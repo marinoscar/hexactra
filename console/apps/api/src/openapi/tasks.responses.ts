@@ -5,7 +5,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { RUN_STOP_REASONS } from '../runner/budget';
-import { taskResponseSchema } from './console.responses';
+import { runOutputResponseSchema, taskOutputResponseSchema, taskResponseSchema } from './console.responses';
 
 const iso = z.string().describe('ISO 8601 timestamp');
 const runStatus = z.enum(['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled']);
@@ -117,3 +117,24 @@ export const taskStatsSchema = z.object({
     .describe('Finished runs of the period by why they stopped, most frequent first'),
 });
 export class TaskStatsResponseDto extends createZodDto(taskStatsSchema) {}
+
+/** `GET /tasks/{id}/outputs` (E39.5, #600): the outputs of the task's last runs, newest first. */
+export const taskOutputsPageSchema = z.object({
+  columns: z
+    .array(taskOutputResponseSchema)
+    .describe("The task's outputs now, in order, then any key an older run reported that the task no longer has (labels as that run knew them): one column each"),
+  items: z
+    .array(
+      z.object({
+        runId: z.uuid(),
+        status: runStatus,
+        createdAt: iso,
+        finishedAt: iso.nullable(),
+        outputsComplete: z.boolean().nullable(),
+        values: z.record(z.string(), runOutputResponseSchema).describe('By key. A column the run did not have is absent; a sensitive value is `[hidden]`'),
+      }),
+    )
+    .describe('Runs of the task that have finished, newest first'),
+  nextCursor: z.string().nullable().describe('Pass it as `cursor` to read the next page; null on the last page. Opaque.'),
+});
+export class TaskOutputsPageResponseDto extends createZodDto(taskOutputsPageSchema) {}

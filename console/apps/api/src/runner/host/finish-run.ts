@@ -80,9 +80,9 @@ export async function pauseEarly(d: HostDeps, userId: string, runId: string, mem
   return (await pauseRunRaw(d, userId, runId, patch)) ? 'paused' : 'superseded';
 }
 
-export async function finishRun(d: HostDeps, userId: string, runId: string, sessionId: string | null, session: FabricSession, to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason }): Promise<void> {
+export async function finishRun(d: HostDeps, userId: string, runId: string, sessionId: string | null, session: FabricSession, to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean }): Promise<void> {
   if (sessionId) await session.end(sessionId);
-  const done = await d.tasks.transition(userId, runId, to, patch);
+  const done = await d.tasks.transition(userId, runId, to, patch as RunPatch);
   d.log.log(`run ${runId}: ${to}`);
   // The saved result: it leads with a confirmed step the run carried out (#540).
   await d.notifier?.finished(userId, done, to, done.result ?? patch.error);

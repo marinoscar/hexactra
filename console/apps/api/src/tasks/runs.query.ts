@@ -11,7 +11,11 @@ import { readConfirmedActions } from '../runner/confirmed-actions';
 import { readEffectiveBudget, runBudgetView, type RunBudgetView } from '../runner/budget';
 import './runs.errors';
 import { withCost } from './run-cost';
+import { outputsView } from './task-outputs';
+import { readOutputs, type OutputView } from './task-outputs.schemas';
+import type { TaskOutput } from '@app/shared/task-fields';
 import type { RunStatus } from './run-status';
+import { TERMINAL_RUN_STATUSES } from './run-status';
 import { BUDGET_STOP_REASONS, LIVE_RUN_STATUSES, RUN_STATES, RUN_STATUSES, type RunFilter } from './runs.schemas';
 
 function invalidFilter(message: string): BadRequestException {
@@ -123,7 +127,7 @@ export class RunsQueryService {
       where: after ? { AND: [filter, after] } : filter,
       orderBy: [{ createdAt: q.order }, { id: q.order }],
       take: q.limit + 1,
-      omit: { transcript: true, policySnapshot: true, spanId: true, traceIds: true },
+      omit: { transcript: true, policySnapshot: true, spanId: true, traceIds: true, outputs: true, outputsSpec: true },
       include: { task: { select: { name: true } } },
     });
     const page = rows.slice(0, q.limit);
@@ -141,6 +145,34 @@ export class RunsQueryService {
     // Which filters were used, never their values: a goal search is the user's text.
     this.log.debug(`runs list user=${userId} filters=[${usedFilters(q).join(',')}] order=${q.order} rows=${items.length} ms=${Date.now() - started}`);
     return { items, nextCursor };
+  }
+
+  /**
+   * The outputs of a task's finished runs that had outputs (E39.5, #600), newest first, keyset paged like the runs list.
+   * `columns`: the task's outputs now (`current`), then any key an older run reported that the task no longer has. Values
+   * are the run's own (definitions as the run started with them), masked.
+   */
+  async outputsPage(userId: string, taskId: string, current: readonly TaskOutput[], q: { limit: number; cursor?: string }) {
+    const filter: Prisma.RunWhereInput = { taskId, status: { in: [...TERMINAL_RUN_STATUSES] }, NOT: { outputsSpec: { equals: Prisma.DbNull } } };
+    const after = q.cursor ? await this.afterCursor(userId, decodeRunCursor(q.cursor), 'desc') : undefined;
+    const rows = await this.prisma.forUser({ userId }).run.findMany({
+      where: after ? { AND: [filter, after] } : filter,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: q.limit + 1,
+      select: { id: true, status: true, createdAt: true, finishedAt: true, outputs: true, outputsSpec: true, outputsComplete: true },
+    });
+    const page = rows.slice(0, q.limit);
+    const extras = await this.extras(userId, page.map((r) => r.id));
+    const columns = new Map<string, TaskOutput>(current.map((d) => [d.key, d]));
+    const items = page.map((r) => {
+      const views = outputsView(r.outputsSpec, r.outputs) ?? [];
+      for (const d of readOutputs(r.outputsSpec)) if (!columns.has(d.key)) columns.set(d.key, d);
+      return { runId: r.id, status: r.status, createdAt: r.createdAt, finishedAt: r.finishedAt, outputsComplete: r.outputsComplete, values: Object.fromEntries(views.map((v: OutputView) => [v.key, v])) };
+    });
+    const last = page.at(-1);
+    const lastTime = last ? extras.get(last.id)?.c : undefined;
+    const nextCursor = rows.length > q.limit && last && lastTime ? encodeRunCursor({ c: lastTime, i: last.id }) : null;
+    return { columns: [...columns.values()], items, nextCursor };
   }
 
   /** How many runs match, per status, with their cost: one GROUP BY. */

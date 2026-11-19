@@ -21,6 +21,8 @@ import { PassThrough, type Readable } from 'node:stream';
 import * as jpeg from 'jpeg-js';
 import type { Content, ContextPageSize, TDocumentDefinitions, TFontDictionary } from 'pdfmake/interfaces';
 
+import { formatOutputValue } from '@app/shared/task-fields';
+
 import type { RunTrace, RunTraceStep } from './run-trace.schemas';
 
 export const REPORT_PAPERS = ['a4', 'letter'] as const;
@@ -443,6 +445,14 @@ function outcome(trace: RunTrace): Content[] {
   return out;
 }
 
+/** What the run returned (E39.5): one row per output, "not found" for a missing one; a sensitive value is already `[hidden]` in the trace. Nothing for a run without outputs. */
+function outputsSection(trace: RunTrace): Content[] {
+  const list = trace.outputs;
+  if (!list?.length) return [];
+  const rows: [string, string][] = list.map((o) => [o.label, o.value === null ? `Not found${o.note && o.note !== 'Not found' ? ` (${o.note})` : ''}` : typeof o.value === 'string' && o.sensitive ? o.value : formatOutputValue(o, o.value)]);
+  return [heading('Outputs', 'outputs'), ...(trace.outputsComplete === false ? [{ text: 'Not every output was found.', style: 'muted' } as Content] : []), factsTable(rows)];
+}
+
 function questions(trace: RunTrace): Content[] {
   const seen = new Map<string, { at: string; q: Question }>();
   for (const s of trace.steps) {
@@ -583,6 +593,7 @@ export function buildReportDefinition(trace: RunTrace, options: ReportOptions = 
   const content: Content[] = [
     ...cover(trace, images),
     ...outcome(trace),
+    ...outputsSection(trace),
     ...questions(trace),
     // The budget is short: heading and table stay on one page.
     { stack: budget(trace), unbreakable: true } as Content,

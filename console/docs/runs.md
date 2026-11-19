@@ -53,7 +53,7 @@ Errors are `400` with a typed `code`:
 
 A row is the run as `GET /api/runs/{id}` returns it, without its steps, plus `taskName` (null for a run without a task). It includes `startedAt`, `finishedAt`, `policy { id, name, version, source, builtin }`, `costUsd`, `costKnown`, `modelCalls`, `stopReason` and `currentTier`.
 
-A list row never carries the run's transcript or its policy snapshot, so 50 rows stay well under 100 KB. `budget` is present while a run is live and `null` on a finished run: read a finished run's budget from `GET /api/runs/{id}`.
+A list row never carries the run's transcript, its policy snapshot or its `outputs` (E39.5): it has `outputsComplete` only, and the values are on `GET /api/runs/{id}` and `GET /api/tasks/{id}/outputs`. So 50 rows stay well under 100 KB. `budget` is present while a run is live and `null` on a finished run: read a finished run's budget from `GET /api/runs/{id}`.
 
 ### Who started a run
 
@@ -313,6 +313,7 @@ The same file from the other clients: `hexactra runs export <id> [--no-screensho
 | `exportedAt`, `partial`, `console.version` | When, whether the run was live, and which console wrote it |
 | `masking` | `applied: true`, the pattern table's `patternsVersion`, and `hits`: how many matches of each pattern were masked (patterns with none are left out) |
 | `run` | `id`, `goal`, `status`, `stopReason`, `result`, `error`, `trigger`, `origin`, `client` (the AI app's name, never its grant), `taskId`, `taskName`, `conversationId`, `profile`, `traceIds` (the OpenTelemetry trace ids of the run's jobs, oldest first: [Traces](#traces-opentelemetry)), `host: { id, name }`, the three times, `confirmedActions` (#540) and `usage` (steps, model calls, tokens, cost, active time) |
+| `outputs`, `outputsComplete` | What the run returned (E39.5, [api-tasks-runs.md](api-tasks-runs.md#task-outputs)): the task's outputs as they were when the run started, each with `key`, `label`, `type`, `required`, `sensitive`, `value`, `ok` and `note`; a sensitive value is `[hidden]`. `null` for a run without outputs; absent from a file written before they existed |
 | `policy` | The agent policy as snapshotted at the run's start: `id`, `name`, `version`, `builtin`, `source`, `spec` |
 | `budget` | The run budget: effective limits, use, percent, source, enforcement, `over` |
 | `models` | The tiers the run used, in order, with their model; `calls` is the run's model calls when it used one tier, `null` when it used several (calls are counted per run) |

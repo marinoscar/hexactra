@@ -32926,6 +32926,114 @@
         }
       }
     },
+    "/api/tasks/{id}/outputs": {
+      "get": {
+        "description": "What the task's finished runs returned (E39.5): `columns` are the task's outputs, `items` the runs, newest first, each with its `values` by key (the labels and types the run started with; a sensitive value is `[hidden]`). Keyset paged: pass `nextCursor` back as `cursor`. 404 `TASK_NOT_FOUND` for a task that is not yours.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "tasks_outputs",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Runs to return, 1 to 100. Default 20.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's `nextCursor`. Opaque: do not parse or build it.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 400,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskOutputsPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The outputs of a task's last runs",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
     "/api/tasks/{id}/schedules": {
       "put": {
         "description": "One transaction: an item with an `id` updates that schedule (its `lastRunAt`, `lastRunId` and `consecutiveFailures` are kept; a field left out is unchanged), an item without creates one, and the task's schedules that are not listed are deleted. `nextRunAt` is recomputed for each. An invalid item fails the whole request with 400, a typed `code` and `details.path` (`schedules[1].cron`); an `id` that is not this task's is 400 `SCHEDULE_NOT_IN_TASK`. The response is the task with its `summary`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
@@ -42767,6 +42875,13 @@
               "SAVE_DISABLED",
               "SAVE_UNAVAILABLE",
               "SAVE_REFUSED",
+              "INVALID_OUTPUTS",
+              "INVALID_GOAL",
+              "INVALID_PARAMETERS",
+              "UNKNOWN_INPUT",
+              "INVALID_INPUT",
+              "SENSITIVE_INPUT",
+              "SCHEDULE_INPUTS_MISSING",
               "INVALID_CRON",
               "INVALID_TIMEZONE",
               "CRON_TOO_FREQUENT",
@@ -42786,12 +42901,6 @@
               "POLICY_IMPORT_INVALID",
               "POLICY_IMPORT_UNSUPPORTED_VERSION",
               "POLICY_IMPORT_TOO_LARGE",
-              "INVALID_GOAL",
-              "INVALID_PARAMETERS",
-              "UNKNOWN_INPUT",
-              "INVALID_INPUT",
-              "SENSITIVE_INPUT",
-              "SCHEDULE_INPUTS_MISSING",
               "APP_PAUSED",
               "APP_RUN_LIMIT",
               "APP_COST_LIMIT",
@@ -76285,6 +76394,66 @@
             ],
             "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
           },
+          "outputs": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "snake_case, unique in the task"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "description": "What to look for; the agent reads it",
+                      "type": "string"
+                    },
+                    "sensitive": {
+                      "description": "Masked in every view and export, and never sent to an AI app",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none"
+          },
           "spend30d": {
             "type": "object",
             "properties": {
@@ -76645,6 +76814,7 @@
           "model",
           "policyId",
           "parameters",
+          "outputs",
           "spend30d",
           "createdAt",
           "updatedAt"
@@ -76868,6 +77038,66 @@
                     }
                   ],
                   "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
+                },
+                "outputs": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "description": "snake_case, unique in the task"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "money",
+                              "date",
+                              "datetime",
+                              "boolean",
+                              "url",
+                              "choice"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "options": {
+                            "description": "choice: the options",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "help": {
+                            "description": "What to look for; the agent reads it",
+                            "type": "string"
+                          },
+                          "sensitive": {
+                            "description": "Masked in every view and export, and never sent to an AI app",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "type",
+                          "required"
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none"
                 },
                 "spend30d": {
                   "type": "object",
@@ -77229,6 +77459,7 @@
                 "model",
                 "policyId",
                 "parameters",
+                "outputs",
                 "spend30d",
                 "createdAt",
                 "updatedAt"
@@ -77253,6 +77484,229 @@
           "items",
           "nextCursor",
           "total"
+        ]
+      },
+      "TaskOutputsPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "snake_case, unique in the task"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "datetime",
+                    "boolean",
+                    "url",
+                    "choice"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: the options",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "help": {
+                  "description": "What to look for; the agent reads it",
+                  "type": "string"
+                },
+                "sensitive": {
+                  "description": "Masked in every view and export, and never sent to an AI app",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "type",
+                "required"
+              ]
+            },
+            "description": "The task's outputs now, in order, then any key an older run reported that the task no longer has (labels as that run knew them): one column each"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "waiting_human",
+                    "paused",
+                    "succeeded",
+                    "failed",
+                    "cancelled"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "finishedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "outputsComplete": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "values": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "text",
+                          "number",
+                          "money",
+                          "date",
+                          "datetime",
+                          "boolean",
+                          "url",
+                          "choice"
+                        ]
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "sensitive": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "type": "number"
+                                  },
+                                  "currency": {
+                                    "description": "ISO 4217, or null when the page gave none",
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "amount",
+                                  "currency"
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                      },
+                      "ok": {
+                        "type": "boolean",
+                        "description": "The value was returned and valid (an optional output left empty is ok)"
+                      },
+                      "note": {
+                        "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "type",
+                      "required",
+                      "sensitive",
+                      "value",
+                      "ok",
+                      "note"
+                    ]
+                  },
+                  "description": "By key. A column the run did not have is absent; a sensitive value is `[hidden]`"
+                }
+              },
+              "required": [
+                "runId",
+                "status",
+                "createdAt",
+                "finishedAt",
+                "outputsComplete",
+                "values"
+              ]
+            },
+            "description": "Runs of the task that have finished, newest first"
+          },
+          "nextCursor": {
+            "description": "Pass it as `cursor` to read the next page; null on the last page. Opaque.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "columns",
+          "items",
+          "nextCursor"
         ]
       },
       "TaskWithSummaryResponseDto": {
@@ -77468,6 +77922,66 @@
               }
             ],
             "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "snake_case, unique in the task"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "description": "What to look for; the agent reads it",
+                      "type": "string"
+                    },
+                    "sensitive": {
+                      "description": "Masked in every view and export, and never sent to an AI app",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none"
           },
           "spend30d": {
             "type": "object",
@@ -77829,6 +78343,7 @@
           "model",
           "policyId",
           "parameters",
+          "outputs",
           "spend30d",
           "createdAt",
           "updatedAt",
@@ -78092,6 +78607,71 @@
               "additionalProperties": false
             },
             "description": "Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter."
+          },
+          "outputs": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "description": "snake_case, unique in the task, 1 to 40 characters (lower-case letters, digits, `_`). Derived from the label when omitted.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80,
+                  "description": "What a person reads: \"Confirmation number\"."
+                },
+                "type": {
+                  "default": "text",
+                  "description": "text, number, money, date, datetime, boolean, url or choice.",
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "datetime",
+                    "boolean",
+                    "url",
+                    "choice"
+                  ]
+                },
+                "required": {
+                  "default": true,
+                  "description": "The agent must give a value; if it cannot find one it is asked again, twice at most, and then the run ends with the output marked \"not found\".",
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: 2 to 50 options.",
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "help": {
+                  "description": "What to look for, one line. The agent reads it.",
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "sensitive": {
+                  "description": "Masked wherever a person or an export sees it, and never sent to an AI app. The value is still stored.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "label"
+              ],
+              "additionalProperties": false
+            },
+            "description": "The values the agent must return when it finishes, by name. Stored on each run (`GET /runs/{id}` `outputs`) and listed per task (`GET /tasks/{id}/outputs`). Runs started from the task use these definitions; a schedule, the API and MCP cannot redefine them. An empty list removes them."
           },
           "useSavedLogins": {
             "type": "boolean",
@@ -78412,6 +78992,66 @@
             ],
             "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
           },
+          "outputs": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "snake_case, unique in the task"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "description": "What to look for; the agent reads it",
+                      "type": "string"
+                    },
+                    "sensitive": {
+                      "description": "Masked in every view and export, and never sent to an AI app",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none"
+          },
           "spend30d": {
             "type": "object",
             "properties": {
@@ -78487,6 +79127,7 @@
           "model",
           "policyId",
           "parameters",
+          "outputs",
           "spend30d",
           "createdAt",
           "updatedAt"
@@ -78743,6 +79384,71 @@
               "additionalProperties": false
             },
             "description": "Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter."
+          },
+          "outputs": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "description": "snake_case, unique in the task, 1 to 40 characters (lower-case letters, digits, `_`). Derived from the label when omitted.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80,
+                  "description": "What a person reads: \"Confirmation number\"."
+                },
+                "type": {
+                  "default": "text",
+                  "description": "text, number, money, date, datetime, boolean, url or choice.",
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "datetime",
+                    "boolean",
+                    "url",
+                    "choice"
+                  ]
+                },
+                "required": {
+                  "default": true,
+                  "description": "The agent must give a value; if it cannot find one it is asked again, twice at most, and then the run ends with the output marked \"not found\".",
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: 2 to 50 options.",
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "help": {
+                  "description": "What to look for, one line. The agent reads it.",
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "sensitive": {
+                  "description": "Masked wherever a person or an export sees it, and never sent to an AI app. The value is still stored.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "label"
+              ],
+              "additionalProperties": false
+            },
+            "description": "The values the agent must return when it finishes, by name. Stored on each run (`GET /runs/{id}` `outputs`) and listed per task (`GET /tasks/{id}/outputs`). Runs started from the task use these definitions; a schedule, the API and MCP cannot redefine them. An empty list removes them."
           },
           "useSavedLogins": {
             "type": "boolean",
@@ -79070,6 +79776,66 @@
               }
             ],
             "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "snake_case, unique in the task"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "description": "What to look for; the agent reads it",
+                      "type": "string"
+                    },
+                    "sensitive": {
+                      "description": "Masked in every view and export, and never sent to an AI app",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none"
           },
           "spend30d": {
             "type": "object",
@@ -79440,6 +80206,7 @@
           "model",
           "policyId",
           "parameters",
+          "outputs",
           "spend30d",
           "createdAt",
           "updatedAt",
@@ -80866,6 +81633,115 @@
               }
             ]
           },
+          "outputsComplete": {
+            "description": "Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "outputs": {
+            "description": "What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs.",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "sensitive": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "description": "ISO 4217, or null when the page gave none",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "description": "The value was returned and valid (an optional output left empty is ok)"
+                    },
+                    "note": {
+                      "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "sensitive",
+                    "value",
+                    "ok",
+                    "note"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -80950,6 +81826,7 @@
           "usedSavedLogins",
           "usedSavedIdentity",
           "usedSavedCards",
+          "outputsComplete",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -81827,6 +82704,115 @@
                     }
                   ]
                 },
+                "outputsComplete": {
+                  "description": "Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "outputs": {
+                  "description": "What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs.",
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "money",
+                              "date",
+                              "datetime",
+                              "boolean",
+                              "url",
+                              "choice"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "sensitive": {
+                            "type": "boolean"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "amount": {
+                                        "type": "number"
+                                      },
+                                      "currency": {
+                                        "description": "ISO 4217, or null when the page gave none",
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "amount",
+                                      "currency"
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                          },
+                          "ok": {
+                            "type": "boolean",
+                            "description": "The value was returned and valid (an optional output left empty is ok)"
+                          },
+                          "note": {
+                            "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "type",
+                          "required",
+                          "sensitive",
+                          "value",
+                          "ok",
+                          "note"
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "memoryIds": {
                   "type": "array",
                   "items": {
@@ -81911,6 +82897,7 @@
                 "usedSavedLogins",
                 "usedSavedIdentity",
                 "usedSavedCards",
+                "outputsComplete",
                 "memoryIds",
                 "createdAt",
                 "startedAt",
@@ -82411,6 +83398,115 @@
               "finishedAt",
               "confirmedActions",
               "usage"
+            ]
+          },
+          "outputs": {
+            "description": "What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed.",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "sensitive": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "description": "ISO 4217, or null when the page gave none",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "description": "The value was returned and valid (an optional output left empty is ok)"
+                    },
+                    "note": {
+                      "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "sensitive",
+                    "value",
+                    "ok",
+                    "note"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputsComplete": {
+            "description": "Whether every output was returned and valid; null when the run has no outputs or has not finished",
+            "type": [
+              "boolean",
+              "null"
             ]
           },
           "policy": {
@@ -84211,6 +85307,115 @@
               }
             ]
           },
+          "outputsComplete": {
+            "description": "Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "outputs": {
+            "description": "What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs.",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "sensitive": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "description": "ISO 4217, or null when the page gave none",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "description": "The value was returned and valid (an optional output left empty is ok)"
+                    },
+                    "note": {
+                      "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "sensitive",
+                    "value",
+                    "ok",
+                    "note"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -84591,6 +85796,7 @@
           "usedSavedLogins",
           "usedSavedIdentity",
           "usedSavedCards",
+          "outputsComplete",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -85490,6 +86696,115 @@
               }
             ]
           },
+          "outputsComplete": {
+            "description": "Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "outputs": {
+            "description": "What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs.",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "sensitive": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "description": "ISO 4217, or null when the page gave none",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "description": "The value was returned and valid (an optional output left empty is ok)"
+                    },
+                    "note": {
+                      "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "sensitive",
+                    "value",
+                    "ok",
+                    "note"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -85567,6 +86882,7 @@
           "usedSavedLogins",
           "usedSavedIdentity",
           "usedSavedCards",
+          "outputsComplete",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -90169,6 +91485,59 @@
               ]
             },
             "description": "The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "snake_case, unique in the task"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "datetime",
+                    "boolean",
+                    "url",
+                    "choice"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: the options",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "help": {
+                  "description": "What to look for; the agent reads it",
+                  "type": "string"
+                },
+                "sensitive": {
+                  "description": "Masked in every view and export, and never sent to an AI app",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "type",
+                "required"
+              ]
+            },
+            "description": "The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping."
           }
         },
         "required": [
@@ -90183,7 +91552,8 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
-          "parameters"
+          "parameters",
+          "outputs"
         ]
       },
       "LinkTaskDto": {

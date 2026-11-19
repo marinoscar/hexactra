@@ -7,6 +7,7 @@ import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
 import { countOlderThan, deleteOlderThan, exportRun, exportRunPdf, parseDays, runsWord, sizeText, type ReportTarget } from './runs.js';
 import { collectInput, missingParameters, parseInputFlags, promptMissing, type CliTaskParameter } from './task-inputs.js';
+import { outputLines, outputsCsv, outputsTable, type CliOutputsPage, type CliRunOutput } from './task-outputs.js';
 
 let targetFactory: (() => ReportTarget) | null = null;
 
@@ -60,6 +61,9 @@ interface Run extends RunPolicyFields {
   error: string | null;
   createdAt: string;
   steps?: Step[];
+  /** What the run returned (E39.5): masked; null for a run without outputs. */
+  outputs?: CliRunOutput[] | null;
+  outputsComplete?: boolean | null;
 }
 
 const label = (s: string) => (s === 'waiting_human' ? 'needs you' : s);
@@ -110,6 +114,7 @@ async function show(id: string, watch: boolean, asJson: boolean): Promise<void> 
     if (!watch || TERMINAL.has(r.status)) {
       for (const l of runPolicyLines(r)) if (l.startsWith('cost') || l.startsWith('stopped') || l.startsWith('budget')) out(l);
       if (r.result) out(`result: ${r.result}`);
+      for (const l of outputLines(r.outputs, r.outputsComplete)) out(l);
       if (r.error) out(`error: ${r.error}`);
       if (r.status === 'failed') process.exitCode = 1;
       return;
@@ -210,6 +215,35 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       if (r.status === 'waiting_human') out(`waiting for values: answer it with \`hexactra inbox\` or at ${webUrl()}/inbox`);
       if (sensitive.length) out(`${sensitive.map((p) => p.label).join(', ')}: asked for in the console when the run starts (${webUrl()}/inbox), never here`);
       if (o.watch) await show(r.id, true, false);
+    });
+  tasks
+    .command('outputs <task>')
+    .description("What a task's finished runs returned (the values its outputs name), newest first: a table, or --csv for a spreadsheet; a sensitive output reads [hidden]")
+    .option('--limit <n>', 'how many runs (1 to 500)', (v) => Number.parseInt(v, 10), 20)
+    .option('--csv', 'print CSV: one row per run, one column per output')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { limit: number; csv?: boolean; json?: boolean }) => {
+      if (!Number.isInteger(o.limit) || o.limit < 1 || o.limit > 500) throw new Error('--limit is a number from 1 to 500.');
+      const list = await consoleApi().get<Task[]>('/tasks');
+      const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
+      if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
+      const task = matches[0]!;
+      // The API pages by 100 at most: follow the cursor until enough runs are read.
+      let page: CliOutputsPage | null = null;
+      let cursor: string | null = null;
+      do {
+        const next: CliOutputsPage = await consoleApi().get<CliOutputsPage>(`/tasks/${task.id}/outputs`, { query: { limit: Math.min(100, o.limit - (page?.items.length ?? 0)), ...(cursor ? { cursor } : {}) } });
+        page = page ? { columns: page.columns, items: [...page.items, ...next.items], nextCursor: next.nextCursor } : next;
+        cursor = next.nextCursor;
+      } while (cursor && page.items.length < o.limit);
+      if (o.json) return json(page);
+      if (o.csv) {
+        process.stdout.write(outputsCsv(page));
+        return;
+      }
+      if (!page.columns.length) return out('This task has no outputs. Add them to the task in the console (Outputs).');
+      if (!page.items.length) return out('No finished run of this task has returned outputs yet.');
+      for (const l of outputsTable(page)) out(l);
     });
   tasks
     .command('delete <id>')
