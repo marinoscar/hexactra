@@ -6134,7 +6134,7 @@ export interface paths {
         };
         /**
          * List your connected accounts
-         * @description Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.
+         * @description Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `mail_modify`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.
          *
          *     **Requires:** authentication, plus permission `connections:read`.
          */
