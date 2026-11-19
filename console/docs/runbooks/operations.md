@@ -223,6 +223,7 @@ A run that did not sign in from a saved login **has not failed**: by design it f
    | Refused by the provider | Vault refused for a reason of its own (a missing scope, for instance) | Vault's **Agent activity** page; reconnect with the scopes the feature needs |
    | Failed: the page address could not be read / the field could not be typed into | The browser did not report the tab's URL, or the selector the model chose did not take the text | Look at the run's screenshots; the run asks the owner |
 
+1b. **A card payment that did not go through** has its own outcomes and instructions (an amount over the merchant grant's limit, a currency mismatch, an expired grant, a payment frame the grant does not list, a bank verification step): [../secrets.md](../secrets.md#errors-become-instructions). The fix is almost always in the provider (create or widen the merchant grant, with the owner's own session) and never in Hexactra; the run asks the owner. Incident handling for cards is in [public-exposure.md](public-exposure.md#8-saved-cards-on-a-public-console-e377).
 2. **Several matching logins** is not a fault: the run asks with a choice card of names and usernames. Save only one login per site, or the owner picks.
 3. **A rejected password is not retried.** A password is typed at most once per run and site; if the site refused it, the run asks the owner. Update the login in the provider.
 4. **A code by text message** is never in a vault: the run asks the owner for it.

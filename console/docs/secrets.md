@@ -36,7 +36,7 @@ Everything is **off by default** and every layer alone stops the agent. Reading 
 | The deployment | `secrets.agentUse.enabled` | Administration → Secrets (`PATCH /api/system-settings`) | off |
 | The built-in store | `SECRETS_STORE_ENABLED` | the environment (restart the API) | off |
 | The owner | `secrets.agentUse.enabled` ("Let the agent use saved logins") | Settings → Secrets (`PATCH /api/user-settings`) | off |
-| The owner's grant | the OAuth scopes: `vault:items_read`, `vault:items_fill`, `offline_access`; `vault:items_write` (save and change logins); `vault:identity_read`, `vault:identity_fill`; the card scopes | the consent Vault shows; each extra scope is a new consent | the first three |
+| The owner's grant | the OAuth scopes: `vault:items_read`, `vault:items_fill`, `offline_access`; `vault:items_write` (save and change logins); `vault:identity_read`, `vault:identity_fill`; `vault:cards_read`, `vault:cards_fill` | the consent Vault shows; each extra scope is a new consent (`connect { allowWrite, allowIdentity, allowCards }`) | the first three |
 | Each login, detail or card | Vault's per-item "Allow agents to use this login" (and a card's per-merchant grant) | Vault (the built-in store: Settings → Secrets → My saved logins) | closed |
 | A task or a chat | `useSavedLogins`; `useSavedIdentity`; `useSavedCards` | the task form, Chat settings, `POST`/`PATCH /api/tasks` and `/api/chats` | off (a new one starts from the owner's `secrets.defaultUseSavedLogins`, itself off) |
 | A connected AI app | the limits `allowSavedLogins`, `allowSavedIdentity`, `allowSavedCards` (identity and card use each need saved logins, and none widens another) | the app's page, `PATCH /api/connected-apps/{clientId}/settings` | off |
@@ -70,7 +70,8 @@ A provider that is unreachable, refusing, revoked, rate limited or simply has no
 - **The fabric types into the element the model names** on the exact saved origin; it does not check that the element is a password field ([#625](https://github.com/marinoscar/hexactra/issues/625)).
 - **Origin binding is enforced by the caller.** Vault is told the origin by the fabric, and the fabric learns the tab's URL from the node's extension, so a compromised node or console defeats it ([security-secrets.md](security-secrets.md)).
 - **Saved logins plus a remembered approval plus a schedule can move money with nobody watching.** Origin binding stops a look-alike site; it does not stop a real page steering the agent. Scheduled runs that used a saved login keep purchase confirmation on unless the task opts out.
-- **Not built:** offering to save a login the owner just typed by hand ([#621](https://github.com/marinoscar/hexactra/issues/621), waiting on marinoscar/vault#233), identity details and cards in the built-in store ([#627](https://github.com/marinoscar/hexactra/issues/627)), moving logins between providers, other password managers ([#628](https://github.com/marinoscar/hexactra/issues/628)), agent-driven password rotation ([#629](https://github.com/marinoscar/hexactra/issues/629)), a fast Stop and general crash safety (E38: #582, #584).
+- **A card is the riskiest thing here and is not a payment service.** It works on any site, so the protection is the owner's decision per merchant and amount (the provider's merchant grant, Hexactra's approval with a required limit); a payment frame's origin is what the page declares for it; Hexactra claims no card-industry compliance (PCI DSS or similar). Prefer a virtual card with its own limit, and a shop that already holds the owner's card in the node's persistent profile ([Cards](#cards-e377)).
+- **Not built:** offering to save a login the owner just typed by hand ([#621](https://github.com/marinoscar/hexactra/issues/621), waiting on marinoscar/vault#233), identity details and cards in the built-in store ([#627](https://github.com/marinoscar/hexactra/issues/627)), a card picker on a task, an automatic grant request, saving a card from a run, wallet buttons (Apple Pay, Google Pay, PayPal), passing a bank's verification step, moving logins between providers, other password managers ([#628](https://github.com/marinoscar/hexactra/issues/628)), agent-driven password rotation ([#629](https://github.com/marinoscar/hexactra/issues/629)), a fast Stop and general crash safety (E38: #582, #584).
 
 ## Contents of the rest of this chapter
 
@@ -279,19 +280,95 @@ The instructions: on a form that asks for personal details, call `saved_identity
 
 **Provider support.** The remote Vault (contract 1.1: `GET /identity?origin=`, `POST /identity/{id}/fill` with purpose `form`, scopes `vault:identity_read` and `vault:identity_fill`, errors `IDENTITY_ACCESS_DISABLED` and `ORIGIN_MISMATCH`). The built-in store (E37.5) holds logins only (its type is `Credential`, enforced by `store.interceptor.ts`), so it has no identity items: its provider answers none for an identity lookup and a run with the built-in store chosen is not offered the identity tools (`RunSecretsService.identitySupported`). Holding identity items in the built-in store (the Identity type, its page, Vault's `agentAccess.identity` switch bound to the deployment's) is a follow-up of E37.
 
+## Cards (E37.7)
+
+The agent can complete a checkout with a card the owner saved **without the model seeing the number, the expiry or the security code**. Because a card works on any site, a site binding cannot protect it the way it protects a login, so the protection is the owner's decision **per merchant and per amount**, enforced outside the model in two places: the provider's merchant grant, and Hexactra's own rules. **Hexactra is not a payment service**: this is the owner's own card on the owner's own deployment, and no card-industry compliance (PCI DSS or similar) is claimed. Offering it to other people needs a compliance review first.
+
+### The safest path needs no stored card
+
+The browser profile the agent uses is persistent. A shop where the owner's card is **already saved in the shop's own account** in that profile (sign in once, save the card there) needs nothing from this page: the agent signs in (saved logins) and pays with what the shop already holds. Prefer that, and prefer a **virtual card with its own spending limit** from the bank or card issuer over the main card, for anything that is stored here. Wallet buttons (Apple Pay, Google Pay, PayPal) are the owner's own sessions in the profile and are not handled here.
+
+### The rules, in order
+
+1. **Offered only with every switch.** The task's or chat's **Also pay with my saved cards** (`useSavedCards`, off by default; it needs `useSavedLogins`), the Vault grant's `vault:cards_read` and `vault:cards_fill` (**Let the agent pay with a saved card** on the Secrets page: a new consent), Vault's own card release on (`agentAccess.cards.enabled`), and for an AI app's run the app's limit `allowSavedCards` (default **off**; it never widens `allowSavedLogins`). Otherwise no card tool is offered and the run says so. The built-in store holds logins only (it answers none for a card lookup and refuses a card release): cards need the remote Vault (contract 1.1).
+2. **The merchant grant (the provider).** Nothing is released unless the owner opened the card **and** created a **merchant grant** for the shop in Vault, with their own session: the shop (matched by registrable domain, so a checkout on another subdomain works), a **maximum amount and currency**, optionally the payment frames it accepts, a period limit, an expiry and whether the **security code** is included (default off, per card and per shop). A runtime cannot create or widen a grant. Vault lists a card only for a merchant it holds a live grant for, so there is no list of every card.
+3. **A declared charge.** Nothing is typed before the agent has called `declare_charge { amount, currency, description }` with the exact total it read on the page. The **merchant host is the one the fabric reports for the tab, never the model's words**. The amount must be a plain decimal with at most two places; if the task has one `money` parameter (#552) it is a ceiling for what the agent may declare. The provider checks the amount against the grant, and the owner sees it in the approval.
+4. **A shop the run may visit.** The card goes only into an `https` page the task and the AI app allow, on the same registrable domain as the declared charge and as the lookup (`saved_cards`). Otherwise nothing is fetched.
+5. **The owner approves each shop.** The first use at a merchant always asks: a confirmation card with the **merchant's host, the card (brand and last four), the amount and what is being bought**, "Allow this payment" / "Do not pay". The approval is for that card, that shop and that amount in this run.
+6. **Remembering it.** Ticking **Don't ask again** on that card makes a saved approval ([approvals.md](approvals.md#cards-e377)) bound to the shop's registrable domain **and the card**, in the amount's currency, with a **required** amount limit (the form will not save without one, and the server refuses it with `CARD_RULE_NEEDS_AMOUNT_LIMIT`; unlike every other approval). The site-wide "routine steps" rule never covers a card. A later run pays without a card question **only** under that limit, on that shop, with that card, in that currency; over the limit, another shop, another card, another currency, a disabled, expired or paused rule: it asks.
+7. **Never unattended by default.** A run that was **not started from a chat** (a schedule, the API, MCP, a task run) types a card only when its task has `unattendedPayments: allow` **and** a matching remembered approval with an amount limit exists. Otherwise it waits for the owner (a pending card question). An AI app's run with **confirm purchases** on always asks, whatever is remembered.
+8. **The fields go in order, the code last.** `pay_with_saved_card` types the card number, the expiry (one `MM/YY` input composed inside the fabric, or month and year), the name on the card and the postal code, and the **security code last**, in one tool call with no screenshot between the first field and the end of typing. The security code is typed only if the grant includes it; when it does not, the model is told to ask the owner for it as a `secret` request (typed by the fabric, never stored).
+9. **The pay click is a separate action.** It passes through the confirmation gate like any commitment, and the approval for the card at this shop covers **that one click** for the declared amount (never a second one). After it, `confirm_charge` records the amount the page shows.
+
+### Payment frames
+
+Payment forms are often inside a **cross-origin iframe** from a processor. The earlier rule that refused cross-origin frames (E37.1) is **lifted for cards only**: a field inside a frame is typed with a click and keystrokes at **screen coordinates** (the model passes `x` and `y`), so no script runs in the frame. The fabric reads the **top-level origin (the merchant)** and, for a point inside a frame, the **frame's origin**, and passes both to the provider, which checks the frame against the grant's list; a frame whose origin the fabric cannot determine (no source, `about:blank`, `data:`, not `https`) is refused (`frame_unknown`) and nothing is fetched. **What this does not protect:** the frame origin is what the page declares for the frame element. A frame that redirects to another site, or a frame inside a frame, is not seen; the owner's merchant grant, its amount limit and the audit trail are the protection, and a virtual card with its own limit is the real one. Login fields stay refused inside frames.
+
+### What the model sees of a card, and what it never does
+
+| Tool (group `secrets`) | What the model reads |
+|---|---|
+| `saved_cards` | For the shop on screen: `{ ref, name, brand, last4, limit, expires, securityCode }` per card (`ref` is per run; `limit` is the grant's maximum, `expires` is when the owner's **permission** ends, never the card's expiry), or `none`. |
+| `declare_charge { amount, currency, description }` | "Recorded: 42.50 USD at checkout.shop.example.com", or why it was refused. |
+| `pay_with_saved_card { ref, fields }` | "Typed the card details" or an instruction. `fields` are targets (a selector, or `x` and `y`). It records an intent (`commits`-class). |
+| `confirm_charge { amount, currency }` | "Confirmed" or "differs": the amount on the confirmation page against the declared one (within a cent or one percent). The model reads the page, so this is a check of the model's reading, not of the shop. |
+
+**The model never sees a number, an expiry or a code**, not in a tool result, a step, the run's memory, a question, a notification or a screenshot: the fabric types and answers `{ typed: true }`. A card typed into the page is covered like any provider-filled input: read back as `[filled from your saved details]`, covered by an opaque box in every picture the model is shown (for a field inside a frame, the element at that point), and the run's trace pictures are masked at capture (`autocomplete=cc-*` fields and cross-origin frames are always covered). No desktop picture is taken while a card is on the page. A card **expiry** is never shown to the model (it reads the last four digits, the brand and the grant).
+
+### Errors become instructions
+
+| Code | What the model is told |
+|---|---|
+| `origin_mismatch` (a wrong shop or a payment frame the grant does not list) | Stop; nothing typed; do not try another card, amount or shop; tell the owner. **The owner is asked with a warning card and cards are off for the rest of the run.** |
+| `frame_unknown` | The payment frame's address cannot be verified; nothing typed; do not type the card yourself; tell the owner. |
+| `amount_exceeded`, `currency_mismatch`, `grant_expired`, `limit_reached` | Nothing typed; tell the owner; no other card, amount or shop. (The first two are also refused locally before the provider is asked.) |
+| `security_code_not_granted` | Ask the owner to type it (`request_human`, `secret`), then `type_handoff_secret`. |
+| `insecure_origin` | The page is not `https`; a card is never typed there. |
+| `cards_disabled`, `not_found` | Card release is off in the provider, or no card is allowed at this shop; tell the owner. |
+| `unauthorized`, `rate_limited`, `unavailable`, `typing_failed` | Not available right now / look at the page and retry the missing fields / tell the owner; the connection is reported (`needs_reconnect`). |
+
+### Bank verification
+
+When the checkout shows a verification step from the card issuer (a redirect or a frame, 3-D Secure, an approval in the banking app), the agent does **not** try to pass it and does not interact with the issuer's frame. It asks the owner with the question kind **`verification`** ("Your bank wants you to confirm this payment in your banking app"), waits, and continues when the page moves on. A code sent by text is a `code` request as before. Hexactra never passes a bank's verification itself.
+
+### Crash safety
+
+The phases are saved **before** each field and around the pay click (`runs.transcript.savedCards`). A job that dies between two fields finds them: the fields that were typed are not typed again (the card is released once), the one being typed is typed again. A job that dies **around the pay click** leaves the payment `unknown`: the model is told it may or may not have gone through, a second click on pay is refused by the gate and asks the owner, **a saved approval for that button does not apply**, and no card tool pays again in that run. A job that dies after the card was typed and before the pay click presses pay once on retry. The test for it simulates the interrupted click by saving the state a dying job would leave (the intent record is asserted to be saved before the click is sent); a real process kill on the deployed stack is the evidence the issue asks for.
+
+### What the owner sees
+
+- **The Secrets page** (`/settings/secrets`): **Let the agent pay with a saved card** (the consent), **Payment cards** (how it works; **Check a shop** lists the cards the provider has a live grant for at that shop, with brand, last four, expiry, the limit and whether the code is allowed, read-only, `GET /api/secrets/cards?merchant=`; and the shops Hexactra remembers, linking to Saved approvals). Vault lists a card only for a shop it is granted for, so the page asks per shop and cannot list every card.
+- **The task form and chat settings**: **Also pay with my saved cards** (off by default) and, for a task, what an unattended run does at a payment.
+- **The run page and the chat card**: "Paid with Visa ending 4242 at checkout.shop.example.com: 42.50 USD", the declared and the confirmed amount, and a **warning when they differ** (and a notification `runs.card_amount_mismatch`). `usedSavedCards` on a run: `[{ provider, itemName, brand, last4, merchant, origin, currency, declaredAmount, confirmedAmount, mismatch, at }]`, at most 10: a brand, the last four digits and amounts, never a number, an expiry or a code.
+- **A notification for every card use**, attended or not (`runs.card_used`: "Paid with Visa ending 4242 at ...: 42.50 USD").
+- **The Activity list**: each field kind typed (`card number`, `card expiry`, ...), the declared amount and the payment frame's host, and every refusal.
+
+### Audit and observability
+
+Fabric execution events (`secrets.lookup`, `secrets.release`) carry the field **name** only, with `amount`, `currency` and `frame_origin` for a card (the merchant is `origin`). The console stores them in `secrets_activity` (`amount`, `currency`, `frame_site` columns: validated copies, never a value). Steps and the run's own record carry the declared charge, the approval and the confirmed amount. Counter `app.secrets.card_uses` (label `outcome`: `typed`, `asked`, `approved`, `declined`, `refused_amount`, `refused_shop`, `refused_limit`, `refused_other`, `unattended_waits`, `mismatch`). Alert kind **Saved card used a lot** (`hexactra_card_use`, rule `hexactra.card_use`, on by default): more than `maxUses` (5) card payments of one user in `windowHours` (24), or a single payment above `maxAmount` (off until an administrator sets a deployment threshold).
+
+### What is not built (yet)
+
+- **Cards in the built-in store.** It holds logins only by design until Vault's card release is embedded there; a run with the built-in store chosen is not offered the card tools.
+- **Saving a new card from a run**, and **wallet buttons**.
+- **A card picker on a task.** The provider lists a card only for a shop it is granted for, so there is no list to pick from when a task is made; a task may use any card the owner granted at the shop it pays on, and the owner is asked which (the confirmation names the card).
+- **An automatic grant request.** Vault's grant request needs a card's id, which the per-shop lookup does not give for a shop with no grant. The model tells the owner (and the Secrets page links to the provider) to create the grant; the run does not file one.
+- **Passing a bank's verification automatically.**
+
 ## Routes
 
 | Route | Permission | |
 |---|---|---|
 | `GET /api/secrets/status` | `secrets:read` | Status of the providers and the two switches |
 | `PUT /api/secrets/vault/client` | `secrets:write` | The owner's address, client id and (write-only) client secret; `409 SECRETS_VAULT_DISCONNECT_FIRST` while connected |
-| `POST /api/secrets/vault/connect` | `secrets:write` | `{ allowWrite?, returnTo? }` → `{ authorizeUrl, expiresAt }`; sets the binding cookie |
+| `POST /api/secrets/vault/connect` | `secrets:write` | `{ allowWrite?, allowIdentity?, allowCards?, returnTo? }` → `{ authorizeUrl, expiresAt }`; sets the binding cookie |
 | `GET /api/secrets/vault/callback` | public (state + cookie) | Redirects to the return page |
 | `POST /api/secrets/vault/disconnect` | `secrets:write` | `{ forgetClient? }` → `{ revoked, status }` |
 | `GET\|PUT\|DELETE /api/secrets/vault/default-client` | `system_settings:read` / `:write` | The administrator's default address, client id and client secret |
 | `GET /api/secrets/activity` | `secrets:read` | The owner's newest 100 uses and refusals (below), and the provider's own activity page |
 | `GET /api/secrets/reach` | `secrets:read` | The logins the agent has used so far, by site |
 | `GET /api/secrets/identity` | `secrets:read` | The identity items the owner saved: names and field labels with a sensitive flag; never a value |
+| `GET /api/secrets/cards?merchant=` | `secrets:read` | The cards the provider has a live grant for at one shop: brand, last four, expiry, the grant's limit; never a number. There is no list of every card |
 | `GET /api/secrets/admin/summary` | `system_settings:read` | Counts for the administrator: owners connected, fields typed and refusals this week |
 
 `secrets:read` goes to contributors, viewers and organization admins; `secrets:write` to contributors and organization admins. There is no MCP tool and no CLI command: a hosted AI app or a personal access token must not rewire the owner's secrets provider, and no MCP tool reads what the agent used (`packages/shared/capabilities.json`, [parity.md](parity.md#what-secrets-added-e37)).
@@ -416,78 +493,3 @@ Vault's `agentAccess` settings namespace is answered by the console (`enabled` i
 ### Testing the built-in store
 
 `test/secrets-store.spec.ts` (the slice off loads no package, key parsing, the envelope fails closed), `test/secrets-store.packages.spec.ts` (the console's ownership and permission copies against the packages), `test/secrets-store.db.spec.ts` (a real database: the whole flow, the identical not-found, the origin refusal, the switches, every role, ciphertext only, rotation, a wrong key, the internal route with every kind of credential, user deletion, a seeded-marker scan). Vault's own host conformance kit (`runVaultHostConformance`) cannot run for a host that mounts a subset (vault#228); the same assertions are in the db spec, in process.
-
-## Cards (E37.7)
-
-The agent can complete a checkout with a card the owner saved **without the model seeing the number, the expiry or the security code**. Because a card works on any site, a site binding cannot protect it the way it protects a login, so the protection is the owner's decision **per merchant and per amount**, enforced outside the model in two places: the provider's merchant grant, and Hexactra's own rules. **Hexactra is not a payment service**: this is the owner's own card on the owner's own deployment, and no card-industry compliance (PCI DSS or similar) is claimed. Offering it to other people needs a compliance review first.
-
-### The safest path needs no stored card
-
-The browser profile the agent uses is persistent. A shop where the owner's card is **already saved in the shop's own account** in that profile (sign in once, save the card there) needs nothing from this page: the agent signs in (saved logins) and pays with what the shop already holds. Prefer that, and prefer a **virtual card with its own spending limit** from the bank or card issuer over the main card, for anything that is stored here. Wallet buttons (Apple Pay, Google Pay, PayPal) are the owner's own sessions in the profile and are not handled here.
-
-### The rules, in order
-
-1. **Offered only with every switch.** The task's or chat's **Also pay with my saved cards** (`useSavedCards`, off by default; it needs `useSavedLogins`), the Vault grant's `vault:cards_read` and `vault:cards_fill` (**Let the agent pay with a saved card** on the Secrets page: a new consent), Vault's own card release on (`agentAccess.cards.enabled`), and for an AI app's run the app's limit `allowSavedCards` (default **off**; it never widens `allowSavedLogins`). Otherwise no card tool is offered and the run says so. The built-in store holds logins only (it answers none for a card lookup and refuses a card release): cards need the remote Vault (contract 1.1).
-2. **The merchant grant (the provider).** Nothing is released unless the owner opened the card **and** created a **merchant grant** for the shop in Vault, with their own session: the shop (matched by registrable domain, so a checkout on another subdomain works), a **maximum amount and currency**, optionally the payment frames it accepts, a period limit, an expiry and whether the **security code** is included (default off, per card and per shop). A runtime cannot create or widen a grant. Vault lists a card only for a merchant it holds a live grant for, so there is no list of every card.
-3. **A declared charge.** Nothing is typed before the agent has called `declare_charge { amount, currency, description }` with the exact total it read on the page. The **merchant host is the one the fabric reports for the tab, never the model's words**. The amount must be a plain decimal with at most two places; if the task has one `money` parameter (#552) it is a ceiling for what the agent may declare. The provider checks the amount against the grant, and the owner sees it in the approval.
-4. **A shop the run may visit.** The card goes only into an `https` page the task and the AI app allow, on the same registrable domain as the declared charge and as the lookup (`saved_cards`). Otherwise nothing is fetched.
-5. **The owner approves each shop.** The first use at a merchant always asks: a confirmation card with the **merchant's host, the card (brand and last four), the amount and what is being bought**, "Allow this payment" / "Do not pay". The approval is for that card, that shop and that amount in this run.
-6. **Remembering it.** Ticking **Don't ask again** on that card makes a saved approval ([approvals.md](approvals.md#cards-e377)) bound to the shop's registrable domain **and the card**, in the amount's currency, with a **required** amount limit (the form will not save without one, and the server refuses it with `CARD_RULE_NEEDS_AMOUNT_LIMIT`; unlike every other approval). The site-wide "routine steps" rule never covers a card. A later run pays without a card question **only** under that limit, on that shop, with that card, in that currency; over the limit, another shop, another card, another currency, a disabled, expired or paused rule: it asks.
-7. **Never unattended by default.** A run that was **not started from a chat** (a schedule, the API, MCP, a task run) types a card only when its task has `unattendedPayments: allow` **and** a matching remembered approval with an amount limit exists. Otherwise it waits for the owner (a pending card question). An AI app's run with **confirm purchases** on always asks, whatever is remembered.
-8. **The fields go in order, the code last.** `pay_with_saved_card` types the card number, the expiry (one `MM/YY` input composed inside the fabric, or month and year), the name on the card and the postal code, and the **security code last**, in one tool call with no screenshot between the first field and the end of typing. The security code is typed only if the grant includes it; when it does not, the model is told to ask the owner for it as a `secret` request (typed by the fabric, never stored).
-9. **The pay click is a separate action.** It passes through the confirmation gate like any commitment, and the approval for the card at this shop covers **that one click** for the declared amount (never a second one). After it, `confirm_charge` records the amount the page shows.
-
-### Payment frames
-
-Payment forms are often inside a **cross-origin iframe** from a processor. The earlier rule that refused cross-origin frames (E37.1) is **lifted for cards only**: a field inside a frame is typed with a click and keystrokes at **screen coordinates** (the model passes `x` and `y`), so no script runs in the frame. The fabric reads the **top-level origin (the merchant)** and, for a point inside a frame, the **frame's origin**, and passes both to the provider, which checks the frame against the grant's list; a frame whose origin the fabric cannot determine (no source, `about:blank`, `data:`, not `https`) is refused (`frame_unknown`) and nothing is fetched. **What this does not protect:** the frame origin is what the page declares for the frame element. A frame that redirects to another site, or a frame inside a frame, is not seen; the owner's merchant grant, its amount limit and the audit trail are the protection, and a virtual card with its own limit is the real one. Login fields stay refused inside frames.
-
-### What the model sees, and what it never does
-
-| Tool (group `secrets`) | What the model reads |
-|---|---|
-| `saved_cards` | For the shop on screen: `{ ref, name, brand, last4, limit, expires, securityCode }` per card (`ref` is per run; `limit` is the grant's maximum, `expires` is when the owner's **permission** ends, never the card's expiry), or `none`. |
-| `declare_charge { amount, currency, description }` | "Recorded: 42.50 USD at checkout.shop.example.com", or why it was refused. |
-| `pay_with_saved_card { ref, fields }` | "Typed the card details" or an instruction. `fields` are targets (a selector, or `x` and `y`). It records an intent (`commits`-class). |
-| `confirm_charge { amount, currency }` | "Confirmed" or "differs": the amount on the confirmation page against the declared one (within a cent or one percent). The model reads the page, so this is a check of the model's reading, not of the shop. |
-
-**The model never sees a number, an expiry or a code**, not in a tool result, a step, the run's memory, a question, a notification or a screenshot: the fabric types and answers `{ typed: true }`. A card typed into the page is covered like any provider-filled input: read back as `[filled from your saved details]`, covered by an opaque box in every picture the model is shown (for a field inside a frame, the element at that point), and the run's trace pictures are masked at capture (`autocomplete=cc-*` fields and cross-origin frames are always covered). No desktop picture is taken while a card is on the page. A card **expiry** is never shown to the model (it reads the last four digits, the brand and the grant).
-
-### Errors become instructions
-
-| Code | What the model is told |
-|---|---|
-| `origin_mismatch` (a wrong shop or a payment frame the grant does not list) | Stop; nothing typed; do not try another card, amount or shop; tell the owner. **The owner is asked with a warning card and cards are off for the rest of the run.** |
-| `frame_unknown` | The payment frame's address cannot be verified; nothing typed; do not type the card yourself; tell the owner. |
-| `amount_exceeded`, `currency_mismatch`, `grant_expired`, `limit_reached` | Nothing typed; tell the owner; no other card, amount or shop. (The first two are also refused locally before the provider is asked.) |
-| `security_code_not_granted` | Ask the owner to type it (`request_human`, `secret`), then `type_handoff_secret`. |
-| `insecure_origin` | The page is not `https`; a card is never typed there. |
-| `cards_disabled`, `not_found` | Card release is off in the provider, or no card is allowed at this shop; tell the owner. |
-| `unauthorized`, `rate_limited`, `unavailable`, `typing_failed` | Not available right now / look at the page and retry the missing fields / tell the owner; the connection is reported (`needs_reconnect`). |
-
-### Bank verification
-
-When the checkout shows a verification step from the card issuer (a redirect or a frame, 3-D Secure, an approval in the banking app), the agent does **not** try to pass it and does not interact with the issuer's frame. It asks the owner with the question kind **`verification`** ("Your bank wants you to confirm this payment in your banking app"), waits, and continues when the page moves on. A code sent by text is a `code` request as before. Hexactra never passes a bank's verification itself.
-
-### Crash safety
-
-The phases are saved **before** each field and around the pay click (`runs.transcript.savedCards`). A job that dies between two fields finds them: the fields that were typed are not typed again (the card is released once), the one being typed is typed again. A job that dies **around the pay click** leaves the payment `unknown`: the model is told it may or may not have gone through, a second click on pay is refused by the gate and asks the owner, **a saved approval for that button does not apply**, and no card tool pays again in that run. A job that dies after the card was typed and before the pay click presses pay once on retry. The test for it simulates the interrupted click by saving the state a dying job would leave (the intent record is asserted to be saved before the click is sent); a real process kill on the deployed stack is the evidence the issue asks for.
-
-### What the owner sees
-
-- **The Secrets page** (`/settings/secrets`): **Let the agent pay with a saved card** (the consent), **Payment cards** (how it works; **Check a shop** lists the cards the provider has a live grant for at that shop, with brand, last four, expiry, the limit and whether the code is allowed, read-only, `GET /api/secrets/cards?merchant=`; and the shops Hexactra remembers, linking to Saved approvals). Vault lists a card only for a shop it is granted for, so the page asks per shop and cannot list every card.
-- **The task form and chat settings**: **Also pay with my saved cards** (off by default) and, for a task, what an unattended run does at a payment.
-- **The run page and the chat card**: "Paid with Visa ending 4242 at checkout.shop.example.com: 42.50 USD", the declared and the confirmed amount, and a **warning when they differ** (and a notification `runs.card_amount_mismatch`). `usedSavedCards` on a run: `[{ provider, itemName, brand, last4, merchant, origin, currency, declaredAmount, confirmedAmount, mismatch, at }]`, at most 10: a brand, the last four digits and amounts, never a number, an expiry or a code.
-- **A notification for every card use**, attended or not (`runs.card_used`: "Paid with Visa ending 4242 at ...: 42.50 USD").
-- **The Activity list**: each field kind typed (`card number`, `card expiry`, ...), the declared amount and the payment frame's host, and every refusal.
-
-### Audit and observability
-
-Fabric execution events (`secrets.lookup`, `secrets.release`) carry the field **name** only, with `amount`, `currency` and `frame_origin` for a card (the merchant is `origin`). The console stores them in `secrets_activity` (`amount`, `currency`, `frame_site` columns: validated copies, never a value). Steps and the run's own record carry the declared charge, the approval and the confirmed amount. Counter `app.secrets.card_uses` (label `outcome`: `typed`, `asked`, `approved`, `declined`, `refused_amount`, `refused_shop`, `refused_limit`, `refused_other`, `unattended_waits`, `mismatch`). Alert kind **Saved card used a lot** (`hexactra_card_use`, rule `hexactra.card_use`, on by default): more than `maxUses` (5) card payments of one user in `windowHours` (24), or a single payment above `maxAmount` (off until an administrator sets a deployment threshold).
-
-### What is not built (yet)
-
-- **Cards in the built-in store.** It holds logins only by design until Vault's card release is embedded there; a run with the built-in store chosen is not offered the card tools.
-- **Saving a new card from a run**, and **wallet buttons**.
-- **A card picker on a task.** The provider lists a card only for a shop it is granted for, so there is no list to pick from when a task is made; a task may use any card the owner granted at the shop it pays on, and the owner is asked which (the confirmation names the card).
-- **An automatic grant request.** Vault's grant request needs a card's id, which the per-shop lookup does not give for a shop with no grant. The model tells the owner (and the Secrets page links to the provider) to create the grant; the run does not file one.
-- **Passing a bank's verification automatically.**
