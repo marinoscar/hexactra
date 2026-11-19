@@ -113,6 +113,7 @@ async fn stream_replay_filter_and_scope() {
                 clear: false,
                 submit: false,
                 sensitive: false,
+                expect_origin: None,
                 tab_id: None,
             },
             Some(Duration::from_millis(300)),

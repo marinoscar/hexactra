@@ -462,6 +462,10 @@ struct SelectOption {
     text: String,
 }
 
+/// What an extension's error starts with when its origin guard refused to type
+/// (`origin_mismatch: ...`, E37.10).
+const EXTENSION_ORIGIN_MISMATCH: &str = "origin_mismatch";
+
 /// The most options read from one select.
 const MAX_OPTIONS: usize = 1_000;
 
@@ -616,6 +620,39 @@ fn compose_expiry(month: &SecretValue, year: &SecretValue) -> Option<SecretValue
     out.flatten().map(SecretValue::from_string)
 }
 
+/// The script that says whether the element a login's password is about to be
+/// typed into is a password field (E37.10): an `input` of type `password`, or
+/// a text input the page presents as one (`autocomplete` of `current-password`
+/// or `new-password`: the "show password" toggle that flips the type). For a
+/// point it descends into same-origin frames. It answers only `{ found,
+/// password }`: nothing of the page is read back. The selector is a JSON string
+/// literal and the point two integers; nothing else page-controlled is spliced
+/// in.
+fn password_target_script(selector: Option<&str>, point: Option<ViewportPoint>) -> String {
+    let find = match (selector, point) {
+        (Some(sel), _) => format!(
+            "document.querySelector({})",
+            serde_json::to_string(sel).unwrap_or_else(|_| "\"\"".into())
+        ),
+        (None, Some(p)) => format!("document.elementFromPoint({},{})", p.x, p.y),
+        (None, None) => "null".to_string(),
+    };
+    let (x, y) = point.map_or((0, 0), |p| (p.x, p.y));
+    let descend = point.is_some();
+    format!(
+        "/* hexactra:password-target */(()=>{{let e=null;try{{e={find}}}catch(_){{e=null}}if(!e)return {{found:false}};\
+         if({descend}){{let ox=0,oy=0;for(let i=0;i<3&&e&&(e.tagName==='IFRAME'||e.tagName==='FRAME');i++){{\
+         let d=null;try{{d=e.contentDocument}}catch(_){{d=null}}if(!d)break;\
+         const r=e.getBoundingClientRect();ox+=r.left+e.clientLeft;oy+=r.top+e.clientTop;\
+         const n=d.elementFromPoint({x}-ox,{y}-oy);if(!n)break;e=n}}}}\
+         if(e.tagName!=='INPUT')return {{found:true,password:false}};\
+         const t=String(e.type||'').toLowerCase();\
+         const ac=String(e.getAttribute('autocomplete')||'').toLowerCase().split(/\\s+/);\
+         const pw=t==='password'||((t==='text'||t==='')&&(ac.includes('current-password')||ac.includes('new-password')));\
+         return {{found:true,password:pw}}}})()"
+    )
+}
+
 /// What a probe of a card's target found.
 #[derive(Debug, PartialEq, Eq)]
 enum CardTarget {
@@ -720,14 +757,21 @@ impl Run {
                         .unwrap_or("the browser did not answer in time"),
                 ),
             )),
-            _ => Err(Fail::new(
-                fail_code,
-                clip(
-                    done.error
-                        .as_deref()
-                        .unwrap_or("the browser could not do it"),
-                ),
-            )),
+            _ => {
+                let error = done
+                    .error
+                    .as_deref()
+                    .unwrap_or("the browser could not do it");
+                // The extension's origin guard (E37.10): the tab is not on the
+                // origin the value was released for, so nothing was typed.
+                if let Some(rest) = error.strip_prefix(EXTENSION_ORIGIN_MISMATCH) {
+                    return Err(Fail::new(
+                        code::ORIGIN_MISMATCH,
+                        clip(rest.trim_start_matches(':').trim_start()),
+                    ));
+                }
+                Err(Fail::new(fail_code, clip(error)))
+            }
         }
     }
 
@@ -785,6 +829,39 @@ impl Run {
             )
         })?;
         Ok((origin, id))
+    }
+
+    /// Whether the element a password is about to be typed into is a password
+    /// field now (see [`password_target_script`]); anything else is refused
+    /// with `target_not_password` and nothing is fetched or typed.
+    async fn check_password_target(&self, tab: i64, target: &Target) -> Result<(), Fail> {
+        let done = self
+            .op(
+                RemoteAction::Evaluate {
+                    script: password_target_script(target.selector.as_deref(), target.point),
+                    await_promise: false,
+                    tab_id: Some(tab),
+                },
+                code::TYPING_FAILED,
+            )
+            .await?;
+        let v = done
+            .result
+            .as_ref()
+            .and_then(|r| r.get("value"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        self.store.discard_result(done.id);
+        if v.get("found").and_then(Value::as_bool) != Some(true) {
+            return Err(Fail::new(code::TYPING_FAILED, "there is no such element"));
+        }
+        if v.get("password").and_then(Value::as_bool) != Some(true) {
+            return Err(Fail::new(
+                code::TARGET_NOT_PASSWORD,
+                "that field is not a password field; a saved password is only typed into one. Nothing was typed",
+            ));
+        }
+        Ok(())
     }
 
     /// A target point must not land in a frame of another origin.
@@ -900,6 +977,18 @@ impl Run {
         if let Some(p) = target.point {
             self.check_point(tab, p).await?;
         }
+        // A login's password goes only into a password field (E37.10): asked
+        // before the provider is, so a refusal fetches nothing.
+        let is_password = matches!(
+            &source,
+            Source::Field {
+                field: SecretField::Password,
+                ..
+            }
+        );
+        if is_password {
+            self.check_password_target(tab, &target).await?;
+        }
 
         // 2. From here until typing ends no picture may be taken.
         let _no_pictures = self.store.secret_guard(self.session_id);
@@ -951,10 +1040,16 @@ impl Run {
                 "the page navigated while the value was fetched; nothing was typed",
             ));
         }
+        // The page may also have swapped the field for another while the
+        // provider answered: it must still be a password field.
+        if is_password {
+            self.check_password_target(tab, &target).await?;
+        }
 
-        // 5. Type it with trusted input; the store holds the text apart from
+        // 5. Type it with trusted input, which the extension runs only while
+        //    the tab is still on `origin`; the store holds the text apart from
         //    the operation (which shows `[secret]`) and zeroizes it.
-        self.type_into(&value, &target, tab).await?;
+        self.type_into(&value, &target, tab, &origin).await?;
         drop(value);
         Ok(json!(ProviderTypedResult {
             typed: true,
@@ -1095,7 +1190,7 @@ impl Run {
 
         // 5. Type it with trusted input; at a point inside a frame this is a
         //    click and keystrokes at screen coordinates: no script runs there.
-        self.type_into(&value, &target, tab).await?;
+        self.type_into(&value, &target, tab, &origin).await?;
         drop(value);
         Ok(json!(CardTypedResult {
             typed: true,
@@ -1214,7 +1309,18 @@ impl Run {
         Ok(json!(ProviderSelectedResult { selected: true }))
     }
 
-    async fn type_into(&self, value: &SecretValue, target: &Target, tab: i64) -> Result<(), Fail> {
+    /// Type `value` into the target with trusted input. The `type` and
+    /// `type_keys` actions carry `expect_origin`, which the extension checks
+    /// against the tab's top-level origin at the moment of typing (E37.10),
+    /// so a navigation after the fabric's last origin read types nothing.
+    async fn type_into(
+        &self,
+        value: &SecretValue,
+        target: &Target,
+        tab: i64,
+        expect: &Origin,
+    ) -> Result<(), Fail> {
+        let expect_origin = Some(expect.to_string());
         let text = || {
             secret_text(value)
                 .ok_or_else(|| Fail::new(code::TYPING_FAILED, "the value is not text"))
@@ -1227,6 +1333,7 @@ impl Run {
                     clear: target.clear,
                     submit: target.submit,
                     sensitive: true,
+                    expect_origin: expect_origin.clone(),
                     tab_id: Some(tab),
                 },
                 code::TYPING_FAILED,
@@ -1267,6 +1374,7 @@ impl Run {
             RemoteAction::TypeKeys {
                 text: text()?,
                 sensitive: true,
+                expect_origin: expect_origin.clone(),
                 tab_id,
             },
             code::TYPING_FAILED,

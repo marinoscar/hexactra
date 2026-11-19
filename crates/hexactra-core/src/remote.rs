@@ -432,6 +432,10 @@ pub mod provider_error_codes {
     /// `type_card_field`: the target is in a frame and its origin cannot be
     /// determined (or is not `https`); nothing was typed.
     pub const FRAME_UNKNOWN: &str = "frame_unknown";
+    /// A login's password is only typed into a password field (E37.10): the
+    /// target is not an `input` of type `password` (nor a text input the page
+    /// presents as one); nothing was fetched or typed.
+    pub const TARGET_NOT_PASSWORD: &str = "target_not_password";
 }
 
 /// The provider implementations a registration can name.
@@ -533,6 +537,14 @@ pub enum RemoteAction {
         /// sends it to the host but stores and reports it as `[secret]`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         sensitive: bool,
+        /// The origin (`scheme://host[:port]`) the tab's top-level document
+        /// must be on at the moment of typing (E37.10, #625). The control
+        /// plane sets it for a provider action from the origin it verified;
+        /// the extension compares it with the tab's URL and, when it differs,
+        /// types nothing and fails with `origin_mismatch: ...`. Absent for an
+        /// ordinary `type`; a host or extension that predates it ignores it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expect_origin: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -787,6 +799,10 @@ pub enum RemoteAction {
         /// plane sends it to the host but stores and reports it as `[secret]`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         sensitive: bool,
+        /// As for `type`: the origin the tab's top-level document must be on
+        /// when the keys are sent (E37.10).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expect_origin: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -992,6 +1008,26 @@ fn check_text(text: &str) -> Result<(), ActionValidationError> {
     Ok(())
 }
 
+/// The most an `expect_origin` may be: an origin is a scheme, a host and a port.
+const MAX_ORIGIN_LEN: usize = 300;
+
+/// `expect_origin` is `scheme://host[:port]`: no path, query or fragment, so a
+/// URL (which can carry a token) is never put in an action.
+fn check_expect_origin(origin: Option<&str>) -> Result<(), ActionValidationError> {
+    let Some(o) = origin else { return Ok(()) };
+    let rest = o
+        .strip_prefix("https://")
+        .or_else(|| o.strip_prefix("http://"));
+    let bad = o.len() > MAX_ORIGIN_LEN
+        || rest.is_none_or(|r| r.is_empty() || r.contains(['/', '?', '#', '@', ' ']));
+    if bad {
+        return Err(ActionValidationError(
+            "expect_origin must be scheme://host[:port]".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// The most a purchase may be: 10,000,000.00 (Vault's own ceiling).
 pub const MAX_CARD_AMOUNT: f64 = 10_000_000.0;
 
@@ -1170,8 +1206,14 @@ impl RemoteAction {
             RemoteAction::Click { selector, .. } | RemoteAction::TypeSecret { selector, .. } => {
                 check_selector(selector)
             }
-            RemoteAction::Type { selector, text, .. } => {
+            RemoteAction::Type {
+                selector,
+                text,
+                expect_origin,
+                ..
+            } => {
                 check_selector(selector)?;
+                check_expect_origin(expect_origin.as_deref())?;
                 check_text(text)
             }
             RemoteAction::SecretsLookup {
@@ -1310,7 +1352,18 @@ impl RemoteAction {
                 check_delta(*dx)?;
                 check_delta(*dy)
             }
-            RemoteAction::TypeKeys { text, .. } | RemoteAction::DesktopType { text } => {
+            RemoteAction::TypeKeys {
+                text,
+                expect_origin,
+                ..
+            } => {
+                if text.is_empty() {
+                    return Err(ActionValidationError("text must not be empty".into()));
+                }
+                check_expect_origin(expect_origin.as_deref())?;
+                check_text(text)
+            }
+            RemoteAction::DesktopType { text } => {
                 if text.is_empty() {
                     return Err(ActionValidationError("text must not be empty".into()));
                 }
@@ -2857,6 +2910,7 @@ mod tests {
                 clear: false,
                 submit: false,
                 sensitive: false,
+                expect_origin: None,
                 tab_id: None
             }
         );
@@ -3407,6 +3461,62 @@ mod tests {
     }
 
     #[test]
+    fn expect_origin_is_optional_on_the_wire_and_is_an_origin() {
+        // Absent in, absent out: an action from an older client is unchanged.
+        let t: RemoteAction =
+            serde_json::from_value(json!({"type": "type", "selector": "#p", "text": "x"})).unwrap();
+        assert!(serde_json::to_value(&t)
+            .unwrap()
+            .get("expect_origin")
+            .is_none());
+        let k: RemoteAction = serde_json::from_value(
+            json!({"type": "type_keys", "text": "x", "expect_origin": "https://app.example.test"}),
+        )
+        .unwrap();
+        assert!(matches!(
+            &k,
+            RemoteAction::TypeKeys { expect_origin: Some(o), .. } if o == "https://app.example.test"
+        ));
+        assert!(k.validate().is_ok());
+        assert_eq!(
+            serde_json::to_value(&k).unwrap()["expect_origin"],
+            "https://app.example.test"
+        );
+        // An origin, not a URL: no path, query, userinfo or other scheme.
+        for bad in [
+            "https://app.example.test/signin",
+            "https://app.example.test?x=1",
+            "https://user@app.example.test",
+            "ftp://app.example.test",
+            "https://",
+            "app.example.test",
+        ] {
+            let a = RemoteAction::Type {
+                selector: "#p".into(),
+                text: "x".into(),
+                clear: false,
+                submit: false,
+                sensitive: true,
+                expect_origin: Some(bad.into()),
+                tab_id: None,
+            };
+            assert!(a.validate().is_err(), "{bad}");
+        }
+        for ok in ["https://app.example.test", "http://localhost:8080"] {
+            let a = RemoteAction::Type {
+                selector: "#p".into(),
+                text: "x".into(),
+                clear: false,
+                submit: false,
+                sensitive: true,
+                expect_origin: Some(ok.into()),
+                tab_id: None,
+            };
+            assert!(a.validate().is_ok(), "{ok}");
+        }
+    }
+
+    #[test]
     fn kind_never_contains_content() {
         let a = RemoteAction::Type {
             selector: "#password".into(),
@@ -3414,6 +3524,7 @@ mod tests {
             clear: true,
             submit: false,
             sensitive: true,
+            expect_origin: None,
             tab_id: None,
         };
         assert_eq!(a.kind(), "type");
