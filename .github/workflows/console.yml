@@ -91,6 +91,16 @@ jobs:
       - run: npm run check:generated --workspace=@hexactra/console-sdk
       # Unit tests, runPlatformConformance(), web and CLI suites.
       - run: npm test
+      # The replay suite, scripted (E38.6): every scenario against the real runner loop with a scripted model and a fake site. Free and
+      # deterministic (no database, no model). It fails when a scenario fails or when none is found, so it never reports success for a
+      # suite that did not run. The live mode costs money and has its own workflow (scenarios-live.yml).
+      - run: npm run scenarios --workspace=api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scenarios-junit
+          path: console/apps/api/test-results/scenarios.xml
+          if-no-files-found: warn
       - run: npm run build
 
       # The db tier: the whole app against the migrated, seeded database.

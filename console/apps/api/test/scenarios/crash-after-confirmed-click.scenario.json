@@ -1,0 +1,45 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a crash after a confirmed click",
+  "description": "The click reached the browser and the payment happened, then the job died before the result was recorded (#584). The next job marks the step unknown and never repeats it: the agent reads the page, sees the transfer was sent, and finishes without a second click.",
+  "goal": "Send 10 to Person A",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["bank.example.test"] },
+  "site": {
+    "start": "https://bank.example.test/review",
+    "state": { "paid": "no" },
+    "pages": {
+      "https://bank.example.test/review": {
+        "title": "Review transfer",
+        "text": "Send 10.00 to Person A from Checking. Press Pay to send it.",
+        "elements": [
+          { "id": "pay", "selector": "#pay", "tag": "button", "label": "Pay", "commit": "payment", "on": [{ "when": { "paid": "no" }, "set": { "paid": "yes" }, "goto": "https://bank.example.test/done" }] }
+        ]
+      },
+      "https://bank.example.test/done": { "title": "Done", "text": "Transfer sent: 10.00 to Person A. Reference TR-2002.", "elements": [] }
+    }
+  },
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve", "repeat": true }],
+  "harness": {
+    "crash": { "when": "after_send", "label": "Pay" },
+    "scriptAfterCrash": [
+      [{ "tool": "read_text" }],
+      [{ "tool": "finish", "args": { "success": true, "result": "The transfer was already sent (TR-2002); I did not pay again." } }]
+    ]
+  },
+  "script": [
+    [
+      { "tool": "click", "args": { "selector": "#pay", "reason": "send the transfer" } },
+      { "tool": "request_human", "args": { "kind": "confirmation", "prompt": "Pay 10.00 to Person A from Checking?", "input": "confirm", "confirm_label": "Pay", "deny_label": "Cancel" } }
+    ],
+    [{ "tool": "click", "args": { "selector": "#pay", "reason": "the owner approved" } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "mustAsk": [{ "kind": "confirmation", "beforeLabel": "Pay" }],
+    "questions": 1,
+    "mustNot": ["click:Pay:without_confirmation", "repeat_commit"],
+    "endState": { "paid": "yes" },
+    "finishIncludes": "TR-2002",
+    "maxSteps": 20
+  }
+}

@@ -11,6 +11,7 @@ import { agentCommand } from './agent/agent.command.js';
 import { agentScreen } from './agent/agent.tui.js';
 import { withAndroidPreflight } from './android-checkout.js';
 import { androidScreen } from './android.tui.js';
+import { devCommand } from './dev.command.js';
 import { EDGE_WEBSOCKETS_STEPS } from './edge-websockets.step.js';
 import { FABRIC_CONNECT_STEPS } from './fabric-connect.step.js';
 import { bundledHostCommand } from './bundled-host.command.js';
@@ -91,7 +92,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   version: readVersion(),
   // `android`: build, version and release the Android app (apps/android) through the platform's group,
   // behind this app's folder check (#478): the app is in console/, and a build needs `npm ci` there.
-  extraCommands: [bundledHostCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, policiesCommand, memoriesCommand, connectionsCommand, appsCommand, inboxCommand, questionsCommand, mcpCommand, withAndroidPreflight(androidCommand({ identity: ANDROID_IDENTITY_SOURCE }))],
+  extraCommands: [bundledHostCommand, devCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, policiesCommand, memoriesCommand, connectionsCommand, appsCommand, inboxCommand, questionsCommand, mcpCommand, withAndroidPreflight(androidCommand({ identity: ANDROID_IDENTITY_SOURCE }))],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen, agentScreen, androidScreen],
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,

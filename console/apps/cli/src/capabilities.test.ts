@@ -30,8 +30,8 @@ function leafPaths(): string[] {
   return out;
 }
 
-/** Commands that are tooling rather than a capability of the product: the MCP bridge and the platform's Android release group. */
-const isTooling = (path: string) => path === 'mcp serve' || path.startsWith('android ') || path === 'android';
+/** Commands that are tooling rather than a capability of the product: the MCP bridge, the platform's Android release group, and the developer tools (`dev`: the replay suite's scenario converter, #587). */
+const isTooling = (path: string) => path === 'mcp serve' || path.startsWith('android ') || path === 'android' || path.startsWith('dev ');
 
 describe('capability parity (CLI, TUI)', () => {
   const commands = leafPaths();

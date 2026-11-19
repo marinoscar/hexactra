@@ -1,0 +1,31 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a stall that escalates a tier",
+  "description": "The agent clicks the same button over and over and the page never changes. The stall detector nudges, then moves the run to the next tier (#405); the stronger model finds the real link.",
+  "goal": "Open the opening hours page of the library",
+  "policy": "builtin:balanced",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["library.example.test"] },
+  "harness": { "stall": { "maxRepeatedAction": 3, "maxConsecutiveFailures": 3, "noProgressActions": 8, "maxEscalations": 2 } },
+  "site": {
+    "start": "https://library.example.test/",
+    "state": {},
+    "pages": {
+      "https://library.example.test/": {
+        "title": "Library",
+        "text": "Welcome. Menu: Hours, Catalogue.",
+        "elements": [
+          { "id": "refresh", "selector": "#refresh", "tag": "button", "label": "Refresh" },
+          { "id": "hours", "selector": "#hours", "tag": "a", "role": "link", "label": "Hours", "on": [{ "goto": "https://library.example.test/hours" }] }
+        ]
+      },
+      "https://library.example.test/hours": { "title": "Opening hours", "text": "Open 9 to 17, Monday to Saturday.", "elements": [] }
+    }
+  },
+  "script": [
+    [{ "tool": "click", "args": { "selector": "#refresh" } }, { "tool": "click", "args": { "selector": "#refresh" } }, { "tool": "click", "args": { "selector": "#refresh" } }, { "tool": "click", "args": { "selector": "#refresh" } }],
+    [{ "tool": "click", "args": { "selector": "#refresh" } }, { "tool": "click", "args": { "selector": "#refresh" } }, { "tool": "click", "args": { "selector": "#refresh" } }, { "tool": "click", "args": { "selector": "#refresh" } }],
+    [{ "tool": "click", "args": { "selector": "#hours" } }, { "tool": "read_text" }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Open 9 to 17, Monday to Saturday." } }]
+  ],
+  "expect": { "status": "succeeded", "tierAtEnd": "frontier", "finishIncludes": "9 to 17", "maxSteps": 30 }
+}
