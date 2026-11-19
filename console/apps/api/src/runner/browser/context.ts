@@ -1,6 +1,8 @@
 // The context the browser tools are written against (E38.5): the harness context, a memory with the browser's fields, and the browser
 // toolset's own state and hooks. The host builds it; the tools reach the page, the site list and the gates only through it.
-import type { GateTarget, HarnessMemory, RunContext } from '../harness';
+import type { z } from 'zod';
+
+import type { GateTarget, HarnessMemory, ResultField, RunContext } from '../harness';
 import type { BrowserPort } from './browser-port';
 import type { ScreenshotWindow } from './context-settings';
 import type { TargetFacts } from './policy';
@@ -84,6 +86,22 @@ export interface BrowserHooks {
   secretTyped?(info: { handoffId: string }): Promise<void>;
 }
 
+/**
+ * What the run must return beside its words (task outputs, E39.5), as the host binds it for a run whose task declared some: the `finish`
+ * tool's parameters, how the values it was given are read and checked, and the words kept out of the result. The toolset never reads a
+ * type or a rule itself.
+ */
+export interface OutputsHandle {
+  /** The parameters of `finish` for this run: `success`, `result` and `outputs` with exactly the task's keys. */
+  parameters: z.ZodTypeAny;
+  /** Reads and checks what `finish` was given. `refusal` is the answer when `finish` must be asked again (never when `final`). */
+  decide(given: unknown, opts: { attempts: number; final: boolean }): { fields: Record<string, ResultField>; complete: boolean; refusal: string | null; problemKeys: string[] };
+  /** The result text with every sensitive value taken out of it. */
+  scrub(result: string, given: unknown): string;
+  /** How many times `finish` may be refused (the host's rule; the loop asks the same number of times for a missing `finish`). */
+  readonly maxAttempts: number;
+}
+
 export interface BrowserExt {
   browser: BrowserPort;
   sites: SiteList;
@@ -97,6 +115,8 @@ export interface BrowserExt {
   sensitiveParams(): { key: string; label: string }[];
   masking: ReadMasking;
   hooks: BrowserHooks;
+  /** The task's outputs for this run; null for a run without any (then `finish` is `{ success, result }` as it always was). */
+  outputs: OutputsHandle | null;
 }
 
 export type BrowserContext = RunContext<BrowserMemory, BrowserExt>;

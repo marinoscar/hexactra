@@ -6,6 +6,7 @@ import { savedApprovalsLine } from '../approvals/approval-runner';
 import { PrismaService } from '../prisma/prisma.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { RunEndHooks } from '../tasks/run-end-hooks';
+import { outputsView } from '../tasks/task-outputs';
 import { TERMINAL_RUN_STATUSES } from '../tasks/run-status';
 import { ChatService } from './chat.service';
 
@@ -49,11 +50,13 @@ export class ChatResults implements OnModuleInit, OnModuleDestroy {
   async recordRunEnd(userId: string, runId: string): Promise<void> {
     const run = await this.prisma.forUser({ userId }).run.findFirst({
       where: { id: runId, conversationId: { not: null }, status: { in: [...TERMINAL_RUN_STATUSES] } },
-      select: { id: true, conversationId: true, status: true, result: true, error: true, stopReason: true, costUsd: true, costKnown: true, stepCount: true, confirmedActions: true },
+      select: { id: true, conversationId: true, status: true, result: true, error: true, stopReason: true, costUsd: true, costKnown: true, stepCount: true, confirmedActions: true, outputs: true, outputsSpec: true, outputsComplete: true },
     });
     if (!run?.conversationId) return;
     // Steps that went ahead on saved approvals (#555): the same line as the end-of-run notification.
     const savedApprovals = savedApprovalsLine((await this.approvals?.gateUsesOfRun(userId, run.id).catch(() => [])) ?? []);
+    // What the run returned (E39.5): the definitions it started with and the values, masked (a sensitive one is `[hidden]`).
+    const outputs = outputsView(run.outputsSpec, run.outputs);
     const meta: Prisma.InputJsonObject = {
       status: run.status,
       stopReason: run.stopReason,
@@ -62,6 +65,7 @@ export class ChatResults implements OnModuleInit, OnModuleDestroy {
       stepCount: run.stepCount,
       confirmedActions: readConfirmedActions(run.confirmedActions).length,
       ...(savedApprovals ? { savedApprovals } : {}),
+      ...(outputs ? { outputs: outputs as unknown as Prisma.InputJsonArray, outputsComplete: run.outputsComplete } : {}),
     };
     await this.chats.append(run.conversationId, { role: 'assistant', kind: 'result', text: resultText(run).slice(0, RESULT_TEXT_MAX), runId: run.id, meta }, { onceForRun: true });
   }

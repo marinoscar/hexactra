@@ -32,6 +32,14 @@ export interface LoopProfile<C extends AnyContext = AnyContext> {
   contextLines(ctx: C): string[];
   /** The words of a `guidance` step: the owner's message, masked and cut. */
   summarizeGuidance(note: string): string;
+  /**
+   * The model stopped talking without calling `finish`. A toolset that needs a structured result (task outputs, E39.5) returns what to ask
+   * for (the nudge the next round carries, and the note recorded in the trace), counting its own attempts in the memory; null takes the
+   * model's answer as the result.
+   */
+  beforeImplicitFinish?(ctx: C): { nudge: string; note: string } | null;
+  /** A line the wrap-up call's input carries after the budget's own words (what else `finish` should give), or ''. */
+  wrapUpNote?(ctx: C): string;
   /** The memory block about the owner (#553): information for the model, after the goal. '' without memories. */
   aboutOwner: string;
 }

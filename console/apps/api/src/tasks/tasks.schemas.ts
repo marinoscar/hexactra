@@ -5,6 +5,7 @@ import { profileNameSchema } from '../fleet/fleet.schemas';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
 import { taskSchedulesField } from './task-list.schemas';
+import { taskOutputsField } from './task-outputs.schemas';
 import { taskParametersField } from './task-params.schemas';
 
 /** A site an agent may visit: a hostname, or `*.` and a hostname. */
@@ -33,6 +34,7 @@ const taskFields = {
   model: z.string().trim().min(1).max(200).nullable().meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `models.pins.standard`.'),
   policyId: policyRefSchema.nullable().describe("The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
   parameters: taskParametersField,
+  outputs: taskOutputsField,
   useSavedLogins: z
     .boolean()
     .describe(
@@ -69,6 +71,7 @@ export const createTaskSchema = z.object({
   model: taskFields.model.optional(),
   policyId: taskFields.policyId.optional(),
   parameters: taskFields.parameters.optional(),
+  outputs: taskFields.outputs.optional(),
   // Absent: the owner's `secrets.defaultUseSavedLogins` (off unless they turned it on).
   useSavedLogins: taskFields.useSavedLogins.optional(),
   useSavedIdentity: taskFields.useSavedIdentity.optional(),

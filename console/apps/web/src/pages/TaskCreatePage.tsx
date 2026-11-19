@@ -26,6 +26,8 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
     useSavedCards: draft.useSavedCards === true,
     // The parameters the draft proposes (#556): the owner reviews each in the form; nothing is saved by the draft.
     parameters: Array.isArray(draft.parameters) ? draft.parameters.filter((p) => p && typeof p.key === 'string').map((p) => ({ ...p })) : [],
+    // The outputs the draft proposes from what the finished run reported (E39.5): the owner reviews each row in the form.
+    outputs: Array.isArray(draft.outputs) ? draft.outputs.filter((o) => o && typeof o.label === 'string').map((o) => ({ ...o, key: typeof o.key === 'string' ? o.key : '' })) : [],
   };
 }
 

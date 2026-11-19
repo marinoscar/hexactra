@@ -2,6 +2,7 @@ import type { RunBudget } from '../components/runBudget';
 // A chat and its messages, as the API returns them (`chatResponseSchema` and
 // friends in apps/api/src/openapi/chat.responses.ts) and as the chat's event
 // stream sends them (apps/api/src/chat/chat-stream.controller.ts).
+import type { TaskOutput } from '@app/shared/task-fields';
 import type { TaskParameter } from '@app/shared/task-params';
 
 import type { RunActivity } from '../components/RunActivity';
@@ -112,6 +113,8 @@ export interface ChatTaskDraft {
   useSavedCards?: boolean;
   /** The goal's parameters the draft proposes (#556); absent in drafts from before. */
   parameters?: TaskParameter[];
+  /** The outputs the draft proposes (E39.5), from what the finished run reported; absent in drafts from before. */
+  outputs?: TaskOutput[];
 }
 
 /** What the chat hands to `/tasks/new` in the router's state: the draft to review, and the chat to tell once it is saved. */

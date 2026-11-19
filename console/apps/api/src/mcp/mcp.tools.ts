@@ -6,7 +6,7 @@
 import { chatAnswerMode } from '@app/shared/question-rules';
 import { z } from 'zod';
 
-import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskResponseSchema } from '../openapi/console.responses';
+import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
 import { schedulePreviewSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { parsePolicyRef } from '../policies/builtin-policies';
@@ -335,7 +335,7 @@ function runSummary(r: Record<string, unknown>): string {
 
 /** A run's answer and notes come from the web: mark the result when it holds any. */
 function runHasPageText(r: Record<string, unknown>): boolean {
-  return (typeof r.result === 'string' && r.result !== '') || (typeof r.error === 'string' && r.error !== '');
+  return (typeof r.result === 'string' && r.result !== '') || (typeof r.error === 'string' && r.error !== '') || (Array.isArray(r.outputs) && r.outputs.length > 0);
 }
 
 /** How long run_goal and task_run wait by default: hosted (OAuth) clients have no timers, so they wait for a first report. */
@@ -438,6 +438,7 @@ const taskListItemSchema = z.object({
   liveRunId: z.uuid().nullable().describe('A run of the task that is queued, running or waiting for the user'),
   policyName: z.string().nullable().optional(),
   parameters: z.array(mcpTaskParameterSchema).optional().describe("The goal's {{parameters}} (#552): pass their values in task_run inputs"),
+  outputs: z.array(taskOutputResponseSchema).optional().describe('The values the agent returns when a run of this task finishes (E39.5): they come back as `outputs` in run_status and run_wait'),
 });
 
 function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSchema> {
@@ -465,6 +466,7 @@ function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSc
     liveRunId: s.liveRunId ?? null,
     policyName: s.policy?.name ?? null,
     ...(Array.isArray(t.parameters) && t.parameters.length ? { parameters: mcpParameters(t.parameters) } : {}),
+    ...(Array.isArray(t.outputs) && t.outputs.length ? { outputs: t.outputs as z.infer<typeof taskOutputResponseSchema>[] } : {}),
   };
 }
 

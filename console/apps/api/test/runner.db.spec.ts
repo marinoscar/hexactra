@@ -8,7 +8,7 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FabricError, type FabricClient } from '../src/fabric/fabric.client';
-import { GoalRunnerService } from '../src/runner/goal-runner.service';
+import { GoalRunnerService, INSTRUCTIONS } from '../src/runner/goal-runner.service';
 import { ExternalBrowserController } from '../src/browser/external-browser.controller';
 import { HandoffAnswers } from '../src/browser/handoff-answers';
 import { InboxController } from '../src/browser/inbox.controller';
@@ -26,6 +26,8 @@ import { UNLIMITED_LOG_LINE } from '../src/runner/budget';
 import { AiError } from '@marinoscar/platform-api/ai';
 import { lastValueFrom, toArray } from 'rxjs';
 import { RunLiveController } from '../src/runner/run-live.controller';
+import { z } from 'zod';
+import type { TaskOutput } from '@app/shared/task-fields';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -1756,5 +1758,180 @@ describe('the run trace (#541)', () => {
     } finally {
       live.artifacts = before;
     }
+  });
+});
+
+describe('task outputs (E39.5, #600)', () => {
+  const FOUR: TaskOutput[] = [
+    { key: 'confirmation_number', label: 'Confirmation number', type: 'text', required: true, help: 'Shown on the receipt' },
+    { key: 'amount_paid', label: 'Amount paid', type: 'money', required: true },
+    { key: 'paid_on', label: 'Paid on', type: 'date', required: true },
+    { key: 'balance', label: 'Remaining balance', type: 'money', required: false },
+  ];
+  const GOOD = { confirmation_number: 'C-8841', amount_paid: '$1,250.00', paid_on: 'March 25, 2026', balance: null };
+  const WRAP = 'Paid; the balance page did not load.';
+
+  async function outputsRun(email: string, spec: TaskOutput[] | null = FOUR, columns: Record<string, unknown> = {}) {
+    const userId = await login(email);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Pay the rent', goal: 'Pay the rent', ...(spec ? { outputs: spec as never } : {}) } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: 'Pay the rent', ...(spec ? { outputsSpec: spec as never } : {}), ...columns } });
+    return { userId, prisma, db, task, run };
+  }
+  const runnerOf = (prisma: PrismaService, ai: AiService, fabric: ReturnType<typeof fakeFabric>) => new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, { needsYou: async () => undefined, finished: async () => undefined } as never);
+  const finish = (success: boolean, outputs: Record<string, unknown> | undefined, result = 'Paid the rent.'): Call => ['finish', { success, result, ...(outputs ? { outputs } : {}) }];
+  /** The scripted model, with every request it was sent. */
+  function recordingAi(scripts: Call[][]) {
+    const scripted = scriptedAi(scripts);
+    return scripted;
+  }
+  const reqs = (runTools: jest.Mock) => runTools.mock.calls.map((c) => c[0] as { instructions: string; input: string; tools: { tool: { name: string; parameters: z.ZodType } }[] });
+
+  it('finishes a task with four outputs: all stored, read by type, outputsComplete true', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-ok-${stamp}@example.test`);
+    const { ai, runTools } = recordingAi([[finish(true, GOOD)]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', outputsComplete: true, stopReason: 'finished' });
+    expect(done.outputs).toEqual({
+      confirmation_number: { value: 'C-8841', ok: true },
+      amount_paid: { value: { amount: 1250, currency: 'USD' }, ok: true },
+      paid_on: { value: '2026-03-25', ok: true },
+      balance: { value: null, ok: true },
+    });
+    // The instructions list the outputs; the finish schema carries exactly the task's keys.
+    const [first] = reqs(runTools);
+    expect(first!.instructions).toContain('Outputs to return:');
+    expect(first!.instructions).toContain('- confirmation_number (Confirmation number): text, required. Shown on the receipt');
+    const json = z.toJSONSchema(first!.tools.find((t) => t.tool.name === 'finish')!.tool.parameters) as unknown as { properties: { outputs: { properties: Record<string, unknown> } } };
+    expect(Object.keys(json.properties.outputs.properties)).toEqual(FOUR.map((o) => o.key));
+  });
+
+  it('a task without outputs keeps today’s finish schema and instructions, and stores no outputs', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-none-${stamp}@example.test`, null);
+    const { ai, runTools } = recordingAi([[['finish', { success: true, result: 'Done.' }]]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    const [first] = reqs(runTools);
+    expect(first!.instructions).toBe(INSTRUCTIONS);
+    expect(z.toJSONSchema(first!.tools.find((t) => t.tool.name === 'finish')!.tool.parameters)).toEqual(z.toJSONSchema(z.object({ success: z.boolean(), result: z.string().min(1).max(4000) })));
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ outputs: null, outputsComplete: null });
+  });
+
+  it('keeps the instructions, the stable prefix, the same in every round', async () => {
+    const { userId, prisma, run } = await outputsRun(`outputs-prefix-${stamp}@example.test`);
+    const { ai, runTools } = recordingAi([[['navigate', { url: 'https://shop.example.test/pay', reason: 'open' }]], [['observe_elements', {}]], [finish(true, GOOD)]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    const all = reqs(runTools);
+    expect(all.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(all.map((r) => r.instructions)).size).toBe(1);
+    expect(all[0]!.instructions.startsWith(INSTRUCTIONS)).toBe(true);
+  });
+
+  it('answers a finish with a missing required output, and the run goes on', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-missing-${stamp}@example.test`);
+    const { ai, outputs } = recordingAi([[finish(true, { ...GOOD, confirmation_number: null, amount_paid: 'ten dollars' })], [finish(true, GOOD)]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    expect(outputs[0]).toMatch(/^Not finished: `confirmation_number` is required; `amount_paid` is not an amount of money: 'ten dollars'\./);
+    expect(outputs[1]).toBe('Finished.');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', outputsComplete: true });
+    // Only the accepted finish is a step of the run; the refusal is a note.
+    const steps = await prisma.runStep.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' } });
+    expect(steps.filter((x) => x.kind === 'finish')).toHaveLength(1);
+    expect(steps.find((x) => x.kind === 'note')?.summary).toMatch(/finish was refused: confirmation_number, amount_paid \(1 of 2\)/);
+  });
+
+  it('after two bad attempts the run ends with what it has: invalid fields null with the reason, outputsComplete false', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-bad-${stamp}@example.test`);
+    const bad = { confirmation_number: 'C-1', amount_paid: 'ten dollars', paid_on: null, balance: null };
+    const { ai, outputs } = recordingAi([[finish(true, bad)], [finish(true, bad)], [finish(true, bad)]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    expect(outputs[0]).not.toBe('Finished.');
+    expect(outputs[1]).toMatch(/last time/);
+    expect(outputs[2]).toBe('Finished.');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', outputsComplete: false });
+    expect(done.outputs).toEqual({
+      confirmation_number: { value: 'C-1', ok: true },
+      amount_paid: { value: null, ok: false, note: 'Not an amount of money' },
+      paid_on: { value: null, ok: false, note: 'Not found' },
+      balance: { value: null, ok: true },
+    });
+  });
+
+  it('a failed run stores the outputs it gave, validated, and may omit the rest', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-failed-${stamp}@example.test`);
+    const { ai, outputs } = recordingAi([[finish(false, { confirmation_number: 'C-2', amount_paid: 'n/a' }, 'Payment page was down.')]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+    // A failure is never refused.
+    expect(outputs[0]).toBe('Finished.');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'failed', outputsComplete: false });
+    expect(done.outputs).toMatchObject({ confirmation_number: { value: 'C-2', ok: true }, amount_paid: { value: null, ok: false, note: 'Not an amount of money' }, paid_on: { value: null, ok: false } });
+  });
+
+  it('a failed finish with no outputs at all still ends the run, every required output not found', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-omit-${stamp}@example.test`);
+    const { ai } = recordingAi([[finish(false, undefined, 'Could not sign in.')]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done.outputsComplete).toBe(false);
+    expect(done.outputs).toMatchObject({ confirmation_number: { value: null, ok: false, note: 'Not found' }, balance: { value: null, ok: true } });
+  });
+
+  it('the wrap-up call uses the same finish schema, and a stopped run still returns the fields it found', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-wrap-${stamp}@example.test`, FOUR, { policyRef: 'builtin:balanced', policyVersion: 1, policySource: 'system_default', policySnapshot: snapshotWith({ maxActions: 2 }) as never });
+    const nav = (n: number): Call[] => Array.from({ length: n }, (_, i): Call => ['navigate', { url: `https://shop.example.test/${i}`, reason: 'go' }]);
+    // The model gives a bad value in the wrap-up: there is no second try there.
+    const { ai, runTools, outputs } = recordingAi([nav(3), [finish(false, { confirmation_number: 'C-3', amount_paid: 'lots' }, WRAP)]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+    expect(outputs.at(-1)).toBe('Finished.');
+    const wrap = reqs(runTools)[1]!;
+    expect(wrap.tools.map((t) => t.tool.name)).toEqual(['finish']);
+    expect(wrap.instructions).toBe(reqs(runTools)[0]!.instructions);
+    expect(wrap.input).toMatch(/Give the outputs in finish too/);
+    const json = z.toJSONSchema(wrap.tools[0]!.tool.parameters) as unknown as { properties: { outputs: { properties: Record<string, unknown> } } };
+    expect(Object.keys(json.properties.outputs.properties)).toEqual(FOUR.map((o) => o.key));
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'failed', stopReason: 'budget_actions', result: WRAP, outputsComplete: false });
+    expect(done.outputs).toMatchObject({ confirmation_number: { value: 'C-3', ok: true }, amount_paid: { value: null, ok: false } });
+  });
+
+  it('a model that stops without finish is asked for the outputs, twice at most', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-nofinish-${stamp}@example.test`);
+    const scripted = recordingAi([[finish(true, GOOD)]]);
+    let calls = 0;
+    const runTools = jest.fn(async (req: Parameters<typeof scripted.runTools>[0]) => {
+      calls += 1;
+      if (calls === 1) return { final: { outputText: 'All done.' }, steps: [], stopReason: 'completed' };
+      return scripted.runTools(req);
+    });
+    const ai = { forUser: () => ({ runTools }) } as unknown as AiService;
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    expect(calls).toBe(2);
+    expect(String((runTools.mock.calls[1]![0] as { input: string }).input)).toMatch(/You stopped without calling finish/);
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ outputsComplete: true });
+  });
+
+  it('keeps a sensitive output’s value out of the result text and the steps, and the trace holds no model arguments', async () => {
+    const MARK = 'SENSITIVE-OUT-5521-zq';
+    const spec: TaskOutput[] = [...FOUR, { key: 'account', label: 'Account', type: 'text', required: false, sensitive: true }];
+    const { userId, prisma, db, run } = await outputsRun(`outputs-sens-${stamp}@example.test`, spec);
+    const { ai } = recordingAi([[finish(true, { ...GOOD, account: MARK }, `Paid from account ${MARK}.`)]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    // Stored whole (a delivery the owner configured may carry it), but never in the words or the trace.
+    expect(JSON.stringify(done.outputs)).toContain(MARK);
+    expect(done.result).not.toContain(MARK);
+    expect(JSON.stringify(await prisma.runStep.findMany({ where: { runId: run.id } }))).not.toContain(MARK);
+    expect(JSON.stringify(done.transcript)).not.toContain(MARK);
+  });
+
+  it('a run stopped by the owner has not returned its outputs', async () => {
+    const { userId, prisma, db, run } = await outputsRun(`outputs-cancel-${stamp}@example.test`);
+    await app.get(TasksService).transition(userId, run.id, 'cancelled', { error: 'Cancelled before it started', stopReason: 'cancelled' });
+    void prisma;
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'cancelled', outputsComplete: false, outputs: null });
   });
 });

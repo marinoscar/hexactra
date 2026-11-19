@@ -25,6 +25,8 @@ export const IDS = {
   paramTask: '11111111-1111-4111-8111-111111111119',
   formQuestion: '55555555-5555-4555-8555-555555555559',
   paramRun: '33333339-3333-4333-8333-333333333333',
+  outputsTask: '11111111-1111-4111-8111-11111111111a',
+  outputsRun: '3333333a-3333-4333-8333-333333333333',
   // The memory `GET /memories` lists as "My wife".
   memory: 'a1000000-0000-4000-8000-000000000001',
 };
@@ -629,5 +631,41 @@ RESPONSES[`GET /questions/${IDS.formQuestion}`] = formQuestion;
 RESPONSES[`GET /runs/${IDS.paramRun}`] = paramRun;
 RESPONSES['GET /inbox'] = [formQuestion, ...RESPONSES['GET /inbox']];
 
+// ---- Task outputs (E39.5, #600): the task form's Outputs section, the task page's history table, a finished run's Outputs block ----
+
+const outputsDefs = [
+  { key: 'confirmation_number', label: 'Confirmation number', type: 'text', required: true, help: 'Shown on the receipt page' },
+  { key: 'amount_paid', label: 'Amount paid', type: 'money', required: true },
+  { key: 'paid_on', label: 'Paid on', type: 'date', required: true },
+  { key: 'remaining_balance', label: 'Remaining balance', type: 'money', required: false },
+  { key: 'account', label: 'Account', type: 'text', required: false, sensitive: true },
+];
+const outputsTask = task(IDS.outputsTask, 'Pay the rent', {
+  goal: 'Pay this month\'s rent on the property portal and read the receipt', hostId: null, hostFallback: true, allowedDomains: ['portal.example.test'], policyId: null,
+  parameters: [], outputs: outputsDefs, createdAt: iso(-20 * 86_400_000), updatedAt: iso(-86_400_000),
+  summary: { ...taskSummary, schedules: [taskSchedule('33333333-3333-4333-8333-33333333333a', 'Every month on day 1 at 09:00')] },
+});
+const outputRow = (key, label, type, value, extra = {}) => ({ key, label, type, required: true, sensitive: false, value, ok: true, note: null, ...extra });
+const outputValues = (n) => ({
+  confirmation_number: outputRow('confirmation_number', 'Confirmation number', 'text', `RC-48${n}1`),
+  amount_paid: outputRow('amount_paid', 'Amount paid', 'money', { amount: 1250, currency: 'USD' }),
+  paid_on: outputRow('paid_on', 'Paid on', 'date', `2026-0${n}-01`),
+  remaining_balance: n === 3 ? outputRow('remaining_balance', 'Remaining balance', 'money', null, { required: false, ok: false, note: 'Not found' }) : outputRow('remaining_balance', 'Remaining balance', 'money', { amount: 0, currency: 'USD' }, { required: false }),
+  account: outputRow('account', 'Account', 'text', '[hidden]', { required: false, sensitive: true }),
+});
+const outputsPage = {
+  columns: outputsDefs,
+  items: [3, 2, 1].map((n) => ({ runId: `3333333b-3333-4333-8333-33333333333${n}`, status: 'succeeded', createdAt: iso(-n * 86_400_000), finishedAt: iso(-n * 86_400_000 + 180_000), outputsComplete: n !== 3, values: outputValues(n) })),
+  nextCursor: null,
+};
+const outputsRun = run(IDS.outputsRun, 'succeeded', {
+  taskId: IDS.outputsTask, goal: 'Pay this month\'s rent on the property portal and read the receipt', result: 'Paid the rent. The balance page did not load, so the remaining balance is not known.', finishedAt: iso(-60_000),
+  outputs: Object.values(outputValues(3)), outputsComplete: false,
+});
+RESPONSES[`GET /tasks/${IDS.outputsTask}`] = outputsTask;
+RESPONSES[`GET /tasks/${IDS.outputsTask}/stats`] = RESPONSES[`GET /tasks/${IDS.task}/stats`];
+RESPONSES[`GET /tasks/${IDS.outputsTask}/outputs`] = outputsPage;
+RESPONSES[`GET /runs/${IDS.outputsRun}`] = outputsRun;
+
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, saveLoginQuestion: saveLogin.id };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, saveLoginQuestion: saveLogin.id };

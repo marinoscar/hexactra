@@ -80,6 +80,26 @@ describe('the console SDK', () => {
     });
   });
 
+  it('saves a task with outputs and reads what its runs returned (E39.5, #600)', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-outputs-${Date.now()}@example.test`, role: 'contributor' } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const { stdout } = await promisify(execFile)(process.execPath, [resolve(__dirname, '../../../packages/sdk/dist/examples/task-outputs.js')], {
+      env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token },
+      timeout: 60_000,
+    });
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as Record<string, unknown>;
+    expect(out).toMatchObject({
+      outputKeys: ['confirmation_number', 'amount_paid', 'paid_on', 'remaining_balance', 'account'],
+      sensitiveKeys: ['account'],
+      runOutputLabels: ['Confirmation number', 'Amount paid', 'Paid on', 'Remaining balance', 'Account'],
+      runOutputsComplete: null,
+      columns: ['confirmation_number', 'amount_paid', 'paid_on', 'remaining_balance', 'account'],
+      historyRuns: 0,
+      nextCursor: null,
+      refused: 400,
+    });
+  });
+
   it('round-trips agent policies: create, update, export, import and run under one', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-pol-${Date.now()}@example.test`, role: 'contributor' } });
     const token = new URL(String(res.headers.location)).searchParams.get('token')!;

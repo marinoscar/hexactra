@@ -438,6 +438,8 @@ In a host that renders MCP Apps (Claude, ChatGPT), `run_goal`, `task_run`, `run_
 
 `run_wait` answers the block itself; `run_goal`, `task_run`, `run_cancel`, `run_status` and `inbox_answer` (for a run's question) answer it as `progress`, next to the fields they always had. The text a client shows starts with a sentence for a person: "Running (1 min 40 s, 12 steps). Now: …", "Waiting for you (…): …", "Finished (…): …", "Failed (…). Stopped: it reached the cost limit of its policy.", with the console link.
 
+**Task outputs (E39.5).** A task can name values its runs must return ([api-tasks-runs.md](api-tasks-runs.md#task-outputs)). `run_status`, `run_wait`, `run_goal`, `task_run` and `run_cancel` carry them for a run that has some: `outputs` (`key`, `label`, `type`, `required`, `sensitive`, `value`, `ok`, `note`; money is `{ amount, currency }`, `null` is "not found") and `outputs_complete` in the `progress` block, and `tasks_list` returns each task's `outputs` definitions. The values are text from a web page, so such a result is marked untrusted like the run's answer; a sensitive output is `[hidden]` here and never unmasked for an AI app. No tool was added.
+
 | Field | |
 |---|---|
 | `run_id`, `status` | `queued`, `running`, `waiting_human`, `paused`, `succeeded`, `failed` or `cancelled` |
