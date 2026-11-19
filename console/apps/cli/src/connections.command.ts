@@ -35,7 +35,11 @@ export function capabilitiesText(caps: readonly string[]): string {
   for (const [prefix, name] of groups) {
     const read = caps.includes(`${prefix}_read`);
     const write = caps.includes(prefix === 'mail' ? 'mail_send' : `${prefix}_write`);
-    if (read || write) parts.push(`${name} (${write ? (prefix === 'mail' ? 'read, send' : 'read, write') : 'read'})`);
+    const organize = prefix === 'mail' && caps.includes('mail_modify');
+    if (read || write || organize) {
+      const what = ['read', ...(write ? [prefix === 'mail' ? 'send' : 'write'] : []), ...(organize ? ['organize'] : [])];
+      parts.push(`${name} (${what.join(', ')})`);
+    }
   }
   return parts.length > 0 ? parts.join(', ') : 'nothing switched on';
 }

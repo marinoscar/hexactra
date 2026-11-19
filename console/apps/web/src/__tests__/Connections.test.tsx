@@ -93,6 +93,12 @@ describe('the words', () => {
     expect(levelOf(['calendar_read'], GROUPS[0]!)).toBeNull();
   });
 
+  it('reads mail with the organize switch (archive, labels, drafts) as its own level', () => {
+    expect(levelOf(['mail_read', 'mail_modify'], GROUPS[0]!)).toBe('read and organize');
+    expect(levelOf(['mail_read', 'mail_send', 'mail_modify'], GROUPS[0]!)).toBe('read, send and organize');
+    expect(levelOf(['calendar_read', 'calendar_write'], GROUPS[1]!)).toBe('read and write');
+  });
+
   it('says what happened when the consent returns, from a closed set, naming what was not allowed', () => {
     expect(outcomeBanner('connected', 'Work', [])).toEqual({ severity: 'success', text: 'Connected Work.' });
     expect(outcomeBanner('connected', 'Work', ['calendar_read']).text).toMatch(/did not allow: Read calendar\. Those are off/);
@@ -190,6 +196,12 @@ describe('connect an account', () => {
     expect(within(dialog).getByRole('checkbox', { name: 'Documents: read' })).toBeChecked();
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Documents: read' }));
     expect(within(dialog).getByRole('checkbox', { name: 'Documents: write' })).not.toBeChecked();
+    // organizing mail (archive, labels, drafts) needs read too, and goes with it
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mail: organize' }));
+    expect(within(dialog).getByRole('checkbox', { name: 'Mail: read' })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mail: read' }));
+    expect(within(dialog).getByRole('checkbox', { name: 'Mail: organize' })).not.toBeChecked();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mail: read' }));
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Calendar: read' }));
     fireEvent.change(within(dialog).getByLabelText('Name (optional)'), { target: { value: 'Work' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Continue to Google' }));

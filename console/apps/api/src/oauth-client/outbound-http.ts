@@ -17,7 +17,7 @@ import { isIP } from 'node:net';
 import { WebhookEgressError, resolveWebhookTarget, systemHostResolver, type HostResolver, type ResolvedWebhookTarget, type WebhookEgressPolicy } from '@marinoscar/platform-api/core';
 
 /** Why an outbound call did not happen or did not finish. Closed set: never a URL path, query or body. */
-export type OutboundErrorCode = 'invalid_url' | 'scheme_not_allowed' | 'userinfo_not_allowed' | 'port_not_allowed' | 'private_target' | 'unresolvable' | 'timeout' | 'too_large' | 'network';
+export type OutboundErrorCode = 'invalid_url' | 'scheme_not_allowed' | 'userinfo_not_allowed' | 'port_not_allowed' | 'private_target' | 'unresolvable' | 'timeout' | 'too_large' | 'network' | 'aborted';
 
 export class OutboundHttpError extends Error {
   constructor(
@@ -30,7 +30,7 @@ export class OutboundHttpError extends Error {
 }
 
 export interface OutboundRequest {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
   headers?: Record<string, string>;
   body?: string;
@@ -40,6 +40,8 @@ export interface OutboundRequest {
   maxBytes?: number;
   /** Exact host names exempt from the private-address check (https is still required). */
   allowedHosts?: readonly string[];
+  /** Cancels the exchange (E39.3: Stop): the request is destroyed and `send` rejects with `aborted`. */
+  signal?: AbortSignal;
 }
 
 export interface OutboundResponse {
@@ -112,6 +114,7 @@ export class PinnedOutboundHttp extends OutboundHttp {
   }
 
   async send(req: OutboundRequest): Promise<OutboundResponse> {
+    if (req.signal?.aborted) throw new OutboundHttpError('aborted', 'The request was cancelled.');
     const target = await checkOutboundUrl(req.url, this.resolver, req.allowedHosts ?? []);
     return this.exchange(target, req);
   }
@@ -132,6 +135,7 @@ export class PinnedOutboundHttp extends OutboundHttp {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        req.signal?.removeEventListener('abort', onAbort);
         action();
       };
       const options: RequestOptions = {
@@ -171,6 +175,14 @@ export class PinnedOutboundHttp extends OutboundHttp {
         clientRequest.destroy();
       }, timeoutMs);
       timer.unref?.();
+      const onAbort = () => {
+        finish(() => reject(new OutboundHttpError('aborted', 'The request was cancelled.')));
+        clientRequest.destroy();
+      };
+      if (req.signal) {
+        if (req.signal.aborted) onAbort();
+        else req.signal.addEventListener('abort', onAbort, { once: true });
+      }
       clientRequest.on('error', (error: NodeJS.ErrnoException) => {
         // The message may name the host and port; never the path or query.
         finish(() => reject(new OutboundHttpError('network', `Network error${error.code ? ` (${error.code})` : ''}.`)));

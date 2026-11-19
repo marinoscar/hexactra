@@ -30809,7 +30809,7 @@
     },
     "/api/connections": {
       "get": {
-        "description": "Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "description": "Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `mail_modify`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.\n\n**Requires:** authentication, plus permission `connections:read`.",
         "operationId": "connections_list",
         "parameters": [],
         "responses": {
@@ -74620,6 +74620,7 @@
               "enum": [
                 "mail_read",
                 "mail_send",
+                "mail_modify",
                 "calendar_read",
                 "calendar_write",
                 "docs_read",
@@ -74635,6 +74636,7 @@
               "enum": [
                 "mail_read",
                 "mail_send",
+                "mail_modify",
                 "calendar_read",
                 "calendar_write",
                 "docs_read",
@@ -74812,13 +74814,14 @@
           },
           "capabilities": {
             "minItems": 1,
-            "maxItems": 6,
+            "maxItems": 7,
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
                 "mail_read",
                 "mail_send",
+                "mail_modify",
                 "calendar_read",
                 "calendar_write",
                 "docs_read",
@@ -74887,6 +74890,7 @@
               "enum": [
                 "mail_read",
                 "mail_send",
+                "mail_modify",
                 "calendar_read",
                 "calendar_write",
                 "docs_read",
@@ -74902,6 +74906,7 @@
               "enum": [
                 "mail_read",
                 "mail_send",
+                "mail_modify",
                 "calendar_read",
                 "calendar_write",
                 "docs_read",
@@ -75042,6 +75047,7 @@
                   "enum": [
                     "mail_read",
                     "mail_send",
+                    "mail_modify",
                     "calendar_read",
                     "calendar_write",
                     "docs_read",
@@ -75057,6 +75063,7 @@
                   "enum": [
                     "mail_read",
                     "mail_send",
+                    "mail_modify",
                     "calendar_read",
                     "calendar_write",
                     "docs_read",
@@ -75176,13 +75183,14 @@
           },
           "capabilities": {
             "description": "The full set of switches. Turning one off is immediate; adding one the provider has not granted starts an incremental consent (`consent.authorizeUrl`).",
-            "maxItems": 6,
+            "maxItems": 7,
             "type": "array",
             "items": {
               "type": "string",
               "enum": [
                 "mail_read",
                 "mail_send",
+                "mail_modify",
                 "calendar_read",
                 "calendar_write",
                 "docs_read",
@@ -75224,6 +75232,7 @@
                   "enum": [
                     "mail_read",
                     "mail_send",
+                    "mail_modify",
                     "calendar_read",
                     "calendar_write",
                     "docs_read",

@@ -18,7 +18,7 @@ describe('capabilities', () => {
   });
 
   it('groups are Mail, Calendar and Documents', () => {
-    expect(CAPABILITIES.map(groupOf)).toEqual(['mail', 'mail', 'calendar', 'calendar', 'docs', 'docs']);
+    expect(CAPABILITIES.map(groupOf)).toEqual(['mail', 'mail', 'mail', 'calendar', 'calendar', 'docs', 'docs']);
     expect(groupsOf(['docs_read', 'mail_read'])).toEqual(['mail', 'docs']);
   });
 
