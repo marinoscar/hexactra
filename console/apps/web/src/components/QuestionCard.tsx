@@ -9,6 +9,9 @@ import { QuestionAnswerForm } from './QuestionAnswerForm';
 import { KIND_LABEL, answerText, askerText, remaining, type AnswerBody, type AskedQuestion, type InboxItem, type Question, type QuestionResponse } from './questions';
 import { RunThumbnail } from './RunThumbnail';
 
+/** The first word of the prompt the runner asks with after a saved login was refused on a page that is not its site (`mismatchPrompt`). */
+export const SAVED_LOGIN_WARNING_PREFIX = 'Warning:';
+
 /** What a card shows of a question: the same for an Inbox item and for `GET /api/questions/:id`. */
 export interface CardQuestion extends AskedQuestion {
   id: string;
@@ -150,9 +153,16 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
             </Typography>
           )}
         </Stack>
-        <Typography variant={variant === 'page' ? 'h6' : 'body1'} component={variant === 'page' ? 'h2' : 'p'} sx={{ whiteSpace: 'pre-wrap', ...WRAP }}>
-          {q.prompt}
-        </Typography>
+        {/* A saved login was refused on the wrong site (E37.3, #593): the prompt says "Warning: ..." with both addresses, so it is a warning card. */}
+        {q.kind === 'login' && q.prompt.startsWith(SAVED_LOGIN_WARNING_PREFIX) ? (
+          <Alert severity="warning" data-testid="saved-login-warning" sx={{ whiteSpace: 'pre-wrap', ...WRAP }}>
+            {q.prompt.slice(SAVED_LOGIN_WARNING_PREFIX.length).trim()}
+          </Alert>
+        ) : (
+          <Typography variant={variant === 'page' ? 'h6' : 'body1'} component={variant === 'page' ? 'h2' : 'p'} sx={{ whiteSpace: 'pre-wrap', ...WRAP }}>
+            {q.prompt}
+          </Typography>
+        )}
         <Box sx={{ mt: 1, color: 'text.secondary', ...WRAP }}>
           <Typography variant="body2" sx={WRAP}>
             {q.runId && q.goal ? (

@@ -9,6 +9,7 @@ export const activityItemSchema = z.object({
   event: z.enum(['lookup', 'release']).describe('`lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed.'),
   runId: z.string().uuid().nullable().describe('The run or chat browser it happened in, when it is yours and still exists.'),
   site: z.string().nullable().describe('The host of the page, never a path or query.'),
+  loginName: z.string().nullable().describe("The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username."),
   field: z.enum(['username', 'password', 'one_time_code']).nullable().describe('Which field was typed. Never its value.'),
   outcome: z.string().describe('A closed code: `typed`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...).'),
   refused: z.boolean().describe('Nothing was typed: the fabric or the provider refused or failed.'),

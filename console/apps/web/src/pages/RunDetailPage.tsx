@@ -20,6 +20,7 @@ import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/Run
 import { runCost } from '../components/runBudget';
 import { runAgain, runAgainQuestionFor } from '../components/runRow';
 import { RunExportButton, RunExportMenu, useRunExport } from '../components/RunExport';
+import { UsedSavedLogins } from '../components/UsedSavedLogins';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -89,15 +90,7 @@ export function UsedMemories({ memories }: { memories: Run['memories'] }) {
   );
 }
 
-/** "Signed in with: Shop login" (E37.3): the saved logins the run used, by name and site; never a username, password or code. */
-export function UsedSavedLogins({ logins }: { logins: Run['usedSavedLogins'] }) {
-  if (!logins?.length) return null;
-  return (
-    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, overflowWrap: 'anywhere' }} data-testid="used-saved-logins">
-      Signed in with: {logins.map((l) => `${l.itemName} (${l.origin.replace(/^https?:\/\//, '')})`).join(', ')}
-    </Typography>
-  );
-}
+export { UsedSavedLogins };
 
 export function RunDetailPage() {
   const { api, viewer } = usePlatformHost();

@@ -60,7 +60,7 @@ describe('ingest', () => {
   it('stores one sanitized row per event, once, and never a value placed anywhere in the event', async () => {
     const alice = await login('act-alice');
     const mallory = await login('act-mallory');
-    const run = await prisma.run.create({ data: { userId: alice.userId, goal: 'Sign in', status: 'succeeded' } as never, select: { id: true } });
+    const run = await prisma.run.create({ data: { userId: alice.userId, goal: 'Sign in', status: 'succeeded', usedSavedLogins: [{ provider: 'vault', itemName: 'Shop login', origin: 'https://app.example.test', at: new Date().toISOString() }] } as never, select: { id: true } });
     const itemId = randomUUID();
     const events = [
       ev(alice.userId, 'secrets.lookup', { kind: 'login', count: 1, outcome: 'ok', run_id: run.id }),
@@ -109,9 +109,11 @@ describe('ingest', () => {
     const list = await get<{ items: Record<string, unknown>[]; providerActivityUrl: string | null }>(alice, '/api/secrets/activity');
     expect(list.statusCode).toBe(200);
     expect(list.data.items).toHaveLength(5);
-    expect(list.data.items.every((i) => ['id', 'at', 'event', 'runId', 'site', 'field', 'outcome', 'refused', 'matches'].every((k) => k in i) && Object.keys(i).length === 9)).toBe(true);
+    expect(list.data.items.every((i) => ['id', 'at', 'event', 'runId', 'site', 'loginName', 'field', 'outcome', 'refused', 'matches'].every((k) => k in i) && Object.keys(i).length === 10)).toBe(true);
     expect(list.data.items.filter((i) => i.refused).map((i) => i.outcome).sort()).toEqual(['origin_mismatch', 'other']);
     expect(list.data.providerActivityUrl).toBeNull();
+    // The login's name is the one the run recorded for that site; a refusal and a lookup carry none.
+    expect(list.data.items.filter((i) => i.loginName).map((i) => [i.loginName, i.site, i.field].join('|')).sort()).toEqual(['Shop login|app.example.test|one_time_code', 'Shop login|app.example.test|password', 'Shop login|app.example.test|username']);
     const times = list.data.items.map((i) => String(i.at));
     expect([...times].sort().reverse()).toEqual(times);
     expect((await get<{ items: unknown[] }>(mallory, '/api/secrets/activity')).data.items).toHaveLength(1);

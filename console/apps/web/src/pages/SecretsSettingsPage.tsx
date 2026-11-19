@@ -1,6 +1,6 @@
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { Alert, Box, Button, Chip, FormControlLabel, FormHelperText, Link, Paper, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, FormControlLabel, FormHelperText, Link, Paper, Radio, RadioGroup, Stack, Switch, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
@@ -12,13 +12,16 @@ import {
   getDefaultUseSavedLogins,
   getReach,
   getStatus,
+  getStoreStatus,
   saveClient,
   setAgentUse,
   setDefaultUseSavedLogins,
+  setProvider,
   type ActivityItem,
   type ActivityList,
   type Reach,
   type SecretsStatus,
+  type StoreStatus,
   type VaultStatus,
 } from '../secrets/api';
 import { CONNECT_RESULT_WORDS, fieldsWords, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
@@ -192,7 +195,7 @@ function ProviderCard({ vault, canWrite, busy, onConnect, onSaveAndConnect, onDi
 
 const ACTIVITY_COLUMNS = (links: { runHref: (id: string) => string }): Column<ActivityItem>[] => [
   { key: 'at', header: 'When', width: 170, render: (i) => <RelativeTime iso={i.at} /> },
-  { key: 'site', header: 'Site', render: (i) => i.site ?? 'Unknown site' },
+  { key: 'site', header: 'Login and site', render: (i) => <SiteCell item={i} /> },
   { key: 'what', header: 'What', hideBelow: 'lg', render: (i) => whatWords(i) },
   {
     key: 'run',
@@ -209,6 +212,22 @@ const ACTIVITY_COLUMNS = (links: { runHref: (id: string) => string }): Column<Ac
   },
   { key: 'outcome', header: 'Outcome', width: 270, render: (i) => <OutcomeChip item={i} /> },
 ];
+
+/** The login's name when the run recorded it, with the site under it. */
+function SiteCell({ item }: { item: ActivityItem }) {
+  const site = item.site ?? 'Unknown site';
+  if (!item.loginName) return <>{site}</>;
+  return (
+    <>
+      <Box component="span" sx={{ display: 'block', fontWeight: 500 }}>
+        {item.loginName}
+      </Box>
+      <Box component="span" sx={{ display: 'block', color: 'text.secondary', typography: 'body2' }}>
+        {site}
+      </Box>
+    </>
+  );
+}
 
 function OutcomeChip({ item }: { item: ActivityItem }) {
   const text = outcomeWords(item.outcome);
@@ -245,7 +264,7 @@ function ActivitySection({ activity }: { activity: ActivityList }) {
           renderCard={(i) => (
             <Paper variant="outlined" sx={{ p: 1.5 }} data-testid={`activity-${i.id}`}>
               <Stack spacing={0.5}>
-                <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{i.site ?? 'Unknown site'}</Typography>
+                <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{i.loginName ? `${i.loginName} (${i.site ?? 'unknown site'})` : (i.site ?? 'Unknown site')}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {whatWords(i)} · <RelativeTime iso={i.at} />
                 </Typography>
@@ -266,14 +285,85 @@ function ActivitySection({ activity }: { activity: ActivityList }) {
   );
 }
 
-function ReachSection({ reach, manageUrl }: { reach: Reach; manageUrl: string | null }) {
+/** Where the logins are kept, when the deployment offers the built-in store too (E37.5): one is active at a time. */
+function StoreChoice({ store, vault, canWrite, busy, onChoose }: { store: StoreStatus; vault: VaultStatus; canWrite: boolean; busy: boolean; onChoose: (p: 'vault' | 'builtin') => void }) {
+  const VAULT_WORDS = { not_configured: 'Not set up yet', disconnected: 'Not connected', connected: 'Connected', needs_reconnect: 'Needs to be connected again' } as const;
+  return (
+    <Paper variant="outlined" component="section" aria-labelledby="where-title" sx={{ p: { xs: 2, sm: 3 } }}>
+      <Typography id="where-title" variant="h6" component="h2" sx={{ mb: 1 }}>
+        Where your logins are kept
+      </Typography>
+      <RadioGroup value={store.provider} onChange={(e) => onChoose(e.target.value === 'builtin' ? 'builtin' : 'vault')} aria-label="Secrets provider">
+        <FormControlLabel
+          value="builtin"
+          disabled={!canWrite || busy}
+          control={<Radio />}
+          sx={{ alignItems: 'flex-start', mb: 1, minHeight: { xs: 44, sm: 'auto' } }}
+          label={
+            <Box>
+              <Typography sx={{ fontWeight: 600 }}>Store in Hexactra</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Saved logins live encrypted in this deployment&rsquo;s database. {store.logins} saved, {store.openToAgent} open to the agent.
+              </Typography>
+            </Box>
+          }
+        />
+        <FormControlLabel
+          value="vault"
+          disabled={!canWrite || busy}
+          control={<Radio />}
+          sx={{ alignItems: 'flex-start', minHeight: { xs: 44, sm: 'auto' } }}
+          label={
+            <Box>
+              <Typography sx={{ fontWeight: 600 }}>Connect Vault</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Your own Vault keeps them; Hexactra never sees a value. {VAULT_WORDS[vault.status]}.
+              </Typography>
+            </Box>
+          }
+        />
+      </RadioGroup>
+      <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
+        One is active at a time. Switching does not move your logins.
+      </Typography>
+    </Paper>
+  );
+}
+
+/** The card of the built-in store, when it is the chosen provider. */
+function StoreCard({ store }: { store: StoreStatus }) {
+  return (
+    <Paper variant="outlined" component="section" aria-label="Secrets provider" sx={{ p: { xs: 2, sm: 3 } }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+        <Typography variant="h6" component="h2">
+          Hexactra
+        </Typography>
+        <Chip size="small" color="success" label="In use" data-testid="provider-state" />
+      </Stack>
+      <Typography sx={{ mt: 1 }} color="text.secondary">
+        {store.logins} saved, {store.openToAgent} open to the agent. You decide which logins the agent may use where you save them.
+      </Typography>
+      <Button component={RouterLink} to="/secrets" variant="outlined" sx={{ ...TOUCH, mt: 2 }}>
+        My saved logins
+      </Button>
+    </Paper>
+  );
+}
+
+function ReachSection({ reach, manageUrl, store }: { reach: Reach; manageUrl: string | null; store?: StoreStatus | null }) {
   return (
     <Box component="section" aria-labelledby="reach-title">
       <Typography id="reach-title" variant="h6" component="h2" sx={{ mb: 0.5 }}>
         What the agent can reach
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Which logins are open to the agent is decided in your provider, not here. Vault can look logins up only for the page on screen, so the full list is in Vault; these are the ones the agent has used so far.
+        {store?.provider === 'builtin' ? (
+          <>
+            {store.openToAgent} of your {store.logins} saved logins are open to the agent. Which ones is decided where you save them, not here. These are the ones the agent has used so far.
+          </>
+        ) : (
+          'Which logins are open to the agent is decided in your provider, not here. Vault can look logins up only for the page on screen, so the full list is in Vault; these are the ones the agent has used so far.'
+        )}
       </Typography>
       {reach.items.length === 0 ? (
         <Typography color="text.secondary">The agent has not used a saved login yet.</Typography>
@@ -287,10 +377,16 @@ function ReachSection({ reach, manageUrl }: { reach: Reach; manageUrl: string | 
                   Typed: {fieldsWords(r.fields)} · used {r.uses === 1 ? 'once' : `${r.uses} times`}, last <RelativeTime iso={r.lastUsedAt} />
                 </Typography>
               </Box>
-              {manageUrl && (
-                <Link href={manageUrl} target="_blank" rel="noopener noreferrer" sx={{ ...TOUCH, display: 'inline-flex', alignItems: 'center' }} aria-label={`Manage ${r.site ?? 'this login'} in Vault`}>
-                  Manage in Vault
+              {store?.provider === 'builtin' ? (
+                <Link component={RouterLink} to="/secrets" sx={{ ...TOUCH, display: 'inline-flex', alignItems: 'center' }} aria-label={`Manage ${r.site ?? 'this login'} in My saved logins`}>
+                  Manage in My saved logins
                 </Link>
+              ) : (
+                manageUrl && (
+                  <Link href={manageUrl} target="_blank" rel="noopener noreferrer" sx={{ ...TOUCH, display: 'inline-flex', alignItems: 'center' }} aria-label={`Manage ${r.site ?? 'this login'} in Vault`}>
+                    Manage in Vault
+                  </Link>
+                )
               )}
             </Paper>
           ))}
@@ -314,6 +410,8 @@ export function SecretsSettingsPage() {
   const [activity, setActivity] = useState<ActivityList | null>(null);
   const [reach, setReach] = useState<Reach | null>(null);
   const [defaultOn, setDefaultOn] = useState(false);
+  // The built-in store (E37.5): null when this deployment does not offer it.
+  const [store, setStore] = useState<StoreStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ severity: 'success' | 'info' | 'warning' | 'error'; text: string } | null>(null);
   const action = useApiAction('Could not change this');
@@ -326,6 +424,7 @@ export function SecretsSettingsPage() {
       getActivity(api).then(setActivity, () => setActivity({ items: [], providerActivityUrl: null }));
       getReach(api).then(setReach, () => setReach({ listing: 'per_origin', items: [] }));
       getDefaultUseSavedLogins(api).then(setDefaultOn, () => setDefaultOn(false));
+      getStoreStatus(api).then(setStore);
     } catch (e) {
       setLoadError(e instanceof Error && e.message ? e.message : 'Could not load your secrets settings');
     }
@@ -379,6 +478,15 @@ export function SecretsSettingsPage() {
     setMessage({ severity: 'info', text: saved ? 'The agent may use your saved logins.' : 'The agent will not use your saved logins.' });
   };
 
+  const chooseProvider = async (provider: 'vault' | 'builtin') => {
+    const done = await action.run('provider', async () => {
+      await setProvider(api, provider);
+      setStore(await getStoreStatus(api));
+      return true;
+    });
+    if (done) setMessage({ severity: 'info', text: provider === 'builtin' ? 'The agent now uses the logins saved in Hexactra.' : 'The agent now uses your Vault.' });
+  };
+
   const toggleDefault = async (on: boolean) => {
     const saved = await action.run('default', () => setDefaultUseSavedLogins(api, on));
     if (saved === undefined) return;
@@ -423,7 +531,8 @@ export function SecretsSettingsPage() {
       )}
       {status && vault && (
         <Stack spacing={4}>
-          <ProviderCard vault={vault} canWrite={canWrite} busy={action.busy} onConnect={() => void startConnect(hasWriteScope(vault.scopes))} onSaveAndConnect={(v) => void saveAndConnect(v)} onDisconnect={() => void doDisconnect()} />
+          {store && <StoreChoice store={store} vault={vault} canWrite={canWrite} busy={action.busy === 'provider'} onChoose={(p) => void chooseProvider(p)} />}
+          {store?.provider === 'builtin' ? <StoreCard store={store} /> : <ProviderCard vault={vault} canWrite={canWrite} busy={action.busy} onConnect={() => void startConnect(hasWriteScope(vault.scopes))} onSaveAndConnect={(v) => void saveAndConnect(v)} onDisconnect={() => void doDisconnect()} />}
 
           <Paper variant="outlined" component="section" aria-labelledby="switches-title" sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography id="switches-title" variant="h6" component="h2" sx={{ mb: 1 }}>
@@ -446,22 +555,24 @@ export function SecretsSettingsPage() {
                 busy={action.busy === 'default'}
                 onChange={(on) => void toggleDefault(on)}
               />
-              <SwitchRow
-                label="Let the agent save and change logins"
-                help={
-                  !connected
-                    ? 'Connect your provider first.'
-                    : 'Asks Vault for permission to save and change logins. You approve it in Vault. Saving a sign-in from a run is not available yet.'
-                }
-                checked={connected && hasWriteScope(vault.scopes)}
-                disabled={!canWrite || !connected}
-                busy={action.busy === 'connect'}
-                onChange={(on) => void toggleWrite(on)}
-              />
+              {store?.provider !== 'builtin' && (
+                <SwitchRow
+                  label="Let the agent save and change logins"
+                  help={
+                    !connected
+                      ? 'Connect your provider first.'
+                      : 'Asks Vault for permission to save and change logins. You approve it in Vault. Saving a sign-in from a run is not available yet.'
+                  }
+                  checked={connected && hasWriteScope(vault.scopes)}
+                  disabled={!canWrite || !connected}
+                  busy={action.busy === 'connect'}
+                  onChange={(on) => void toggleWrite(on)}
+                />
+              )}
             </Stack>
           </Paper>
 
-          {reach && <ReachSection reach={reach} manageUrl={manageUrl} />}
+          {reach && <ReachSection reach={reach} manageUrl={manageUrl} store={store} />}
           {activity ? <ActivitySection activity={activity} /> : <ListSkeleton rows={3} />}
         </Stack>
       )}

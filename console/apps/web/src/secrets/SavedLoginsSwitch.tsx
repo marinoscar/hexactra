@@ -2,9 +2,15 @@ import { FormControlLabel, FormHelperText, Link, Switch } from '@mui/material';
 import { useId } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import type { SavedLoginsAvailability } from './useSavedLoginsAvailability';
+import { useSavedLoginsAvailability, type SavedLoginsAvailability } from './useSavedLoginsAvailability';
 
 export const SAVED_LOGINS_HELP = 'When a page asks you to sign in and you saved a login for exactly that site, the agent signs in without asking. It never sees the password or the code.';
+
+/** The switch with its own availability check: for a dialog that mounts only while open (the chat settings). */
+export function SavedLoginsToggle(props: { checked: boolean; onChange: (on: boolean) => void; disabled?: boolean; label?: string }) {
+  const availability = useSavedLoginsAvailability();
+  return <SavedLoginsSwitch {...props} availability={availability} />;
+}
 
 /**
  * "Use my saved logins" (E37.4, #593): the per-task and per-chat opt-in. While saved logins cannot work for this

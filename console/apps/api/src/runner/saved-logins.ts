@@ -190,9 +190,10 @@ export function failureOf(code: SecretsErrorCode, retryAfterSeconds?: number): S
 }
 
 /** The warning card the run asks the owner with after a look-alike or foreign origin (kind `login`, the owner takes over). */
-export function mismatchPrompt(host: string | null, loginName: string): string {
-  const where = host ? ` on ${host}` : '';
-  return `Warning: the agent was about to sign in${where} with your saved login '${loginName.slice(0, 80)}', but this page is not the site that login is saved for. Nothing was typed and the agent will not try another saved login. If this is the site you meant, sign in yourself and press Done. If it looks like a copy of a site you know, stop the run.`;
+export function mismatchPrompt(pageHost: string | null, loginName: string, savedHost: string | null = null): string {
+  // Both addresses, so the owner can tell a look-alike from the real site: the page it is on, and the site the login is saved for.
+  const hosts = [pageHost ? `The page is ${pageHost}.` : null, savedHost ? `The login is saved for ${savedHost}.` : null].filter(Boolean).join(' ');
+  return `Warning: the agent was about to sign in with your saved login '${loginName.slice(0, 80)}', but this page is not the site that login is saved for.${hosts ? ` ${hosts}` : ''} Nothing was typed and the agent will not try another saved login. If this is the site you meant, sign in yourself and press Done. If it looks like a copy of a site you know, stop the run.`;
 }
 
 /** The line the next round's input carries after a mismatch. */

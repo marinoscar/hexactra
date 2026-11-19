@@ -45,7 +45,7 @@ const status = (vault: VaultStatus, use = { deployment: true, user: false }): Se
 
 const RUN = 'bbbbbbbb-2222-4222-8222-222222222222';
 const ACTIVITY: ActivityItem[] = [
-  { id: 'a1', at: '2026-11-19T09:00:00.000Z', event: 'release', runId: RUN, site: 'app.example.test', field: 'password', outcome: 'typed', refused: false, matches: null },
+  { id: 'a1', at: '2026-11-19T09:00:00.000Z', event: 'release', runId: RUN, site: 'app.example.test', loginName: 'Shop login', field: 'password', outcome: 'typed', refused: false, matches: null },
   { id: 'a2', at: '2026-11-19T08:59:00.000Z', event: 'release', runId: null, site: 'evil.example.test', field: 'password', outcome: 'origin_mismatch', refused: true, matches: null },
   { id: 'a3', at: '2026-11-19T08:58:00.000Z', event: 'lookup', runId: RUN, site: 'app.example.test', field: null, outcome: 'ok', refused: false, matches: 1 },
 ];
@@ -195,6 +195,54 @@ describe('the provider card', () => {
   });
 });
 
+describe('the built-in store beside Vault (E37.5)', () => {
+  const STORE = { enabled: true, provider: 'vault', logins: 4, openToAgent: 2 };
+
+  it('is offered only when the deployment has it: without it there is no choice', async () => {
+    renderPage({ 'GET /secrets/status': status(CONNECTED) });
+    expect(await screen.findByTestId('provider-state')).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Secrets provider' })).not.toBeInTheDocument();
+  });
+
+  it('offers "Store in Hexactra" and "Connect Vault"; choosing the store patches the setting, shows its card and hides the Vault write switch', async () => {
+    let current = { ...STORE };
+    const host = renderPage({
+      'GET /secrets/status': status(CONNECTED),
+      'GET /secrets/store/status': () => current,
+      'PATCH /user-settings': (r: TestApiRequest) => {
+        current = { ...current, provider: (r.body as { secrets: { provider: 'vault' | 'builtin' } }).secrets.provider };
+        return {};
+      },
+    });
+    const group = await screen.findByRole('radiogroup', { name: 'Secrets provider' });
+    expect(within(group).getByRole('radio', { name: /Connect Vault/ })).toBeChecked();
+    expect(within(group).getByText(/4 saved, 2 open to the agent/)).toBeInTheDocument();
+    fireEvent.click(within(group).getByRole('radio', { name: /Store in Hexactra/ }));
+    await waitFor(() => expect(screen.getByTestId('provider-state')).toHaveTextContent('In use'));
+    expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { secrets: { provider: 'builtin' } } });
+    expect(screen.getByRole('link', { name: 'My saved logins' })).toHaveAttribute('href', '/secrets');
+    expect(screen.queryByRole('switch', { name: 'Let the agent save and change logins' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toContain('The agent now uses the logins saved in Hexactra.');
+  });
+
+  it('with the store chosen, "what the agent can reach" says how many are open and links to My saved logins', async () => {
+    renderPage({
+      'GET /secrets/status': status(CONNECTED),
+      'GET /secrets/store/status': { ...STORE, provider: 'builtin' },
+      'GET /secrets/reach': { listing: 'per_origin', items: [{ site: 'app.example.test', fields: ['username', 'password'], uses: 1, lastUsedAt: '2026-11-19T09:00:00.000Z', lastRunId: null }] },
+    });
+    expect(await screen.findByText(/2 of your 4 saved logins are open to the agent/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage app.example.test in My saved logins' })).toHaveAttribute('href', '/secrets');
+  });
+
+  it('a viewer cannot choose', async () => {
+    renderPage({ 'GET /secrets/status': status(CONNECTED), 'GET /secrets/store/status': STORE }, ['secrets:read']);
+    const group = await screen.findByRole('radiogroup', { name: 'Secrets provider' });
+    for (const r of within(group).getAllByRole('radio')) expect(r).toBeDisabled();
+  });
+});
+
 describe('the switches', () => {
   it('"Let the agent use saved logins" patches the user setting and announces it', async () => {
     const host = renderPage({ 'GET /secrets/status': status(CONNECTED), 'PATCH /user-settings': (r: TestApiRequest) => r.body });
@@ -299,6 +347,8 @@ describe('what the agent can reach and what it used', () => {
     expect(within(table).getByText('Typed')).toBeInTheDocument();
     expect(within(table).getByText('Refused: the page was not the saved site')).toBeInTheDocument();
     expect(within(table).getByText('evil.example.test')).toBeInTheDocument();
+    // The login's name, as the run recorded it, with the site under it.
+    expect(within(table).getByText('Shop login')).toBeInTheDocument();
     expect(within(table).getAllByText('Typed the password')).toHaveLength(2);
     expect(within(table).getByText('Looked for a saved login: 1 found')).toBeInTheDocument();
     expect(within(table).getAllByRole('link', { name: 'Open run' })[0]).toHaveAttribute('href', `/runs/${RUN}`);

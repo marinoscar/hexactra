@@ -72181,6 +72181,13 @@
                     "null"
                   ]
                 },
+                "loginName": {
+                  "description": "The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "field": {
                   "anyOf": [
                     {
@@ -72225,6 +72232,7 @@
                 "event",
                 "runId",
                 "site",
+                "loginName",
                 "field",
                 "outcome",
                 "refused",

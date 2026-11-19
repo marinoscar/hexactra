@@ -15003,6 +15003,8 @@ export interface components {
                 runId: string | null;
                 /** @description The host of the page, never a path or query. */
                 site: string | null;
+                /** @description The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username. */
+                loginName: string | null;
                 /** @description Which field was typed. Never its value. */
                 field: ("username" | "password" | "one_time_code") | null;
                 /** @description A closed code: `typed`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...). */

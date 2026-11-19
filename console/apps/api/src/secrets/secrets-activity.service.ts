@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { readUsedSavedLogins } from '../runner/saved-logins';
 import { PrismaService } from '../prisma/prisma.service';
 import { SECRETS_ACTIVITY_KEEP_DAYS, isRefusal, sanitizeSecretsEvent, type SanitizedActivity } from './secrets-activity';
 
@@ -20,6 +21,8 @@ export interface ActivityItem {
   /** The run (or chat browser) it happened in, when it is one of this user's and still exists. */
   runId: string | null;
   site: string | null;
+  /** The saved login's name, as the run recorded it when it signed in (E37.3); null when the run is gone or did not record this site. */
+  loginName: string | null;
   field: 'username' | 'password' | 'one_time_code' | null;
   outcome: string;
   /** The fabric refused or failed: nothing was typed. */
@@ -44,6 +47,14 @@ export interface SecretsAdminSummary {
   usesThisWeek: number;
   refusalsThisWeek: number;
 }
+
+const hostOfOrigin = (origin: string): string | null => {
+  try {
+    return new URL(origin).host.toLowerCase();
+  } catch {
+    return null;
+  }
+};
 
 const FIELD_ORDER = ['username', 'password', 'one_time_code'];
 
@@ -114,12 +125,21 @@ export class SecretsActivityService {
   /** The owner's newest uses and refusals. */
   async list(userId: string, limit = ACTIVITY_PAGE_SIZE): Promise<ActivityItem[]> {
     const rows = await this.prisma.secretsActivity.findMany({ where: { userId }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: Math.min(limit, ACTIVITY_PAGE_SIZE) });
+    // The login's name is not in the fabric's audit event: it is the one the run recorded for that site.
+    const runIds = [...new Set(rows.map((r) => r.runId).filter((id): id is string => id !== null))];
+    const runs = runIds.length ? await this.prisma.run.findMany({ where: { id: { in: runIds }, userId }, select: { id: true, usedSavedLogins: true } }) : [];
+    const used = new Map(runs.map((r) => [r.id, readUsedSavedLogins(r.usedSavedLogins)]));
+    const nameOf = (runId: string | null, site: string | null): string | null => {
+      if (!runId || !site) return null;
+      return used.get(runId)?.find((l) => hostOfOrigin(l.origin) === site)?.itemName ?? null;
+    };
     return rows.map((r) => ({
       id: r.id,
       at: r.occurredAt.toISOString(),
       event: r.event === 'lookup' ? 'lookup' : 'release',
       runId: r.runId,
       site: r.site,
+      loginName: r.event === 'release' ? nameOf(r.runId, r.site) : null,
       field: (r.field as ActivityItem['field']) ?? null,
       outcome: r.outcome,
       refused: isRefusal(r.outcome),

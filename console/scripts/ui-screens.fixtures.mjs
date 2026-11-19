@@ -399,8 +399,8 @@ const secretsActivity = (_url, _body, referer) =>
     : {
         providerActivityUrl: 'https://vault.example.test/settings/agent-activity',
         items: [
-          { id: 'ac000000-0000-4000-8000-000000000001', at: iso(-3_600_000), event: 'release', runId: IDS.finishedRun, site: 'app.example.test', field: 'password', outcome: 'typed', refused: false, matches: null },
-          { id: 'ac000000-0000-4000-8000-000000000002', at: iso(-3_660_000), event: 'release', runId: IDS.finishedRun, site: 'app.example.test', field: 'username', outcome: 'typed', refused: false, matches: null },
+          { id: 'ac000000-0000-4000-8000-000000000001', at: iso(-3_600_000), event: 'release', runId: IDS.finishedRun, site: 'app.example.test', loginName: 'Shop login', field: 'password', outcome: 'typed', refused: false, matches: null },
+          { id: 'ac000000-0000-4000-8000-000000000002', at: iso(-3_660_000), event: 'release', runId: IDS.finishedRun, site: 'app.example.test', loginName: 'Shop login', field: 'username', outcome: 'typed', refused: false, matches: null },
           { id: 'ac000000-0000-4000-8000-000000000003', at: iso(-3_700_000), event: 'lookup', runId: IDS.finishedRun, site: 'app.example.test', field: null, outcome: 'ok', refused: false, matches: 1 },
           { id: 'ac000000-0000-4000-8000-000000000004', at: iso(-26 * 3_600_000), event: 'release', runId: null, site: 'a-look-alike-of-a-long-shop-name.example.co.uk', field: 'password', outcome: 'origin_mismatch', refused: true, matches: null },
           { id: 'ac000000-0000-4000-8000-000000000005', at: iso(-30 * 3_600_000), event: 'release', runId: IDS.liveRun, site: 'shop.example.test', field: 'one_time_code', outcome: 'rate_limited', refused: true, matches: null },

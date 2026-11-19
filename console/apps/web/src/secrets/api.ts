@@ -36,6 +36,8 @@ export interface ActivityItem {
   event: 'lookup' | 'release';
   runId: string | null;
   site: string | null;
+  /** The saved login's name, as the run recorded it; null when unknown. */
+  loginName?: string | null;
   field: ActivityField | null;
   outcome: string;
   refused: boolean;
@@ -59,6 +61,20 @@ export interface Reach {
   listing: 'per_origin';
   items: ReachItem[];
 }
+
+/** `GET /api/secrets/store/status`: present only when the deployment switched the built-in store on (E37.5). */
+export interface StoreStatus {
+  enabled: true;
+  provider: 'vault' | 'builtin';
+  logins: number;
+  openToAgent: number;
+}
+
+/** The built-in store's status, or null when this deployment does not offer it (the route is absent: 404). */
+export const getStoreStatus = (api: PlatformApiClient): Promise<StoreStatus | null> => api.get<StoreStatus>('/secrets/store/status').catch(() => null);
+
+/** Which provider the agent uses: the user setting `secrets.provider`. One is active at a time; switching moves no data. */
+export const setProvider = (api: PlatformApiClient, provider: 'vault' | 'builtin') => api.patch('/user-settings', { secrets: { provider } });
 
 export interface AdminSummary {
   deploymentEnabled: boolean;

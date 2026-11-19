@@ -1168,7 +1168,9 @@ export class GoalRunnerService {
       sl().attempt = null;
       memory.log.push(MISMATCH_LOG);
       await persistSavedLogins();
-      const spec = questionSpecSchema.parse({ kind: 'login', input: 'takeover', prompt: mismatchPrompt(hostOf(about?.origin ?? null), about?.name ?? 'saved login') });
+      // `about.origin` is the site the login is saved for (the page it matched); the tab may be somewhere else now.
+      const pageNow = await currentUrl();
+      const spec = questionSpecSchema.parse({ kind: 'login', input: 'takeover', prompt: mismatchPrompt(hostOf(pageNow), about?.name ?? 'saved login', hostOf(about?.origin ?? null)) });
       return (await askPerson(spec, started)) ? `${f.text} The owner has been asked to look.` : f.text;
     };
     /** The page's lookup and a reference the owner may use now: exact, chosen when several match, on the page still on screen. */
