@@ -132,6 +132,8 @@ export interface Run {
   usedSavedLogins?: { provider: string; itemName: string; origin: string; at: string }[];
   /** The identity details the run filled (E37.6): the item's name, the field's label and the site, never a value. */
   usedSavedIdentity?: { provider: string; itemName: string; label: string; origin: string; at: string }[];
+  /** The saved cards the run paid with (E37.7): brand, last four, the merchant and the declared and confirmed amounts, never a number, an expiry or a code. */
+  usedSavedCards?: UsedSavedCardEntry[];
   /** The owner's memories this run used (#553). */
   memoryIds?: string[];
   /** `GET /runs/:id`: the used memories that still exist, with their labels (#553). */
@@ -186,4 +188,19 @@ export interface RunsDeleteQueued {
   jobId: string;
   matched: number;
   costUsd: number | null;
+}
+
+/** One card payment of a run (E37.7). */
+export interface UsedSavedCardEntry {
+  provider: string;
+  itemName: string;
+  brand: string | null;
+  last4: string | null;
+  merchant: string;
+  origin: string;
+  currency: string;
+  declaredAmount: string;
+  confirmedAmount: string | null;
+  mismatch: boolean;
+  at: string;
 }

@@ -136,7 +136,7 @@ function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, 
   const ruleBody = rememberRuleOf(rememberable, rule);
   const ruleAnswer = ruleBody ? { rememberRule: ruleBody } : {};
   // A ticked box with an amount that is not one: the approval waits until it is fixed (never sent without the rule).
-  const ruleBlocked = Boolean(rememberable && rule.ticked && amountError(rule.amount));
+  const ruleBlocked = Boolean(rememberable && rule.ticked && amountError(rule.amount, rememberable.requiresLimit === true));
   const ruleField = rememberable ? <RememberRuleField rememberable={rememberable} value={rule} onChange={setRule} disabled={disabled} /> : null;
   const isSecret = q.input === 'secret' || q.input === 'credentials';
   const rememberAnswer = q.rememberLabel ? { remember } : {};

@@ -16,6 +16,7 @@ import { RunExportButton } from './RunExport';
 import { RunTimeline } from './RunTimeline';
 import { softBudgetNotice } from './runBudget';
 import { UsedSavedLogins } from './UsedSavedLogins';
+import { UsedSavedCards } from './UsedSavedCards';
 import type { RunFrame } from './useRunFrame';
 
 const CARD_MAX = { xs: '100%', sm: 440 } as const;
@@ -192,6 +193,7 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
       <CardShell title="Browser" label="Browser run" status={run ? <StatusChip status={run.status} stopReason={run.stopReason} size="small" /> : undefined}>
         {goal}
         <UsedSavedLogins logins={run?.usedSavedLogins} />
+        <UsedSavedCards cards={run?.usedSavedCards?.map(cardEntry)} />
         {!message.runId && (
           <Typography variant="body2" color="text.secondary">
             This run was deleted.
@@ -218,6 +220,7 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
         {!paneOpen && <BrowserFrame frame={frame} activity={run.activity} hidden={frameHidden} now={now} />}
       </Box>
       <UsedSavedLogins logins={run.usedSavedLogins} />
+      <UsedSavedCards cards={run.usedSavedCards?.map(cardEntry)} />
       <SoftBudgetLine run={run} />
       <Button fullWidth variant="outlined" onClick={onOpen} disabled={paneOpen} sx={{ mt: 1, minHeight: 44, borderRadius: 3 }}>
         {paneOpen ? 'Browser is open' : 'Open browser'}
@@ -378,3 +381,6 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
     </Paper>
   );
 }
+
+/** The chat stream's card line as a payment entry (the stream carries no provider, origin or time). */
+const cardEntry = (c: NonNullable<ChatRun["usedSavedCards"]>[number]) => ({ provider: '', itemName: '', origin: `https://${c.merchant}`, at: '', ...c });

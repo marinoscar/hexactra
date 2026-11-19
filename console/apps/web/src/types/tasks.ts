@@ -19,6 +19,8 @@ export interface Task {
   useSavedLogins?: boolean;
   /** Let the agent fill identity details from the owner's saved details (E37.6); absent from an older console: off. */
   useSavedIdentity?: boolean;
+  /** Let the agent pay with a saved card under the owner's per-merchant approval and amount limit (E37.7); absent from an older console: off. */
+  useSavedCards?: boolean;
   /** What an unattended run that used a saved login does at a payment (E37.3): `ask` or `allow`; absent: `ask`. */
   unattendedPayments?: 'ask' | 'allow';
   /** What the task's runs spent in the last 30 days (#400, #408). */

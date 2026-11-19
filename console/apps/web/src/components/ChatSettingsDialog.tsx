@@ -20,7 +20,7 @@ export interface ChatSettingsDialogProps {
   onSave: (settings: ChatSettings) => Promise<void>;
 }
 
-const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false, useSavedIdentity: chat.useSavedIdentity ?? false });
+const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false, useSavedIdentity: chat.useSavedIdentity ?? false, useSavedCards: chat.useSavedCards ?? false });
 
 /**
  * How the chat's runs execute: the machine, the browser profile, the agent
@@ -79,8 +79,9 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
           <SavedLoginsToggle
             checked={values.useSavedLogins}
             disabled={busy}
-            onChange={(useSavedLogins) => setValues((v) => ({ ...v, useSavedLogins, ...(useSavedLogins ? {} : { useSavedIdentity: false }) }))}
+            onChange={(useSavedLogins) => setValues((v) => ({ ...v, useSavedLogins, ...(useSavedLogins ? {} : { useSavedIdentity: false, useSavedCards: false }) }))}
             identity={{ checked: values.useSavedIdentity, onChange: (useSavedIdentity) => setValues((v) => ({ ...v, useSavedIdentity })) }}
+            cards={{ checked: values.useSavedCards, onChange: (useSavedCards) => setValues((v) => ({ ...v, useSavedCards })) }}
           />
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
           <div>

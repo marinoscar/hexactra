@@ -21,6 +21,10 @@ export interface SavedLoginsAvailability {
   identityAvailable: boolean;
   /** Why not, in one sentence, when saved logins can work but identity cannot; null otherwise. */
   identityReason: string | null;
+  /** Whether the "pay with a saved card" sub-switch can work (E37.7): saved logins can, and the provider's card permissions are granted. */
+  cardsAvailable: boolean;
+  /** Why not, in one sentence, when saved logins can work but cards cannot; null otherwise. */
+  cardsReason: string | null;
 }
 
 /** The reason in words, from a status. Pure. */
@@ -42,6 +46,15 @@ export function identityReason(status: SecretsStatus | null): string | null {
   return hasIdentityScopes(status.providers.vault.scopes) ? null : 'Allow “Let the agent fill identity details” on the Secrets page first.';
 }
 
+/** Whether a grant's scopes let the agent pay with saved cards (E37.7). */
+export const hasCardScopes = (scopes: readonly string[] | undefined): boolean => !!scopes && scopes.includes('vault:cards_read') && scopes.includes('vault:cards_fill');
+
+/** Why the card sub-switch cannot be used, given that saved logins can. Pure. */
+export function cardsReason(status: SecretsStatus | null): string | null {
+  if (!status) return 'Saved cards could not be checked.';
+  return hasCardScopes(status.providers.vault.scopes) ? null : 'Allow “Let the agent pay with a saved card” on the Secrets page first.';
+}
+
 export function useSavedLoginsAvailability(): SavedLoginsAvailability {
   const { api, viewer } = usePlatformHost();
   const canRead = viewer.hasPermission('secrets:read');
@@ -61,5 +74,6 @@ export function useSavedLoginsAvailability(): SavedLoginsAvailability {
   const why = state.loaded ? unavailableReason(state.status, canRead) : null;
   const available = state.loaded && why === null;
   const idReason = available ? identityReason(state.status) : null;
-  return { loaded: state.loaded, available, reason: why?.reason ?? null, fixTo: why?.fixTo ?? null, defaultOn: state.defaultOn, identityAvailable: available && idReason === null, identityReason: idReason };
+  const cardReason = available ? cardsReason(state.status) : null;
+  return { loaded: state.loaded, available, reason: why?.reason ?? null, fixTo: why?.fixTo ?? null, defaultOn: state.defaultOn, identityAvailable: available && idReason === null, identityReason: idReason, cardsAvailable: available && cardReason === null, cardsReason: cardReason };
 }

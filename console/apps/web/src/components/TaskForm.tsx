@@ -31,7 +31,7 @@ import { MachinePicker } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { ScheduleEditor } from './ScheduleEditor';
 import { ScheduleSummary, type ScheduleSummaryData } from './ScheduleSummary';
-import { SavedIdentitySwitch, SavedLoginsSwitch } from '../secrets/SavedLoginsSwitch';
+import { SavedCardsSwitch, SavedIdentitySwitch, SavedLoginsSwitch } from '../secrets/SavedLoginsSwitch';
 import { useSavedLoginsAvailability } from '../secrets/useSavedLoginsAvailability';
 import { runTaskWith } from '../policies/api';
 import { NO_HARD_STOP_WARNING, budgetSummary, hasNoHardStop, startModel, tierRange } from '../policies/format';
@@ -569,8 +569,9 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
         </Section>
 
         <Section title="Saved logins and details" id={`${uid}-saved-logins`}>
-          <SavedLoginsSwitch checked={fields.useSavedLogins} onChange={(useSavedLogins) => setFields({ useSavedLogins, ...(useSavedLogins ? {} : { useSavedIdentity: false }) })} disabled={busy} availability={savedLogins} />
+          <SavedLoginsSwitch checked={fields.useSavedLogins} onChange={(useSavedLogins) => setFields({ useSavedLogins, ...(useSavedLogins ? {} : { useSavedIdentity: false, useSavedCards: false }) })} disabled={busy} availability={savedLogins} />
           <SavedIdentitySwitch checked={fields.useSavedIdentity} onChange={(useSavedIdentity) => setFields({ useSavedIdentity })} disabled={busy} parentOn={fields.useSavedLogins} availability={savedLogins} />
+          <SavedCardsSwitch checked={fields.useSavedCards} onChange={(useSavedCards) => setFields({ useSavedCards })} disabled={busy} parentOn={fields.useSavedLogins} availability={savedLogins} />
           <FormControl component="fieldset" disabled={busy || !savedLogins.available || !fields.useSavedLogins} sx={{ ml: { xs: 0, sm: 6 } }}>
             <FormLabel component="legend" id={`${uid}-unattended-label`}>
               When it runs without me and reaches a payment
@@ -584,7 +585,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
               <FormControlLabel value="allow" control={<Radio />} label="Go ahead" sx={MIN_TAP} />
             </RadioGroup>
             <FormHelperText sx={{ mt: 0 }} data-testid="unattended-help">
-              {fields.unattendedPayments === 'allow' ? 'The agent will pay without asking, while you are not there, after signing in with a saved login. Choose this only for a task you trust, on a site you listed above. Your saved approvals and the sites you allowed still apply.' : 'A run that signed in with a saved login still stops and asks in your Inbox before it pays, even if you switched the question off above.'}
+              {fields.unattendedPayments === 'allow' ? 'The agent will pay without asking, while you are not there, after signing in with a saved login, and (with a saved card) only at a shop and up to an amount you remembered in Saved approvals. Choose this only for a task you trust, on a site you listed above. Your saved approvals and the sites you allowed still apply.' : 'A run that signed in with a saved login still stops and asks in your Inbox before it pays, even if you switched the question off above.'}
             </FormHelperText>
             {fields.unattendedPayments === 'allow' && (
               <Alert severity="warning" sx={{ mt: 1 }}>

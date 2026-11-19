@@ -94,7 +94,15 @@ const click = (selector = '#pay'): Call => ['click', { selector, reason: 'pay' }
 const confirm = (amount = '42.50', currency = 'USD'): Call => ['confirm_charge', { amount, currency }];
 const finish = (result = 'Done.'): Call => ['finish', { success: true, result }];
 
-const notifier = { finished: jest.fn(), needsYou: jest.fn(), started: jest.fn(), savedLoginUsed: jest.fn(), savedApprovalsUsed: jest.fn(), cardUsed: jest.fn(async () => undefined), cardAmountMismatch: jest.fn(async () => undefined) };
+const notifier = {
+  finished: jest.fn(),
+  needsYou: jest.fn(),
+  started: jest.fn(),
+  savedLoginUsed: jest.fn(),
+  savedApprovalsUsed: jest.fn(),
+  cardUsed: jest.fn<Promise<void>, [string, { id: string }, string]>(async () => undefined),
+  cardAmountMismatch: jest.fn<Promise<void>, [string, { id: string }, string]>(async () => undefined),
+};
 
 /** The run's secrets seam: registered, with or without card support. */
 function seamOf(opts: { state?: 'registered' | 'not_enabled'; cards?: boolean } = {}) {
@@ -137,7 +145,7 @@ async function owner(label: string, task: Record<string, unknown> = {}) {
 type Owner = Awaited<ReturnType<typeof owner>>;
 
 /** A fabric on the scripted shop's checkout page, with its pay button described. */
-function shop(url = CARD.checkout): SecretsFabric {
+function shop(url: string = CARD.checkout): SecretsFabric {
   const f = fakeSecretsFabric(url);
   f.targets.set('#pay', { tag: 'button', label: 'Pay now' });
   return f;
@@ -314,7 +322,8 @@ describe('saved cards: the first use at a merchant asks the owner', () => {
     expect(typing.every((x) => x.provider === undefined || typeof x.provider === 'string')).toBe(true);
     // The pay click went through the gate on the owner's approval of the card (no second question), after the card.
     expect(fabric.actions.filter((x) => x.type === 'click')).toEqual([{ type: 'click', selector: '#pay' }]);
-    expect(fabric.actions.findIndex((x) => x.type === 'click')).toBeGreaterThan(fabric.actions.findLastIndex((x) => x.type === 'type_card_field'));
+    const lastTyping = fabric.actions.map((x) => x.type).lastIndexOf('type_card_field');
+    expect(fabric.actions.findIndex((x) => x.type === 'click')).toBeGreaterThan(lastTyping);
     expect(await o.db.question.count({ where: { runId: run.id } })).toBe(1);
     // Positive control: the page holds the values (that is where they live).
     expect(typedTexts(fabric)).toEqual(expect.arrayContaining([CARD.number, CARD.expiry, CARD.cvv]));

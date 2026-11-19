@@ -78,6 +78,10 @@ export interface Rememberable {
   /** The sentence the owner reads: "Press 'Pay' on bankofamerica.com". */
   summary: string;
   scopes?: RememberScope[];
+  /** A saved card (E37.7): the amount limit is required for "Don't ask again", in `currency`; `amount` is this purchase. */
+  requiresLimit?: boolean;
+  currency?: string;
+  amount?: string;
 }
 
 /** The "Don't ask again" tick with its optional limits (#555). Distinct from `remember`, a site's own "remember me". */
@@ -161,6 +165,7 @@ export const KIND_LABEL: Record<string, string> = {
   captcha: 'CAPTCHA',
   code: 'Code',
   passkey: 'Passkey',
+  verification: 'Bank verification',
   login: 'Sign-in',
   confirmation: 'Confirm',
   memory: 'Memory',
