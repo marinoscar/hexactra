@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { FabricModule } from '../fabric/fabric.module';
 import { OAuthClientModule } from '../oauth-client';
-import { FABRIC_SECRETS_REGISTRY, UnwiredFabricSecretsRegistry } from './fabric-secrets-registry';
+import { FabricClientSecretsRegistry } from './fabric-client-secrets-registry';
+import { FABRIC_SECRETS_REGISTRY } from './fabric-secrets-registry';
+import { RunSecretsService } from './run-secrets.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar } from './secrets-provider.registrar';
 import { SecretsController } from './secrets.controller';
@@ -22,14 +25,14 @@ import { VaultTokenService } from './vault-token.service';
  * switches (`secrets.agentUse.enabled`, the deployment's and the owner's), `GET /api/secrets/status` and a Doctor
  * line. Mounted only with the credentials and notifications slices (app.module.ts).
  *
- * `FABRIC_SECRETS_REGISTRY` is bound to `UnwiredFabricSecretsRegistry` until the fabric's secrets-provider resource
- * (E37.1, #590) exists on `main`: replace the `useClass` here with the adapter over the fabric client.
+ * `FABRIC_SECRETS_REGISTRY` is bound to `FabricClientSecretsRegistry`, the adapter over the fabric's secrets-provider
+ * resource (E37.1, #590). `RunSecretsService` (E37.3, #592) is what the goal runner uses.
  */
 @Module({
-  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule],
+  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
   controllers: [SecretsController],
   providers: [
-    { provide: FABRIC_SECRETS_REGISTRY, useClass: UnwiredFabricSecretsRegistry },
+    { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricClientSecretsRegistry },
     SecretsPolicyService,
     SecretsEvents,
     VaultApiClient,
@@ -39,12 +42,13 @@ import { VaultTokenService } from './vault-token.service';
     VaultConnectionService,
     VaultDefaultClientService,
     SecretsProviderRegistrar,
+    RunSecretsService,
     VaultKeepFresh,
     VaultKeepFreshHandler,
     VaultKeepFreshTask,
     VaultConnectionsCheck,
     VaultEgressContributor,
   ],
-  exports: [FABRIC_SECRETS_REGISTRY, SecretsPolicyService, SecretsProviderRegistrar, VaultConnectionService, VaultTokenService],
+  exports: [FABRIC_SECRETS_REGISTRY, RunSecretsService, SecretsPolicyService, SecretsProviderRegistrar, VaultConnectionService, VaultTokenService],
 })
 export class SecretsModule {}

@@ -6,6 +6,8 @@ import { AiModule } from '../platform/ai/ai.config';
 import { ApprovalsModule } from '../approvals/approvals.module';
 import { PoliciesModule } from '../policies/policies.module';
 import { QuestionsModule } from '../questions/questions.module';
+import { isSliceEnabled } from '../platform/slices/manifest';
+import { SecretsModule } from '../secrets/secrets.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { GoalRunHandler, HandoffCheckHandler, HandoffCheckTask } from './goal-runner.jobs';
 import { GoalRunnerService } from './goal-runner.service';
@@ -18,7 +20,8 @@ import { RunsStartController } from './runs-start.controller';
  * (its configured AiModule); the job queue is global.
  */
 @Module({
-  imports: [AiModule, FabricModule, TasksModule, QuestionsModule, PoliciesModule, MemoriesModule, ApprovalsModule],
+  // The secrets module is mounted only with the credentials and notifications slices (app.module.ts): without it a run never signs in from a saved login.
+  imports: [AiModule, FabricModule, TasksModule, QuestionsModule, PoliciesModule, MemoriesModule, ApprovalsModule, ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : [])],
   controllers: [RunsStartController, RunLiveController],
   providers: [RunOwnerGuard, GoalRunnerService, GoalRunHandler, HandoffCheckHandler, HandoffCheckTask],
   exports: [GoalRunnerService],

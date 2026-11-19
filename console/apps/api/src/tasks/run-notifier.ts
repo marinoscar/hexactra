@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
-import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_SAVED_APPROVALS_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_SAVED_APPROVALS_EVENT, RUN_SAVED_LOGIN_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
 import { FINAL_WINDOW_MS, canSnooze } from './reminder-schedule';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
@@ -138,6 +138,18 @@ export class RunNotifier {
    */
   async savedApprovalsUsed(userId: string, run: RunRef, line: string): Promise<void> {
     await this.send(RUN_SAVED_APPROVALS_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 500), runUrl: this.url(`/runs/${run.id}`) });
+  }
+
+  /**
+   * A scheduled run signed in with a saved login (E37.3): once per run, at its end, grouped ("Signed in to
+   * shop.example.test with a saved login"). Sites only: never a login's name, username, password or code.
+   */
+  async savedLoginUsed(userId: string, run: RunRef, sites: string[]): Promise<void> {
+    const shown = [...new Set(sites)].slice(0, 3);
+    if (shown.length === 0) return;
+    const more = new Set(sites).size - shown.length;
+    const line = `Signed in to ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''} with a saved login`;
+    await this.send(RUN_SAVED_LOGIN_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line, runUrl: this.url(`/runs/${run.id}`) });
   }
 
   /** The notice links to the task's schedules (`/tasks/:id#schedule`, #428), where the failing one carries a warning. */

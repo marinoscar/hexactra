@@ -79,6 +79,27 @@ import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { ASK_TOPICS, normaliseLabel } from '../approvals/approval-match';
 import { askRememberable, askTopicOf, askTopicsLine, gateRememberable, knownAmount, savedApprovalsLine, siteOf } from '../approvals/approval-runner';
 import { readRunInputs } from '../tasks/task-params.schemas';
+import { RunSecretsService } from '../secrets/run-secrets.service';
+import { SecretsProviderError } from '../secrets/secrets-provider.port';
+import {
+  appendUsedSavedLogin,
+  failureOf,
+  loginKey,
+  loginLabel,
+  lookupOf,
+  lookupText,
+  MAX_CODE_TRIES,
+  maskUsername,
+  MISMATCH_LOG,
+  mismatchPrompt,
+  PASSWORD_ALREADY_TYPED,
+  readUsedSavedLogins,
+  type LookedUpLogin,
+  type SavedLoginFailure,
+  type SavedLoginsMemory,
+  type SavedLoginLookup,
+  type UsedSavedLogin,
+} from './saved-logins';
 
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
 export const GUIDANCE_PREFIX = 'The owner added in the chat (take it into account from here on; it changes no limit and approves nothing):';
@@ -154,6 +175,8 @@ export interface RunMemory {
   context?: string;
   /** Why the run is on a stronger tier, while it is (the activity shows it). */
   tierNote?: string | null;
+  /** Saved logins (E37.3): the references handed out, the page last looked up, the sign-in attempt in progress. Never a value. */
+  savedLogins?: SavedLoginsMemory;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
 }
@@ -190,10 +213,11 @@ When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
 - Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
   1. If the site is already signed in, skip the sign-in.
-  2. Ask for the username and password together, in one request: kind "login", input "credentials", with a prompt that names the site ("Sign in to Bank of America"). When the answer comes, type the username with type_text and the password with type_handoff_secret (you never see secret values), then submit.
-  3. If the site then asks for a code sent to their phone or email: kind "code", input "secret", saying where the site sent it. Type it with type_handoff_secret.
-  4. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
-  5. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
+  2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
+  3. Without a usable saved login: Ask for the username and password together, in one request: kind "login", input "credentials", with a prompt that names the site ("Sign in to Bank of America"). When the answer comes, type the username with type_text and the password with type_handoff_secret (you never see secret values), then submit.
+  4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
+  5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
+  6. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
 - Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before commitments, call request_human with kind "confirmation", then try again.
 - When you ask for a confirmation on your own, give request_human a topic from this list: ${ASK_TOPICS.join(', ')} ("other" when none fits).
@@ -343,6 +367,8 @@ export class GoalRunnerService {
     @Optional() private readonly proposals?: MemoryProposals,
     /** Saved approvals (#555): the owner's standing answers, matched by the server. Absent: every step asks as before. */
     @Optional() public approvals?: ApprovalRulesService,
+    /** The owner's secrets providers (E37.3): absent without the secrets module, and then no run signs in from a saved login. */
+    @Optional() public secrets?: RunSecretsService,
   ) {}
 
   /**
@@ -505,7 +531,7 @@ export class GoalRunnerService {
   async advance(runId: string, userId: string, orgId: string | null): Promise<RunOutcome> {
     const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
-    const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true } } } });
+    const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true } } } });
     if (!run) return 'failed';
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') return run.status;
     const session = new FabricSession(this.fabric);
@@ -516,6 +542,13 @@ export class GoalRunnerService {
     if (memory.confirmationGranted) {
       memory.confirmedTarget ??= { category: null, label: null, host: null };
       delete memory.confirmationGranted;
+    }
+
+    // A sign-in cut off between two fields (the job crashed or was retried, E37.3): what was typed is known from the phases, never retyped blindly.
+    const interrupted = memory.savedLogins?.attempt;
+    if (interrupted && (interrupted.username === 'typing' || interrupted.password === 'typing' || interrupted.code === 'typing')) {
+      if (interrupted.username === 'typing') interrupted.username = undefined;
+      memory.log.push('(A sign-in from a saved login was cut off while it was typing. Look at the page and read each field before typing again. A password that may already have been typed is not typed a second time: if you are not signed in, ask the owner.)');
     }
 
     if (run.cancelRequested) {
@@ -570,6 +603,13 @@ export class GoalRunnerService {
           rememberLabel: q?.rememberLabel ?? h.remember?.label ?? null,
           remember: resp?.remember ?? h.response?.remember,
         });
+        // The owner picked one of several saved logins for this address (E37.3): only that reference may be used.
+        const picked = q?.input === 'choice' ? (resp?.value ?? h.response?.value) : undefined;
+        const asked = memory.savedLogins?.lookup;
+        if (asked?.ambiguous && picked && asked.logins.some((l) => l.exact && l.ref === picked)) {
+          asked.chosen = picked;
+          memory.log.push(`The owner chose the saved login ${picked}: sign in with sign_in_with_saved_login(ref "${picked}").`);
+        }
         // A sensitive task parameter's value (#552) is kept for its own parameter; any other secret is the next one to type.
         if (h.input === 'secret' && memory.askingParam) memory.paramSecrets = { ...(memory.paramSecrets ?? {}), [memory.askingParam]: h.id };
         else if (h.input === 'secret' || h.input === 'credentials') memory.secretHandoffId = h.id;
@@ -614,6 +654,17 @@ export class GoalRunnerService {
       await this.notifier?.started?.(userId, run);
     }
 
+    // Saved logins (E37.3): on only when the task or chat opted in, the app (if an AI app started the run) allows it, both
+    // switches are on and a provider is connected. Anything else: the tools are not offered and the run asks as before.
+    const appAtStart = readAppLimits(run.appLimits);
+    const optedIn = (run.task ? run.task.useSavedLogins : (run.conversation?.useSavedLogins ?? false)) && (appAtStart ? appAtStart.allowSavedLogins : true);
+    let savedLoginsOn = false;
+    if (optedIn && this.secrets) {
+      const prepared = await this.secrets.prepare(userId);
+      savedLoginsOn = prepared === 'registered';
+      if (!savedLoginsOn && !memory.savedLogins?.stopped && (memory.chunks ?? 0) === 0) memory.log.push(`(Saved logins are not available for this run (${prepared.replace(/_/g, ' ')}): sign in by asking the owner.)`);
+    }
+
     let sessionId = run.sessionId;
     if (!sessionId) {
       try {
@@ -629,7 +680,7 @@ export class GoalRunnerService {
         }
         // The browser enforces the run's allowed sites too (#508), so a page cannot leave them on its own.
         const sites = fabricAllowedSites(run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [], readAppLimits(run.appLimits)?.allowedDomains ?? []);
-        sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}`, allowedDomains: sites });
+        sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}`, allowedDomains: sites, ...(savedLoginsOn ? { ownerId: userId } : {}) });
       } catch (e) {
         await this.finish(userId, run.id, null, session, 'failed', { error: `No browser available: ${e instanceof Error ? e.message : String(e)}`, stopReason: 'error' });
         return 'failed';
@@ -661,7 +712,14 @@ export class GoalRunnerService {
       allowedDomains: run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [],
       // The app's own allowed sites: a URL must pass both lists.
       appDomains: app?.allowedDomains ?? [],
-      confirmRisky: (run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false) || app?.confirmPurchases === true,
+      // The task's or chat's own setting, or the app's. An UNATTENDED run (not started from a chat: a schedule, the API, MCP, a task run
+      // with nobody in a thread) that signed in with a saved login keeps it on whatever the task says, unless the task set
+      // `unattendedPayments: allow` (E37.3). A getter: it turns on the moment the run first uses a saved login.
+      get confirmRisky(): boolean {
+        const own = (run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false) || app?.confirmPurchases === true;
+        const unattended = !run.conversationId && run.trigger !== 'chat';
+        return own || (state.usedLogins.length > 0 && unattended && (run.task?.unattendedPayments ?? 'ask') !== 'allow');
+      },
     };
     /** Whether a URL is allowed by the task and by the app. */
     const siteAllowed = (url: string) => domainAllowed(url, policy.allowedDomains) && domainAllowed(url, policy.appDomains);
@@ -686,6 +744,8 @@ export class GoalRunnerService {
       marks: new Map<number, ScreenMark>(),
       /** The last screen the model was shown. */
       view: null as ScreenView | null,
+      /** The saved logins the run signed in with so far (E37.3), as `runs.used_saved_logins` holds them. */
+      usedLogins: readUsedSavedLogins(run.usedSavedLogins),
     };
 
     /** What the run page shows as happening now (#379). Best effort: never fails the run. */
@@ -1056,6 +1116,223 @@ export class GoalRunnerService {
       if (target && !memory.pendingConfirmation) memory.confirmedTarget = null;
     };
 
+    // ------------------------------------------------------------------ saved logins (E37.3, #592)
+    // The model passes a per-run reference from the lookup of the page it is on; the fabric reads the page's origin itself
+    // when it types and asks the owner's provider with it. A value never reaches this process, a step, the memory or the
+    // model: only names, masked usernames and origins do. Offered only when the run may use saved logins (`savedLoginsOn`).
+    const unattended = !run.conversationId && run.trigger !== 'chat';
+    const sl = (): SavedLoginsMemory => (memory.savedLogins ??= { refs: {} });
+    const loginOpts = { runId: run.id, clientLabel: app?.clientName ?? 'Hexactra' };
+    /** The saved-logins memory is written at once, before and after every field: a crash between two fields finds what was typed. */
+    const persistSavedLogins = async () => {
+      await db.run.updateMany({ where: { id: run.id }, data: { transcript: memory as never } });
+    };
+    const originOf = (url: string | null): string | null => {
+      try {
+        return url ? new URL(url).origin : null;
+      } catch {
+        return null;
+      }
+    };
+    /** A refusal the model reads, recorded as a failed step (never a typed value: there is none). */
+    const refuseSaved = async (action: string, args: Record<string, unknown>, started: number, text: string, summary: string): Promise<string> => {
+      await record('action', action, args, false, summary, started, undefined, { secret: true });
+      return text;
+    };
+    /** The provider or the fabric refused for good (nothing was typed), as opposed to an outcome nobody knows (a timeout, a cancel). */
+    const definitiveRefusal = (e: unknown): boolean => e instanceof SecretsProviderError && !['timed_out', 'cancelled', 'unknown'].includes(e.code);
+    /** A saved login's first use in this run: `runs.used_saved_logins`, and (unattended) the confirmation before a commitment turns on. */
+    const markUsed = async (login: LookedUpLogin, lookup: SavedLoginLookup) => {
+      const next = appendUsedSavedLogin(state.usedLogins, { provider: lookup.provider, itemName: login.name, origin: lookup.origin, at: new Date() });
+      if (next.length === state.usedLogins.length) return;
+      const first = state.usedLogins.length === 0;
+      state.usedLogins = next;
+      await db.run.updateMany({ where: { id: run.id }, data: { usedSavedLogins: next as never } });
+      if (first && unattended && (run.task?.unattendedPayments ?? 'ask') !== 'allow') {
+        memory.log.push('(This run signed in with a saved login and nobody is watching: the server asks the owner before a payment or another commitment.)');
+      }
+    };
+    /**
+     * A provider failure as an instruction (the table of `failureOf`). A mismatch ends the attempt and asks the owner with a
+     * warning card; saved logins are off for the rest of the run. Anything that is not a provider or fabric error is rethrown.
+     */
+    const savedLoginFailure = async (action: string, args: Record<string, unknown>, e: unknown, started: number, about?: { name: string; origin: string }): Promise<string> => {
+      let f: SavedLoginFailure;
+      if (e instanceof SecretsProviderError) f = failureOf(e.code, e.retryAfterSeconds);
+      else if (e instanceof FabricError) f = failureOf('unavailable');
+      else throw e;
+      if (f.outcome) await this.secrets?.outcome(userId, { ok: false, code: f.outcome });
+      await record('action', action, args, false, f.summary, started, undefined, { secret: true });
+      if (!f.warn) return f.text;
+      sl().stopped = true;
+      sl().attempt = null;
+      memory.log.push(MISMATCH_LOG);
+      await persistSavedLogins();
+      const spec = questionSpecSchema.parse({ kind: 'login', input: 'takeover', prompt: mismatchPrompt(hostOf(about?.origin ?? null), about?.name ?? 'saved login') });
+      return (await askPerson(spec, started)) ? `${f.text} The owner has been asked to look.` : f.text;
+    };
+    /** The page's lookup and a reference the owner may use now: exact, chosen when several match, on the page still on screen. */
+    const usableLogin = async (action: string, args: Record<string, unknown>, ref: string, started: number): Promise<{ login: LookedUpLogin; lookup: SavedLoginLookup } | string> => {
+      const spent = budgetCheck();
+      if (spent) {
+        stopForBudget(spent);
+        return `${BUDGET_ERROR[spent]}.`;
+      }
+      const refuse = (text: string, summary: string) => refuseSaved(action, args, started, text, summary);
+      if (sl().stopped) return refuse('Saved logins are switched off for the rest of this run, because a page was refused as the wrong site. Do not try another login. Tell the owner.', 'refused: saved logins are off for this run');
+      const lookup = sl().lookup;
+      if (!lookup) return refuse('Call saved_logins first, on the page you are signing in to.', 'refused: no lookup of this page yet');
+      const login = lookup.logins.find((l) => l.ref === ref);
+      if (!login) return refuse(`There is no saved login "${ref}". Call saved_logins again for this page and use a reference it gives.`, 'refused: unknown reference');
+      const now = originOf(await currentUrl());
+      if (now && now !== lookup.origin) return refuse('The page changed since saved_logins looked it up. Call saved_logins again for the page you are on.', 'refused: the page changed since the lookup');
+      if (!login.exact) return refuse('That login is saved for a different address of this site. Ask the owner: call request_human with kind "login", input "credentials".', 'refused: saved for a different address of the site');
+      if (lookup.ambiguous && lookup.chosen !== login.ref) {
+        return refuse('Several logins are saved for this address, and the owner has not chosen one. Ask the owner with request_human (kind "login", input "choice"; the options are the references from saved_logins).', 'refused: the owner has not chosen between several logins');
+      }
+      return { login, lookup };
+    };
+
+    const savedLoginTools: AiDefinedTool[] = [
+      defineTool({
+        name: 'saved_logins',
+        description:
+          'List the logins the owner saved for the page now on screen: none, or `{ ref, name, username, exact, hasCode }` each. Only a login marked exact may be used. Call it first on a sign-in page. A username is not secret; passwords and codes are never shown.',
+        parameters: z.object({}),
+        execute: async () => {
+          const started = Date.now();
+          const spent = budgetCheck();
+          if (spent) {
+            stopForBudget(spent);
+            return `${BUDGET_ERROR[spent]}.`;
+          }
+          if (sl().stopped) return refuseSaved('saved_logins', {}, started, 'Saved logins are switched off for the rest of this run, because a page was refused as the wrong site. Do not try another login. Tell the owner.', 'refused: saved logins are off for this run');
+          let found;
+          try {
+            found = await session.secretsLookup(sessionId!, 'login', loginOpts);
+          } catch (e) {
+            return await savedLoginFailure('saved_logins', {}, e, started);
+          }
+          await this.secrets?.outcome(userId, { ok: true });
+          const previous = sl().lookup;
+          const lookup = lookupOf(sl(), found);
+          // The owner's choice between several logins stands for this page for the rest of the run.
+          if (previous?.chosen && previous.origin === lookup.origin && lookup.logins.some((l) => l.exact && l.ref === previous.chosen)) lookup.chosen = previous.chosen;
+          // The model reads the lookup now; the run keeps it with the usernames masked (a username is not secret, but nothing needs it again).
+          const text = lookupText(lookup);
+          sl().lookup = { ...lookup, logins: lookup.logins.map((l) => ({ ...l, username: l.username === null ? null : maskUsername(l.username) })) };
+          // A new page, a new attempt; but a sign-in cut off on this very page (a crash, a retried job) keeps what it typed.
+          if (!(previous && previous.origin === lookup.origin && sl().attempt && sl().attempt!.password !== 'typed')) sl().attempt = null;
+          const exact = lookup.logins.filter((l) => l.exact).length;
+          const n = lookup.logins.length;
+          await record('action', 'saved_logins', {}, true, `looked up saved logins: ${n === 0 ? 'no match' : `${n} match${n === 1 ? '' : 'es'}${exact === n ? '' : `, ${exact} exact`}`}`, started);
+          await persistSavedLogins();
+          return text;
+        },
+      }),
+      defineTool({
+        name: 'sign_in_with_saved_login',
+        description:
+          "Sign in with a login the owner saved, on the page now on screen: types its username and password into the fields you name with real keystrokes. You never see either. `ref` comes from saved_logins and must be marked exact. When the site asks for the username and the password on separate pages, pass one selector per call and null for the other. `submit` presses Enter after the last field typed. A password is typed at most once per run: if the site rejects it, ask the owner.",
+        parameters: z.object({ ref: z.string().min(1).max(40), username_selector: z.string().max(2000).nullable(), password_selector: z.string().max(2000).nullable(), submit: z.boolean() }),
+        execute: async ({ ref, username_selector, password_selector, submit }) => {
+          const started = Date.now();
+          const args = { ref, username_selector, password_selector, submit };
+          if (!username_selector && !password_selector) return 'Give a username_selector, a password_selector or both.';
+          const pre = await usableLogin('sign_in_with_saved_login', args, ref, started);
+          if (typeof pre === 'string') return pre;
+          const { login, lookup } = pre;
+          const mem = sl();
+          const key = loginKey(login.itemId, lookup.origin);
+          const attempt = mem.attempt && mem.attempt.itemId === login.itemId ? mem.attempt : (mem.attempt = { ref: login.ref, itemId: login.itemId });
+          // A password is typed once per login and site in a run, whatever happened: repeated wrong passwords lock accounts.
+          if (password_selector && attempt.password === 'typing') {
+            return refuseSaved('sign_in_with_saved_login', args, started, "A previous attempt was cut off while typing this login's password, so it may already be typed. Look at the page: if you are signed in, carry on. If not, do not type it again: ask the owner to sign in with request_human, kind \"login\", input \"credentials\".", 'refused: the password may already have been typed');
+          }
+          if (password_selector && mem.passwordTyped?.includes(key)) return refuseSaved('sign_in_with_saved_login', args, started, PASSWORD_ALREADY_TYPED, 'refused: the password was already typed in this run');
+          const todo = (
+            [
+              ['username', username_selector],
+              ['password', password_selector],
+            ] as const
+          ).filter(([field, selector]) => selector && !(field === 'username' && attempt.username === 'typed'));
+          if (todo.length === 0) return 'The username was already typed on this page. Pass the password_selector to type the password.';
+          const label = loginLabel(login.name, login.username);
+          const done: string[] = [];
+          for (const [i, [field, selector]] of todo.entries()) {
+            // The phase is written before the keystrokes and the field is `typed` only after the fabric says so.
+            attempt[field] = 'typing';
+            await persistSavedLogins();
+            await recordNote('note', 'saved_login_phase', `typing the ${field} of the saved login ${label}`);
+            await setActivity('acting', { action: { type: 'type', selector, secret: '', submit }, target: actionTarget({ selector: selector! }, state.marks.values()) });
+            try {
+              await session.typeFromProvider(sessionId!, { itemId: login.itemId, field, selector: selector!, purpose: 'login', clear: true, submit: submit && i === todo.length - 1, ...loginOpts });
+            } catch (e) {
+              // A refusal is definitive: nothing was typed. A crash, a lost connection or a timeout is not: the field may be typed.
+              if (definitiveRefusal(e)) attempt[field] = undefined;
+              await persistSavedLogins();
+              return await savedLoginFailure('sign_in_with_saved_login', args, e, started, { name: login.name, origin: lookup.origin });
+            } finally {
+              await setActivity('thinking');
+            }
+            attempt[field] = 'typed';
+            if (field === 'password') mem.passwordTyped = [...(mem.passwordTyped ?? []), key];
+            await markUsed(login, lookup);
+            await persistSavedLogins();
+            done.push(field);
+          }
+          await this.secrets?.outcome(userId, { ok: true });
+          const typedPassword = done.includes('password');
+          await record('action', 'sign_in_with_saved_login', args, true, typedPassword ? `signed in with the saved login ${label}` : `typed the username of the saved login ${label}`, started, undefined, { secret: true });
+          return typedPassword
+            ? `Typed ${done.join(' and ')} of the saved login ${ref}${submit ? ' and submitted' : ''}. Check the page.`
+            : `Typed the username of the saved login ${ref}${submit ? ' and submitted' : ''}. When the site shows the password field, call this again with password_selector (and null for username_selector).`;
+        },
+      }),
+      defineTool({
+        name: 'type_saved_code',
+        description:
+          'Type the one-time authenticator code of a saved login into the field you name, fresh at that moment; you never see it. Only for a login marked hasCode, and only when the page asks for an authenticator-app code (never a code sent by text message or email). `ref` comes from saved_logins and must be exact. `submit` presses Enter after typing.',
+        parameters: z.object({ ref: z.string().min(1).max(40), selector: z.string().min(1).max(2000), submit: z.boolean() }),
+        execute: async ({ ref, selector, submit }) => {
+          const started = Date.now();
+          const args = { ref, selector, submit };
+          const pre = await usableLogin('type_saved_code', args, ref, started);
+          if (typeof pre === 'string') return pre;
+          const { login, lookup } = pre;
+          if (!login.hasCode) {
+            return refuseSaved('type_saved_code', args, started, 'That login has no authenticator code saved. Ask the owner for the code: call request_human with kind "code", input "secret", and type it with type_handoff_secret.', 'refused: the login has no code');
+          }
+          const mem = sl();
+          const key = loginKey(login.itemId, lookup.origin);
+          if ((mem.codes?.[key] ?? 0) >= MAX_CODE_TRIES) {
+            return refuseSaved('type_saved_code', args, started, `A code from this login was already typed ${MAX_CODE_TRIES} times in this run. Do not try again: ask the owner.`, 'refused: too many codes typed in this run');
+          }
+          mem.codes = { ...(mem.codes ?? {}), [key]: (mem.codes?.[key] ?? 0) + 1 };
+          const attempt = mem.attempt && mem.attempt.itemId === login.itemId ? mem.attempt : (mem.attempt = { ref: login.ref, itemId: login.itemId });
+          attempt.code = 'typing';
+          await persistSavedLogins();
+          await recordNote('note', 'saved_login_phase', `typing the authenticator code of the saved login ${loginLabel(login.name, login.username)}`);
+          await setActivity('acting', { action: { type: 'type', selector, secret: '', submit }, target: actionTarget({ selector }, state.marks.values()) });
+          try {
+            await session.typeCodeFromProvider(sessionId!, { itemId: login.itemId, selector, clear: true, submit, ...loginOpts });
+          } catch (e) {
+            if (definitiveRefusal(e)) attempt.code = undefined;
+            await persistSavedLogins();
+            return await savedLoginFailure('type_saved_code', args, e, started, { name: login.name, origin: lookup.origin });
+          } finally {
+            await setActivity('thinking');
+          }
+          attempt.code = 'typed';
+          await markUsed(login, lookup);
+          await persistSavedLogins();
+          await this.secrets?.outcome(userId, { ok: true });
+          await record('action', 'type_saved_code', args, true, `typed the authenticator code of the saved login ${loginLabel(login.name, login.username)}`, started, undefined, { secret: true });
+          return `Typed the code${submit ? ' and submitted' : ''}. Check the page.`;
+        },
+      }),
+    ];
+
     const tools: AiDefinedTool[] = [
       defineTool({
         name: 'observe_elements',
@@ -1424,6 +1701,7 @@ export class GoalRunnerService {
           return ok ? 'Typed the secret.' : `Failed: ${op.error ?? op.state}`;
         },
       }),
+      ...(savedLoginsOn ? savedLoginTools : []),
       defineTool({
         name: 'finish',
         description: 'End the run with a short factual result.',
@@ -1906,6 +2184,15 @@ export class GoalRunnerService {
     this.log.log(`run ${runId}: ${to}`);
     // The saved result: it leads with a confirmed step the run carried out (#540).
     await this.notifier?.finished(userId, done, to, done.result ?? patch.error);
+    // A scheduled run that signed in with a saved login (E37.3): one notification at the end of the run, grouped by site.
+    try {
+      const used = readUsedSavedLogins((done as { usedSavedLogins?: unknown }).usedSavedLogins);
+      if (used.length > 0 && (done as { trigger?: string }).trigger === 'schedule') {
+        await this.notifier?.savedLoginUsed?.(userId, done, used.map((u) => hostOf(u.origin) ?? u.origin));
+      }
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not tell the owner about the saved login: ${e instanceof Error ? e.message : String(e)}`);
+    }
     // Steps that went ahead on saved approvals (#555): one notification at the end of the run. Ask rules do not notify.
     try {
       const line = savedApprovalsLine((await this.approvals?.gateUsesOfRun(userId, runId)) ?? []);
