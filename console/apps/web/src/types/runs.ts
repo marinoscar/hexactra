@@ -1,5 +1,6 @@
 // A run and its steps, as the API returns them (`runResponseSchema` and
 // `runStepResponseSchema` in apps/api/src/openapi/console.responses.ts).
+import type { RunInput } from '../taskParams/RunInputs';
 import type { RunClient, RunOrigin } from '../aiApps/types';
 import type { RunActivity } from '../components/RunActivity';
 import { STOP_REASONS, type BudgetKey, type RunBudget, type RunPolicy, type RunTier, type StopReason, type Tier } from '../components/runBudget';
@@ -97,6 +98,8 @@ export interface Run {
   activity?: RunActivity | null;
   /** The agent policy the run runs under; null until its first step snapshots it (#401). */
   policy?: RunPolicy | null;
+  /** The task parameter values the run started with (#552), masked, with their source; null without parameters. */
+  inputs?: RunInput[] | null;
   /** USD spent on model calls; a lower bound while `costKnown` is false. */
   costUsd?: number | null;
   /** False once a call could not be priced: show `costUsd` as "at least". */

@@ -1,6 +1,8 @@
 // A task and its schedules, as the API returns them (`taskResponseSchema` and
 // the schedule response in apps/api/src/openapi/console.responses.ts).
 
+import type { TaskParameter } from '@app/shared/task-params';
+
 import type { TaskSpend } from '../components/runBudget';
 
 /** A task, as `GET /api/tasks` returns it. */
@@ -17,6 +19,8 @@ export interface Task {
   spend30d?: TaskSpend;
   /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */
   policyId: string | null;
+  /** The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none. */
+  parameters?: TaskParameter[] | null;
   createdAt?: string;
   /** When the task was last edited. */
   updatedAt?: string;
@@ -39,6 +43,8 @@ export interface TaskSchedule {
   description?: string;
   /** Overrides the task's agent policy for scheduled runs; null follows the task. */
   policyId?: string | null;
+  /** Preset values for the task's parameters (#552), by key; null for none. */
+  inputs?: Record<string, string> | null;
 }
 
 /** One schedule of a task's `summary` (`taskSummaryScheduleSchema`, #424). */
@@ -54,6 +60,8 @@ export interface TaskSummarySchedule {
   consecutiveFailures: number;
   description: string;
   policyId: string | null;
+  /** Preset values for the task's parameters (#552), by key; null for none. */
+  inputs?: Record<string, string> | null;
 }
 
 /** `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some of each. */

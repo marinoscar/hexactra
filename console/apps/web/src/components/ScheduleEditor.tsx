@@ -25,6 +25,8 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { PolicySelect } from '../policies/PolicySelect';
 import type { PolicyCatalog } from '../policies/usePolicyCatalog';
 import type { ScheduleDraft } from '../schedule/draft';
+import type { TaskParameter } from '../taskParams/model';
+import { ScheduleValues, scheduleValuesOk } from '../taskParams/ScheduleValues';
 import {
   CRON_FIELDS,
   HOUR_STEPS,
@@ -66,6 +68,8 @@ export interface ScheduleEditorProps {
   catalog?: Pick<PolicyCatalog, 'policies' | 'defaultId' | 'byId'>;
   /** The task's own policy (null follows the user's default): what "Task's policy" resolves to. */
   taskPolicyId?: string | null;
+  /** The task's parameters (#556): the schedule presets a value for each that has no saved one. */
+  parameters?: readonly TaskParameter[];
 }
 
 /** IANA zones the runtime knows; empty where `Intl.supportedValuesOf` is missing (the field is then free text). */
@@ -145,7 +149,7 @@ function MonthDayGrid({ days, onToggle, disabled }: { days: number[]; onToggle: 
  * Controlled, and it never saves: the parent keeps the draft and owns the
  * request. It needs a `ConfirmProvider` above it.
  */
-export function ScheduleEditor({ value, onChange, onValidity, disabled, profileTimezone, catalog, taskPolicyId }: ScheduleEditorProps) {
+export function ScheduleEditor({ value, onChange, onValidity, disabled, profileTimezone, catalog, taskPolicyId, parameters }: ScheduleEditorProps) {
   const { isPhone } = useBreakpoint();
   const confirm = useConfirm();
   const ids = useId();
@@ -168,7 +172,8 @@ export function ScheduleEditor({ value, onChange, onValidity, disabled, profileT
   const preview = useSchedulePreview(cron, value.timezone);
   const refused = !preview.pending && preview.result?.valid === false;
   // Advanced text is only known to be good once the server has answered; a builder spec is good by construction.
-  const ok = localError === null && !refused && !(preview.pending && spec.mode === 'advanced');
+  // An active schedule needs a value for every required parameter without a saved one (#556).
+  const ok = localError === null && !refused && !(preview.pending && spec.mode === 'advanced') && scheduleValuesOk(parameters, value.inputs, value.enabled);
   const report = useRef(onValidity);
   report.current = onValidity;
   useEffect(() => {
@@ -556,6 +561,7 @@ export function ScheduleEditor({ value, onChange, onValidity, disabled, profileT
       ) : (
         more
       )}
+      {parameters && parameters.length > 0 && <ScheduleValues parameters={parameters} inputs={value.inputs} enabled={value.enabled} disabled={disabled} onChange={(inputs) => patch({ inputs })} />}
       <FormControlLabel
         control={<Switch checked={value.enabled} disabled={disabled} onChange={(e) => patch({ enabled: e.target.checked })} />}
         label={value.enabled ? 'Active' : 'Paused'}

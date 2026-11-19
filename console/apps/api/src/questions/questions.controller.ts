@@ -75,8 +75,11 @@ export class QuestionsController {
   @Auth({ permissions: ['runs:write'] })
   async answer(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: AnswerQuestionDto, @Req() req?: object): Promise<QuestionView> {
     const { channel, ...answer } = body;
+    // "Don't ask again" (#555) is the person's own tick in the signed-in web or Android app: the request's origin,
+    // from its credential (never the declared channel), must be one of those. A token, the CLI and an AI app approve once.
+    const rememberAllowed = answer.rememberRule ? ['web', 'android'].includes((await this.clients?.resolve(req))?.origin ?? '') : true;
     // Through MCP the channel is never the console's own, whatever the body says (#553).
-    return this.questions.answer(user, id, answer, { channel: await this.channelOf(req, channel) });
+    return this.questions.answer(user, id, answer, { channel: await this.channelOf(req, channel), rememberAllowed });
   }
 
   /** Decline the question (the same as answering it with `outcome: "cancelled"`). */

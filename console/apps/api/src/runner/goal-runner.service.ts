@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { buildObjectKey } from '@marinoscar/platform-api/storage';
 import { AiError, AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
-import { Prisma } from '@prisma/client';
+import { Prisma, type ApprovalRule } from '@prisma/client';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
@@ -75,6 +75,9 @@ import { appendConfirmedAction, noReportResult } from './confirmed-actions';
 import { captureScreen, captureTrace, markCenter, roundInput, TraceCaptureError, type Screen, type ScreenMark, type ScreenView, type TraceNote, type TraceShot } from './vision';
 import { answerSummary, guidanceSummary, isSecretInput, questionMoment, traceAllowed, traceKeyParts, type TraceMoment } from './trace';
 import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.service';
+import { ApprovalRulesService } from '../approvals/approval-rules.service';
+import { ASK_TOPICS, normaliseLabel } from '../approvals/approval-match';
+import { askRememberable, askTopicOf, askTopicsLine, gateRememberable, knownAmount, savedApprovalsLine, siteOf } from '../approvals/approval-runner';
 import { readRunInputs } from '../tasks/task-params.schemas';
 
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
@@ -193,6 +196,7 @@ When you need the person:
   5. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
 - Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before commitments, call request_human with kind "confirmation", then try again.
+- When you ask for a confirmation on your own, give request_human a topic from this list: ${ASK_TOPICS.join(', ')} ("other" when none fits).
 - The server itself stops you before a commitment (pressing Pay, Send, Place order, Transfer, Delete account) when the task asks for confirmation; you do not ask first. Never ask the person before ordinary steps: opening menus, choosing dates, filling fields, picking options, moving between pages. Ask only when the owner's intent is unclear or a detail you need is missing.
 
 Values in the goal:
@@ -243,6 +247,8 @@ export interface RequestHumanArgs {
   risk?: 'low' | 'high' | null;
   /** credentials and secret: the words of the page's "remember me" option, when it has one (#527). */
   remember_label?: string | null;
+  /** A confirmation's topic from the fixed list (#555); anything else is `other`. Never a source of authorization. */
+  topic?: string | null;
 }
 
 const CONSTRAINT_FROM_MODEL = {
@@ -335,6 +341,8 @@ export class GoalRunnerService {
     /** The owner's memories (#553): the block the model reads, and the proposals it may make. */
     @Optional() private readonly memoryContext?: MemoryContext,
     @Optional() private readonly proposals?: MemoryProposals,
+    /** Saved approvals (#555): the owner's standing answers, matched by the server. Absent: every step asks as before. */
+    @Optional() public approvals?: ApprovalRulesService,
   ) {}
 
   /**
@@ -959,17 +967,19 @@ export class GoalRunnerService {
       }
     };
 
-    /** The host of the active tab, as the fabric reports it (#550): never the model's words. Not an action. */
-    const currentHost = async (): Promise<string | null> => {
+    /** The URL of the active tab, as the fabric reports it (#550, #555): never the model's words. Not an action. */
+    const currentUrl = async (): Promise<string | null> => {
       try {
         const op = await session.act(sessionId!, { type: 'tabs' }, ACTION_TIMEOUT_MS);
         const tabs = (op.result?.tabs as Record<string, unknown>[] | undefined) ?? [];
         const active = tabs.find((t) => t.active === true);
-        return hostOf(typeof active?.url === 'string' ? active.url : null);
+        return typeof active?.url === 'string' ? active.url : null;
       } catch {
         return null;
       }
     };
+    /** The host of the active tab, as the fabric reports it (#550): never the model's words. Not an action. */
+    const currentHost = async (): Promise<string | null> => hostOf(await currentUrl());
 
     /**
      * The confirmation gate (#550): whether a click on this target must wait for a person. Decided by what is
@@ -992,6 +1002,55 @@ export class GoalRunnerService {
 
     /** Whether the person's approval covers this target. */
     const approved = (target: GateTarget) => Boolean(memory.confirmedTarget && approvalCovers(memory.confirmedTarget, target));
+    /** A rememberable question with the scopes this run offers: always everywhere; this task or this chat when it has one. */
+    const withScopes = <T extends object>(r: T | null): (T & { scopes: ('everywhere' | 'this_task' | 'this_chat')[] }) | null =>
+      r ? { ...r, scopes: ['everywhere', ...(run.taskId ? (['this_task'] as const) : []), ...(run.conversationId ? (['this_chat'] as const) : [])] } : null;
+
+    /**
+     * A saved approval that lets a gated click through (#555), matched by the server: the registrable domain of the
+     * page the fabric reports, the verdict's category and the element's label read from the page. Never when the page
+     * could not describe the target (a cross-origin frame, a failed read), never when the run's AI app asks before
+     * purchases (#464), never while "Pause all" is on. The model is not asked and cannot claim one.
+     */
+    const savedGate = async (target: GateTarget, described: boolean) => {
+      if (!this.approvals || !described || !target.host || app?.confirmPurchases === true) return null;
+      try {
+        return await this.approvals.match(userId, {
+          kind: 'gate',
+          pageUrl: `https://${target.host}/`,
+          category: target.category,
+          matchKey: normaliseLabel(target.label),
+          taskId: run.taskId ?? null,
+          conversationId: run.conversationId ?? null,
+          // The owner's money input (#552), never the model's words.
+          amount: knownAmount({ inputs: run.inputs, task: run.task ? { parameters: run.task.parameters } : null }),
+        });
+      } catch (e) {
+        this.log.warn(`run ${run.id}: could not read saved approvals: ${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
+    };
+    /**
+     * After a click a saved approval allowed (#555): the step carries `approval.ruleId` and says so, the rule's use is
+     * recorded, and the step is a confirmed action "by saved approval" (#540). Only when the click was carried out.
+     */
+    const allowedByRule = async (rule: ApprovalRule, seqBefore: number, action: string) => {
+      if (state.seq === seqBefore) return;
+      const step = await this.prisma.runStep.findFirst({ where: { runId: run.id, seq: state.seq }, select: { id: true, ok: true, args: true, kind: true } });
+      if (!step || !step.ok || step.kind !== 'action') return;
+      const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args) ? (step.args as Record<string, unknown>) : {};
+      await this.prisma.runStep.update({ where: { id: step.id }, data: { args: { ...args, approval: { ruleId: rule.id } } as never, summary: trim(`allowed by a saved approval: ${rule.summary}`, 1_900) } });
+      try {
+        await this.approvals?.recordUse(rule, { runId: run.id, stepSeq: state.seq, orgId });
+      } catch (e) {
+        this.log.warn(`run ${run.id}: could not record a saved approval's use: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      const row = await db.run.findFirst({ where: { id: run.id }, select: { confirmedActions: true } });
+      const next = appendConfirmedAction(row?.confirmedActions ?? null, { seq: state.seq, prompt: `by saved approval: ${rule.summary}`, action, at: new Date() });
+      await db.run.updateMany({ where: { id: run.id }, data: { confirmedActions: next as never } });
+      memory.log.push(`(Step ${state.stepCount} went ahead on a saved approval of the owner.)`);
+    };
+
     /** After a gated click went ahead the approval is spent; a failed attempt keeps it for the retry (#540). */
     const spend = (target: GateTarget | null) => {
       if (target && !memory.pendingConfirmation) memory.confirmedTarget = null;
@@ -1028,10 +1087,14 @@ export class GoalRunnerService {
         parameters: z.object({ selector: z.string().max(2000), reason: z.string().max(500) }),
         execute: async ({ selector, reason }) => {
           // The page's facts first (they hold the form's action); what observe_elements saw when the page cannot answer.
-          const target = await gateFor(policy.confirmRisky ? ((await describeTarget({ selector })) ?? state.labels.get(selector) ?? null) : null);
-          if (target && !approved(target)) return refuseGated('click', { selector }, target, reason);
+          const described = policy.confirmRisky ? await describeTarget({ selector }) : null;
+          const target = await gateFor(policy.confirmRisky ? (described ?? state.labels.get(selector) ?? null) : null);
+          const rule = target && !approved(target) ? await savedGate(target, described !== null) : null;
+          if (target && !approved(target) && !rule) return refuseGated('click', { selector }, target, reason);
+          const seqBefore = state.seq;
           const out = await act({ type: 'click', selector }, reason);
-          spend(target);
+          if (rule) await allowedByRule(rule, seqBefore, 'click');
+          else spend(target);
           return out;
         },
       }),
@@ -1092,11 +1155,15 @@ export class GoalRunnerService {
           if (!mark) return `There is no mark ${n} on the latest screenshot. Call look to refresh it.`;
           const { x, y } = markCenter(mark);
           // The element under the mark's center, as the page reports it; the mark's own role and text when it cannot.
-          const facts = policy.confirmRisky ? ((await describeTarget({ x, y })) ?? { label: mark.text ?? null, role: mark.role ?? null, tag: mark.tag ?? null }) : null;
+          const described = policy.confirmRisky ? await describeTarget({ x, y }) : null;
+          const facts = policy.confirmRisky ? (described ?? { label: mark.text ?? null, role: mark.role ?? null, tag: mark.tag ?? null }) : null;
           const target = await gateFor(facts);
-          if (target && !approved(target)) return refuseGated('click_at', { mark: n }, target, reason);
+          const rule = target && !approved(target) ? await savedGate(target, described !== null) : null;
+          if (target && !approved(target) && !rule) return refuseGated('click_at', { mark: n }, target, reason);
+          const seqBefore = state.seq;
           const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason, { x: mark.x, y: mark.y, w: mark.w, h: mark.h });
-          spend(target);
+          if (rule) await allowedByRule(rule, seqBefore, 'click_at');
+          else spend(target);
           return out;
         },
       }),
@@ -1113,10 +1180,14 @@ export class GoalRunnerService {
         }),
         execute: async ({ x, y, button, double, modifiers, reason }) => {
           // The element under the point (#550). The model's reason is never read: with no facts, nothing is gated.
-          const target = await gateFor(policy.confirmRisky ? await describeTarget({ x, y }) : null);
-          if (target && !approved(target)) return refuseGated('click_at', { x, y }, target, reason);
+          const described = policy.confirmRisky ? await describeTarget({ x, y }) : null;
+          const target = await gateFor(described);
+          const rule = target && !approved(target) ? await savedGate(target, described !== null) : null;
+          if (target && !approved(target) && !rule) return refuseGated('click_at', { x, y }, target, reason);
+          const seqBefore = state.seq;
           const out = await act({ type: 'click_at', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}), ...(modifiers.length ? { modifiers } : {}) }, reason);
-          spend(target);
+          if (rule) await allowedByRule(rule, seqBefore, 'click_at');
+          else spend(target);
           return out;
         },
       }),
@@ -1245,6 +1316,8 @@ export class GoalRunnerService {
           risk: z.enum(['low', 'high']).nullable(),
           /** credentials and secret: the words of the page's "remember me" option, or null. */
           remember_label: z.string().max(200).nullable(),
+          /** kind confirmation: what the step is, from the fixed list (#555), so the owner can say "don't ask again". */
+          topic: z.string().max(40).nullable(),
         }),
         execute: async (args) => {
           const started = Date.now();
@@ -1256,6 +1329,26 @@ export class GoalRunnerService {
           if (spec.kind === 'confirmation' && memory.gatePending?.category) {
             spec.gate = { host: memory.gatePending.host, category: memory.gatePending.category, label: memory.gatePending.label };
             memory.gatePending = null;
+            // What "Don't ask again" would remember (#555): the gate's own facts, never the model's.
+            if (spec.input === 'confirm' || spec.input === 'none') spec.rememberable = withScopes(gateRememberable(spec.gate));
+          } else if (spec.kind === 'confirmation' && (spec.input === 'confirm' || spec.input === 'none')) {
+            // An ask the agent makes on its own (#555): keyed on a fixed topic and the page the fabric reports.
+            const topic = askTopicOf(args.topic);
+            const url = topic !== 'other' && this.approvals ? await currentUrl() : null;
+            if (url) {
+              const rule = await this.approvals!.match(userId, { kind: 'ask', pageUrl: url, category: null, matchKey: topic, taskId: run.taskId ?? null, conversationId: run.conversationId ?? null, amount: null }).catch(() => null);
+              if (rule) {
+                // The owner's standing approval: no question. A trace step, not an action (no budget, no stall).
+                state.seq += 1;
+                await this.prisma.runStep.create({
+                  data: { runId: run.id, seq: state.seq, kind: 'handoff', action: 'pre_approved', args: { topic, approval: { ruleId: rule.id } } as never, ok: true, summary: trim(`went ahead on a saved approval: ${rule.summary}`, 1_900), durationMs: 0 },
+                });
+                await this.approvals!.recordUse(rule, { runId: run.id, stepSeq: state.seq, orgId }).catch(() => undefined);
+                memory.log.push(`(Not asked: the owner has a standing approval on this site for: ${topic}.)`);
+                return 'The owner has a standing approval for this on this site. Go ahead.';
+              }
+              spec.rememberable = withScopes(askRememberable(topic, url));
+            }
           }
           if (!(await askPerson(spec, started))) return 'Could not reach a person right now.';
           return 'Waiting for the person.';
@@ -1558,6 +1651,17 @@ export class GoalRunnerService {
       return 'failed';
     };
 
+    /** The line naming the owner's ask rules for the current site (#555), or null. Best effort; never fails the run. */
+    const askTopicsFor = async (pageUrl: string | null): Promise<string | null> => {
+      if (!this.approvals || !sessionId) return null;
+      try {
+        const url = pageUrl ?? (await currentUrl());
+        const topics = await this.approvals.askTopics(userId, { pageUrl: url, taskId: run.taskId ?? null, conversationId: run.conversationId ?? null });
+        return askTopicsLine(siteOf(url), topics);
+      } catch {
+        return null;
+      }
+    };
     // A sensitive task parameter (#552) is asked for as a secret once the browser is open, before the model works:
     // the fabric keeps the value and types it (type_handoff_secret with the parameter), the model never sees it.
     const unasked = (readRunInputs(run.inputs)?.sensitive ?? []).filter((p) => !memory.paramSecrets?.[p.key]);
@@ -1645,7 +1749,10 @@ export class GoalRunnerService {
           .filter(Boolean)
           .join('\n\n');
       // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
-      const status = `Steps used: ${state.stepCount}${effective.limits.actions !== null ? ` of ${effective.limits.actions}` : ' (no limit)'}.`;
+      const steps = `Steps used: ${state.stepCount}${effective.limits.actions !== null ? ` of ${effective.limits.actions}` : ' (no limit)'}.`;
+      // The owner's ask rules on this site (#555): advice so the model stops asking, never what authorises a step. Gate rules are never listed.
+      const askLine = await askTopicsFor(view?.url ?? null);
+      const status = askLine ? `${steps}\n${askLine}` : steps;
       let result: AiToolLoopResult | null = null;
       await setActivity('thinking');
       const tierReq = tierRequest(snapshot, tier);
@@ -1799,5 +1906,12 @@ export class GoalRunnerService {
     this.log.log(`run ${runId}: ${to}`);
     // The saved result: it leads with a confirmed step the run carried out (#540).
     await this.notifier?.finished(userId, done, to, done.result ?? patch.error);
+    // Steps that went ahead on saved approvals (#555): one notification at the end of the run. Ask rules do not notify.
+    try {
+      const line = savedApprovalsLine((await this.approvals?.gateUsesOfRun(userId, runId)) ?? []);
+      if (line) await this.notifier?.savedApprovalsUsed?.(userId, done, line);
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not tell the owner about saved approvals: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 }

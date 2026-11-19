@@ -290,6 +290,8 @@ interface ResultMeta {
   stepCount?: number;
   /** Steps the owner confirmed that the run carried out (#540). */
   confirmedActions?: number;
+  /** Steps that went ahead on saved approvals (#555), in one sentence; absent when none did. */
+  savedApprovals?: string;
 }
 
 /** The step a result's lead sentence names (#540), for the "Run again" question; null when it names none. */
@@ -339,6 +341,11 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
         {message.text}
       </Typography>
+      {meta.savedApprovals && (
+        <Typography variant="body2" color="text.secondary" data-testid="saved-approvals-line" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
+          {meta.savedApprovals}
+        </Typography>
+      )}
       {facts.length > 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           {facts.join(' · ')}

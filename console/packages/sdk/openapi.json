@@ -40350,6 +40350,10 @@
               "INTERNAL_ERROR",
               "ROLE_NOT_ASSIGNABLE",
               "INVALID_RETURN_URI",
+              "APPROVAL_RULE_NOT_FOUND",
+              "RULE_CANNOT_WIDEN",
+              "APPROVAL_RULE_INVALID",
+              "APPROVAL_RULE_DUPLICATE",
               "MEMORY_NOT_FOUND",
               "MEMORY_LABEL_TAKEN",
               "MEMORY_LIMIT",
@@ -40403,10 +40407,6 @@
               "WEBHOOK_EVENT_UNKNOWN",
               "WEBHOOK_EVENT_NOT_PERMITTED",
               "WEBHOOK_LIMIT_REACHED",
-              "APPROVAL_RULE_NOT_FOUND",
-              "RULE_CANNOT_WIDEN",
-              "APPROVAL_RULE_INVALID",
-              "APPROVAL_RULE_DUPLICATE",
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
@@ -79961,6 +79961,64 @@
             ],
             "description": "The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only."
           },
+          "rememberable": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "gate",
+                      "ask"
+                    ]
+                  },
+                  "host": {
+                    "type": "string",
+                    "description": "The registrable domain of the page the browser reported"
+                  },
+                  "category": {
+                    "description": "gate: payment, purchase, send, delete or submit",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "matchKey": {
+                    "type": "string",
+                    "description": "gate: the element's label; ask: the topic"
+                  },
+                  "summary": {
+                    "type": "string",
+                    "description": "What the owner reads: \"Press 'Pay' on bankofamerica.com\""
+                  },
+                  "scopes": {
+                    "description": "Where a rule may be limited to: this task or this chat when the run has one",
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "everywhere",
+                        "this_task",
+                        "this_chat"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "host",
+                  "category",
+                  "matchKey",
+                  "summary"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What \"Don't ask again\" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -79999,6 +80057,12 @@
                   "remember": {
                     "description": "The person's choice for the question's \"remember me\" option",
                     "type": "boolean"
+                  },
+                  "ruleId": {
+                    "description": "The saved approval this answer created or found (\"Don't ask again\", #555)",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
                   "fields": {
                     "description": "form: the values given, masked",
@@ -80202,6 +80266,7 @@
           "rememberLabel",
           "fields",
           "gate",
+          "rememberable",
           "status",
           "response",
           "pageTitle",
@@ -80438,6 +80503,37 @@
           "remember": {
             "type": "boolean"
           },
+          "rememberRule": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "const": true
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "everywhere",
+                  "this_task",
+                  "this_chat"
+                ]
+              },
+              "maxAmount": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000000
+              },
+              "expiresInDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
           "fields": {
             "type": "object",
             "propertyNames": {
@@ -80557,6 +80653,37 @@
           },
           "remember": {
             "type": "boolean"
+          },
+          "rememberRule": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "const": true
+              },
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "everywhere",
+                  "this_task",
+                  "this_chat"
+                ]
+              },
+              "maxAmount": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000000
+              },
+              "expiresInDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
           },
           "fields": {
             "type": "object",
@@ -81107,6 +81234,64 @@
               "null"
             ]
           },
+          "rememberable": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "gate",
+                      "ask"
+                    ]
+                  },
+                  "host": {
+                    "type": "string",
+                    "description": "The registrable domain of the page the browser reported"
+                  },
+                  "category": {
+                    "description": "gate: payment, purchase, send, delete or submit",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "matchKey": {
+                    "type": "string",
+                    "description": "gate: the element's label; ask: the topic"
+                  },
+                  "summary": {
+                    "type": "string",
+                    "description": "What the owner reads: \"Press 'Pay' on bankofamerica.com\""
+                  },
+                  "scopes": {
+                    "description": "Where a rule may be limited to: this task or this chat when the run has one",
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "everywhere",
+                        "this_task",
+                        "this_chat"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "kind",
+                  "host",
+                  "category",
+                  "matchKey",
+                  "summary"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What \"Don't ask again\" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered."
+          },
           "fields": {
             "description": "form (#552): the fields to fill",
             "anyOf": [
@@ -81280,6 +81465,7 @@
           "denyLabel",
           "risk",
           "rememberLabel",
+          "rememberable",
           "pageTitle",
           "viewerUrl",
           "createdAt",
@@ -83750,6 +83936,117 @@
           },
           "confirmRiskyActions": {
             "type": "boolean"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "choice",
+                    "phone",
+                    "email"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: the options",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "help": {
+                  "type": "string"
+                },
+                "default": {
+                  "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "memory": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "attribute": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "attribute"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "memory"
+                      ]
+                    }
+                  ]
+                },
+                "constraints": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    },
+                    "maxLength": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "sensitive": {
+                  "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "type",
+                "required"
+              ]
+            },
+            "description": "The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."
           }
         },
         "required": [
@@ -83760,7 +84057,8 @@
           "hostFallback",
           "policyId",
           "allowedDomains",
-          "confirmRiskyActions"
+          "confirmRiskyActions",
+          "parameters"
         ]
       },
       "LinkTaskDto": {

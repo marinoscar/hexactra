@@ -2,7 +2,19 @@
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
 import { answerLabel } from '@app/shared/question-rules';
 
-export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'memory';
+export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form' | 'memory';
+
+/** A field of a `form` question (#552): one missing value of a task run, asked before it starts. */
+export interface FormField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'money' | 'date' | 'choice' | 'phone' | 'email';
+  required: boolean;
+  options?: string[];
+  help?: string;
+  constraints?: { min?: number; max?: number; maxLength?: number; pattern?: string };
+  sensitive?: boolean;
+}
 
 /** A memory the agent proposes (#553): what the card shows and the owner may edit before saving. */
 export interface MemoryProposal {
@@ -44,10 +56,36 @@ export interface AskedQuestion {
   viewerUrl: string | null;
   /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
   rememberLabel?: string | null;
+  /** form (#552): the values to fill. */
+  fields?: FormField[] | null;
   /** memory (#553): the proposed memory. */
   proposal?: MemoryProposal | null;
   /** False for a memory proposal (#553): no run waits on it. */
   blocking?: boolean;
+  /** What "Don't ask again" would remember (#555), computed by the server; null or absent when it cannot be remembered. */
+  rememberable?: Rememberable | null;
+}
+
+/** The scopes a saved approval may be limited to (#555). */
+export type RememberScope = 'everywhere' | 'this_task' | 'this_chat';
+
+/** What a "Don't ask again" tick makes a rule of (#555): set by the server only. */
+export interface Rememberable {
+  kind: 'gate' | 'ask';
+  host: string;
+  category: string | null;
+  matchKey: string;
+  /** The sentence the owner reads: "Press 'Pay' on bankofamerica.com". */
+  summary: string;
+  scopes?: RememberScope[];
+}
+
+/** The "Don't ask again" tick with its optional limits (#555). Distinct from `remember`, a site's own "remember me". */
+export interface RememberRuleBody {
+  enabled: true;
+  scope?: RememberScope;
+  maxAmount?: number;
+  expiresInDays?: number;
 }
 
 export interface QuestionResponse {
@@ -57,8 +95,12 @@ export interface QuestionResponse {
   valueWithheld: boolean;
   /** What the person chose for the "remember me" option, when one was offered. */
   remember?: boolean;
+  /** form (#552): the values given, masked. */
+  fields?: Record<string, string>;
   /** memory (#553): the memory the approved proposal saved. */
   memoryId?: string;
+  /** The saved approval this answer made ("Don't ask again", #555). */
+  ruleId?: string;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -107,8 +149,12 @@ export interface AnswerBody {
   secret?: string;
   /** The choice for the question's "remember me" option. */
   remember?: boolean;
+  /** form (#552): the value of each field, by key. */
+  fields?: Record<string, string>;
   /** memory (#553): the memory as the owner saves it, edited on the card. */
   memory?: { kind?: MemoryProposal['kind']; label: string; aliases?: string[]; attributes: Record<string, string> };
+  /** "Don't ask again" (#555): make a saved approval of this approval. */
+  rememberRule?: RememberRuleBody;
 }
 
 export const KIND_LABEL: Record<string, string> = {
@@ -133,7 +179,7 @@ export function askerText(askedBy: string): string {
 }
 
 /** The final state of a settled question, in words (a secret is never shown). */
-export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | 'options' | 'constraints' | 'confirmLabel' | 'denyLabel'>): string {
+export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | 'options' | 'constraints' | 'confirmLabel' | 'denyLabel'> & { fields?: FormField[] | null }): string {
   if (q.status === 'pending') return 'Waiting for an answer';
   if (q.status === 'expired') return q.input === 'memory' ? 'This suggestion expired. Nothing was saved.' : 'This question expired before anyone answered.';
   const r = q.response;
@@ -141,13 +187,16 @@ export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | '
   const via = r?.channel ? ` (from ${r.channel})` : '';
   if (!r || r.outcome === 'cancelled') return `Declined${via}.`;
   if (r.valueWithheld) return `Answered${via}. The secret went to the agent and is not shown.`;
+  if (q.input === 'form') return `Provided${via}${formAnswerText(q.fields, r.fields)}`;
   const words = answerLabel(q, r);
   if (r.values) return `Answered${via}: ${words}`;
+  // "Don't ask again" was ticked (#555).
+  const kept = r.ruleId ? " · won't ask again" : '';
   if (r.value !== undefined) {
-    if (q.input === 'confirm') return r.value === 'approve' ? `Approved${via}: ${words}` : `Denied${via}: ${words}`;
+    if (q.input === 'confirm') return r.value === 'approve' ? `Approved${via}${kept}: ${words}` : `Denied${via}: ${words}`;
     return `Answered${via}: ${words}`;
   }
-  return `Done${via}.`;
+  return `Done${via}${kept}.`;
 }
 
 /** The label of a secret field, by why it is asked: short, so it fits a phone on one line. */
@@ -181,4 +230,13 @@ export function remaining(iso: string, now: number): string {
   if (h) return `${h} h ${String(m).padStart(2, '0')} min`;
   if (m) return `${m} min ${String(sec).padStart(2, '0')} s`;
   return `${sec} s`;
+}
+
+/** A form's given values in words, already masked by the API: ": Amount: 25 · Date: 2026-11-18" (a full stop when none). */
+export function formAnswerText(fields: readonly Pick<FormField, 'key' | 'label' | 'sensitive'>[] | null | undefined, given: Record<string, string> | undefined): string {
+  if (!given) return '.';
+  const parts = Object.entries(given)
+    .filter(([key]) => !fields?.find((f) => f.key === key)?.sensitive)
+    .map(([key, v]) => `${fields?.find((f) => f.key === key)?.label ?? key}: ${v}`);
+  return parts.length ? `: ${parts.join(' · ')}` : '.';
 }

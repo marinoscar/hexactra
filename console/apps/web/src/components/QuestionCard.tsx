@@ -3,6 +3,7 @@ import { keyframes } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { savedApprovalHref } from '../approvals/types';
 import { useConfirm } from '../ui';
 import { QuestionAnswerForm } from './QuestionAnswerForm';
 import { KIND_LABEL, answerText, askerText, remaining, type AnswerBody, type AskedQuestion, type InboxItem, type Question, type QuestionResponse } from './questions';
@@ -214,6 +215,14 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
         ) : !pending ? (
           <Alert severity={q.status === 'answered' ? 'success' : 'info'} sx={{ mt: 2, ...WRAP }}>
             {answerText(q)}
+            {q.response?.ruleId && (
+              <>
+                {' '}
+                <Link component={RouterLink} to={savedApprovalHref(q.response.ruleId)}>
+                  See the saved approval
+                </Link>
+              </>
+            )}
           </Alert>
         ) : canAnswer ? (
           <QuestionAnswerForm question={q} busy={busy} onSubmit={answer} onOpenBrowser={q.viewerUrl && onOpenBrowser ? () => onOpenBrowser(q.viewerUrl!) : undefined} />

@@ -48,6 +48,7 @@ function view(over: Partial<QuestionView>): QuestionView {
     rememberLabel: null,
     fields: null,
     gate: null,
+    rememberable: null,
     status: 'pending',
     response: null,
     pageTitle: null,

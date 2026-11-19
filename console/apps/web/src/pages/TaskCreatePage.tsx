@@ -20,6 +20,8 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
     policyId: draft.policyId ?? null,
     allowedDomains: Array.isArray(draft.allowedDomains) ? draft.allowedDomains.filter((d) => typeof d === 'string') : [],
     confirmRiskyActions: draft.confirmRiskyActions === true,
+    // The parameters the draft proposes (#556): the owner reviews each in the form; nothing is saved by the draft.
+    parameters: Array.isArray(draft.parameters) ? draft.parameters.filter((p) => p && typeof p.key === 'string').map((p) => ({ ...p })) : [],
   };
 }
 

@@ -43,7 +43,8 @@
 // accessible name of a button to press before the screenshot: a dialog).
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
+// `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -62,6 +63,14 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONSOLE = resolve(HERE, '..');
+
+/** A route action (#556): press the first button of that accessible name, then let the page settle. */
+function pressButton(name) {
+  return async (page) => {
+    await page.getByRole('button', { name, exact: true }).first().click({ timeout: 5_000 });
+    await page.waitForTimeout(500);
+  };
+}
 
 /** Every route the audit opens: `[name, path, options?]`. Append to add a page. */
 export const ROUTES = [
@@ -105,6 +114,14 @@ export const ROUTES = [
   // Memories (#551): the page, and its add dialog (opened by clicking "Add").
   ['settings-memories', '/settings/memories'],
   ['settings-memories-dialog', '/settings/memories', { click: 'Add' }],
+  // "Don't ask again" (#555): the approval card with the box ticked and the limits open.
+  ['inbox-dont-ask-again', '/inbox', {
+    action: async (page) => {
+      await page.getByRole('checkbox', { name: /^Don't ask again/ }).first().click({ timeout: 5_000 });
+      await page.getByRole('button', { name: 'Limit it' }).first().click({ timeout: 5_000 });
+      await page.waitForTimeout(400);
+    },
+  }],
   // Saved approvals (#554): the page, and its "Add a limit" dialog.
   ['settings-approvals', '/settings/approvals'],
   ['settings-approvals-limit', '/settings/approvals', {
@@ -138,6 +155,12 @@ export const ROUTES = [
   ['activate', '/activate'],
   ['oauth-error', '/oauth/error?code=client_not_allowed&host=client.example.test', { signedOut: true }],
   ['login', '/login', { signedOut: true }],
+  // Task parameters (#556): the form with three, a schedule's values, the run dialog, the form card, a run's Inputs.
+  ['task-edit-parameters', '/tasks/{paramTask}/edit'],
+  ['task-schedule-values', '/tasks/{paramTask}/edit', { action: pressButton('Edit') }],
+  ['task-run-dialog', '/tasks/{paramTask}', { action: pressButton('Run now') }],
+  ['question-form', '/inbox/q/{formQuestion}'],
+  ['run-inputs', '/runs/{paramRun}'],
 ];
 
 /** `run-trace`: scroll through the page so every lazy picture loads, then back to the top. */

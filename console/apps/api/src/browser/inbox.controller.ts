@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { HandoffAnswers } from './handoff-answers';
 import { InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
 import { QuestionsService } from '../questions/questions.service';
-import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption } from '../questions/questions.contract';
+import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable } from '../questions/questions.contract';
 import { RequestClientService } from '../connected-apps/request-client';
 
 const respondSchema = z.object({
@@ -45,6 +45,8 @@ export interface InboxItem {
   denyLabel: string | null;
   /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
   rememberLabel: string | null;
+  /** What "Don't ask again" would remember (#555), computed by the server; null when it cannot be remembered. */
+  rememberable: QuestionRememberable | null;
   risk: 'low' | 'high' | null;
   pageTitle: string | null;
   viewerUrl: string | null;
@@ -96,6 +98,7 @@ export class InboxController {
         confirmLabel: q.confirmLabel,
         denyLabel: q.denyLabel,
         rememberLabel: q.rememberLabel,
+        rememberable: (q.rememberable as unknown as QuestionRememberable | null) ?? null,
         fields: q.fields ?? null,
         risk: (q.risk as 'low' | 'high' | null) ?? null,
         pageTitle: q.pageTitle,

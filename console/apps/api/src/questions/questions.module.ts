@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ApprovalsModule } from '../approvals/approvals.module';
 import { FabricModule } from '../fabric/fabric.module';
 import { MemoriesModule } from '../memories/memories.module';
 import { MemoryProposals } from '../memories/memory-proposals.service';
@@ -26,7 +27,7 @@ import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
  * `QuestionChannelRegistry`) hear `QuestionEvents` through the dispatcher.
  */
 @Module({
-  imports: [FabricModule, TasksModule, MemoriesModule],
+  imports: [FabricModule, TasksModule, MemoriesModule, ApprovalsModule],
   controllers: [QuestionsController, AnswerByTokenController],
   providers: [
     QuestionsService,
