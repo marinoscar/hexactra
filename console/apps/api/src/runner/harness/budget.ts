@@ -12,17 +12,8 @@
 // exhausted and which should be warned about. It starts from what the run
 // already used in earlier jobs and chunks (the totals on the run row), so a
 // run continued after a handoff or a job hop never gets a fresh budget.
-
 /** The budget part of an agent policy: a limit per budget (`null` is unlimited) and the warning threshold. */
-export interface BudgetSpec {
-  maxActions: number | null;
-  maxModelCalls: number | null;
-  maxActiveMinutes: number | null;
-  maxInputTokens: number | null;
-  maxOutputTokens: number | null;
-  maxCostUsd: number | null;
-  warnAtPercent: number;
-}
+export type BudgetSpec = Record<'maxActions' | 'maxModelCalls' | 'maxActiveMinutes' | 'maxInputTokens' | 'maxOutputTokens' | 'maxCostUsd', number | null> & { warnAtPercent: number };
 
 /** The six budgets, in the order they are checked and reported. */
 export const BUDGET_KEYS = ['actions', 'modelCalls', 'activeMinutes', 'inputTokens', 'outputTokens', 'cost'] as const;

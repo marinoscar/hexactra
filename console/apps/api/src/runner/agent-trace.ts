@@ -32,59 +32,20 @@ import type { AiDefinedTool } from '@marinoscar/platform-api/ai';
 import type { RunMetrics } from '../tasks/run-metrics';
 import { ATTR, EVENT, ERROR_TYPE, LINK, OPERATION, SPAN, TRACER_NAME, type JobReason } from './trace-attributes';
 
-const tracer = () => trace.getTracer(TRACER_NAME);
+export const tracer = () => trace.getTracer(TRACER_NAME);
 
 /** The context key that carries the job's {@link AgentTrace}: how a fabric call knows it is inside a run. */
-const AGENT_KEY = createContextKey('hexactra.agent-trace');
+export const AGENT_KEY = createContextKey('hexactra.agent-trace');
 /** The context key that carries the tool call now running, so a recorded step can mark it. */
-const TOOL_KEY = createContextKey('hexactra.tool-call');
+export const TOOL_KEY = createContextKey('hexactra.tool-call');
 
 /** The most trace ids a run keeps (`runs.trace_ids`). */
 export const MAX_TRACE_IDS = 100;
 
 /** A tool call as it runs. */
-interface PendingTool {
-  name: string;
-  start: number;
-  span?: Span;
-  endedAt?: number;
-  thrown?: boolean;
-  seq?: number;
-  ok?: boolean;
-  action?: string;
-  host?: string;
-  gate?: string;
-}
+import { errorTypeOf, pageHost, storedSpanContext, type PendingTool, type StepFacts } from './agent-trace-support';
 
-/** What `onStep` hands over about a model round trip (a structural subset of `AiToolStep`). */
-export interface StepFacts {
-  response: { provider?: string; model?: string; finishReason?: string; usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number } };
-  calls?: { callId: string; name: string; status: string; durationMs: number }[];
-}
-
-/** The host of a URL, or undefined: the one part of a page address a span may carry. */
-export function pageHost(url: unknown): string | undefined {
-  if (typeof url !== 'string') return undefined;
-  try {
-    return new URL(url).hostname || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The span context of a stored trace and span id (a remote, sampled parent), or null when they are not valid. */
-export function storedSpanContext(traceId: string | null | undefined, spanId: string | null | undefined): SpanContext | null {
-  if (!traceId || !spanId) return null;
-  const sc: SpanContext = { traceId, spanId, traceFlags: 1, isRemote: true };
-  return trace.isSpanContextValid(sc) ? sc : null;
-}
-
-/** An `error.type` for a thrown value: an AI or fabric error's code, else the error's class name. Never its message. */
-export function errorTypeOf(e: unknown): string {
-  const code = (e as { code?: unknown } | null)?.code;
-  if (typeof code === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/.test(code)) return code;
-  return e instanceof Error && /^[A-Za-z0-9_]{1,64}$/.test(e.name) ? e.name : ERROR_TYPE.other;
-}
+export { errorTypeOf, pageHost, storedSpanContext, type StepFacts };
 
 export class AgentTrace {
   private readonly root: Span;
@@ -432,34 +393,5 @@ export class AgentTrace {
       }
     }
     this.root.end();
-  }
-}
-
-/**
- * Wraps one fabric operation in a `hexactra.fabric <action>` span, a CLIENT span the fabric client's
- * `traceparent` header then continues (`hexactra-control` takes it as the parent of its request span).
- * Only inside a run's trace; anywhere else (a probe, an external agent's session) it just calls `fn`.
- */
-export async function traceFabric<T extends { id?: string; state?: string }>(action: string, fn: () => Promise<T>): Promise<T> {
-  const owner = context.active().getValue(AGENT_KEY) as AgentTrace | undefined;
-  if (!owner?.recording) return fn();
-  // Inside a tool call the operation hangs under that call; anywhere else (the chunk's screenshot), under the chunk.
-  const active = context.active();
-  const parent = active.getValue(TOOL_KEY) ? active : owner.currentContext;
-  const span = tracer().startSpan(SPAN.fabric(action), { kind: SpanKind.CLIENT, attributes: { [ATTR.fabricAction]: action } }, parent);
-  try {
-    const op = await context.with(trace.setSpan(parent, span), fn);
-    span.setAttributes({ ...(op?.id ? { [ATTR.fabricOperationId]: op.id } : {}), ...(op?.state ? { [ATTR.fabricState]: op.state } : {}) });
-    if (op?.state && op.state !== 'succeeded') {
-      span.setAttribute(ATTR.errorType, ERROR_TYPE.fabricError);
-      span.setStatus({ code: SpanStatusCode.ERROR });
-    }
-    return op;
-  } catch (e) {
-    span.setAttribute(ATTR.errorType, errorTypeOf(e));
-    span.setStatus({ code: SpanStatusCode.ERROR });
-    throw e;
-  } finally {
-    span.end();
   }
 }

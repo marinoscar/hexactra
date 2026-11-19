@@ -19,7 +19,8 @@ import { TasksService } from '../tasks/tasks.service';
 import { AgentTrace } from './agent-trace';
 import { browserInstructions } from './browser/instructions';
 import { LeaseLost, RunLease } from './lease';
-import { type RunOutcome, runLoop } from './harness';
+import type { RunOutcome } from './harness';
+import { runLoop } from './harness/engine';
 import { RunStopSignal } from './stop-signal';
 import { AGENT, ATTR } from './trace-attributes';
 import { beforeLoop } from './host/before-loop';
@@ -27,7 +28,7 @@ import { buildRun } from './host/build-context';
 import type { HostDeps } from './host/deps';
 import { startRun } from './host/start';
 
-export { GUIDANCE_PREFIX } from './harness';
+export { GUIDANCE_PREFIX } from './harness/engine';
 export { describeScript } from './browser/page';
 export { answerLine, requestHumanSpec, type RequestHumanArgs } from './browser/request-human-spec';
 export { pausedFor } from './host/paused-for';

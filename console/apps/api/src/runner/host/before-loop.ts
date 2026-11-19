@@ -2,7 +2,8 @@
 // The fabric keeps the value and types it (`type_handoff_secret`); the model never sees it.
 import { readRunInputs } from '../../tasks/task-params.schemas';
 import { hostOf } from '../browser/policy';
-import { closeRun, pauseForPerson, type RunOutcome } from '../harness';
+import type { RunOutcome } from '../harness';
+import { closeRun, pauseForPerson } from '../harness/engine';
 import type { HostContext } from './context';
 
 export async function beforeLoop(ctx: HostContext): Promise<RunOutcome | null> {

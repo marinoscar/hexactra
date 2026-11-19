@@ -123,6 +123,7 @@ Once per deployment, in this order. Each step links to its reference.
 | [docs/security-hosted-clients.md](docs/security-hosted-clients.md) | The threat model |
 | [docs/secrets.md](docs/secrets.md), [docs/security-secrets.md](docs/security-secrets.md) | Saved logins, identity details and cards the agent uses but never sees: the chapter, and its threat model |
 | [docs/runbooks/public-exposure.md](docs/runbooks/public-exposure.md) | Putting the console on the internet safely |
+| [docs/runner.md](docs/runner.md) | How a browser run is driven in code: the harness, browser and host layers, the ports, the life of one tool call and the checklist for adding a tool |
 | [docs/agent-frameworks.md](docs/agent-frameworks.md) | Hermes Agent, OpenClaw and Pi with a personal access token |
 | [docs/parity.md](docs/parity.md), [docs/directory-readiness.md](docs/directory-readiness.md) | Which client does what; what a ChatGPT or Claude directory listing would still need |
 
