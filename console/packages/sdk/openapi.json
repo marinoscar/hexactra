@@ -31988,165 +31988,13 @@
         }
       }
     },
-    "/api/connected-apps": {
+    "/api/tasks/{id}/mail-triggers": {
       "get": {
-        "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
-        "operationId": "connectedApps_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/ConnectedAppListResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Your connected AI apps",
-        "tags": [
-          "Connected apps"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connected_apps:read"
-          ]
-        }
-      }
-    },
-    "/api/connected-apps/preflight": {
-      "get": {
-        "description": "For the \"Connect an AI app\" guide: is the OAuth server on, is the console on a public HTTPS URL that answers the discovery documents (the platform Doctor checks `oauth.public_url` and `oauth.well_known`), and are the hosts of ChatGPT and Claude allowed. Each failing row says who can fix it.\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
-        "operationId": "connectedApps_preflight",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AppPreflightResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Can an AI app connect?",
-        "tags": [
-          "Connected apps"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connected_apps:read"
-          ]
-        }
-      }
-    },
-    "/api/connected-apps/{clientId}": {
-      "get": {
-        "description": "An app you connected, or one known from its runs or settings after it was disconnected (`grantId` null).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
-        "operationId": "connectedApps_get",
+        "description": "The rules, the account, the status and how many runs each started today. Never a message.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "mailTriggers_list",
         "parameters": [
           {
-            "name": "clientId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -32166,7 +32014,10 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/ConnectedAppResponseDto"
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MailTriggerResponseDto"
+                      }
                     }
                   }
                 }
@@ -32212,109 +32063,24 @@
             "PAT-auth": []
           }
         ],
-        "summary": "One connected AI app",
+        "summary": "A task's email triggers",
         "tags": [
-          "Connected apps"
+          "Mail triggers"
         ],
         "x-rbac": {
           "authenticated": true,
           "roles": [],
           "permissions": [
-            "connected_apps:read"
-          ]
-        }
-      }
-    },
-    "/api/connected-apps/{clientId}/settings": {
-      "get": {
-        "description": "The defaults until you change one; clamped to the deployment ceilings.\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
-        "operationId": "connectedApps_settings",
-        "parameters": [
-          {
-            "name": "clientId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AppLimitsResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "An app's limits",
-        "tags": [
-          "Connected apps"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connected_apps:read"
+            "runs:read"
           ]
         }
       },
-      "patch": {
-        "description": "Any subset of the limits. A limit only narrows what the app may do: it never widens a task's own allowed sites or confirmation. `maxConcurrentRuns` and `dailyRunLimit` may not exceed the deployment ceilings (`mcp.maxConcurrentRunsPerApp`, `mcp.maxDailyRunsPerApp`). `paused: true` refuses new runs and sessions from the app; live ones keep running.\n\n**Requires:** authentication, plus permission `connected_apps:write`.",
-        "operationId": "connectedApps_patch",
+      "post": {
+        "description": "The trigger watches one of your connected accounts (`mail_read` on) and starts one run per matching message that arrives after the trigger was created. `match.from` is required: an exact address or one domain (a domain anybody can have an address at is refused). A message that fails the provider's sender check starts nothing. The run has the task's own settings; the message text is never part of its goal. 400 `MAIL_TRIGGER_CONNECTION_INVALID`, `MAIL_TRIGGER_INPUTS_INVALID`, `MAIL_TRIGGER_POLL_TOO_FAST`; 409 `MAIL_TRIGGER_LIMIT`.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "mailTriggers_create",
         "parameters": [
           {
-            "name": "clientId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -32327,13 +32093,13 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PatchAppSettingsDto"
+                "$ref": "#/components/schemas/CreateMailTriggerDto"
               }
             }
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "",
             "content": {
               "application/json": {
@@ -32344,7 +32110,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/AppLimitsResponseDto"
+                      "$ref": "#/components/schemas/MailTriggerResponseDto"
                     }
                   }
                 }
@@ -32390,15 +32156,369 @@
             "PAT-auth": []
           }
         ],
-        "summary": "Change an app's limits",
+        "summary": "Start this task when a matching email arrives",
         "tags": [
-          "Connected apps"
+          "Mail triggers"
         ],
         "x-rbac": {
           "authenticated": true,
           "roles": [],
           "permissions": [
-            "connected_apps:write"
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/mail-triggers/{id}": {
+      "patch": {
+        "description": "A field left out is unchanged. Enabling again starts from now: mail that arrived while it was off never fires. Changing the account starts from now too.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "mailTriggers_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMailTriggerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailTriggerResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change or switch an email trigger on or off",
+        "tags": [
+          "Mail triggers"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Its event history goes with it; runs it started are kept.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "mailTriggers_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete an email trigger",
+        "tags": [
+          "Mail triggers"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/mail-triggers/{id}/test": {
+      "post": {
+        "description": "Reads the last 5 messages of the account that match the rules and says for each whether it would start a run. Subjects are cut to 60 characters. 409 `MAIL_TRIGGER_CONNECTION_UNAVAILABLE` (with `details.reason`) when the mailbox cannot be read.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "mailTriggers_test",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MailTriggerTestResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Show what would match, without starting anything",
+        "tags": [
+          "Mail triggers"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/mail-triggers/{id}/events": {
+      "get": {
+        "description": "Newest first: `started` (with the run), or skipped (`skipped_unverified`, `skipped_limit`, `skipped_loop`) or `failed`, each with a reason code. No subject or sender is stored.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "mailTriggers_events",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "before",
+            "required": false,
+            "in": "query",
+            "description": "An ISO instant: only events before it (the previous page ends here).",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MailTriggerEventResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What a trigger did with the messages it saw",
+        "tags": [
+          "Mail triggers"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
           ]
         }
       }
@@ -34003,7 +34123,7 @@
             "name": "trigger",
             "required": false,
             "in": "query",
-            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas.",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -34344,7 +34464,7 @@
             "name": "trigger",
             "required": false,
             "in": "query",
-            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas.",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -35469,6 +35589,421 @@
         "tags": [
           "Questions"
         ]
+      }
+    },
+    "/api/connected-apps": {
+      "get": {
+        "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectedAppListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Your connected AI apps",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      }
+    },
+    "/api/connected-apps/preflight": {
+      "get": {
+        "description": "For the \"Connect an AI app\" guide: is the OAuth server on, is the console on a public HTTPS URL that answers the discovery documents (the platform Doctor checks `oauth.public_url` and `oauth.well_known`), and are the hosts of ChatGPT and Claude allowed. Each failing row says who can fix it.\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_preflight",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppPreflightResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Can an AI app connect?",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      }
+    },
+    "/api/connected-apps/{clientId}": {
+      "get": {
+        "description": "An app you connected, or one known from its runs or settings after it was disconnected (`grantId` null).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_get",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectedAppResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One connected AI app",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      }
+    },
+    "/api/connected-apps/{clientId}/settings": {
+      "get": {
+        "description": "The defaults until you change one; clamped to the deployment ceilings.\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_settings",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppLimitsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "An app's limits",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      },
+      "patch": {
+        "description": "Any subset of the limits. A limit only narrows what the app may do: it never widens a task's own allowed sites or confirmation. `maxConcurrentRuns` and `dailyRunLimit` may not exceed the deployment ceilings (`mcp.maxConcurrentRunsPerApp`, `mcp.maxDailyRunsPerApp`). `paused: true` refuses new runs and sessions from the app; live ones keep running.\n\n**Requires:** authentication, plus permission `connected_apps:write`.",
+        "operationId": "connectedApps_patch",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchAppSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppLimitsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change an app's limits",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:write"
+          ]
+        }
       }
     },
     "/api/browser/sessions": {
@@ -42948,6 +43483,12 @@
               "CONNECTION_NONE",
               "CONNECTION_UNAVAILABLE",
               "CONNECTION_DEFAULT_NEEDS_CAPABILITY",
+              "MAIL_TRIGGER_NOT_FOUND",
+              "MAIL_TRIGGER_LIMIT",
+              "MAIL_TRIGGER_CONNECTION_INVALID",
+              "MAIL_TRIGGER_POLL_TOO_FAST",
+              "MAIL_TRIGGER_INPUTS_INVALID",
+              "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
               "ERROR"
             ]
           },
@@ -47642,6 +48183,26 @@
               }
             }
           },
+          "mailTriggers": {
+            "type": "object",
+            "properties": {
+              "minPollSeconds": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 86400
+              },
+              "maxTriggersPerUser": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              },
+              "maxRunsPerUserPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            }
+          },
           "storage": {
             "type": "object",
             "properties": {
@@ -48250,6 +48811,7 @@
           "agentPricing",
           "browserAgentCeilings",
           "connections",
+          "mailTriggers",
           "storage",
           "notifications",
           "ai",
@@ -48844,6 +49406,26 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "mailTriggers": {
+            "type": "object",
+            "properties": {
+              "minPollSeconds": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 86400
+              },
+              "maxTriggersPerUser": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              },
+              "maxRunsPerUserPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
               }
             }
           },
@@ -50076,6 +50658,26 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "mailTriggers": {
+            "type": "object",
+            "properties": {
+              "minPollSeconds": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 86400
+              },
+              "maxTriggersPerUser": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              },
+              "maxRunsPerUserPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
               }
             }
           },
@@ -75499,782 +76101,662 @@
         },
         "additionalProperties": false
       },
-      "ConnectedAppListResponseDto": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "clientId": {
-              "type": "string",
-              "description": "`oauth_clients.id`"
-            },
-            "grantId": {
-              "description": "The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "name": {
-              "type": "string",
-              "description": "The display name: the client's host (\"chatgpt.com\"), or its own name for a local app"
-            },
-            "displayName": {
-              "type": "string",
-              "description": "\"ChatGPT\", \"Claude\", or the name"
-            },
-            "selfName": {
-              "description": "The name the client gives itself (self-asserted; secondary)",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "host": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "logoUri": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "verified": {
-              "type": "boolean",
-              "description": "True: an OAuth client known to the server"
-            },
-            "removed": {
-              "type": "boolean",
-              "description": "The client row was deleted by an administrator: its runs keep their name"
-            },
-            "connectedAt": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "lastUsedAt": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "scopes": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "label": {
-                    "type": "string",
-                    "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
-                  },
-                  "consent": {
-                    "type": "string",
-                    "description": "What the consent page said"
-                  },
-                  "risk": {
-                    "type": "string",
-                    "enum": [
-                      "low",
-                      "elevated",
-                      "high"
-                    ]
-                  }
-                },
-                "required": [
-                  "id",
-                  "label",
-                  "consent",
-                  "risk"
-                ]
-              }
-            },
-            "limits": {
-              "type": "object",
-              "properties": {
-                "policyId": {
-                  "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "allowedPolicyIds": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "The only policies this app may choose; empty: any."
-                },
-                "allowedDomains": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
-                },
-                "maxConcurrentRuns": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991,
-                  "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
-                },
-                "dailyRunLimit": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991,
-                  "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
-                },
-                "dailyCostLimitUsd": {
-                  "description": "USD per day over this app's runs; null: no cost limit.",
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "confirmPurchases": {
-                  "type": "boolean",
-                  "description": "Ask before risky steps (purchases, submissions) even when the task does not."
-                },
-                "confirmSensitiveActions": {
-                  "type": "boolean",
-                  "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
-                },
-                "allowSavedLogins": {
-                  "type": "boolean",
-                  "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
-                },
-                "allowSavedIdentity": {
-                  "type": "boolean",
-                  "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
-                },
-                "allowSavedCards": {
-                  "type": "boolean",
-                  "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
-                },
-                "paused": {
-                  "type": "boolean",
-                  "description": "Refuse new runs and sessions from this app without disconnecting it."
-                }
-              },
-              "required": [
-                "policyId",
-                "allowedPolicyIds",
-                "allowedDomains",
-                "maxConcurrentRuns",
-                "dailyRunLimit",
-                "dailyCostLimitUsd",
-                "confirmPurchases",
-                "confirmSensitiveActions",
-                "allowSavedLogins",
-                "allowSavedIdentity",
-                "allowSavedCards",
-                "paused"
-              ]
-            },
-            "usage": {
-              "type": "object",
-              "properties": {
-                "runs30d": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                "costUsd30d": {
-                  "type": "number"
-                },
-                "costKnown": {
-                  "type": "boolean"
-                },
-                "lastRunAt": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "liveRuns": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                "runsToday": {
-                  "type": "integer",
-                  "minimum": -9007199254740991,
-                  "maximum": 9007199254740991
-                },
-                "costTodayUsd": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "runs30d",
-                "costUsd30d",
-                "costKnown",
-                "lastRunAt",
-                "liveRuns",
-                "runsToday",
-                "costTodayUsd"
-              ]
-            }
-          },
-          "required": [
-            "clientId",
-            "grantId",
-            "name",
-            "displayName",
-            "selfName",
-            "host",
-            "logoUri",
-            "verified",
-            "removed",
-            "connectedAt",
-            "lastUsedAt",
-            "scopes",
-            "limits",
-            "usage"
-          ]
-        }
-      },
-      "AppPreflightResponseDto": {
+      "MailTriggerResponseDto": {
         "type": "object",
         "properties": {
-          "mcpUrl": {
+          "id": {
             "type": "string",
-            "description": "The URL to paste into the AI app: `<APP_URL>/api/mcp`"
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "admin": {
-            "type": "boolean",
-            "description": "Whether the caller may change the OAuth settings (`oauth_clients:write`)"
-          },
-          "ready": {
-            "type": "boolean",
-            "description": "True when no check failed or warned"
-          },
-          "checks": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "enum": [
-                    "oauth_enabled",
-                    "public_url",
-                    "well_known"
-                  ]
-                },
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "pass",
-                    "warn",
-                    "fail",
-                    "skip"
-                  ]
-                },
-                "title": {
-                  "type": "string"
-                },
-                "detail": {
-                  "type": "string"
-                },
-                "fix": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "who": {
-                          "type": "string",
-                          "enum": [
-                            "admin",
-                            "you"
-                          ],
-                          "description": "`admin`: the caller can fix it (they hold the permission); `you` never appears here today"
-                        },
-                        "path": {
-                          "description": "The console page that fixes it, for an administrator",
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "text": {
-                          "type": "string",
-                          "description": "What to do, in a sentence; \"Ask your administrator to …\" for anyone else"
-                        }
-                      },
-                      "required": [
-                        "who",
-                        "path",
-                        "text"
-                      ]
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "status",
-                "title",
-                "detail",
-                "fix"
-              ]
-            }
-          },
-          "clients": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "enum": [
-                    "chatgpt",
-                    "claude",
-                    "claude-code",
-                    "other"
-                  ]
-                },
-                "allowed": {
-                  "description": "Whether the OAuth settings let this app connect; null when it cannot be told in advance (any other client)",
-                  "type": [
-                    "boolean",
-                    "null"
-                  ]
-                },
-                "hosts": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "detail": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "allowed",
-                "hosts",
-                "detail"
-              ]
-            }
-          }
-        },
-        "required": [
-          "mcpUrl",
-          "admin",
-          "ready",
-          "checks",
-          "clients"
-        ]
-      },
-      "ConnectedAppResponseDto": {
-        "type": "object",
-        "properties": {
-          "clientId": {
+          "taskId": {
             "type": "string",
-            "description": "`oauth_clients.id`"
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "grantId": {
-            "description": "The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected",
+          "connectionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "connectionLabel": {
+            "description": "Null when the connection was removed.",
             "type": [
               "string",
               "null"
             ]
           },
           "name": {
-            "type": "string",
-            "description": "The display name: the client's host (\"chatgpt.com\"), or its own name for a local app"
+            "type": "string"
           },
-          "displayName": {
-            "type": "string",
-            "description": "\"ChatGPT\", \"Claude\", or the name"
+          "enabled": {
+            "type": "boolean"
           },
-          "selfName": {
-            "description": "The name the client gives itself (self-asserted; secondary)",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "host": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "logoUri": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "verified": {
-            "type": "boolean",
-            "description": "True: an OAuth client known to the server"
-          },
-          "removed": {
-            "type": "boolean",
-            "description": "The client row was deleted by an administrator: its runs keep their name"
-          },
-          "connectedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "lastUsedAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scopes": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
+          "match": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "array",
+                "items": {
                   "type": "string"
-                },
-                "label": {
-                  "type": "string",
-                  "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
-                },
-                "consent": {
-                  "type": "string",
-                  "description": "What the consent page said"
-                },
-                "risk": {
-                  "type": "string",
-                  "enum": [
-                    "low",
-                    "elevated",
-                    "high"
-                  ]
                 }
               },
-              "required": [
-                "id",
-                "label",
-                "consent",
-                "risk"
-              ]
-            }
-          },
-          "limits": {
-            "type": "object",
-            "properties": {
-              "policyId": {
-                "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+              "to": {
+                "type": "string"
               },
-              "allowedPolicyIds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "The only policies this app may choose; empty: any."
+              "subjectContains": {
+                "type": "string"
               },
-              "allowedDomains": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+              "textContains": {
+                "type": "string"
               },
-              "maxConcurrentRuns": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991,
-                "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
-              },
-              "dailyRunLimit": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991,
-                "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
-              },
-              "dailyCostLimitUsd": {
-                "description": "USD per day over this app's runs; null: no cost limit.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "confirmPurchases": {
-                "type": "boolean",
-                "description": "Ask before risky steps (purchases, submissions) even when the task does not."
-              },
-              "confirmSensitiveActions": {
-                "type": "boolean",
-                "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
-              },
-              "allowSavedLogins": {
-                "type": "boolean",
-                "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
-              },
-              "allowSavedIdentity": {
-                "type": "boolean",
-                "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
-              },
-              "allowSavedCards": {
-                "type": "boolean",
-                "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
-              },
-              "paused": {
-                "type": "boolean",
-                "description": "Refuse new runs and sessions from this app without disconnecting it."
-              }
-            },
-            "required": [
-              "policyId",
-              "allowedPolicyIds",
-              "allowedDomains",
-              "maxConcurrentRuns",
-              "dailyRunLimit",
-              "dailyCostLimitUsd",
-              "confirmPurchases",
-              "confirmSensitiveActions",
-              "allowSavedLogins",
-              "allowSavedIdentity",
-              "allowSavedCards",
-              "paused"
-            ]
-          },
-          "usage": {
-            "type": "object",
-            "properties": {
-              "runs30d": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              "costUsd30d": {
-                "type": "number"
-              },
-              "costKnown": {
+              "hasAttachment": {
                 "type": "boolean"
               },
-              "lastRunAt": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "liveRuns": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              "runsToday": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991
-              },
-              "costTodayUsd": {
-                "type": "number"
+              "label": {
+                "type": "string"
               }
             },
             "required": [
-              "runs30d",
-              "costUsd30d",
-              "costKnown",
-              "lastRunAt",
-              "liveRuns",
-              "runsToday",
-              "costTodayUsd"
+              "from"
             ]
-          }
-        },
-        "required": [
-          "clientId",
-          "grantId",
-          "name",
-          "displayName",
-          "selfName",
-          "host",
-          "logoUri",
-          "verified",
-          "removed",
-          "connectedAt",
-          "lastUsedAt",
-          "scopes",
-          "limits",
-          "usage"
-        ]
-      },
-      "AppLimitsResponseDto": {
-        "type": "object",
-        "properties": {
-          "policyId": {
-            "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+          },
+          "inputs": {
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "afterStart": {
+            "type": "string"
+          },
+          "pollSeconds": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxRunsPerDay": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "acceptUnverified": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "needs_reconnect",
+              "failing",
+              "rate_limited",
+              "connection_paused",
+              "connection_removed"
+            ]
+          },
+          "statusReason": {
             "type": [
               "string",
               "null"
             ]
           },
-          "allowedPolicyIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The only policies this app may choose; empty: any."
-          },
-          "allowedDomains": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
-          },
-          "maxConcurrentRuns": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991,
-            "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
-          },
-          "dailyRunLimit": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991,
-            "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
-          },
-          "dailyCostLimitUsd": {
-            "description": "USD per day over this app's runs; null: no cost limit.",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "confirmPurchases": {
-            "type": "boolean",
-            "description": "Ask before risky steps (purchases, submissions) even when the task does not."
-          },
-          "confirmSensitiveActions": {
-            "type": "boolean",
-            "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
-          },
-          "allowSavedLogins": {
-            "type": "boolean",
-            "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
-          },
-          "allowSavedIdentity": {
-            "type": "boolean",
-            "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
-          },
-          "allowSavedCards": {
-            "type": "boolean",
-            "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
-          },
-          "paused": {
-            "type": "boolean",
-            "description": "Refuse new runs and sessions from this app without disconnecting it."
-          }
-        },
-        "required": [
-          "policyId",
-          "allowedPolicyIds",
-          "allowedDomains",
-          "maxConcurrentRuns",
-          "dailyRunLimit",
-          "dailyCostLimitUsd",
-          "confirmPurchases",
-          "confirmSensitiveActions",
-          "allowSavedLogins",
-          "allowSavedIdentity",
-          "allowSavedCards",
-          "paused"
-        ]
-      },
-      "PatchAppSettingsDto": {
-        "type": "object",
-        "properties": {
-          "policyId": {
+          "lastCheckedAt": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 64,
-                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                "description": "ISO 8601 timestamp"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "allowedPolicyIds": {
-            "maxItems": 20,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "maxLength": 64,
-              "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
-            }
-          },
-          "allowedDomains": {
-            "maxItems": 50,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
-            }
-          },
-          "maxConcurrentRuns": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 20
-          },
-          "dailyRunLimit": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 1000
-          },
-          "dailyCostLimitUsd": {
+          "lastMatchedAt": {
             "anyOf": [
               {
-                "type": "number",
-                "minimum": 0.01,
-                "maximum": 10000,
-                "multipleOf": 0.01
+                "type": "string",
+                "description": "ISO 8601 timestamp"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "confirmPurchases": {
-            "type": "boolean"
+          "runsToday": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs this trigger started since 00:00 UTC."
           },
-          "confirmSensitiveActions": {
-            "type": "boolean"
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
           },
-          "allowSavedLogins": {
-            "type": "boolean"
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "connectionId",
+          "connectionLabel",
+          "name",
+          "enabled",
+          "match",
+          "inputs",
+          "afterStart",
+          "pollSeconds",
+          "maxRunsPerDay",
+          "acceptUnverified",
+          "status",
+          "statusReason",
+          "lastCheckedAt",
+          "lastMatchedAt",
+          "runsToday",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateMailTriggerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Defaults to the first sender.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
           },
-          "allowSavedIdentity": {
-            "type": "boolean"
+          "connectionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The connected account whose mailbox is watched (needs `mail_read`)."
           },
-          "allowSavedCards": {
-            "type": "boolean"
+          "match": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                "description": "Required: at least one exact address (`person-a@example.test`) or one domain (`@example.test`, exactly that domain). A domain anybody can have an address at is refused."
+              },
+              "to": {
+                "description": "The message was sent to this address (To).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 320
+              },
+              "subjectContains": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "textContains": {
+                "description": "Words that must appear in the text body.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "hasAttachment": {
+                "type": "boolean"
+              },
+              "label": {
+                "description": "A label or folder id from the connection; default is the inbox.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "from"
+            ],
+            "additionalProperties": false
           },
-          "paused": {
+          "inputs": {
+            "description": "How the task's parameters get values from the message: `{ [key]: { fixed } | { header: 'subject'|'from'|'date' } | { capture: { source: 'subject'|'text', pattern } } }`. The message text is never pasted into the goal.",
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "fixed": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "fixed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "subject",
+                            "from",
+                            "date"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "header"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "capture": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "subject",
+                                "text"
+                              ]
+                            },
+                            "pattern": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200,
+                              "description": "A regular expression with exactly one group; the group is the value. No back-references or nested quantifiers."
+                            },
+                            "ignoreCase": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "pattern"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "capture"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "afterStart": {
+            "type": "string",
+            "pattern": "^(none|mark_read|add_label:[^\\s\\u0000-\\u001f]{1,60})$",
+            "description": "What happens to the message after a run was queued: `none`, `mark_read` or `add_label:<label id>`. The last two need the connection's `mail_modify` switch."
+          },
+          "pollSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400,
+            "description": "How often to look for mail, in seconds: 300 by default, never under the deployment minimum (60 unless the administrator raised it)."
+          },
+          "maxRunsPerDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies."
+          },
+          "acceptUnverified": {
+            "type": "boolean",
+            "description": "Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does."
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "connectionId",
+          "match"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateMailTriggerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "connectionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "match": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                "description": "Required: at least one exact address (`person-a@example.test`) or one domain (`@example.test`, exactly that domain). A domain anybody can have an address at is refused."
+              },
+              "to": {
+                "description": "The message was sent to this address (To).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 320
+              },
+              "subjectContains": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "textContains": {
+                "description": "Words that must appear in the text body.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "hasAttachment": {
+                "type": "boolean"
+              },
+              "label": {
+                "description": "A label or folder id from the connection; default is the inbox.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "from"
+            ],
+            "additionalProperties": false
+          },
+          "inputs": {
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "fixed": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "fixed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "subject",
+                            "from",
+                            "date"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "header"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "capture": {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "subject",
+                                "text"
+                              ]
+                            },
+                            "pattern": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200,
+                              "description": "A regular expression with exactly one group; the group is the value. No back-references or nested quantifiers."
+                            },
+                            "ignoreCase": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "pattern"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "capture"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "afterStart": {
+            "type": "string",
+            "pattern": "^(none|mark_read|add_label:[^\\s\\u0000-\\u001f]{1,60})$",
+            "description": "What happens to the message after a run was queued: `none`, `mark_read` or `add_label:<label id>`. The last two need the connection's `mail_modify` switch."
+          },
+          "pollSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400,
+            "description": "How often to look for mail, in seconds: 300 by default, never under the deployment minimum (60 unless the administrator raised it)."
+          },
+          "maxRunsPerDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies."
+          },
+          "acceptUnverified": {
+            "type": "boolean",
+            "description": "Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does."
+          },
+          "enabled": {
+            "description": "Enabling again starts from now: mail that arrived while it was off never fires.",
             "type": "boolean"
           }
         },
         "additionalProperties": false
+      },
+      "MailTriggerTestResponseDto": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "subject": {
+                  "type": "string",
+                  "description": "The first 60 characters of the subject."
+                },
+                "from": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "wouldStart": {
+                  "type": "boolean",
+                  "description": "False when it arrived before the trigger was enabled, came from the account itself, failed the sender check, or could not be checked while the trigger does not accept unverified senders."
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "before_enabled",
+                        "own_message",
+                        "sender_not_verified",
+                        "sender_not_checked"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "senderVerified": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "date",
+                "subject",
+                "from",
+                "wouldStart",
+                "reason",
+                "senderVerified"
+              ]
+            },
+            "description": "Up to the last 5 messages that match the rules. Nothing is started."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "messages",
+          "note"
+        ]
+      },
+      "MailTriggerEventResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "started",
+              "skipped_limit",
+              "skipped_unverified",
+              "skipped_loop",
+              "failed"
+            ]
+          },
+          "reason": {
+            "description": "`SENDER_NOT_VERIFIED`, `SENDER_NOT_CHECKED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "messageAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "outcome",
+          "reason",
+          "runId",
+          "messageAt",
+          "createdAt"
+        ]
       },
       "TaskDetailResponseDto": {
         "type": "object",
@@ -76758,7 +77240,8 @@
                           "api",
                           "mcp",
                           "external",
-                          "chat"
+                          "chat",
+                          "email"
                         ]
                       },
                       "createdAt": {
@@ -76877,6 +77360,12 @@
                   }
                 ],
                 "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+              },
+              "mailTriggers": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
               }
             },
             "required": [
@@ -76886,7 +77375,8 @@
               "lastRun",
               "liveRunId",
               "runCounts",
-              "policy"
+              "policy",
+              "mailTriggers"
             ],
             "description": "Schedule and run facts of the task, present with `include=summary`"
           }
@@ -77403,7 +77893,8 @@
                                 "api",
                                 "mcp",
                                 "external",
-                                "chat"
+                                "chat",
+                                "email"
                               ]
                             },
                             "createdAt": {
@@ -77522,6 +78013,12 @@
                         }
                       ],
                       "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+                    },
+                    "mailTriggers": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
                     }
                   },
                   "required": [
@@ -77531,7 +78028,8 @@
                     "lastRun",
                     "liveRunId",
                     "runCounts",
-                    "policy"
+                    "policy",
+                    "mailTriggers"
                   ],
                   "description": "Schedule and run facts of the task, present with `include=summary`"
                 }
@@ -78287,7 +78785,8 @@
                           "api",
                           "mcp",
                           "external",
-                          "chat"
+                          "chat",
+                          "email"
                         ]
                       },
                       "createdAt": {
@@ -78406,6 +78905,12 @@
                   }
                 ],
                 "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+              },
+              "mailTriggers": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
               }
             },
             "required": [
@@ -78415,7 +78920,8 @@
               "lastRun",
               "liveRunId",
               "runCounts",
-              "policy"
+              "policy",
+              "mailTriggers"
             ],
             "description": "Schedule and run facts of the task, present with `include=summary`"
           }
@@ -80141,7 +80647,8 @@
                           "api",
                           "mcp",
                           "external",
-                          "chat"
+                          "chat",
+                          "email"
                         ]
                       },
                       "createdAt": {
@@ -80260,6 +80767,12 @@
                   }
                 ],
                 "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+              },
+              "mailTriggers": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
               }
             },
             "required": [
@@ -80269,7 +80782,8 @@
               "lastRun",
               "liveRunId",
               "runCounts",
-              "policy"
+              "policy",
+              "mailTriggers"
             ],
             "description": "Schedule and run facts of the task, present with `include=summary`"
           },
@@ -80625,7 +81139,7 @@
                 ]
               },
               "trigger": {
-                "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas.",
+                "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas.",
                 "anyOf": [
                   {
                     "type": "string"
@@ -80922,7 +81436,8 @@
               "api",
               "mcp",
               "external",
-              "chat"
+              "chat",
+              "email"
             ]
           },
           "origin": {
@@ -81712,7 +82227,8 @@
                         "memory",
                         "asked",
                         "schedule",
-                        "saved_details"
+                        "saved_details",
+                        "email"
                       ]
                     }
                   },
@@ -81993,7 +82509,8 @@
                     "api",
                     "mcp",
                     "external",
-                    "chat"
+                    "chat",
+                    "email"
                   ]
                 },
                 "origin": {
@@ -82783,7 +83300,8 @@
                               "memory",
                               "asked",
                               "schedule",
-                              "saved_details"
+                              "saved_details",
+                              "email"
                             ]
                           }
                         },
@@ -83242,7 +83760,8 @@
                   "api",
                   "mcp",
                   "external",
-                  "chat"
+                  "chat",
+                  "email"
                 ]
               },
               "origin": {
@@ -84570,7 +85089,8 @@
               "api",
               "mcp",
               "external",
-              "chat"
+              "chat",
+              "email"
             ]
           },
           "origin": {
@@ -85386,7 +85906,8 @@
                         "memory",
                         "asked",
                         "schedule",
-                        "saved_details"
+                        "saved_details",
+                        "email"
                       ]
                     }
                   },
@@ -85959,7 +86480,8 @@
               "api",
               "mcp",
               "external",
-              "chat"
+              "chat",
+              "email"
             ]
           },
           "origin": {
@@ -86775,7 +87297,8 @@
                         "memory",
                         "asked",
                         "schedule",
-                        "saved_details"
+                        "saved_details",
+                        "email"
                       ]
                     }
                   },
@@ -88144,6 +88667,783 @@
           "neverForSite": {
             "type": "boolean",
             "const": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConnectedAppListResponseDto": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "type": "string",
+              "description": "`oauth_clients.id`"
+            },
+            "grantId": {
+              "description": "The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "description": "The display name: the client's host (\"chatgpt.com\"), or its own name for a local app"
+            },
+            "displayName": {
+              "type": "string",
+              "description": "\"ChatGPT\", \"Claude\", or the name"
+            },
+            "selfName": {
+              "description": "The name the client gives itself (self-asserted; secondary)",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "host": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "logoUri": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verified": {
+              "type": "boolean",
+              "description": "True: an OAuth client known to the server"
+            },
+            "removed": {
+              "type": "boolean",
+              "description": "The client row was deleted by an administrator: its runs keep their name"
+            },
+            "connectedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "lastUsedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
+                  },
+                  "consent": {
+                    "type": "string",
+                    "description": "What the consent page said"
+                  },
+                  "risk": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "elevated",
+                      "high"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "consent",
+                  "risk"
+                ]
+              }
+            },
+            "limits": {
+              "type": "object",
+              "properties": {
+                "policyId": {
+                  "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "allowedPolicyIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The only policies this app may choose; empty: any."
+                },
+                "allowedDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+                },
+                "maxConcurrentRuns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
+                },
+                "dailyRunLimit": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
+                },
+                "dailyCostLimitUsd": {
+                  "description": "USD per day over this app's runs; null: no cost limit.",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "confirmPurchases": {
+                  "type": "boolean",
+                  "description": "Ask before risky steps (purchases, submissions) even when the task does not."
+                },
+                "confirmSensitiveActions": {
+                  "type": "boolean",
+                  "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
+                },
+                "allowSavedLogins": {
+                  "type": "boolean",
+                  "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
+                },
+                "allowSavedIdentity": {
+                  "type": "boolean",
+                  "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
+                },
+                "allowSavedCards": {
+                  "type": "boolean",
+                  "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
+                },
+                "paused": {
+                  "type": "boolean",
+                  "description": "Refuse new runs and sessions from this app without disconnecting it."
+                }
+              },
+              "required": [
+                "policyId",
+                "allowedPolicyIds",
+                "allowedDomains",
+                "maxConcurrentRuns",
+                "dailyRunLimit",
+                "dailyCostLimitUsd",
+                "confirmPurchases",
+                "confirmSensitiveActions",
+                "allowSavedLogins",
+                "allowSavedIdentity",
+                "allowSavedCards",
+                "paused"
+              ]
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "runs30d": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsd30d": {
+                  "type": "number"
+                },
+                "costKnown": {
+                  "type": "boolean"
+                },
+                "lastRunAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "liveRuns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "runsToday": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costTodayUsd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "runs30d",
+                "costUsd30d",
+                "costKnown",
+                "lastRunAt",
+                "liveRuns",
+                "runsToday",
+                "costTodayUsd"
+              ]
+            }
+          },
+          "required": [
+            "clientId",
+            "grantId",
+            "name",
+            "displayName",
+            "selfName",
+            "host",
+            "logoUri",
+            "verified",
+            "removed",
+            "connectedAt",
+            "lastUsedAt",
+            "scopes",
+            "limits",
+            "usage"
+          ]
+        }
+      },
+      "AppPreflightResponseDto": {
+        "type": "object",
+        "properties": {
+          "mcpUrl": {
+            "type": "string",
+            "description": "The URL to paste into the AI app: `<APP_URL>/api/mcp`"
+          },
+          "admin": {
+            "type": "boolean",
+            "description": "Whether the caller may change the OAuth settings (`oauth_clients:write`)"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "True when no check failed or warned"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "oauth_enabled",
+                    "public_url",
+                    "well_known"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "warn",
+                    "fail",
+                    "skip"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "fix": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "who": {
+                          "type": "string",
+                          "enum": [
+                            "admin",
+                            "you"
+                          ],
+                          "description": "`admin`: the caller can fix it (they hold the permission); `you` never appears here today"
+                        },
+                        "path": {
+                          "description": "The console page that fixes it, for an administrator",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "text": {
+                          "type": "string",
+                          "description": "What to do, in a sentence; \"Ask your administrator to …\" for anyone else"
+                        }
+                      },
+                      "required": [
+                        "who",
+                        "path",
+                        "text"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "title",
+                "detail",
+                "fix"
+              ]
+            }
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "chatgpt",
+                    "claude",
+                    "claude-code",
+                    "other"
+                  ]
+                },
+                "allowed": {
+                  "description": "Whether the OAuth settings let this app connect; null when it cannot be told in advance (any other client)",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "hosts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "allowed",
+                "hosts",
+                "detail"
+              ]
+            }
+          }
+        },
+        "required": [
+          "mcpUrl",
+          "admin",
+          "ready",
+          "checks",
+          "clients"
+        ]
+      },
+      "ConnectedAppResponseDto": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "description": "`oauth_clients.id`"
+          },
+          "grantId": {
+            "description": "The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The display name: the client's host (\"chatgpt.com\"), or its own name for a local app"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "\"ChatGPT\", \"Claude\", or the name"
+          },
+          "selfName": {
+            "description": "The name the client gives itself (self-asserted; secondary)",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logoUri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "True: an OAuth client known to the server"
+          },
+          "removed": {
+            "type": "boolean",
+            "description": "The client row was deleted by an administrator: its runs keep their name"
+          },
+          "connectedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
+                },
+                "consent": {
+                  "type": "string",
+                  "description": "What the consent page said"
+                },
+                "risk": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "elevated",
+                    "high"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "consent",
+                "risk"
+              ]
+            }
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "policyId": {
+                "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "allowedPolicyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The only policies this app may choose; empty: any."
+              },
+              "allowedDomains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+              },
+              "maxConcurrentRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
+              },
+              "dailyRunLimit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
+              },
+              "dailyCostLimitUsd": {
+                "description": "USD per day over this app's runs; null: no cost limit.",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "confirmPurchases": {
+                "type": "boolean",
+                "description": "Ask before risky steps (purchases, submissions) even when the task does not."
+              },
+              "confirmSensitiveActions": {
+                "type": "boolean",
+                "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
+              },
+              "allowSavedLogins": {
+                "type": "boolean",
+                "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
+              },
+              "allowSavedIdentity": {
+                "type": "boolean",
+                "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
+              },
+              "allowSavedCards": {
+                "type": "boolean",
+                "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
+              },
+              "paused": {
+                "type": "boolean",
+                "description": "Refuse new runs and sessions from this app without disconnecting it."
+              }
+            },
+            "required": [
+              "policyId",
+              "allowedPolicyIds",
+              "allowedDomains",
+              "maxConcurrentRuns",
+              "dailyRunLimit",
+              "dailyCostLimitUsd",
+              "confirmPurchases",
+              "confirmSensitiveActions",
+              "allowSavedLogins",
+              "allowSavedIdentity",
+              "allowSavedCards",
+              "paused"
+            ]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "runs30d": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsd30d": {
+                "type": "number"
+              },
+              "costKnown": {
+                "type": "boolean"
+              },
+              "lastRunAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "liveRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "runsToday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costTodayUsd": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "runs30d",
+              "costUsd30d",
+              "costKnown",
+              "lastRunAt",
+              "liveRuns",
+              "runsToday",
+              "costTodayUsd"
+            ]
+          }
+        },
+        "required": [
+          "clientId",
+          "grantId",
+          "name",
+          "displayName",
+          "selfName",
+          "host",
+          "logoUri",
+          "verified",
+          "removed",
+          "connectedAt",
+          "lastUsedAt",
+          "scopes",
+          "limits",
+          "usage"
+        ]
+      },
+      "AppLimitsResponseDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allowedPolicyIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The only policies this app may choose; empty: any."
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+          },
+          "maxConcurrentRuns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
+          },
+          "dailyRunLimit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
+          },
+          "dailyCostLimitUsd": {
+            "description": "USD per day over this app's runs; null: no cost limit.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "confirmPurchases": {
+            "type": "boolean",
+            "description": "Ask before risky steps (purchases, submissions) even when the task does not."
+          },
+          "confirmSensitiveActions": {
+            "type": "boolean",
+            "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
+          },
+          "allowSavedLogins": {
+            "type": "boolean",
+            "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
+          },
+          "allowSavedIdentity": {
+            "type": "boolean",
+            "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
+          },
+          "allowSavedCards": {
+            "type": "boolean",
+            "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "Refuse new runs and sessions from this app without disconnecting it."
+          }
+        },
+        "required": [
+          "policyId",
+          "allowedPolicyIds",
+          "allowedDomains",
+          "maxConcurrentRuns",
+          "dailyRunLimit",
+          "dailyCostLimitUsd",
+          "confirmPurchases",
+          "confirmSensitiveActions",
+          "allowSavedLogins",
+          "allowSavedIdentity",
+          "allowSavedCards",
+          "paused"
+        ]
+      },
+      "PatchAppSettingsDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedPolicyIds": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+            }
+          },
+          "allowedDomains": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            }
+          },
+          "maxConcurrentRuns": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "dailyRunLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "dailyCostLimitUsd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 10000,
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmPurchases": {
+            "type": "boolean"
+          },
+          "confirmSensitiveActions": {
+            "type": "boolean"
+          },
+          "allowSavedLogins": {
+            "type": "boolean"
+          },
+          "allowSavedIdentity": {
+            "type": "boolean"
+          },
+          "allowSavedCards": {
+            "type": "boolean"
+          },
+          "paused": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -89820,7 +91120,8 @@
                             "api",
                             "mcp",
                             "external",
-                            "chat"
+                            "chat",
+                            "email"
                           ]
                         },
                         "origin": {

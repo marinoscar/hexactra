@@ -37,6 +37,7 @@ import { questionPort } from './question-port';
 import { readMasking } from './read-masking';
 import { aboutOwner } from './about-owner';
 import { buildSavedCardContext } from './card-context';
+import { mailContextLines } from './mail-context';
 import { priceTable } from './policy-snapshot';
 import { controlPort } from './control-port';
 import type { RunStart } from './start';
@@ -183,6 +184,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   if (flags.savedCards) registry.registerAll(buildSavedCardTools(cardCtx));
   registry.register(browserTools.finish as unknown as RunnerTool<HostContext>);
 
+  // A run an email started (E39.8): a reference to the message, never its content.
+  const mailLines = await mailContextLines(d, userId, run.context, registry.get('mail_read') !== undefined);
   const profile: LoopProfile<HostContext> = {
     // The shared instructions, then (for a task with outputs) the list of what to return: the same text every round (the stable prefix, #406).
     instructions: instructionsWithOutputs(browserInstructions(ASK_TOPICS, registry.usageNotes(ctx)), readOutputs(run.outputsSpec)),
@@ -191,7 +194,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     visionNotes: VISION_NOTES,
     observe: (c) => observeRound(c as never),
     assembleInput: assembleRoundInput,
-    contextLines: (c) => [sitesLine(c as never)],
+    contextLines: (c) => [sitesLine(c as never), ...mailLines],
     summarizeGuidance: guidanceSummary,
     aboutOwner: await aboutOwner(d, userId, run, memory.context),
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),

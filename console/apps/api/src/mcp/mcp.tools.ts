@@ -437,13 +437,14 @@ const taskListItemSchema = z.object({
   lastRun: z.object({ id: z.uuid(), status: z.string(), finishedAt: z.string().nullable() }).nullable().describe('The newest run'),
   liveRunId: z.uuid().nullable().describe('A run of the task that is queued, running or waiting for the user'),
   policyName: z.string().nullable().optional(),
+  mailTriggers: z.number().int().optional().describe('Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read-only here: a trigger is made in the console, never by an app.'),
   parameters: z.array(mcpTaskParameterSchema).optional().describe("The goal's {{parameters}} (#552): pass their values in task_run inputs"),
   outputs: z.array(taskOutputResponseSchema).optional().describe('The values the agent returns when a run of this task finishes (E39.5): they come back as `outputs` in run_status and run_wait'),
 });
 
 function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSchema> {
   const goal = typeof t.goal === 'string' ? t.goal : '';
-  const s = (t.summary ?? {}) as { schedules?: { enabled?: boolean; description?: string }[]; scheduleState?: string; nextRunAt?: string | null; lastRun?: { id: string; status: string; finishedAt: string | null } | null; liveRunId?: string | null; policy?: { name?: string } | null };
+  const s = (t.summary ?? {}) as { mailTriggers?: number; schedules?: { enabled?: boolean; description?: string }[]; scheduleState?: string; nextRunAt?: string | null; lastRun?: { id: string; status: string; finishedAt: string | null } | null; liveRunId?: string | null; policy?: { name?: string } | null };
   const state = (['none', 'active', 'paused', 'partial'].includes(String(s.scheduleState)) ? s.scheduleState : 'none') as 'none' | 'active' | 'paused' | 'partial';
   const schedules = Array.isArray(s.schedules) ? s.schedules : [];
   const enabled = schedules.filter((x) => x.enabled).map((x) => String(x.description ?? ''));
@@ -465,6 +466,7 @@ function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSc
     lastRun: s.lastRun ? { id: s.lastRun.id, status: s.lastRun.status, finishedAt: s.lastRun.finishedAt ?? null } : null,
     liveRunId: s.liveRunId ?? null,
     policyName: s.policy?.name ?? null,
+    ...(typeof s.mailTriggers === 'number' && s.mailTriggers > 0 ? { mailTriggers: s.mailTriggers } : {}),
     ...(Array.isArray(t.parameters) && t.parameters.length ? { parameters: mcpParameters(t.parameters) } : {}),
     ...(Array.isArray(t.outputs) && t.outputs.length ? { outputs: t.outputs as z.infer<typeof taskOutputResponseSchema>[] } : {}),
   };

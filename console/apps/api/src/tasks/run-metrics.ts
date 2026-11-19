@@ -6,7 +6,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { AppMetricsService } from '@marinoscar/platform-api/host';
 import { registerAppMetrics, type AppMetricDef } from '@marinoscar/platform-api/otel-core';
 
-const TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat'] as const;
+const TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email'] as const;
 const STATUSES = ['succeeded', 'failed', 'cancelled'] as const;
 /** How deleted runs were chosen (#421); `retention` is the nightly rule (#422). */
 export const RUN_DELETE_MODES = ['single', 'ids', 'filter', 'retention'] as const;

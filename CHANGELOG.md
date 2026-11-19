@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Epic E38 close-out: the run harness is documented and has an acceptance procedure** (#589, epic #580; documentation and scripts, no behaviour change).
+  - The console's entries for Stop, Pause and Resume (a new run status `paused`, which a client that enumerates statuses must handle), crash safety, traces, the runner split and the agent packages are in `console/CHANGELOG.md`; the chapter is `console/docs/runner.md`.
+  - `VISION.MD` sections 5, 6, 18 and the telemetry sections now describe the one agent loop (the console's goal runner), Stop, Pause, crash safety and GenAI traces. `AGENTS.md` gains the durable invariants: Stop takes effect before the next action through the one tool wrapper, a commit-class action is recorded as an intent and never repeated when its outcome is unknown, and tools, gates and loop behaviour live in a package.
+  - `scripts/link-github-subissues.mjs` links epic #580 and its children.
+  - The measured acceptance (Stop latency, Pause, crash, two workers, trace, behaviour before and after) needs the deployed stack and a real model and has **not** been taken: `console/docs/runbooks/run-harness-acceptance.md`.
 - **One agent loop: the Rust planning loop is retired** (#588, epic #580).
   - Removed the crates `hexactra-planning-loop`, `hexactra-agent-run`, `hexactra-model-adapter` and `hexactra-execution`: nothing in the fabric, the CLI, the MCP server or the console used them. The agent loop is the console's goal runner (`console/apps/api/src/runner/`).
   - **API change (fabric):** removed the stub routes `POST /goals`, `GET /goals` and `GET /goals/{goalId}` (they were never mounted in the router) and the scopes `goals:read` and `goals:write`. A token that carries either scope still validates; the unknown scope is ignored. Start a goal through the console (`POST /api/runs`, MCP `run_goal`, `hexactra runs start`).
