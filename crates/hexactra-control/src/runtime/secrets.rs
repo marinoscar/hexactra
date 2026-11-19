@@ -622,8 +622,10 @@ fn compose_expiry(month: &SecretValue, year: &SecretValue) -> Option<SecretValue
 
 /// The script that says whether the element a login's password is about to be
 /// typed into is a password field (E37.10): an `input` of type `password`, or
-/// a text input the page presents as one (`autocomplete` of `current-password`
-/// or `new-password`: the "show password" toggle that flips the type). For a
+/// a text input the page presents as one: one that was a password input when
+/// the login was looked up ([`MARK_PASSWORD_INPUTS`]) or whose `autocomplete`
+/// is `current-password` or `new-password` (the "show password" toggle that
+/// flips the type). For a
 /// point it descends into same-origin frames. It answers only `{ found,
 /// password }`: nothing of the page is read back. The selector is a JSON string
 /// literal and the point two integers; nothing else page-controlled is spliced
@@ -648,10 +650,22 @@ fn password_target_script(selector: Option<&str>, point: Option<ViewportPoint>) 
          if(e.tagName!=='INPUT')return {{found:true,password:false}};\
          const t=String(e.type||'').toLowerCase();\
          const ac=String(e.getAttribute('autocomplete')||'').toLowerCase().split(/\\s+/);\
-         const pw=t==='password'||((t==='text'||t==='')&&(ac.includes('current-password')||ac.includes('new-password')));\
+         const was=!!window.__hexactraPw&&window.__hexactraPw.has(e);\
+         const pw=t==='password'||((t==='text'||t==='')&&(was||ac.includes('current-password')||ac.includes('new-password')));\
          return {{found:true,password:pw}}}})()"
     )
 }
+
+/// The script run when a login is looked up (E37.10): it notes, in the page,
+/// which inputs are of type `password` now, so that one a "show password"
+/// toggle later flips to `text` is still known as the password field (see
+/// [`password_target_script`]). The set is a non-enumerable `WeakSet` on the
+/// window of this document; it holds elements, never a value, and a new
+/// document starts without it.
+const MARK_PASSWORD_INPUTS: &str = "/* hexactra:password-mark */(()=>{try{\
+    if(!window.__hexactraPw)Object.defineProperty(window,'__hexactraPw',{value:new WeakSet()});\
+    for(const e of document.querySelectorAll('input[type=password]'))window.__hexactraPw.add(e);\
+    }catch(_){}return {marked:true}})()";
 
 /// What a probe of a card's target found.
 #[derive(Debug, PartialEq, Eq)]
@@ -921,8 +935,25 @@ impl Run {
             .providers
             .resolve(owner.as_deref(), provider.as_deref())?;
         self.audit.provider = Some(pid.clone());
-        let (origin, _tab) = self.read_origin(tab_id).await?;
+        let (origin, tab) = self.read_origin(tab_id).await?;
         self.audit.origin = Some(origin.to_string());
+        if kind == ItemKind::Login {
+            // Best effort: note the password inputs now on the page, so a
+            // "show password" toggle later does not hide them.
+            if let Ok(done) = self
+                .op(
+                    RemoteAction::Evaluate {
+                        script: MARK_PASSWORD_INPUTS.to_string(),
+                        await_promise: false,
+                        tab_id: Some(tab),
+                    },
+                    code::TYPING_FAILED,
+                )
+                .await
+            {
+                self.store.discard_result(done.id);
+            }
+        }
         let owner_id =
             OwnerId::new(owner.unwrap_or_default()).map_err(|m| Fail::new(code::NO_PROVIDER, m))?;
         let left = self.remaining()?;

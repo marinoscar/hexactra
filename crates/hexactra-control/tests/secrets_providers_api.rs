@@ -548,8 +548,15 @@ async fn lookup_returns_summaries_only() {
         .await
         .unwrap();
     assert!(probe.result.is_none(), "{probe:?}");
-    // Only the lookup reached the provider: no value was released.
-    assert_eq!(f.ext.kinds(), vec!["tabs"]);
+    // Only the lookup reached the provider: no value was released. A login's
+    // lookup also notes the password inputs now on the page (E37.10), so a
+    // "show password" toggle later does not hide them.
+    assert_eq!(f.ext.kinds(), vec!["tabs", "evaluate"]);
+    assert!(f.ext.received.lock().unwrap().iter().any(|a| matches!(
+        a,
+        RemoteAction::Evaluate { script, .. } if script.contains("hexactra:password-mark")
+            && !script.contains(FIXTURE_PASSWORD)
+    )));
 }
 
 #[tokio::test]
