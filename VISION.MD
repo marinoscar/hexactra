@@ -1,6 +1,6 @@
 # Hexactra — Product Vision and Technical Architecture
 
-> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Sections 26 and 27, and the status notes in Sections 11 and 12.2, record what is implemented in this repository; implemented does not mean proven on a deployed stack.  
+> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Sections 26 and 27, and the status notes in Sections 6.1, 11, 12.2, 14, 15.3 and 18, record what is implemented in this repository; implemented does not mean proven on a deployed stack.  
 > **Repository:** https://github.com/marinoscar/hexactra  
 > **Document version:** 1.2  
 > **Date:** November 16, 2026  
@@ -202,7 +202,7 @@ flowchart TB
 
 ### 6.1 Ownership boundaries
 
-> **As built:** the control plane below is the fabric. The goal-level loop (observe, reason, act, verify) is not in it; it is the console's goal runner (Section 26.3), a client of the control plane's `/v1` API.
+> **As built:** the control plane below is the fabric. The goal-level loop (observe, reason, act, verify) is not in it; it is the console's goal runner (Section 26.3), a client of the control plane's `/v1` API. The loop is two TypeScript packages the console hosts (`@marinoscar/hexactra-agent`, the generic harness, and `@marinoscar/hexactra-browser-agent`, the browser toolset; Section 26.3), and it is the loop, not the control plane, that implements the owner's Stop and Pause and the recovery of a run after a crash: the control plane has no operation cancel and no operation key, and finishes an action it has started.
 
 | Component | Owns | Does not own |
 |---|---|---|
@@ -541,6 +541,8 @@ console question:  pending -> answered  | cancelled | expired
 - Expiry: a handoff expires after its timeout (10 s to 24 h, default 10 min). A console question defaults to 1 h; the `questions.expire` job marks overdue ones expired and withdraws their handoffs.
 - Transitions are atomic and single-use: the response token stops working once the handoff resolves, and a console answer is a conditional update on `status = pending`. A response is tied to one question and cannot be replayed on another session or website.
 
+> **As built (run level, epic #580):** a console run has its own state machine around these questions, and it adds a held state: `queued | running | waiting_human -> paused -> queued (resume) | cancelled`. The owner's **Pause** lets the step in progress finish, then the loop ends its chunk before the next action, keeps the browser session and stops the run's active time; **Resume** starts a new job that looks at the page again before acting. A run that is `waiting_human` pauses once its question is answered, before the agent acts on the answer. **Stop** takes effect before the next action (Section 26.3) and wins over Pause. A paused run never resumes by itself: a reminder after an hour, a cancel after 72 hours by default.
+
 *Future:* explicit delivery states (`PENDING_DELIVERY`, `DELIVERY_FAILED`, retries per provider) and a `CLAIMED` state for a person who has opened a question but not answered. Today delivery is best effort per channel (a channel failure is logged and does not block the others), and the Inbox always shows what is pending.
 
 ### 11.5 Interaction request schema
@@ -782,7 +784,7 @@ Nodes reach the console over its authenticated HTTPS endpoint (only the host pro
 
 ### 13.5 Audit is not telemetry
 
-Every sensitive authorization, takeover, secret request completion (metadata only), action invocation, state transition, and credential-provider use should have an independently durable audit record. Audit capture is not optional just because telemetry export is turned off. The console's run trace (Section 26.8) is a masked record for people to read and export; it does not replace the audit record. Provider use is audited three ways, none of them the console's run trace: the fabric emits a value-free `secrets.lookup` or `secrets.release` event for every provider action (kept in memory, the newest 2,000), the console copies a whitelist of those fields into a durable table the owner reads as **Activity** (180 days), and the provider keeps its own record (Vault's agent activity).
+Every sensitive authorization, takeover, secret request completion (metadata only), action invocation, state transition, and credential-provider use should have an independently durable audit record. Audit capture is not optional just because telemetry export is turned off. The console's run trace (Section 26.8) is a masked record for people to read and export; it does not replace the audit record, and neither does the console's OpenTelemetry trace of a run (Section 14.1), which is operational telemetry. Provider use is audited three ways, none of them the console's run trace: the fabric emits a value-free `secrets.lookup` or `secrets.release` event for every provider action (kept in memory, the newest 2,000), the console copies a whitelist of those fields into a durable table the owner reads as **Activity** (180 days), and the provider keeps its own record (Vault's agent activity).
 
 ---
 
@@ -809,6 +811,8 @@ OTel is a **first-class cross-cutting architectural feature**. It must be usable
 **Structured diagnostic logs**
 - Component, severity, timestamp, correlation ID, sanitized status/error code.
 - Never log password/OTP contents, cookie material, full form fields, access tokens, or raw secret-provider responses.
+
+> **As built (console agent traces, epic #580):** with the telemetry slice on, every job of a browser run is one trace: `invoke_agent hexactra.browser_agent`, a `hexactra.chunk` per chunk, `chat <model>` for each model call, `execute_tool <tool>` for each tool call and `hexactra.fabric <action>` for each fabric request, with attribute names from the OpenTelemetry GenAI semantic conventions (still marked "Development" upstream) and `hexactra.run.id` to find a run. The W3C `traceparent` goes to the fabric, whose request span continues it. **Waiting for a person is not an open span:** the question is a span event in the job that asked, the answer a span event in the resumed job, and each job's root links to the previous one. Spans carry names, counts, sizes, durations and outcomes, never a prompt, model output, page text, typed text, URL beyond its host, question, answer or secret; there is no switch that records message content. The run's trace id is on the run (`traceId`). This is telemetry only: the durable record of a run is its steps and the audit log (Section 13.5).
 
 ### 14.2 OpenTelemetry implementation design
 
@@ -876,6 +880,8 @@ Use SQLite for standalone control-plane metadata and durable event state. Concep
 - Server restart: reload durable operations/interactions; reconcile with live hosts.
 - Browser profile locked: fail cleanly; never corrupt it by force-opening duplicate writers.
 - Takeover interrupted: expire lease; require reassessment before automation resumes.
+
+> **As built (console runs, epic #580):** the goal runner survives its own worker dying. Each recorded step saves the run's memory in the same transaction, so a retried job reconciles from the step rows and tells the agent the run was interrupted. An action that can commit something (a payment click, a typed secret, a send) is **recorded as an intent before it is sent**; an intent left unfinished when the worker died is marked `unknown`, is **never repeated**, and the owner is asked again, whatever the model or a saved approval says. One job drives a run at a time (a lease token checked before every action). The fabric cannot answer "that operation already ran" (it has no operation key), so an `unknown` step is settled by the model and the owner; an idempotency key is a tracked follow-up (issue #633). A site's action cannot be made transactional, and a browser profile lost with its node is not recovered.
 
 ---
 
@@ -1043,6 +1049,8 @@ This is the **target organization**, not a claim that the directories already ex
 - **OCI images:** supported Linux server and browser host runtime distributions.
 
 Exact binary/process consolidation is an implementation choice; logical responsibilities and security boundaries remain separate.
+
+> **As built (console packages, epic #580):** the console is a separate npm workspace under `console/` with its own packages: the agent harness and the browser toolset (`@marinoscar/hexactra-agent`, `@marinoscar/hexactra-browser-agent`, built to `dist/` and imported by the API; not published). They are unrelated to the Rust crate `hexactra-agent` (the host agent) despite the shared name. A new tool, gate or loop behaviour goes in a package and the app only binds ports (`console/docs/runner.md`).
 
 ### 18.2 Build and release expectations
 
@@ -1581,8 +1589,11 @@ The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI d
 
 This is the repository's only agent loop. The fabric (`crates/`) has none: it executes the actions the runner sends (decision record: [docs/decisions/one-agent-loop.md](docs/decisions/one-agent-loop.md)).
 
-- **Runs are durable state machines** (`queued → running → waiting_human → running → succeeded | failed | cancelled`).
-- **Each advance is a queue job.** The runner calls the model in chunks, with the transcript persisted after each chunk.
+- **Runs are durable state machines** (`queued → running → waiting_human → running → succeeded | failed | cancelled`, and `paused`, a live state the owner holds a run in: `running → paused → queued`). A client that enumerates run statuses must handle `paused`.
+- **Each advance is a queue job.** The runner calls the model in chunks; the memory is saved after every recorded step and after each chunk. A long run hands on to a new job before its lease runs out.
+- **Stop takes effect before the next action.** Every tool call goes through one wrapper (`executeTool`) that checks the owner's Stop (and Pause) first, so an action the model chose before the press is not carried out, nothing bypasses it, and the same signal aborts the model call in flight. An action already sent is finished by the browser host and its step says its effect is not known. The time from press to end is measured (`app.runs.stop_latency_ms`).
+- **A commit-class action is recorded as an intent before it is sent and is never repeated when its outcome is unknown** (Section 15.3). A restart continues the run; a step the owner confirmed is not done twice.
+- **One loop, two packages.** The harness (`@marinoscar/hexactra-agent`: loop, tool registry, gates, budgets, checkpoints, ports) knows nothing about browsers, a database or a framework; the browser toolset (`@marinoscar/hexactra-browser-agent`) and the console's own tools sit on it; the console hosts them through ports. A replay suite of scripted scenarios (a fake website, a scripted model, a scripted owner) checks, in CI, that no scenario clicks "Pay" without asking, leaves the allowed sites, leaks a secret, repeats a commit, acts after Stop or while paused, or obeys a page; a live mode runs the same scenarios against a real model under a spend cap. Every job is one OpenTelemetry trace (Section 14.1). Detail: `console/docs/runner.md`.
 - **Waits release the worker.** A run waiting for a person ends its job, and the answered handoff enqueues the continuation.
 - **Policy is enforced server-side before every action:** the run's **agent policy** (Section 26.6), snapshotted when the run starts (the built-in Balanced by default: 60 actions, 20 active minutes, $2), and the task's opt-ins: allowed sites, and confirmation before purchases and irreversible steps (off by default, Section 27).
 - **The model sees the screen:** each round starts with a marked screenshot (Section 27).

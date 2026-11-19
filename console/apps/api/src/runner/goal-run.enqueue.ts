@@ -15,6 +15,7 @@ export const GOAL_RUN_REASONS = {
   schedule: { id: 'schedule', label: 'Scheduled run' },
   continued: { id: 'run_continued', label: 'Run continued in a new job' },
   resumed: { id: 'resumed', label: 'Run resumed after a pause' },
+  mailTrigger: { id: 'mail_trigger', label: 'Run started by an email' },
 } as const;
 export type GoalRunReason = (typeof GOAL_RUN_REASONS)[keyof typeof GOAL_RUN_REASONS]['id'];
 for (const r of Object.values(GOAL_RUN_REASONS)) registerJobReason(r);

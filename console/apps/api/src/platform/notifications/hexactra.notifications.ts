@@ -31,6 +31,8 @@ export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 export const CONNECTION_NEEDS_RECONNECT_EVENT = 'connections.needs_reconnect';
 /** A delivery after a run failed for good (E39.6): once per task per day. Names the kind and the reason, never an address, a subject or a file name. */
 export const DELIVERY_FAILED_EVENT = 'deliveries.failed';
+/** A mail trigger needs the owner (E39.8): its account must be connected again, it keeps failing, it skipped unverified senders or hit its daily limit. Once per episode or day. */
+export const MAIL_TRIGGER_ATTENTION_EVENT = 'mail_triggers.attention';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -129,6 +131,19 @@ const deliveryFailed: BrowserNotificationTemplate = (d) => ({
   body: trim(str(d, 'line') || 'A result could not be sent. Open the run to see why.', 180),
   link: str(d, 'runId') ? `/runs/${encodeURIComponent(str(d, 'runId'))}` : '/tasks',
 });
+const MAIL_TRIGGER_TEXT: Record<string, { title: string; body: (task: string) => string }> = {
+  needs_reconnect: { title: 'An email trigger stopped', body: (t) => `The account behind the email trigger on "${t}" must be connected again. Nothing starts until you do.` },
+  failing: { title: 'An email trigger keeps failing', body: (t) => `The email trigger on "${t}" could not read the mailbox several times in a row. It keeps trying.` },
+  unverified: { title: 'An email failed the sender check', body: (t) => `A message that looked like it matched the email trigger on "${t}" did not pass the provider's sender check (or could not be checked), so nothing started. Open the trigger's history for which.` },
+  limit: { title: 'An email trigger hit its daily limit', body: (t) => `The email trigger on "${t}" reached its limit for today. More matching mail will not start runs until tomorrow.` },
+  connection_paused: { title: 'An email trigger is waiting', body: (t) => `The account behind the email trigger on "${t}" is paused, so the trigger waits. Resume the account in Settings → Connections.` },
+  connection_removed: { title: 'An email trigger was switched off', body: (t) => `The account behind the email trigger on "${t}" was disconnected, so the trigger is off.` },
+};
+const mailTriggerAttention: BrowserNotificationTemplate = (d) => {
+  const text = MAIL_TRIGGER_TEXT[str(d, 'kind')] ?? MAIL_TRIGGER_TEXT.failing!;
+  const task = str(d, 'taskName') || 'a task';
+  return { title: text.title, body: trim(text.body(task), 180), link: str(d, 'taskId') ? `/tasks/${encodeURIComponent(str(d, 'taskId'))}#mail-triggers` : '/tasks' };
+};
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
 export function failingScheduleLink(taskId: string | null | undefined): string {
   return taskId ? `/tasks/${encodeURIComponent(taskId)}#schedule` : '/tasks';
@@ -302,6 +317,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
     },
     browserTemplate: deliveryFailed,
   },
+  {
+    event: {
+      key: MAIL_TRIGGER_ATTENTION_EVENT,
+      label: 'An email trigger needs you',
+      description: 'When a task\'s email trigger stops (its account must be connected again), keeps failing, skips a message that failed the sender check, or reaches its daily limit. At most once per cause per day.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: mailTriggerAttention,
+  },
 ];
 
 /**
@@ -359,6 +384,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === CONNECTION_NEEDS_RECONNECT_EVENT) return { tag: `connection-${str(data, 'connectionId') || 'reconnect'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === DELIVERY_FAILED_EVENT) return { tag: `delivery-${str(data, 'taskId') || 'failed'}`.slice(0, 64), urgency: 'normal' };
+  if (event.key === MAIL_TRIGGER_ATTENTION_EVENT) return { tag: `mail-trigger-${str(data, 'triggerId') || 'attention'}-${str(data, 'kind')}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };

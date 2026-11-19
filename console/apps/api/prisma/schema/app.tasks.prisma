@@ -29,6 +29,8 @@ enum RunTrigger {
   external
   /// Started from a chat (#483): the run carries `conversation_id`.
   chat
+  /// Started by an email that matched a mail trigger (E39.8, #605): the run carries `mail_trigger_id`; its origin is `system`.
+  email
 
   @@map("run_trigger")
 }
@@ -117,6 +119,9 @@ model Task {
 
   // composed from app:deliveries.prisma
   deliveries TaskDelivery[]
+
+  // composed from app:mail-triggers.prisma
+  mailTriggers MailTrigger[]
 
   // composed from app:schedules.prisma
   schedules TaskSchedule[]
@@ -244,6 +249,11 @@ model Run {
   outputs          Json?
   /// Whether every output was returned and valid; null while the run has none or has not finished.
   outputsComplete  Boolean?      @map("outputs_complete")
+  /// The mail trigger that started the run (E39.8, #605); null for any other. No foreign key: the run keeps it after the trigger is deleted.
+  mailTriggerId    String?       @map("mail_trigger_id") @db.Uuid
+  /// What started the run beside the task: `{ mail: { connectionId, messageId } }` for a run an email started. A reference only: no
+  /// subject, address or body, so nothing from the message reaches the goal or the model unless the agent reads it through a tool.
+  context          Json?
   /// The owner's memories this run used (#553): the ones its goal names. Plain ids, not foreign keys: a deleted memory leaves its id.
   memoryIds        String[]      @default([]) @map("memory_ids") @db.Uuid
   /// The saved logins the run signed in with (E37.3): `[{ provider, itemName, origin, at }]`, at most 20, deduplicated by

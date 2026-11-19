@@ -5,6 +5,7 @@ import { resolveApp, startedBy } from './apps.js';
 import { consoleApi, consoleCredentials, consoleWebUrl } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
+import { triggerLine, type MailTriggerView } from './mail-triggers.js';
 import { countOlderThan, deleteOlderThan, exportRun, exportRunPdf, parseDays, runsWord, sizeText, type ReportTarget } from './runs.js';
 import { collectInput, missingParameters, parseInputFlags, promptMissing, type CliTaskParameter } from './task-inputs.js';
 import { outputLines, outputsCsv, outputsTable, type CliOutputsPage, type CliRunOutput } from './task-outputs.js';
@@ -224,6 +225,20 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       if (r.status === 'waiting_human') out(`waiting for values: answer it with \`hexactra inbox\` or at ${webUrl()}/inbox`);
       if (sensitive.length) out(`${sensitive.map((p) => p.label).join(', ')}: asked for in the console when the run starts (${webUrl()}/inbox), never here`);
       if (o.watch) await show(r.id, true, false);
+    });
+  const triggers = tasks.command('triggers').description('Email triggers: start a task when a matching email arrives (make one in the web app: the task page, "Runs automatically")');
+  triggers
+    .command('list <task>')
+    .description("A task's email triggers (id, id prefix or name): the rules, the account and the status")
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { json?: boolean }) => {
+      const list = await consoleApi().get<Task[]>('/tasks');
+      const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
+      if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
+      const rows = await consoleApi().get<MailTriggerView[]>(`/tasks/${matches[0]!.id}/mail-triggers`);
+      if (o.json) return json(rows);
+      if (rows.length === 0) return out('No email triggers on this task.');
+      for (const t of rows) out(triggerLine(t));
     });
   tasks
     .command('outputs <task>')

@@ -79,7 +79,7 @@ export const runInputResponseSchema = z.object({
   key: z.string(),
   label: z.string(),
   value: z.string().describe('Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]"'),
-  source: z.enum(['provided', 'default', 'memory', 'asked', 'schedule', 'saved_details']),
+  source: z.enum(['provided', 'default', 'memory', 'asked', 'schedule', 'saved_details', 'email']),
 });
 
 export const taskResponseSchema = z.object({
@@ -184,7 +184,7 @@ export const runResponseSchema = z.object({
   taskId: z.uuid().nullable(),
   conversationId: z.uuid().nullable().describe('The chat that started the run (trigger `chat`); null for every other run'),
   status: runStatus,
-  trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat']),
+  trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email']),
   origin: runOriginSchema,
   client: runClientSchema.nullable(),
   goal: z.string(),

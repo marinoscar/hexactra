@@ -84,7 +84,7 @@ Measured numbers, and how to size a machine: [capacity.md](capacity.md).
 ## 6. Watching it
 
 - **Alerts.** Administration → Alerts. It ships rules for a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, and one expensive run (off by default); see [the run budget meter, stop reasons and cost alerts](#the-run-budget-meter-stop-reasons-and-cost-alerts).
-- **Telemetry.** Administration → Telemetry. The Browser agents group charts runs, steps, waits for a person and model tokens. To trace across console and fabric, set `HEXACTRA_FABRIC_OTLP_ENDPOINT` ([vps-stack.md](vps-stack.md)). With the telemetry slice on, every run job is also one OpenTelemetry trace: see [Reading a run's trace](#reading-a-runs-trace).
+- **Telemetry.** Administration → Telemetry. The Browser agents group charts runs, steps, waits for a person and model tokens. To trace across console and fabric, set `HEXACTRA_FABRIC_OTLP_ENDPOINT` ([vps-stack.md](vps-stack.md)). With the telemetry slice on, every run job is also one OpenTelemetry trace: see [Reading a run's trace](#find-a-runs-trace-and-read-it).
 - **Doctor.** Administration → Doctor. It runs the `fabric.*` checks: reachability, token, hosts online, event stream; and `runs.retention`: when the nightly run retention job last succeeded ([run-retention.md](run-retention.md)).
 - **About.** Administration → About (`system_settings:read`). What is deployed: the console version, the deployment mode, the record `hexactra deploy` leaves on disk (commit, ref, install and update times, the last run's outcome and failed step, the proxy and certificate expiry, the host, the deploy history), database liveness, and a **Hexactra Fabric** section (URL, fabric version, reachable, browser hosts online and with a browser connected). The service token is never shown. API: `GET /api/admin/about`.
 
@@ -183,7 +183,18 @@ A user who reports a run that did something odd, stopped early or "failed after 
 - **Common readings:** `stopReason: "stalled"` → the stall detector (`docs/runs.md`); a `budget_*` reason on a scheduled or API run → a hard budget; a result that starts "The step you confirmed was carried out" → the run ended after a confirmed, irreversible step — check the site before running it again.
 - **Never ask** for a screenshot of their bank, a password or a code; the file never holds those.
 
-### A run was interrupted (worker restart, crash)
+### A run will not stop
+
+Stop should end a run in about two seconds ([docs/runs.md, Stop](../runs.md#stop-e381)). When it does not, find where the time goes before you do anything to the row.
+
+- **Look at the run.** `SELECT status, cancel_requested, cancel_requested_at, pause_requested, worker_token, updated_at FROM runs WHERE id = '<id>'`. `cancel_requested_at` null means the press never reached the API (check the browser's network tab and the API log for `POST /api/runs/<id>/cancel`). `status` `queued`, `paused` or `waiting_human` is cancelled in the same request; only a `running` run depends on a worker.
+- **How long it took.** The API logs `run <id>: Stop took <n> ms (cancelled)` when a run reaches a terminal status after a Stop, and the histogram `app.runs.stop_latency_ms` (Administration → Telemetry; label `status`) holds it. A few of them over 3000 ms are a worker-side delay; one that never records is a job nobody is driving.
+- **What can legitimately take longer than two seconds.** (1) An action already sent to the browser: the fabric has no operation cancel, so the host finishes it, up to `ACTION_TIMEOUT_MS` (45 s), and the step says "Stopped by the owner while this was running"; nothing after it starts. (2) A model call whose provider ignores the abort: the run ends when the call returns and no tool of its answer runs. (3) A tool that is several fabric calls (a saved login, a saved card) finishes the field it is typing. The run page shows "Stopping…" and the step in progress; the latency is those, not a stuck run.
+- **A job nobody is driving.** `worker_token` set on a `running` run whose job is gone (a worker that died) has no one to hear the Stop. The queue retries the job when its lease expires (up to the job's runtime limit, 30 minutes); the retried job sees `cancel_requested` at its start and cancels. Look at Administration → Jobs for the `browser.goal.run` job of the run (subject `browser_run`). Do not edit the run's row by hand: a run that was in the middle of a confirmed click would lose its `unknown` step ([A run recovered after a restart](#a-run-recovered-after-a-restart)).
+- **Two processes.** The stop signal listens on the run event bus and polls the flag every second, so Stop works when the API and the worker are different processes or an event is lost (3 seconds at worst). If it takes much longer than that, check that a worker is claiming `browser.goal.run` jobs (Administration → Jobs) and that the database is reachable from it.
+- **Still stuck.** Export the run as JSON without screenshots (section 8) and file it: the last steps show whether an action was in flight. A defect here is a harness defect (E38.1), not an operations one.
+
+### A run recovered after a restart
 
 A restart of the API during a run is safe: the run keeps its progress after every action and the queue retries the job (`docs/runs.md`, "Crash safety").
 
@@ -191,7 +202,7 @@ A restart of the API during a run is safe: the run keeps its progress after ever
 - **A step marked unknown.** `SELECT seq, action, phase, summary FROM run_steps WHERE run_id = '<id>' ORDER BY seq` lists the phases. A step in `unknown` was a click or typed secret that may or may not have gone through when the job died. The agent is told not to repeat it and the owner is asked again before the same button is pressed. Check the site (the order, the account's recent activity) before approving a repeat.
 - **A run that does nothing after a restart.** `runs.worker_token` not null on a `running` run whose job is gone means the retry has not started yet (the job queue's lease must expire first, up to the job's runtime limit). It starts by itself; do not cancel and re-run a run that may have paid.
 
-### Reading a run's trace
+### Find a run's trace and read it
 
 With the telemetry slice on and collection turned on at Administration → Telemetry, every **job** of a run is one OpenTelemetry trace, sent to the deployment's OTLP collector with the rest of the API's telemetry. Standard OpenTelemetry only: there is no viewer in the console, so open the trace in whatever the collector feeds (Grafana Tempo, Jaeger, Honeycomb, the Greptime explorer). With the slice off the spans are the API's no-op: nothing is created, and `traceId` is null.
 

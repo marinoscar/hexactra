@@ -141,6 +141,10 @@ model User {
   // composed from app:documents.prisma
   documents Document[]
 
+  // composed from app:mail-triggers.prisma
+  mailTriggers      MailTrigger[]
+  mailTriggerEvents MailTriggerEvent[]
+
   // composed from app:mcp-activity.prisma
   mcpActivity McpActivity[]
 

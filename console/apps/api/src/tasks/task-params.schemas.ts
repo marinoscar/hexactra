@@ -41,7 +41,7 @@ export const taskInputsField = z
   .describe("Values for the task's parameters, by key (`phone_number`) or display name (`Phone Number`).");
 
 /** Where a run's value came from. */
-export const INPUT_SOURCES = ['provided', 'default', 'memory', 'asked', 'schedule', 'saved_details'] as const;
+export const INPUT_SOURCES = ['provided', 'default', 'memory', 'asked', 'schedule', 'saved_details', 'email'] as const;
 export type InputSource = (typeof INPUT_SOURCES)[number];
 
 /** What `runs.inputs` holds: the values and their sources, and the sensitive parameters asked at run time (never their values). */

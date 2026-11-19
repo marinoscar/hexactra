@@ -98,6 +98,7 @@ function mount(task: TaskWithSummary | null = TASK, responses: Record<string, un
       [`GET /tasks/${TASK_ID}/stats`]: (req: { path: string }) => stats(Number(new URLSearchParams(req.path.split('?')[1]).get('days'))),
       'GET /runs': { items: [runItem()], nextCursor: null },
       'GET /runs/counts': COUNTS,
+      [`GET /tasks/${TASK_ID}/mail-triggers`]: [],
       'GET /schedules': [{ ...schedule(), taskId: TASK_ID, lastRunId: RUN_ID }],
       'POST /schedules/preview': (req: { body?: unknown }) => {
         const { cron, timezone = 'UTC' } = req.body as { cron: string; timezone?: string };

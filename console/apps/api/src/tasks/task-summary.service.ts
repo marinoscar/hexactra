@@ -42,6 +42,8 @@ export interface TaskSummary {
   runCounts: { total: number; last7d: { succeeded: number; failed: number; cancelled: number } };
   /** The policy a run started now would use; null only when it could not be resolved. */
   policy: { id: string; name: string; builtin: boolean; isDefault: boolean } | null;
+  /** Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. */
+  mailTriggers: number;
 }
 
 export type TaskWithSpend = Task & { spend30d: TaskSpend };
@@ -281,13 +283,15 @@ export class TaskSummaryService {
   async summarize(userId: string, tasks: Task[]): Promise<TaskWithSummary[]> {
     if (tasks.length === 0) return [];
     const ids = tasks.map((t) => t.id);
-    const [schedules, facts, newest, policies] = await Promise.all([
+    const [schedules, facts, newest, policies, triggers] = await Promise.all([
       this.db(userId).taskSchedule.findMany({ where: { taskId: { in: ids } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
       this.runFacts(userId, ids),
       this.newestRuns(userId, ids),
       // A policy that cannot be read must not fail the list: `policy` is then null.
       this.resolver.forTasks(userId, tasks).catch(() => new Map<string, never>()),
+      this.prisma.mailTrigger.groupBy({ by: ['taskId'], where: { userId, taskId: { in: ids }, enabled: true }, _count: { _all: true } }),
     ]);
+    const triggerCounts = new Map(triggers.map((g) => [g.taskId, g._count._all]));
     const byTask = new Map<string, TaskSummarySchedule[]>();
     for (const s of schedules) {
       const list = byTask.get(s.taskId) ?? [];
@@ -321,6 +325,7 @@ export class TaskSummaryService {
         liveRunId: runs?.live?.id ?? null,
         runCounts: { total: f?.total ?? 0, last7d: { succeeded: f?.succeeded7 ?? 0, failed: f?.failed7 ?? 0, cancelled: f?.cancelled7 ?? 0 } },
         policy: resolved ? { id: resolved.policy.id, name: resolved.policy.name, builtin: resolved.policy.builtin, isDefault: resolved.isDefault } : null,
+        mailTriggers: triggerCounts.get(t.id) ?? 0,
       };
       return { ...t, spend30d: this.spendOf(f), summary };
     });

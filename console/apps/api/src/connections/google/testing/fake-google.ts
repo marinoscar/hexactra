@@ -127,7 +127,7 @@ export class FakeGoogleAccount {
     return any.some((s) => this.scopes.includes(s));
   }
 
-  addMessage(m: { id?: string; from?: string; to?: string; cc?: string; subject?: string; text?: string; html?: string; labels?: string[]; date?: Date; threadId?: string; messageId?: string; references?: string; attachments?: { filename: string; mimeType?: string; bytes: Buffer }[] }): GmailMessage {
+  addMessage(m: { id?: string; from?: string; to?: string; cc?: string; subject?: string; text?: string; html?: string; labels?: string[]; date?: Date; threadId?: string; messageId?: string; references?: string; authenticationResults?: string | string[]; attachments?: { filename: string; mimeType?: string; bytes: Buffer }[] }): GmailMessage {
     const id = m.id ?? `m${this.messages.length + 1}-${randomUUID().slice(0, 6)}`;
     const headers = [
       { name: 'From', value: m.from ?? 'Person B <person-b@example.test>' },
@@ -136,6 +136,8 @@ export class FakeGoogleAccount {
       { name: 'Subject', value: m.subject ?? 'Subject' },
       { name: 'Message-ID', value: m.messageId ?? `<${id}@example.test>` },
       ...(m.references ? [{ name: 'References', value: m.references }] : []),
+      // Top to bottom, as Gmail writes them: its own first, then any the sender put there.
+      ...[m.authenticationResults ?? []].flat().map((value) => ({ name: 'Authentication-Results', value })),
     ];
     const msg: GmailMessage = {
       id,
