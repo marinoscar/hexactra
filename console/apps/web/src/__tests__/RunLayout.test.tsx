@@ -152,7 +152,7 @@ describe('run page below md (live)', () => {
     expect(bar).toHaveStyle({ position: 'sticky' });
     // Take over appears once the run's viewer is known.
     await within(bar).findByRole('button', { name: 'Take over on mini-pc' });
-    expect(within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Cancel run', 'Stop watching', 'Take over on mini-pc', 'Export']);
+    expect(within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Cancel run', 'Pause', 'Stop watching', 'Take over on mini-pc', 'Export']);
     const activity = screen.getByRole('status', { name: 'Now' });
     const meter = screen.getByRole('group', { name: 'Budget' });
     const browser = screen.getByRole('heading', { name: 'Browser' });
