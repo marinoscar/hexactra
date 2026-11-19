@@ -67,7 +67,9 @@ export function resolveSecretsSystemSettings(v: Partial<SecretsSystemSettings> |
   };
 }
 
-const mergeSystem = (current: SecretsSystemSettings | undefined, patch: SecretsSystemSettingsPatch): SecretsSystemSettings => {
+const mergeSystem = (current: SecretsSystemSettings | undefined, patch: SecretsSystemSettingsPatch | undefined): SecretsSystemSettings => {
+  // The platform calls every namespace's merge on every settings write: no patch for this one is the current value.
+  if (!patch) return resolveSecretsSystemSettings(current);
   const base = resolveSecretsSystemSettings(current);
   return {
     agentUse: { enabled: patch.agentUse?.enabled ?? base.agentUse.enabled },
@@ -89,7 +91,7 @@ export const SECRETS_SYSTEM_SETTINGS = {
   responseSchema: secretsSystemSettingsSchema,
   defaults: SECRETS_SYSTEM_DEFAULTS,
   requiredOnPut: false,
-  merge: (current, patch) => mergeSystem(current, patch as SecretsSystemSettingsPatch),
+  merge: (current, patch) => mergeSystem(current, patch as SecretsSystemSettingsPatch | undefined),
 } satisfies SystemSettingsNamespace<'secrets', SecretsSystemSettings, SecretsSystemSettingsPatch>;
 
 // ---- user ----

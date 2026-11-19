@@ -39,8 +39,11 @@ export class SecretsProviderRegistrar {
     @Inject(FABRIC_SECRETS_REGISTRY) private readonly fabric: FabricSecretsRegistry,
   ) {}
 
-  /** Makes the fabric hold a fresh access token for `userId`, or nothing. */
-  async ensureRegistered(userId: string): Promise<RegistrationResult> {
+  /**
+   * Makes the fabric hold a fresh access token for `userId`, or nothing. `force` pushes the token even if it was
+   * pushed before (a run starting after a fabric restart: the fabric keeps providers in memory only).
+   */
+  async ensureRegistered(userId: string, opts: { force?: boolean } = {}): Promise<RegistrationResult> {
     if (!(await this.policy.agentUse(userId)).effective) {
       await this.forget(userId);
       return 'not_enabled';
@@ -60,7 +63,7 @@ export class SecretsProviderRegistrar {
       throw e;
     }
     const last = this.pushed.get(userId);
-    if (last !== undefined && last === access.expiresAt.getTime() && last - this.clock() > 30_000) return 'registered';
+    if (!opts.force && last !== undefined && last === access.expiresAt.getTime() && last - this.clock() > 30_000) return 'registered';
     try {
       await this.fabric.registerSecretsProvider(userId, { kind: 'vault', baseUrl: access.baseUrl, accessToken: access.accessToken, expiresAt: access.expiresAt.toISOString() });
     } catch (e) {

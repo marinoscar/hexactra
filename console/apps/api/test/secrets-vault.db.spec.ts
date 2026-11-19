@@ -616,12 +616,15 @@ describe('the kill switches and the fabric registration', () => {
       // Still fresh: not pushed again.
       expect(await registrar.ensureRegistered(s.userId)).toBe('registered');
       expect(fabricCalls.filter((c) => c.op === 'register')).toHaveLength(1);
+      // A run starting after a fabric restart forces the push.
+      expect(await registrar.ensureRegistered(s.userId, { force: true })).toBe('registered');
+      expect(fabricCalls.filter((c) => c.op === 'register')).toHaveLength(2);
       // Near expiry: refreshed and replaced.
       await expireAccess(s.userId, new Date(Date.now() + 20_000));
       expect(await registrar.ensureRegistered(s.userId)).toBe('registered');
       const replaced = fabricCalls.filter((c) => c.op === 'register');
-      expect(replaced).toHaveLength(2);
-      expect(replaced[1]!.registration!.accessToken).not.toBe(replaced[0]!.registration!.accessToken);
+      expect(replaced).toHaveLength(3);
+      expect(replaced[2]!.registration!.accessToken).not.toBe(replaced[0]!.registration!.accessToken);
       expect(JSON.stringify(fabricCalls)).not.toContain((await store.refreshToken(s.userId))!);
       // Turning the owner's switch off takes the provider away from the fabric.
       await setUser(s, false);
@@ -687,6 +690,26 @@ describe('the kill switches and the fabric registration', () => {
       await setDeployment(false);
       await prisma.run.deleteMany({ where: { userId: live.userId } });
     }
+  });
+});
+
+describe('system settings', () => {
+  it("a write to another namespace leaves the secrets namespace alone (the platform calls every namespace's merge)", async () => {
+    const admin = await login('sec-settings', 'admin');
+    expect((await call(admin, 'PATCH', '/api/system-settings', { secrets: { agentUse: { enabled: true }, vault: { allowedHosts: ['vault.corp.test'] } } })).statusCode).toBe(200);
+    try {
+      expect((await call(admin, 'PATCH', '/api/system-settings', { mcp: { elicitation: true } })).statusCode).toBe(200);
+      policy.invalidate();
+      expect(await policy.system()).toMatchObject({ agentUse: { enabled: true }, vault: { allowedHosts: ['vault.corp.test'], baseUrl: null, clientId: null } });
+      // a partial patch merges: the switch is kept when only the hosts change
+      expect((await call(admin, 'PATCH', '/api/system-settings', { secrets: { vault: { allowedHosts: [] } } })).statusCode).toBe(200);
+      policy.invalidate();
+      expect(await policy.system()).toMatchObject({ agentUse: { enabled: true }, vault: { allowedHosts: [] } });
+    } finally {
+      await call(admin, 'PATCH', '/api/system-settings', { secrets: { agentUse: { enabled: false } } });
+      policy.invalidate();
+    }
+    expect((await policy.system()).agentUse.enabled).toBe(false);
   });
 });
 
