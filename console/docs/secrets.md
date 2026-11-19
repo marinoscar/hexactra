@@ -1,8 +1,88 @@
-# Secrets: connecting a Vault or the built-in store, and signing in from a saved login
+# Secrets: saved logins, identity details and cards the agent can use but never see
 
-Epic E37 (#579) lets an agent use the owner's saved logins and one-time codes **without ever seeing them**. This page is the console's half of the Vault provider (E37.2, #591): how an owner connects their Vault, what Hexactra stores, the kill switches, and what happens when the connection breaks. Looking up a login and typing a field is the fabric's job (E37.1, E37.3); **the console never receives a login, a password or a code**, and there is no console route that returns one.
+Epic E37 (#579) lets an agent use the owner's saved logins, one-time codes, identity details and payment cards **without ever seeing them**. This is the one chapter about it: what a saved secret is and where it lives, the two providers and how to choose, connecting a Vault, the built-in store, how the agent signs in, identity details, cards, the switches that decide whether any of it happens, what the model sees and never sees, what happens when a provider cannot answer, and the limits. Its threat model, threat by threat with what stops it and what does not, is [security-secrets.md](security-secrets.md). Operating it (a run that could not sign in, reconnecting, rotating the store key): [runbooks/operations.md](runbooks/operations.md#10-saved-logins-and-the-secrets-providers).
 
-Vault's own contract is `docs/agent-credential-api.md` and its operator runbook is `docs/runbooks/agent-access.md` in the `marinoscar/vault` repository. The shapes the console mirrors (and the version they follow: agent contract 1.2, beta) are in `apps/api/src/secrets/vault-contract.ts`.
+**Status, honestly.** Everything here is implemented and tested against a fake Vault and fake extensions; no real run on a deployed stack, real Vault and real node has been recorded yet (the acceptance session is [#624](https://github.com/marinoscar/hexactra/issues/624)). A closed issue means the code exists, not that the capability has been proven end to end.
+
+## In short
+
+- **A saved secret is not stored by Hexactra's agent, its model or its console database** (except the built-in store, which is a provider and holds ciphertext). It lives in the owner's **provider**: their own Vault, or the **built-in store** the console embeds.
+- **The fabric fetches and types it.** The model names an item by a per-run reference and a field by its key ("the password of `login-1`"). The fabric (the Rust control plane) reads the page's origin from the browser at the moment of typing, asks the provider for exactly that origin, types the value with trusted input and wipes it. A value does not enter the console's database (on the Vault path it does not enter the console at all), a model's context, a step, a log, a span, a screenshot or an export.
+- **The origin is never taken from the model or the page's text, and only an exact match is used.** No match, several matches or a different address: the owner is asked.
+- **Who can make the agent use one** is the owner, through four layers that must all say yes ([The switches](#the-switches-from-the-deployment-to-the-task)). **A card is stricter:** the owner approves each merchant with an amount limit, and no rule covers every merchant.
+- **A provider that cannot answer makes the agent ask the owner;** it never fails a run by itself ([When the provider cannot answer](#when-the-provider-cannot-answer)).
+
+## Choosing a provider
+
+| | Your own Vault (`vault`, the default) | The built-in store (`builtin`) |
+|---|---|---|
+| What it is | A separate Vault deployment (`marinoscar/vault`) the owner connects with OAuth | Vault's own packages (`@marinoscar/vault-*`) embedded in the console |
+| Holds | Logins and one-time codes, identity details, payment cards | **Logins only**, by design |
+| Where a value crosses | **Only the fabric.** The console never sees one. | **The console's Node process**, for a moment, on its way to the fabric |
+| What the console keeps | An encrypted refresh token, a short-lived access token, the connection's address and status | The ciphertext itself, per-owner wrapped keys, and `SECRETS_STORE_KEY` in its environment |
+| If the console is compromised | An attacker can use the owner's grant to ask Vault for every login the owner opened to agents | An attacker reads every owner's saved logins |
+| Needs | A running Vault with Hexactra registered as an OAuth client | `SECRETS_STORE_ENABLED=true` and a key you back up separately |
+| Choose it for | Anything more than logins; passwords you also use outside Hexactra; a deployment reachable from the internet | One person or a small team on a deployment you control, logins only |
+
+**One provider is active per owner** (the user setting `secrets.provider`, set on the Secrets page: *Store in Hexactra* or *Connect Vault*). Switching moves no data: it takes effect on the next call and the provider that is not chosen answers `disabled`. Moving saved logins between the two is a follow-up ([#626](https://github.com/marinoscar/hexactra/issues/626)). **We recommend the remote Vault for anyone who stores more than logins**, and always for cards, which the built-in store does not hold.
+
+## The switches, from the deployment to the task
+
+Everything is **off by default** and every layer alone stops the agent. Reading from the outside in:
+
+| Layer | Switch | Where | Default |
+|---|---|---|---|
+| Vault | Agent access (and, for details and cards, `agentAccess.identity.enabled` and `agentAccess.cards.enabled`) | Vault's admin settings | off |
+| The deployment | `secrets.agentUse.enabled` | Administration → Secrets (`PATCH /api/system-settings`) | off |
+| The built-in store | `SECRETS_STORE_ENABLED` | the environment (restart the API) | off |
+| The owner | `secrets.agentUse.enabled` ("Let the agent use saved logins") | Settings → Secrets (`PATCH /api/user-settings`) | off |
+| The owner's grant | the OAuth scopes: `vault:items_read`, `vault:items_fill`, `offline_access`; `vault:items_write` (save and change logins); `vault:identity_read`, `vault:identity_fill`; the card scopes | the consent Vault shows; each extra scope is a new consent | the first three |
+| Each login, detail or card | Vault's per-item "Allow agents to use this login" (and a card's per-merchant grant) | Vault (the built-in store: Settings → Secrets → My saved logins) | closed |
+| A task or a chat | `useSavedLogins`; `useSavedIdentity`; `useSavedCards` | the task form, Chat settings, `POST`/`PATCH /api/tasks` and `/api/chats` | off (a new one starts from the owner's `secrets.defaultUseSavedLogins`, itself off) |
+| A connected AI app | the limits `allowSavedLogins`, `allowSavedIdentity`, `allowSavedCards` (identity and card use each need saved logins, and none widens another) | the app's page, `PATCH /api/connected-apps/{clientId}/settings` | off |
+| A task that runs unattended | `unattendedPayments`: `ask` or `allow` | the task form | `ask` |
+
+The sub-switches nest: identity use needs saved logins, and card use needs saved logins. A run that is **not started from a chat** (a schedule, the API, MCP) keeps the confirmation before payments **on** after it signed in with a saved login unless the task says `unattendedPayments: allow`; a card is then typed unattended only under a remembered approval with an amount limit. The saved-login chapter has the rules in detail ([How the agent signs in](#how-the-agent-signs-in)); cards are in [Cards](#cards-e377).
+
+## What the model sees, and what it never does
+
+| The model sees | The model never sees |
+|---|---|
+| For the page on screen: a per-run reference (`login-1`, `details-1`, a card's `ref`), the item's **name**, a login's username (it is not secret, and a run records it masked), whether it is an exact match, whether it has a code | A password, a one-time code, a seed, an ID number, a date of birth, a card number, an expiry or a security code, **or the length of any of them** |
+| An identity field's **label** and flags (`sensitive`, `usableHere`) | The provider's item id (it lives in the run's memory, not in the model's input) |
+| "Typed", "Filled Date of birth", "Chose the option", or a failure in plain words | The provider's error text (only its stable code, turned into an instruction) |
+| What a card is by brand, last four digits, the grant's limit and when the owner's **permission** ends | A card's own expiry |
+| The page, with a filled field reading `[filled from your saved details]` and covered by a box in every screenshot it is shown | The value in any tool result, step, memory, question, notification, trace picture, export or log |
+
+The same rule holds for what a hosted AI app sees: the answer of the run, never a value, and no MCP tool at all that reads or manages a secret ([parity.md](parity.md#what-secrets-added-e37)).
+
+## When the provider cannot answer
+
+A provider that is unreachable, refusing, revoked, rate limited or simply has no match **makes the agent ask the owner**; it does not fail the run by itself. The runner turns each failure into an instruction ("Saved logins are not available right now. Ask the owner to sign in"), the run raises the sign-in card, and it continues after the owner answers, exactly as before saved logins existed. The connection's status follows what happened (`needs_reconnect` after a `401`, Vault's agent access off after a `403 AGENT_ACCESS_DISABLED`) and the owner is notified once. The cost is that **an unattended run waits for a person**: a scheduled task whose Vault is down stops at the sign-in card until someone answers. The runbook says how to find and fix it ([A run could not sign in](runbooks/operations.md#a-run-could-not-sign-in)).
+
+## Limits, stated plainly
+
+- **A code sent by text message or email still needs the owner.** A provider supplies authenticator-app codes only.
+- **The site always sees what is typed into it.** A saved secret protects the model and the stored record, not the site's own page: a compromised or hostile site on the exact saved origin receives it.
+- **A page that copies a filled value elsewhere** (a "review your answers" panel, a confirmation line, a script that mirrors an input into a `<div>`) shows it in text the fill record does not know to hide. The filter that keeps filled values out of what the model reads, and the boxes over filled inputs in screenshots, are best effort.
+- **Masking of text is by pattern** (card, account and ID-number shapes, E35): a secret in a shape no pattern knows is not masked in a trace or an export.
+- **On the built-in store the value passes through the console's Node process** before it reaches the fabric. It is zeroed as a buffer, but the string that Vault's code decrypted lives until the garbage collector frees it (vault#229). Someone who can read the process's memory can read the logins of owners who used one recently.
+- **The fabric types into the element the model names** on the exact saved origin; it does not check that the element is a password field ([#625](https://github.com/marinoscar/hexactra/issues/625)).
+- **Origin binding is enforced by the caller.** Vault is told the origin by the fabric, and the fabric learns the tab's URL from the node's extension, so a compromised node or console defeats it ([security-secrets.md](security-secrets.md)).
+- **Saved logins plus a remembered approval plus a schedule can move money with nobody watching.** Origin binding stops a look-alike site; it does not stop a real page steering the agent. Scheduled runs that used a saved login keep purchase confirmation on unless the task opts out.
+- **Not built:** offering to save a login the owner just typed by hand ([#621](https://github.com/marinoscar/hexactra/issues/621), waiting on marinoscar/vault#233), identity details and cards in the built-in store ([#627](https://github.com/marinoscar/hexactra/issues/627)), moving logins between providers, other password managers ([#628](https://github.com/marinoscar/hexactra/issues/628)), agent-driven password rotation ([#629](https://github.com/marinoscar/hexactra/issues/629)), a fast Stop and general crash safety (E38: #582, #584).
+
+## Contents of the rest of this chapter
+
+1. **Your own Vault:** [register Hexactra in Vault](#register-hexactra-as-an-oauth-client-in-vault-administrator-of-the-vault), [connect](#connect-the-owner), [what Hexactra stores](#what-hexactra-stores), [tokens](#tokens-rotation-and-what-the-fabric-gets), [the kill switches](#the-kill-switches), [status and reconnecting](#status-errors-and-reconnecting), [disconnect](#disconnect), [the address of the Vault](#the-address-of-the-vault-ssrf).
+2. **How the agent uses it:** [signing in](#how-the-agent-signs-in), [identity details](#identity-details-e376), [cards](#cards-e377).
+3. **What the owner sees:** [routes](#routes), [the Secrets page](#the-secrets-page-e374), [where the Activity comes from](#where-the-activity-comes-from).
+4. **The built-in store:** [switch it on](#switch-it-on), [key handling, backups and rotation](#key-handling), [how the fabric reaches it](#how-the-fabric-reaches-it), [what it cannot do](#what-the-built-in-store-cannot-do-a-limit-the-vault-path-does-not-have).
+5. **Testing:** [the fake Vault](#testing-the-fake-vault).
+
+## Your own Vault
+
+Vault's own contract is `docs/agent-credential-api.md` and its operator runbook is `docs/runbooks/agent-access.md` in the `marinoscar/vault` repository. The shapes the console mirrors (and the version they follow: agent contract 1.2, beta) are in `apps/api/src/secrets/vault-contract.ts`, and the fabric's in `crates/hexactra-credential-resolver/src/vault.rs`; replacing both with Vault's published contract package is [#630](https://github.com/marinoscar/hexactra/issues/630). This part is the console's half of the Vault provider (E37.2, #591): how an owner connects their Vault, what Hexactra stores, the kill switches, and what happens when the connection breaks. Looking up a login and typing a field is the fabric's job (E37.1, E37.3); **the console never receives a login, a password or a code**, and there is no console route that returns one.
 
 ## Register Hexactra as an OAuth client in Vault (administrator of the Vault)
 
@@ -259,25 +339,17 @@ cd console/apps/api
 npx ts-node --transpile-only test/support/fake-vault.main.ts --grant   # prints one JSON line: baseUrl, client, logins, and a ready access + refresh token
 ```
 
-From jest: `const vault = await startFakeVault({ clientSecret, redirectUris })`. When Vault's conformance kit (marinoscar/vault#196) is published, a follow-up replaces this fake with it. The tests: `test/secrets-vault.spec.ts` (PKCE, the SSRF guard, the OAuth client, the fake itself) and `test/secrets-vault.db.spec.ts` (the flow, rotation across two instances, a replayed refresh token, the switches, a seeded-marker scan of every response, audit row, notification, row and log line).
+From jest: `const vault = await startFakeVault({ clientSecret, redirectUris })`. Vault has since published its conformance kit (marinoscar/vault#196, closed: `@marinoscar/vault-contract/agent-testing`, a fake server, canary helpers and a scenario suite that today drives logins only). This fake and the mirrored shapes are **not** replaced yet: that is [#630](https://github.com/marinoscar/hexactra/issues/630). The fabric has its own fake in Rust (`crates/hexactra-credential-resolver/src/fake_vault.rs`) with the same semantics. The tests: `test/secrets-vault.spec.ts` (PKCE, the SSRF guard, the OAuth client, the fake itself) and `test/secrets-vault.db.spec.ts` (the flow, rotation across two instances, a replayed refresh token, the switches, a seeded-marker scan of every response, audit row, notification, row and log line).
 
-# The built-in store (E37.5)
+## The built-in store (E37.5)
 
 Someone who runs Hexactra without a separate Vault still gets saved logins. The console embeds **Vault's own domain packages** (`@marinoscar/vault-api`, `vault-contract`, `vault-db`; decision record: [decisions/secrets-embedding.md](decisions/secrets-embedding.md)) and offers them to the agent as a second provider, `builtin`. The rules are Vault's, enforced by Vault's code: a login is visible to the agent only if its owner opened it (**per-item opt-in**), a release is bound to the **exact origin** of the page, **one field per call** (`username` or `password`; a one-time code is its own call), a login that is closed, missing or somebody else's gives **one identical not-found**, every call is **audited** (`agent.credential.*`, credential `embedded`, label `hexactra-agent`), calls are **rate limited** per minute, and Vault's **kill switch** is the deployment's `secrets.agentUse.enabled`. On top, the console's two switches apply (the deployment's and the owner's, both off by default).
 
-## Which one to use
+### Which one to use
 
-| | Built-in store | Your own Vault |
-|---|---|---|
-| Needs | This deployment and its key | A running Vault (an OAuth client registered there) |
-| Where the logins are | This console's database, encrypted | Your Vault |
-| Types | Saved logins (the `Credential` type) | Whatever your Vault holds (cards and identity come later) |
-| A value crosses | **The console's Node process** (see the limit below) | Only the fabric: the console never sees it |
-| Choose it for | One person or a small team, logins only | Anything more than logins; passwords you also use outside Hexactra |
+The comparison and the recommendation are in [Choosing a provider](#choosing-a-provider). One provider is active per owner (`secrets.provider`, `vault` by default or `builtin`); switching moves no data (an export and import path is a follow-up, [#626](https://github.com/marinoscar/hexactra/issues/626)) and takes effect on the next call: the provider that is not chosen answers `disabled`.
 
-**One provider is active per owner**, set in the owner's user setting `secrets.provider` (`vault`, the default, or `builtin`). Switching does not move data (an export and import path is a follow-up) and takes effect on the next call: the provider that is not chosen answers `disabled`. We recommend the remote Vault for anyone who stores more than logins.
-
-## Switch it on
+### Switch it on
 
 Deployment configuration, off by default (`infra/compose/app.env.example`; read at boot, restart the API after changing):
 
@@ -292,7 +364,7 @@ The slice needs the credential store and notifications slices, like the Vault co
 
 Then: the deployment switch `secrets.agentUse.enabled` (Administration), and per owner: choose the built-in store, turn on "let the agent use my saved logins", save a login and tick **Allow agents to use this login**.
 
-## Key handling
+### Key handling
 
 ```
 SECRETS_STORE_KEY (environment)  --wraps-->    one random data key per owner (database, wrapped only)
@@ -304,11 +376,11 @@ data key                         --encrypts--> that owner's values (AES-256-GCM)
 - A wrong key **fails closed**: nothing is returned, the request is an error.
 - Associated data binds a value to its owner; it does **not** bind the item or field (Vault's crypto port does not provide them: vault#227).
 
-### Backups
+#### Backups
 
 The console's database backup contains only ciphertext. **The key must be backed up separately, somewhere other than the database backup** (a password manager, an offline copy). **Losing the key loses every saved login for good.** Restoring the database without the key gives a working app with unreadable logins (Doctor `secrets.store_key` fails: "wrapped under a store key this deployment no longer has").
 
-### Rotating the store key
+#### Rotating the store key
 
 1. Generate the new key. Keep the old one.
 2. Set `SECRETS_STORE_KEY` to the new key and `SECRETS_STORE_KEY_PREVIOUS` to the old one; restart the API. Everything keeps working: rows still wrapped under the old key are read with it. Doctor `secrets.store_key` warns "a rotation is unfinished".
@@ -317,7 +389,7 @@ The console's database backup contains only ciphertext. **The key must be backed
 
 The same job removes expired fabric credentials and secrets that lost their owner (a user removed by a path that skipped the user-data purge: their data key goes with them, so the ciphertext is unreadable anyway).
 
-## How the fabric reaches it
+### How the fabric reaches it
 
 The store has no address of its own, so the fabric **calls back**. When a run starts, `SecretsProviderRegistrar.ensureRegistered(userId)` registers the provider with the fabric as `kind: console` with `base_url = <SECRETS_STORE_CALLBACK_URL>/api/internal/secrets-store/v1` and, as the access token, a credential `sct_...` the console minted for that owner (kept only as a SHA-256 hash, valid for an hour, replaced on every registration, revoked when the owner leaves the built-in store or a switch is turned off). **This is the path used**, not an HTTP call to Vault's agent API: there is no Vault server in the picture.
 
@@ -329,18 +401,18 @@ The store has no address of its own, so the fabric **calls back**. When a run st
 
 Errors are `{ "code": "<provider error code>" }`: `not_found` 404, `origin_mismatch` 403, `disabled` 403, `rate_limited` 429 (`Retry-After`), `unauthorized` 401, `refused` 403, `unsupported` 422, `unavailable` 503. Every answer is `Cache-Control: no-store`. The route is **only** for the fabric: a session, a personal access token and an AI app's OAuth token all get the same `401`; the credential names one owner and a request that names another is refused; the owner must have a live run; nginx answers 404 for `/api/internal/` on the public side (`infra/nginx/app.d/locations/secrets-store-internal.conf`), so the fabric calls the API directly over the private network. The fabric accepts the callback address only as https, or as http on a private path (loopback, a private address, a single-label name such as the compose service `api`, `.internal`, `.local`): the console's address is on the deployment's own network, unlike a Vault's, which must be https. The fabric half is `ConsoleProvider` (`crates/hexactra-credential-resolver/src/console.rs`), registered with `PUT /v1/secrets-providers/{owner}/builtin` as kind `console`.
 
-### What the built-in store cannot do (a limit the Vault path does not have)
+#### What the built-in store cannot do (a limit the Vault path does not have)
 
 **The value crosses the console's Node process.** On the Vault path only the fabric ever holds a value. Here the console decrypts it and writes it to the response. It is reduced, not removed: Vault's service returns a JavaScript string, which is converted to a `Buffer` at once, written straight to the response, and the buffer is zeroed when the response has finished or the socket closed; it is never logged (the request log prints the method and path only, and the tests scan the logs for the seeded marker). But the string Vault's code decrypted lives until the garbage collector frees it and cannot be wiped (vault#229). Someone who can read the console's process memory can read the logins of owners who used one recently: a reason to prefer your own Vault for anything more than logins.
 
 Also not included: cards, identity items, attachments, backups and the zip export, card scanning, card expiry reminders, media, Vault's MCP, Vault's agent HTTP API, custom secret types, the owner notices of Vault's agent slice (every use is audited instead), migrating between providers. Those routes answer 404 or do not exist; their tables exist and stay empty. No AI app's token can reach this store (`/api/secrets/*` is not part of any protected resource).
 
-## Routes, permissions and who can read what
+### Routes, permissions and who can read what
 
 Vault's own controllers are mounted under `/api/secrets` and `/api/secret-types` (the page's API) with `secrets:read`, `secrets:write`, `secrets:delete` and `secret_types:read` (contributors and organization admins, and viewers for the read ones, as for the Vault connection; deleting: contributors and organization admins). `secret_types:write` and `:delete` are declared and granted to nobody. **No role can read another owner's secret values**: the `secrets:read_any`, `:write_any` and `:delete_any` permissions that Vault gives its administrators are **not declared**, so no role can hold them (`test/secrets-store.db.spec.ts` walks every role). A personal access token can manage the owner's own logins only with `secrets:write` and **can never release a value through the agent route** (the release route accepts nothing but the fabric's credential). `GET /api/secrets/store/status` (`secrets:read`) tells the owner which provider is chosen and how many logins are open.
 
 Vault's `agentAccess` settings namespace is answered by the console (`enabled` is the deployment switch, per-minute limits at Vault's defaults, cards and identity off). There is no `secretsStore.*` namespace yet because nothing needs configuring.
 
-## Testing
+### Testing the built-in store
 
 `test/secrets-store.spec.ts` (the slice off loads no package, key parsing, the envelope fails closed), `test/secrets-store.packages.spec.ts` (the console's ownership and permission copies against the packages), `test/secrets-store.db.spec.ts` (a real database: the whole flow, the identical not-found, the origin refusal, the switches, every role, ciphertext only, rotation, a wrong key, the internal route with every kind of credential, user deletion, a seeded-marker scan). Vault's own host conformance kit (`runVaultHostConformance`) cannot run for a host that mounts a subset (vault#228); the same assertions are in the db spec, in process.
