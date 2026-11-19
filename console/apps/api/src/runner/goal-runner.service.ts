@@ -26,6 +26,7 @@ import { AGENT, ATTR } from './trace-attributes';
 import { beforeLoop } from './host/before-loop';
 import { buildRun } from './host/build-context';
 import type { HostDeps } from './host/deps';
+import { policySnapshot } from './host/policy-snapshot';
 import { startRun } from './host/start';
 
 export { GUIDANCE_PREFIX } from './harness/engine';
@@ -93,6 +94,11 @@ export class GoalRunnerService {
       clock: () => this.clock(),
       log: this.log,
     };
+  }
+
+  /** The run's policy snapshot (#401), taken once at its first advance: see `host/policy-snapshot.ts`. Kept here for the specs that read it. */
+  policySnapshot(...args: Parameters<typeof policySnapshot> extends [unknown, ...infer Rest] ? Rest : never): ReturnType<typeof policySnapshot> {
+    return policySnapshot(this.deps(), ...args);
   }
 
   /**
