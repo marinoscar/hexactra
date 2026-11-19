@@ -129,6 +129,10 @@ model User {
   // composed from app:connected-apps.prisma
   connectedAppSettings ConnectedAppSettings[]
 
+  // composed from app:connections.prisma
+  connections     Connection[]
+  connectionFlows ConnectionFlow[]
+
   // composed from app:documents.prisma
   documents Document[]
 

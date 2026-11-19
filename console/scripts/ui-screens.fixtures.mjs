@@ -37,7 +37,7 @@ const PERMISSIONS = [
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
-  'memories:read', 'memories:write', 'secrets:read', 'secrets:write',
+  'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -424,6 +424,29 @@ const approvalRules = [
 /** A saved card's approval (E37.7): bound to the shop and the card, with its required limit. */
 approvalRules.push({ id: '5a000000-0000-4000-8000-000000000004', kind: 'gate', host: 'shop.example.com', category: 'payment', matchKey: 'saved card usd', cardRef: 'vault:7f1c2e9a-0000-4000-8000-0000000000c1', summary: 'Pay with Visa ending 4242 on shop.example.com', taskId: null, taskName: null, conversationId: null, maxAmount: 100, expiresAt: iso(25 * 86_400_000), enabled: true, createdFromQuestionId: null, useCount: 3, lastUsedAt: iso(-86_400_000), lastUsedRunId: IDS.finishedRun, createdAt: iso(-6 * 86_400_000), updatedAt: iso(-6 * 86_400_000) });
 
+/**
+ * Connections (E39.2, #599): two Google accounts and one Microsoft account in different states (a work account with the
+ * mail default, a personal account that is paused, a Microsoft account whose sign-in expired), and the administrator's apps.
+ * `?state=empty` shows the empty list. No token or scope string: the API returns none.
+ */
+const connectionBase = { accountName: null, granted: [], defaultFor: [], statusReason: null, connectedAt: iso(-20 * 86_400_000), lastRefreshAt: iso(-3_600_000) };
+const connectionsList = (_url, _body, referer) => {
+  if (stateOf(referer) === 'empty') return [];
+  return [
+    { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000003', provider: 'microsoft', label: 'Outlook', accountEmail: 'person.m@example.test', accountName: 'Person M', capabilities: ['calendar_read', 'calendar_write'], granted: ['calendar_read', 'calendar_write'], status: 'needs_reconnect', statusReason: 'GRANT_REVOKED', lastUsedAt: iso(-9 * 86_400_000) },
+    { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000001', provider: 'google', label: 'Work', accountEmail: 'person.a@example.test', accountName: 'Person A', capabilities: ['mail_read', 'mail_send', 'calendar_read', 'docs_read'], granted: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], defaultFor: ['mail', 'calendar'], status: 'active', lastUsedAt: iso(-3_600_000) },
+    { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000002', provider: 'google', label: 'Personal', accountEmail: 'person.b@example.test', capabilities: ['mail_read'], granted: ['mail_read'], status: 'paused', lastUsedAt: null },
+  ];
+};
+const connectionProviders = [
+  { provider: 'google', displayName: 'Google', ready: true, reason: null, accountTypes: [{ id: 'personal', label: 'Personal Gmail account', supported: true, note: 'Works while the Google project is published; in testing mode Google ends the sign-in after about a week.' }, { id: 'workspace', label: 'Google Workspace account', supported: true, note: "Your organization's administrator may have to allow the app first." }] },
+  { provider: 'microsoft', displayName: 'Microsoft', ready: true, reason: null, accountTypes: [{ id: 'personal', label: 'Personal Microsoft account', supported: true, note: 'Outlook.com, Hotmail and Live accounts.' }, { id: 'work', label: 'Work or school account', supported: true, note: "Your organization's administrator may have to approve the app." }] },
+];
+const adminConnectionApps = [
+  { provider: 'google', displayName: 'Google', enabled: true, clientId: 'example-google-client.apps.example.test', hasClientSecret: true, tenant: null, installed: true, redirectUri: 'https://console.example.test/api/connections/callback/google', setupSteps: ['In the Google Cloud console, create a project and enable the Gmail, Calendar, Docs, Sheets and Drive APIs.', 'Configure and publish the OAuth consent screen.', 'Create an OAuth client of type Web application and add the redirect URI shown on this page.', 'Paste the client id and secret here and switch Google on.'], accountTypes: [] },
+  { provider: 'microsoft', displayName: 'Microsoft', enabled: false, clientId: null, hasClientSecret: false, tenant: 'common', installed: false, redirectUri: 'https://console.example.test/api/connections/callback/microsoft', setupSteps: ['In the Microsoft Entra admin center, register an application.', 'Add the redirect URI shown on this page as a Web redirect URI.', 'Create a client secret.', 'Paste the application id and secret here, set the tenant and switch Microsoft on.'], accountTypes: [] },
+];
+
 /** Secrets (#593): the provider card in each state; the page's own address says which (`?state=`). */
 const vaultBase = { provider: 'vault', status: 'connected', configured: true, source: 'user', baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, redirectUri: 'https://console.example.test/api/secrets/vault/callback', scopes: ['vault:items_read', 'vault:items_fill', 'vault:identity_read', 'vault:identity_fill', 'vault:cards_read', 'vault:cards_fill', 'offline_access'], vaultUserId: 'abcdef12-0000-4000-8000-000000000000', agentAccess: 'on', connectedAt: iso(-5 * 86_400_000), lastUsedAt: iso(-3_600_000), lastSuccessAt: iso(-3_600_000), lastErrorCode: null, connecting: false };
 const stateOf = (referer) => (referer ? (new URL(referer).searchParams.get('state') ?? 'connected') : 'connected');
@@ -556,6 +579,9 @@ export const RESPONSES = {
   // Saved approvals (#554): three rules on two sites, one limited, one off.
   'GET /approval-rules': { paused: false, rules: approvalRules },
   // Secrets (#593).
+  'GET /connections': connectionsList,
+  'GET /connections/providers': connectionProviders,
+  'GET /connections/admin/apps': adminConnectionApps,
   'GET /secrets/status': secretsStatus,
   'GET /secrets/activity': secretsActivity,
   'GET /secrets/reach': secretsReach,

@@ -47,7 +47,7 @@ const MANIFESTS = [join(API_ROOT, 'package.json'), join(API_ROOT, '..', 'web', '
 /** The suites of the optional slices that are on. */
 function sliceSuites() {
   return {
-    ...(isSliceEnabled('credentials') ? { credentials: { appOwners: ['notes', 'fabric', 'secrets'] } } : {}),
+    ...(isSliceEnabled('credentials') ? { credentials: { appOwners: ['notes', 'fabric', 'secrets', 'connections'] } } : {}),
     ...(isSliceEnabled('storage')
       ? { storage: { requiredPrefixIds: isSliceEnabled('db-backup') ? ['database-backups'] : [] } }
       : {}),
@@ -140,6 +140,10 @@ runPlatformConformance({
         {
           file: 'memories/memories.service.ts',
           why: 'Memories (#551) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'memories:<user id>\'))`) before checking the 500-memory limit and the case-insensitive label rule, so two concurrent writes of one user cannot both pass; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
+        },
+        {
+          file: 'connections/connections.service.ts',
+          why: 'Connections (E39.2) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'connections:<user id>\'))`) before moving a default account (at most one per provider and capability group) so two concurrent writers of one user cannot both claim it; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
         },
         {
           file: 'home/home.service.ts',

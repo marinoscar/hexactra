@@ -158,6 +158,12 @@ export const ROUTES = [
     },
   }],
   ['admin-secrets', '/admin/settings/secrets'],
+  // Connections (E39.2): two Google accounts and a Microsoft account in different states; the empty list; the Connect dialog; one account's menu; the administrator's apps.
+  ['settings-connections', '/settings/connections'],
+  ['settings-connections-empty', '/settings/connections?state=empty'],
+  ['settings-connections-connect', '/settings/connections', { viewport: true, action: pressButton('Connect an account') }],
+  ['settings-connections-result', '/settings/connections?connect=connected&connection=c0000000-0000-4000-8000-000000000001&missing=calendar_write'],
+  ['admin-connections', '/admin/settings/connections'],
   // The task form's "Saved logins" section while no provider is connected (the switch disabled with its reason; `task-new` shows it available).
   ['task-new-saved-logins-unavailable', '/tasks/new?state=not_connected'],
   ['settings-danger-zone', '/settings/danger-zone'],

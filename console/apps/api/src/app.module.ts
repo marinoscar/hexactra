@@ -25,6 +25,7 @@ import { SchedulesModule } from './schedules/schedules.module';
 import { PoliciesModule } from './policies/policies.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { SecretsModule } from './secrets/secrets.module';
+import { ConnectionsModule } from './connections/connections.module';
 import { loadSecretsStoreModule, secretsStoreEnabled } from './secrets/builtin/secrets-store.loader';
 import { TasksModule } from './tasks/tasks.module';
 import { MemoriesModule } from './memories/memories.module';
@@ -56,6 +57,8 @@ import { PrismaModule } from './prisma/prisma.service';
     ApprovalsModule,
     // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
+    // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule] : []),
     // The built-in secrets store (E37.5): the Vault packages embedded, OFF by default. With SECRETS_STORE_ENABLED unset no
     // Vault package is loaded; with it on and no valid SECRETS_STORE_KEY the API refuses to start (one clear error).
     ...(secretsStoreEnabled() ? [loadSecretsStoreModule()] : []),

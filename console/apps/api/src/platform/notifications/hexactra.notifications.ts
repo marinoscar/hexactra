@@ -27,6 +27,8 @@ export const RUN_CARD_USED_EVENT = 'runs.card_used';
 export const RUN_CARD_AMOUNT_MISMATCH_EVENT = 'runs.card_amount_mismatch';
 /** The owner's Vault refused the saved grant (revoked, replayed or expired) and must be connected again (E37.2): once per episode. */
 export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
+/** A connected account (Google, Microsoft) stopped working and must be connected again (E39.2): once per episode. */
+export const CONNECTION_NEEDS_RECONNECT_EVENT = 'connections.needs_reconnect';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -114,6 +116,11 @@ const secretsNeedsReconnect: BrowserNotificationTemplate = () => ({
   title: 'Reconnect your Vault',
   body: 'Vault no longer accepts the connection, so agents cannot use your saved logins. Connect it again in Settings → Secrets.',
   link: '/settings/secrets',
+});
+const connectionNeedsReconnect: BrowserNotificationTemplate = (d) => ({
+  title: 'Reconnect an account',
+  body: trim(`${str(d, 'label') || 'A connected account'} no longer works, so agents cannot use it. Connect it again in Settings → Connections.`, 180),
+  link: '/settings/connections',
 });
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
 export function failingScheduleLink(taskId: string | null | undefined): string {
@@ -268,6 +275,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
     },
     browserTemplate: secretsNeedsReconnect,
   },
+  {
+    event: {
+      key: CONNECTION_NEEDS_RECONNECT_EVENT,
+      label: 'A connected account needs to be reconnected',
+      description: 'Once, when Google or Microsoft stops accepting a connected account (you removed the app there, changed the password, or the sign-in expired), so agents can no longer use it.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: connectionNeedsReconnect,
+  },
 ];
 
 /**
@@ -323,6 +340,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_SAVED_APPROVALS_EVENT) return { tag: runId ? `approvals-${runId}`.slice(0, 64) : 'approvals', urgency: 'normal' };
   if (event.key === RUN_SAVED_LOGIN_EVENT) return { tag: runId ? `saved-login-${runId}`.slice(0, 64) : 'saved-login', urgency: 'normal' };
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
+  if (event.key === CONNECTION_NEEDS_RECONNECT_EVENT) return { tag: `connection-${str(data, 'connectionId') || 'reconnect'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };
