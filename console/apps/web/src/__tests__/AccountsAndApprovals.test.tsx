@@ -506,3 +506,15 @@ describe('the Inbox group for approvals', () => {
     expect(screen.getByText('2 waiting for you')).toBeInTheDocument();
   });
 });
+
+describe('chips on a task', () => {
+  it('say how many accounts and deliveries a task has and that an email starts it, and nothing for a plain task', async () => {
+    const { TaskChips, taskChipLabels } = await import('../taskConnections/TaskChips');
+    const wired = { connections: [{ connectionId: WORK, access: 'read' as const, label: 'Work', provider: 'google', accountEmail: 'a@example.test', status: 'active' }, { connectionId: PERSONAL, access: 'read_write' as const, label: 'Personal', provider: 'microsoft', accountEmail: 'b@example.test', status: 'active' }], summary: { mailTriggers: 1, deliveries: 3 } };
+    expect(taskChipLabels(wired as never)).toEqual(['2 accounts', '3 deliveries', 'Starts from email']);
+    render(<TaskChips task={wired as never} />);
+    expect(within(screen.getByTestId('task-chips')).getAllByText(/account|deliver|email/).map((n) => n.textContent)).toEqual(['2 accounts', '3 deliveries', 'Starts from email']);
+    expect(taskChipLabels({ connections: [], summary: { mailTriggers: 0, deliveries: 0 } } as never)).toEqual([]);
+    expect(taskChipLabels({ connections: undefined, summary: { deliveries: 1 } } as never)).toEqual(['1 delivery']);
+  });
+});

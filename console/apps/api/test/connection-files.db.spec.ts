@@ -230,3 +230,20 @@ describe('the run that an email started', () => {
     expect((await call<{ mailTriggerId: string | null }>(user, 'GET', `/api/runs/${plain.id}`)).data.mailTriggerId).toBeNull();
   });
 });
+
+describe('the task summary', () => {
+  it('counts the deliveries that are switched on', async () => {
+    const user = await login('summary-a');
+    const created = await call<{ id: string }>(user, 'POST', '/api/tasks', { name: 'Pay', goal: 'Pay the bill' });
+    expect(created.status).toBe(201);
+    const list = async () => (await call<{ items: { id: string; summary?: { deliveries: number } }[] }>(user, 'GET', '/api/tasks?envelope=1&include=summary')).data.items.find((i) => i.id === created.data.id)?.summary?.deliveries;
+    expect(await list()).toBe(0);
+    await prisma.taskDelivery.createMany({
+      data: [
+        { userId: user.userId, taskId: created.data.id, kind: 'webhook', config: { url: 'https://hooks.example.test' }, enabled: true },
+        { userId: user.userId, taskId: created.data.id, kind: 'webhook', config: { url: 'https://hooks.example.test/2' }, enabled: false },
+      ],
+    });
+    expect(await list()).toBe(1);
+  });
+});
