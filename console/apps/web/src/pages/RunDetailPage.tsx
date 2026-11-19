@@ -89,6 +89,16 @@ export function UsedMemories({ memories }: { memories: Run['memories'] }) {
   );
 }
 
+/** "Signed in with: Shop login" (E37.3): the saved logins the run used, by name and site; never a username, password or code. */
+export function UsedSavedLogins({ logins }: { logins: Run['usedSavedLogins'] }) {
+  if (!logins?.length) return null;
+  return (
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, overflowWrap: 'anywhere' }} data-testid="used-saved-logins">
+      Signed in with: {logins.map((l) => `${l.itemName} (${l.origin.replace(/^https?:\/\//, '')})`).join(', ')}
+    </Typography>
+  );
+}
+
 export function RunDetailPage() {
   const { api, viewer } = usePlatformHost();
   const { id } = useParams<{ id: string }>();
@@ -309,6 +319,7 @@ export function RunDetailPage() {
       <RunHeaderChips policy={run.policy} tier={run.tier} />
       <RunInputs inputs={run.inputs} />
       <UsedMemories memories={run.memories} />
+      <UsedSavedLogins logins={run.usedSavedLogins} />
     </>
   );
   // A typed stop reason (#404) says why in one line; older runs keep the plain result and error.

@@ -19,7 +19,7 @@ export interface ChatSettingsDialogProps {
   onSave: (settings: ChatSettings) => Promise<void>;
 }
 
-const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions });
+const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false });
 
 /**
  * How the chat's runs execute: the machine, the browser profile, the agent
@@ -74,6 +74,15 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             control={<Switch checked={values.confirmRiskyActions} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, confirmRiskyActions: e.target.checked }))} />}
             label="Ask me before a purchase or another step that is hard to undo"
           />
+          <div>
+            <FormControlLabel
+              control={<Switch checked={values.useSavedLogins} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, useSavedLogins: e.target.checked }))} />}
+              label="Sign in with my saved logins"
+            />
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }}>
+              When a page asks you to sign in and you saved a login for exactly that site, the agent signs in without asking. It never sees the password or the code.
+            </Typography>
+          </div>
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
           <div>
             <SuggestMemoriesSwitch disabled={busy} />

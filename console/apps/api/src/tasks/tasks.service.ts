@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException, Optional } from '@nes
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { readConfirmedActions, withConfirmedLead } from '../runner/confirmed-actions';
 import { STEP_QUESTION_SELECT, stepView } from './run-trace.view';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
@@ -117,14 +118,23 @@ export class TasksService {
    * `request` supplies the device time zone for a schedule that names none.
    */
   async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
-    const { policyId, schedules, parameters: defs, ...fields } = input;
+    const { policyId, schedules, parameters: defs, useSavedLogins, ...fields } = input;
     // The goal's `{{Name}}` parameters (#552): inferred where not defined, checked (400 names the problem).
     const parameters = prepareParameters(fields.goal, defs);
     await this.policies?.assertAssignable(userId, policyId);
     const prepared = schedules?.length && this.taskSchedules ? await this.taskSchedules.prepare(userId, schedules, { request, parameters }) : [];
     const limits = { maxSteps: fields.maxSteps, maxMinutes: fields.maxMinutes, model: fields.model ?? null };
     const policyRef = policyId !== undefined ? policyId : this.policies && !isDefaultLimits(limits) ? await this.policies.ensureLegacyPolicy(userId, fields.name, limits) : null;
-    const data = { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef, parameters: parameters as unknown as Prisma.InputJsonValue };
+    // Absent: the owner's `secrets.defaultUseSavedLogins` (E37.3), off unless they turned it on.
+    const data = {
+      ...fields,
+      userId,
+      hostId: fields.hostId ?? null,
+      model: fields.model ?? null,
+      policyRef,
+      parameters: parameters as unknown as Prisma.InputJsonValue,
+      useSavedLogins: useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
+    };
     if (prepared.length === 0) return { ...(await this.db(userId).task.create({ data })), spend30d: NO_SPEND };
     const t = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({ data });

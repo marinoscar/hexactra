@@ -21,6 +21,17 @@ describe("the browser agent's instructions for a sign-in", () => {
     expect(signIn).toContain('type_handoff_secret (you never see secret values)');
   });
 
+  it('signs in from a saved login only through its tools, never from memory, and asks otherwise (E37.3)', () => {
+    expect(signIn).toContain('If the saved_logins tool is available, call it first on a sign-in page.');
+    expect(signIn).toContain('Never type a username or a password from memory, the goal or the page.');
+    expect(signIn).toContain('you pass the reference saved_logins gave you');
+    expect(signIn).toContain('If the site rejects a saved password, do not try again: ask the owner.');
+    expect(signIn).toContain('do not try another login and tell the owner');
+    expect(signIn).toContain('A code sent by text message or email is never in a vault');
+    // The saved-login path comes before asking, and asking is still described.
+    expect(signIn.indexOf('saved_logins')).toBeLessThan(signIn.indexOf('kind "login", input "credentials"'));
+  });
+
   it('passes the page\'s "remember me" words, and follows the person\'s choice only', () => {
     expect(signIn).toContain('pass its words as remember_label');
     expect(signIn).toContain('Without their answer, leave the box as it is.');

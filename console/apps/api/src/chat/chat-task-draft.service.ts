@@ -20,6 +20,7 @@ export interface ChatTaskDraft {
   policyId: string | null;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  useSavedLogins: boolean;
   /** The goal's `{{Name}}` parameters the draft proposes (#556): checked like a saved task's; empty when nothing varies. */
   parameters: TaskParameter[];
 }
@@ -184,6 +185,7 @@ export class ChatTaskDraftService {
       policyId: c.policyRef,
       allowedDomains: c.allowedDomains,
       confirmRiskyActions: c.confirmRiskyActions,
+      useSavedLogins: c.useSavedLogins,
       parameters: draftDefinitions(goal, base.parameters ?? [], memories),
     };
   }

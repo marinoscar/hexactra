@@ -127,10 +127,17 @@ Send ${{Amount}} today to {{Phone Number}} using Zelle on my Bank of America acc
 - SDK: `packages/sdk/src/examples/task-parameters.ts`.
 - MCP: `task_run` takes `inputs`; `tasks_list`, `task_create` and `task_update` return `parameters` with `has_default` and never a default's value; `schedule_create` takes `inputs`; `inbox_answer` takes `fields`. Scopes, effects and titles are unchanged.
 
+### Saved logins on a task (E37.3)
+
+- `useSavedLogins` (boolean): let the task's runs sign in from the owner's saved logins. Absent on create, it starts from the owner's user setting `secrets.defaultUseSavedLogins` (off unless turned on); `PATCH` changes it. It works only while the deployment's and the owner's secrets switches are on and a Vault is connected, and an AI app's run also needs the app's `allowSavedLogins` ([secrets.md](secrets.md#how-the-agent-signs-in)).
+- `unattendedPayments` (`ask` default, or `allow`): what a run that is **not** started from a chat does at a payment step after it signed in with a saved login. `ask` keeps the confirmation before commitments on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. Saved approvals still apply.
+- A chat has the same `useSavedLogins` (`POST`/`PATCH /api/chats`), and a task drafted from a chat carries it over.
+
 ## Runs
 
 The list, its filters and cursor, the counts, deleting and retention are in [runs.md](runs.md). In short:
 
+- **Saved logins used.** `usedSavedLogins` on a run (`GET /api/runs/{id}` and the list): `[{ provider, itemName, origin, at }]`, empty when none. The item's name and the site, never a username, a password or a code (E37.3).
 - **A page.** `GET /api/runs?envelope=1&limit=50` answers `{ items, nextCursor }`; pass `nextCursor` back as `cursor` with the same filters; `null` is the end. A row never carries `transcript` or `policySnapshot`.
 - **Delete by filter.** `POST /api/runs/delete` with `{ filter, expectedCount }`: the filter is the list's own, live statuses are never matched, "all my finished runs" needs `expectedCount`, and a count that moved by more than 5 % answers `409 COUNT_CHANGED` with `details { matched, expectedCount }`. Up to 500 matches are deleted in the request; more answer `202` and the queue job `browser.runs.delete` deletes them.
 - **Export.** `GET /api/runs/{id}/export` answers the run's masked trace file (`hexactra.run-trace`, JSON Schema `packages/sdk/run-trace.schema.json`): the run, policy, budget, models, every step with its question and answer, the trace screenshots (`screenshots=none` leaves them out) and the chat. Never the transcript, a token or a withheld answer; 50 MB at most; 10 a minute. `format=pdf&paper=a4|letter` renders the same masked trace as a PDF report (#543).

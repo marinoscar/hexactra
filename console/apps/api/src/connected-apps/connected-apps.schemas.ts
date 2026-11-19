@@ -17,6 +17,7 @@ export const APP_LIMIT_DEFAULTS = {
   dailyCostLimitUsd: null,
   confirmPurchases: true,
   confirmSensitiveActions: true,
+  allowSavedLogins: false,
   paused: false,
 } as const;
 
@@ -37,6 +38,9 @@ export const appLimitsSchema = z.object({
     .describe(
       "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins.",
     ),
+  allowSavedLogins: z
+    .boolean()
+    .describe("Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."),
   paused: z.boolean().describe('Refuse new runs and sessions from this app without disconnecting it.'),
 });
 export type AppLimits = z.infer<typeof appLimitsSchema>;
@@ -54,6 +58,7 @@ export const patchAppSettingsSchema = z
     dailyCostLimitUsd: z.number().min(0.01).max(10_000).multipleOf(0.01).nullable(),
     confirmPurchases: z.boolean(),
     confirmSensitiveActions: z.boolean(),
+    allowSavedLogins: z.boolean(),
     paused: z.boolean(),
   })
   .partial()

@@ -6,3 +6,4 @@ export { SecretsPolicyService, type AgentUseState } from './secrets-policy.servi
 export { SecretsProviderRegistrar, type RegistrationResult } from './secrets-provider.registrar';
 export { VaultConnectionService, type ProviderOutcome, type SecretsStatusView, type VaultStatusView } from './vault-connection.service';
 export { VaultAccessError, VaultTokenService, type VaultAccess } from './vault-token.service';
+export { RunSecretsService } from './run-secrets.service';

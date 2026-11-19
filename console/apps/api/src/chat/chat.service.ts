@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma, type ChatMessage, type ChatMessageKind, type ChatMessageRole, type Conversation } from '@prisma/client';
 
+import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RunDeleteService } from '../tasks/run-delete.service';
@@ -19,6 +20,7 @@ export interface ChatView {
   policyId: string | null;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  useSavedLogins: boolean;
   lastMessageAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -77,7 +79,7 @@ export function titleFromMessage(text: string): string {
 }
 
 function view(c: Conversation): ChatView {
-  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
+  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
 }
 function messageView(m: ChatMessage): ChatMessageView {
   return { id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt };
@@ -176,6 +178,8 @@ export class ChatService {
         ...(input.policyId !== undefined ? { policyRef: input.policyId } : {}),
         ...(input.allowedDomains !== undefined ? { allowedDomains: input.allowedDomains } : {}),
         ...(input.confirmRiskyActions !== undefined ? { confirmRiskyActions: input.confirmRiskyActions } : {}),
+        // Absent: the owner's `secrets.defaultUseSavedLogins` (off unless they turned it on).
+        useSavedLogins: input.useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
       },
     });
     return view(c);
