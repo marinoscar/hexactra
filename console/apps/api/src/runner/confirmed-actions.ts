@@ -6,6 +6,8 @@
 // so, and "Run again" asks before it repeats the job.
 import { maskSensitive } from '../tasks/mask';
 
+import { noReportResult as noReportText } from './harness/outcome-text';
+
 /** One confirmed action, as stored. The prompt is cut and masked; never a typed value or a secret. */
 export interface ConfirmedAction {
   /** The step's `seq`. */
@@ -68,12 +70,7 @@ export function withConfirmedLead(text: string, actions: readonly ConfirmedActio
   return text.trim() ? `${lead}\n\n${text}` : lead;
 }
 
-/** How many of a run's last log lines a wrap-up without words reports. */
-const NO_REPORT_LINES = 5;
-
 /** The result of a wrap-up where the model called no `finish` (#540): the run's own last steps, masked. */
 export function noReportResult(log: readonly string[]): string {
-  const last = log.filter((l) => /^\d+\. /.test(l)).slice(-NO_REPORT_LINES);
-  const lines = (last.length ? last : log.slice(-NO_REPORT_LINES)).map((l) => maskSensitive(l.length > 400 ? `${l.slice(0, 399)}…` : l).text);
-  return lines.length ? `Stopped before the agent could report. Last steps:\n${lines.join('\n')}` : 'Stopped before the agent could report.';
+  return noReportText(log, (l) => maskSensitive(l).text);
 }

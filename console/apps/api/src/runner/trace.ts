@@ -3,9 +3,9 @@
 // answer step. No I/O.
 import { maskSensitive } from '../tasks/mask';
 
-/** The moments a masked screenshot is kept at. */
-export const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
-export type TraceMoment = (typeof TRACE_MOMENTS)[number];
+import { isSecretInput, questionMoment, TRACE_MOMENTS, type TraceMoment } from './harness/moments';
+
+export { isSecretInput, questionMoment, TRACE_MOMENTS, type TraceMoment };
 
 /** The most images one run keeps; past it, only the confirmed-action pictures and the final screen. */
 export const TRACE_MAX_IMAGES = 40;
@@ -19,16 +19,6 @@ export function traceAllowed(moment: TraceMoment, taken: number): boolean {
 
 /** The step kinds that are records, not actions (#541): they take a `seq`, never `stepCount` or the actions budget. */
 export const NOTE_STEP_KINDS = ['routing', 'guidance', 'end', 'blocked'] as const;
-
-/** A request whose answer is a secret: no picture is taken while it is open (#525), and its value is never in a step. */
-export function isSecretInput(input: string | null | undefined): boolean {
-  return input === 'secret' || input === 'credentials';
-}
-
-/** The moment of the picture taken as a person is asked: the screen they are asked about. */
-export function questionMoment(kind: string): TraceMoment {
-  return kind === 'confirmation' ? 'before_confirmed' : 'question';
-}
 
 /** The object key of a step's picture: `runs/<userId>/<runId>/<seq>-<moment>.jpg` (the `run-traces` prefix). */
 export function traceKeyParts(runId: string, seq: number, moment: TraceMoment, contentType = 'image/jpeg'): [string, string] {

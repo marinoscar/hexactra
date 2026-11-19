@@ -11,7 +11,7 @@ export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'paused' | 'suc
 /** Every run status, in the order a run moves through them. */
 export const RUN_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled'];
 
-/** Why a run stopped (`runs.stop_reason`): the values #408 declared (`RUN_STOP_REASONS` in apps/api/src/runner/budget.ts). */
+/** Why a run stopped (`runs.stop_reason`): the values #408 declared (`RUN_STOP_REASONS` in apps/api/src/runner/harness/budget.ts). */
 export const RUN_STOP_REASONS: readonly StopReason[] = STOP_REASONS;
 export type RunStopReason = StopReason;
 

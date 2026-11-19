@@ -4,6 +4,8 @@
 import { z } from 'zod';
 import { MASKED_OUTPUT, MAX_OUTPUT_ATTEMPTS, parseOutputs, type StoredOutput, type TaskOutput } from '@app/shared/task-fields';
 
+import type { OutputsHandle } from './browser/context';
+
 /** The argument schema of `finish` for a task without outputs: exactly what it always was. */
 const plainFinish = z.object({ success: z.boolean(), result: z.string().min(1).max(4000) });
 
@@ -106,4 +108,32 @@ export function scrubSensitive(result: string, spec: readonly TaskOutput[], give
     if (text.length >= 4) out = out.split(text).join(MASKED_OUTPUT);
   }
   return out;
+}
+
+/** The outputs of a run as the browser toolset binds them (E39.5), or null when its task has none. */
+export function outputsHandle(spec: readonly TaskOutput[]): OutputsHandle | null {
+  if (spec.length === 0) return null;
+  return {
+    parameters: finishParameters(spec),
+    decide: (given, opts) => decideOutputs(spec, given as GivenOutputs, opts),
+    scrub: (result, given) => scrubSensitive(result, spec, given as GivenOutputs),
+    maxAttempts: MAX_OUTPUT_ATTEMPTS,
+  };
+}
+
+/** The model stopped without `finish` on a run with outputs: ask for them, twice at most (the count is the memory's); null when it need not. */
+export function outputsNudge(handle: OutputsHandle | null, memory: { outputAttempts?: number }): { nudge: string; note: string } | null {
+  if (!handle) return null;
+  const attempts = memory.outputAttempts ?? 0;
+  if (attempts >= handle.maxAttempts) return null;
+  memory.outputAttempts = attempts + 1;
+  return {
+    nudge: 'You stopped without calling finish. This task needs its outputs: call finish with the result and the outputs.',
+    note: `the model stopped without finish; asked for the outputs (${attempts + 1} of ${handle.maxAttempts})`,
+  };
+}
+
+/** What the wrap-up call is also asked for on a run with outputs. */
+export function outputsWrapUpNote(handle: OutputsHandle | null): string {
+  return handle ? 'Give the outputs in finish too: the values you found so far, and null for the rest.' : '';
 }

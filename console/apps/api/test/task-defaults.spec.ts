@@ -21,7 +21,8 @@ describe('task defaults (#399)', () => {
   });
 
   it('the runner takes its limits from the policy snapshot (no literal budget numbers left in it, #401)', () => {
-    const src = readFileSync(join(__dirname, '../src/runner/goal-runner.service.ts'), 'utf8');
+    // Since the runner was split (E38.5) the run is built in the host layer: its policy port reads the snapshot, and its context builds the tracker.
+    const src = ['host/policy-port.ts', 'host/build-context.ts'].map((f) => readFileSync(join(__dirname, '../src/runner', f), 'utf8')).join('\n');
     // The limits are the snapshot's effective budget, enforced by the BudgetTracker (#404).
     expect(src).toContain('snapshot.effectiveBudget');
     expect(src).toContain('new BudgetTracker(');
