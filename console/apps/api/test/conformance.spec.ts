@@ -47,7 +47,7 @@ const MANIFESTS = [join(API_ROOT, 'package.json'), join(API_ROOT, '..', 'web', '
 /** The suites of the optional slices that are on. */
 function sliceSuites() {
   return {
-    ...(isSliceEnabled('credentials') ? { credentials: { appOwners: ['notes', 'fabric'] } } : {}),
+    ...(isSliceEnabled('credentials') ? { credentials: { appOwners: ['notes', 'fabric', 'secrets'] } } : {}),
     ...(isSliceEnabled('storage')
       ? { storage: { requiredPrefixIds: isSliceEnabled('db-backup') ? ['database-backups'] : [] } }
       : {}),

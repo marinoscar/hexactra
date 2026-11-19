@@ -24,6 +24,7 @@ import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PoliciesModule } from './policies/policies.module';
 import { ApprovalsModule } from './approvals/approvals.module';
+import { SecretsModule } from './secrets/secrets.module';
 import { TasksModule } from './tasks/tasks.module';
 import { MemoriesModule } from './memories/memories.module';
 import { NotesModule } from './notes/notes.module';
@@ -52,6 +53,8 @@ import { PrismaModule } from './prisma/prisma.service';
     MemoriesModule,
     // Saved approvals (#554): rules the owner can see, narrow, pause and revoke.
     ApprovalsModule,
+    // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
     // Connected AI apps (#464): the request's client context and the per-app limits (global).
     ConnectedAppsModule,
     TasksModule,

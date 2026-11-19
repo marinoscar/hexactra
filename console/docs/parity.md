@@ -43,6 +43,12 @@ These ride on existing capabilities (tasks, runs, questions); the registry rows 
 | The `form` question: missing values asked at once before a run starts (#552, #556, [questions.md](questions.md)) | **Implemented.** `POST /api/questions/{id}/answer` and `/api/inbox/{runId}/respond` with `fields` | **Implemented.** `inbox_answer` relays `fields`: a form never holds a sensitive field (a sensitive value is asked as a secret in Hexactra once the browser opens). The MCP Apps card sends the person to Hexactra | **Not offered, because** the CLI asks for missing values before it starts the run instead | **Not offered, because** it is answered in the Inbox or the app | Typed through `hx.api` | **Implemented.** "A few details to start" in the chat, the Inbox and the question page | Through the web app |
 | "Don't ask again" on an approval (#555, [approvals.md](approvals.md#dont-ask-again-on-a-request-555)) | **Implemented.** `rememberRule` on an answer, accepted only from the signed-in web and Android app | **Not offered, because** a hosted AI app may approve once but must never turn an approval into a standing one (`422`) | **Not offered, because** a personal access token approves once; rules are made beside the request, signed in | **Not offered, for the same reason** | Not offered (same rule) | **Implemented.** The checkbox and "Limit it" on a rememberable confirmation | **Implemented.** The same card in the app |
 
+## What secrets added (E37)
+
+| Capability (registry id) | REST | MCP | CLI | TUI | SDK | Web | Android |
+|---|---|---|---|---|---|---|---|
+| Connect the owner's Vault, status, disconnect and the administrator's default client (`secrets.status`, `secrets.vault.connect`, `secrets.vault.default`, #591, [secrets.md](secrets.md)) | **Implemented.** `GET /api/secrets/status`, `PUT /api/secrets/vault/client`, `POST /api/secrets/vault/connect`, `GET /api/secrets/vault/callback`, `POST /api/secrets/vault/disconnect`, `GET\|PUT\|DELETE /api/secrets/vault/default-client` | **Not offered, because** a hosted AI app must never connect, change or disconnect the owner's secrets provider | **Not offered, because** the consent is a browser flow, the client secret is write-only and a personal access token must not rewire the provider | **Not offered, because** the TUI is for watching and answering | Typed through `hx.api` | **Not yet:** the Secrets page is E37.4 | Through the web app |
+
 ## The Android column
 
 The Android app opens the console in a Trusted Web Activity, so every page above is there.
