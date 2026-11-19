@@ -4,6 +4,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
+import { RunStopSignal } from '../src/runner/stop-signal';
 import { CapabilityError } from '../src/connections/capabilities';
 import { CapabilityProviderRegistry } from '../src/connections/capability-provider.registry';
 import { balancedSpec } from '../src/policies/builtin-policies';
@@ -14,13 +15,23 @@ let app: NestFastifyApplication;
 let kit: Kit;
 const stamp = `${Date.now()}`;
 
+// An abandoned job (the simulated crash) never disposes its stop signal (E38.1): its poll is stopped here, before the app closes.
+const stopSignals: RunStopSignal[] = [];
+
 beforeAll(async () => {
+  const start = RunStopSignal.start.bind(RunStopSignal);
+  jest.spyOn(RunStopSignal, 'start').mockImplementation((source) => {
+    const signal = start(source);
+    stopSignals.push(signal);
+    return signal;
+  });
   app = await createApp();
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   kit = connectionKit(app);
 });
 afterAll(async () => {
+  await Promise.all(stopSignals.map((x) => x.dispose()));
   await app?.close();
 });
 
@@ -682,5 +693,178 @@ describe('what goes wrong becomes an instruction', () => {
     expect(a.sent).toHaveLength(0);
     // The approval was spent: the retry in the same run asks again.
     expect(model.outputs[2]).toMatch(/^Asked the owner/);
+  });
+});
+
+/** The owner approves the card the run waits on and the run continues, until it is not waiting. */
+async function approveAll(r: Awaited<ReturnType<typeof setup>>, runner: ReturnType<Kit['runner']>, rememberRule?: Record<string, unknown>): Promise<string> {
+  let outcome = 'waiting_human';
+  for (let i = 0; i < 6 && outcome === 'waiting_human'; i += 1) {
+    if ((await kit.prisma.question.count({ where: { runId: r.run.id, status: 'pending' } })) > 0) await kit.answer(r.userId, r.run.id, { outcome: 'completed', value: 'approve', ...(rememberRule ? { rememberRule } : {}) });
+    outcome = await runner.advance(r.run.id, r.userId, null);
+    if ((await kit.prisma.question.count({ where: { runId: r.run.id, status: 'pending' } })) === 0) break;
+  }
+  return outcome;
+}
+
+describe('the tools one by one', () => {
+  it('drafts without asking, and sends the draft it saved: the card shows that draft', async () => {
+    const r = await setup('draft', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    const draft: Call = ['mail_draft', { connection: null, to: ['Person-B@example.test'], cc: null, bcc: null, subject: 'Draft subject', body: 'Draft body text.', reply_to_message_id: null }];
+    const model = scriptedModel([[draft]]);
+    const runner = kit.runner(model, fakeFabric());
+    await runner.advance(r.run.id, r.userId, null);
+    // A draft asks nothing and sends nothing.
+    expect(await kit.prisma.question.count({ where: { runId: r.run.id } })).toBe(0);
+    expect(a.drafts.size).toBe(1);
+    expect(a.sent).toHaveLength(0);
+    const draftId = [...a.drafts.keys()][0]!;
+    expect(model.outputs[0]).toContain(draftId);
+
+    // Sending it asks, showing the saved draft's recipients, subject and text.
+    const sendDraft = (id: string): Call => ['mail_send', { connection: null, draft_id: id, to: null, cc: null, bcc: null, subject: null, body: null, reply_to_message_id: null, attachments: null }];
+    const run3 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, goal: r.task.goal } });
+    let draftOfRun3 = '';
+    const m3 = scriptedModel([[draft]]);
+    await kit.runner(m3, fakeFabric()).advance(run3.id, r.userId, null);
+    draftOfRun3 = [...a.drafts.keys()].at(-1)!;
+    await r.db.run.update({ where: { id: run3.id }, data: { status: 'running' } });
+    const m4 = scriptedModel([[sendDraft(draftOfRun3)], [sendDraft(draftOfRun3), FINISH]]);
+    const runner4 = kit.runner(m4, fakeFabric());
+    expect(await runner4.advance(run3.id, r.userId, null)).toBe('waiting_human');
+    const q = await r.db.question.findFirstOrThrow({ where: { runId: run3.id, status: 'pending' } });
+    expect(q.prompt).toContain('To: person-b@example.test');
+    expect(q.prompt).toContain('Subject: Draft subject');
+    expect(q.prompt).toContain('Draft body text.');
+    await kit.answer(r.userId, run3.id, { outcome: 'completed', value: 'approve' });
+    expect(await runner4.advance(run3.id, r.userId, null)).toBe('succeeded');
+    expect(a.sent).toHaveLength(1);
+    expect(a.sent[0]).toMatchObject({ subject: 'Draft subject', text: 'Draft body text.' });
+    // A draft this run did not save is refused.
+    const m5 = scriptedModel([[sendDraft('not-mine'), FINISH]]);
+    const run5 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, goal: r.task.goal } });
+    await kit.runner(m5, fakeFabric()).advance(run5.id, r.userId, null);
+    expect(m5.outputs[0]).toMatch(/That draft was not saved by this run/);
+  });
+
+  it('refuses to delete mail, and changes a message only after the owner approves', async () => {
+    const r = await setup('modify', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    const m = a.addMessage({ subject: 'Newsletter' });
+    const del: Call = ['mail_modify', { connection: null, message_id: m.id, mark_read: null, archive: null, add_labels: ['TRASH'], remove_labels: null }];
+    const archive: Call = ['mail_modify', { connection: null, message_id: m.id, mark_read: true, archive: true, add_labels: null, remove_labels: null }];
+    const model = scriptedModel([[del, archive], [archive, FINISH]]);
+    const runner = kit.runner(model, fakeFabric());
+    expect(await runner.advance(r.run.id, r.userId, null)).toBe('waiting_human');
+    expect(model.outputs[0]).toBe('Deleting mail is not offered. Archive it instead.');
+    expect(a.messages.find((x) => x.id === m.id)!.unread).toBe(true);
+    await kit.answer(r.userId, r.run.id, { outcome: 'completed', value: 'approve' });
+    expect(await runner.advance(r.run.id, r.userId, null)).toBe('succeeded');
+    expect(a.messages.find((x) => x.id === m.id)!.unread).toBe(false);
+    expect(a.messages.find((x) => x.id === m.id)!.labels).not.toContain('INBOX');
+  });
+
+  it('creates an event only after approval, never notifies by default, and a remembered approval never covers new invitees', async () => {
+    const r = await setup('event', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    const event = (attendees: string[] | null, notify = false): Call => ['calendar_create_event', { connection: null, title: 'Planning', start: '2026-11-23T10:00:00Z', end: '2026-11-23T10:30:00Z', time_zone: null, description: null, location: null, attendees, notify_attendees: notify, conference: null, calendar_id: null }];
+    const model = scriptedModel([[event(['person-b@example.test'])], [event(['person-b@example.test']), FINISH]]);
+    const runner = kit.runner(model, fakeFabric());
+    await runner.advance(r.run.id, r.userId, null);
+    expect(a.events).toHaveLength(0);
+    const q = await r.db.question.findFirstOrThrow({ where: { runId: r.run.id } });
+    expect(q.prompt).toContain('person-b@example.test (they will not be emailed)');
+    await kit.answer(r.userId, r.run.id, { outcome: 'completed', value: 'approve', rememberRule: { enabled: true } });
+    expect(await runner.advance(r.run.id, r.userId, null)).toBe('succeeded');
+    expect(a.events).toHaveLength(1);
+    expect(a.writes.at(-1)).toMatchObject({ method: 'calendar.createEvent', notifyAttendees: false });
+    const rule = await kit.prisma.approvalRule.findFirstOrThrow({ where: { userId: r.userId, kind: 'connection', matchKey: 'calendar_create_event' } });
+    expect(rule.recipients).toEqual(['person-b@example.test']);
+    // An event with no attendees is covered, one that invites someone new asks.
+    const run2 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, trigger: 'schedule', goal: r.task.goal } });
+    const model2 = scriptedModel([[event(null), event(['person-c@example.test'], true)]]);
+    expect(await kit.runner(model2, fakeFabric()).advance(run2.id, r.userId, null)).toBe('waiting_human');
+    expect(model2.outputs[0]).toMatch(/^Created \(event_id /);
+    expect(model2.outputs[1]).toMatch(/^Asked the owner/);
+    expect(a.events).toHaveLength(2);
+  });
+
+  it('asks every time for a change that tells the existing attendees, and cannot remember it', async () => {
+    const r = await setup('update', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    a.events.push({ id: 'ev9', calendarId: 'primary', title: 'Review', description: null, location: null, start: '2026-11-24T10:00:00Z', end: '2026-11-24T11:00:00Z', allDay: false, timeZone: 'UTC', status: 'confirmed', attendees: [{ address: 'person-b@example.test', name: null, response: 'accepted', organizer: false }], recurring: false, conferenceUrl: null, webUrl: null });
+    const move: Call = ['calendar_update_event', { connection: null, event_id: 'ev9', calendar_id: null, title: null, start: '2026-11-24T12:00:00Z', end: '2026-11-24T13:00:00Z', time_zone: null, description: null, location: null, attendees: null, notify_attendees: true }];
+    const model = scriptedModel([[move]]);
+    await kit.runner(model, fakeFabric()).advance(r.run.id, r.userId, null);
+    const q = await r.db.question.findFirstOrThrow({ where: { runId: r.run.id } });
+    expect(q.prompt).toContain('Attendees told: the event\'s attendees');
+    // The people cannot be named, so there is nothing a rule could cover: "Don't ask again" is not offered.
+    expect(q.rememberable).toBeNull();
+    const del: Call = ['calendar_delete_event', { connection: null, event_id: 'ev9', calendar_id: null, notify_attendees: false }];
+    const run2 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, goal: r.task.goal } });
+    const model2 = scriptedModel([[del], [del, FINISH]]);
+    const runner2 = kit.runner(model2, fakeFabric());
+    await runner2.advance(run2.id, r.userId, null);
+    await kit.answer(r.userId, run2.id, { outcome: 'completed', value: 'approve' });
+    expect(await runner2.advance(run2.id, r.userId, null)).toBe('succeeded');
+    expect(a.events.find((e) => e.id === 'ev9')).toBeUndefined();
+  });
+
+  it('appends rows to a sheet after approval, showing the file name and the cells, and flags a sheet that is not there', async () => {
+    const r = await setup('sheet', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    a.files.push({ id: 'sh1', name: 'Loan payments', kind: 'spreadsheet', mimeType: 'x', size: 1, modifiedAt: null, webUrl: null, parentId: null });
+    a.sheets.set('sh1', new Map([['Sheet1', [['Date', 'Amount']]]]));
+    const append = (id: string): Call => ['sheet_append_rows', { connection: null, file_id: id, sheet: 'Sheet1', rows: [['2026-11-19', 250]] }];
+    const model = scriptedModel([[append('missing'), append('sh1')], [append('sh1'), FINISH]]);
+    const runner = kit.runner(model, fakeFabric());
+    // A file that cannot be reached is refused before anyone is asked: the only card is for the one that exists.
+    await runner.advance(r.run.id, r.userId, null);
+    expect(model.outputs[0]).toMatch(/not found/);
+    expect(await kit.prisma.question.count({ where: { runId: r.run.id } })).toBe(1);
+    expect(await approveAll(r, runner)).toBe('succeeded');
+    const q = await r.db.question.findFirstOrThrow({ where: { runId: r.run.id } });
+    expect(q.prompt).toContain('Spreadsheet: Loan payments');
+    expect(q.prompt).toContain('2026-11-19 | 250');
+    expect(a.sheets.get('sh1')!.get('Sheet1')).toEqual([['Date', 'Amount'], ['2026-11-19', 250]]);
+  });
+
+  it('creates documents and saves a run artifact by handle, never inline', async () => {
+    const r = await setup('docs', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    const create: Call = ['docs_create', { connection: null, title: 'Summary', text: 'The run found three items.', folder_id: null }];
+    const model = scriptedModel([[create], [create, FINISH]]);
+    const runner = kit.runner(model, fakeFabric());
+    expect(await approveAll(r, runner)).toBe('succeeded');
+    expect([...a.docs.values()]).toContain('The run found three items.');
+    // A screenshot step that was never stored cannot be uploaded; nobody is asked about it.
+    const run2 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, goal: r.task.goal } });
+    const model2 = scriptedModel([[['file_upload', { connection: null, source: 'screenshot', step: 3, name: null, folder_id: null }], FINISH]]);
+    await kit.runner(model2, fakeFabric()).advance(run2.id, r.userId, null);
+    expect(model2.outputs[0]).toMatch(/Run screenshots are not stored|has no stored screenshot/);
+    expect(a.uploads.size).toBe(0);
+  });
+
+  it('hands an attachment to the browser by a short-lived handle, and removes it after', async () => {
+    const r = await setup('attach', [['Work', READ, 'read']], { needsBrowser: 'always' });
+    const a = kit.fake.account(r.conns[0]!.id);
+    const m = a.addMessage({ subject: 'Form', attachments: [{ id: 'att1', filename: 'form.pdf', contentType: 'application/pdf', bytes: Buffer.from('%PDF-secret-attachment-bytes') }] });
+    const fabric = fakeFabric();
+    const stored = new Map<string, Buffer>();
+    const runner = kit.runner(scriptedModel([[['mail_attachment_to_browser', { connection: null, message_id: m.id, attachment_id: 'att1', selector: '#file' }], FINISH]]), fabric);
+    runner.artifacts = { put: async (k: string, b: Buffer) => void stored.set(k, b), get: async (k: string) => (stored.has(k) ? { bytes: stored.get(k)!, contentType: 'application/pdf' } : null), delete: async (k: string) => void stored.delete(k) };
+    // Drive the same run with the model defined above.
+    await runner.advance(r.run.id, r.userId, null);
+    const upload = fabric.actions.find((x) => x.type === 'upload_file') as { selector: string; file: Record<string, unknown> } | undefined;
+    expect(upload).toBeDefined();
+    expect(upload!.selector).toBe('#file');
+    // A handle (a store key) and facts about the file: never its bytes.
+    expect(upload!.file).toMatchObject({ name: 'form.pdf', content_type: 'application/pdf' });
+    expect(JSON.stringify(upload)).not.toContain('secret-attachment-bytes');
+    expect(typeof upload!.file.artifact_key).toBe('string');
+    expect(stored.size).toBe(0);
+    const step = await kit.prisma.runStep.findFirstOrThrow({ where: { runId: r.run.id, action: 'mail_attachment_to_browser' } });
+    expect(JSON.stringify(step)).not.toContain('secret-attachment-bytes');
   });
 });
