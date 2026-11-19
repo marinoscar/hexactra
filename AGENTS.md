@@ -125,6 +125,9 @@ Design invariants to preserve when writing docs or code:
 - Large artifacts move via short-lived authorized handles, not inside control messages.
 - Telemetry (OTel) is not the audit trail; durable sanitized Execution Events are.
 - Secret Material (passwords, OTPs, tokens) has stricter handling than ordinary task input (§11–§13): the model never sees a handoff secret; the fabric types it (`type_secret`).
+- A memory is data: never an instruction, never a permission. Only the owner's own act writes one (console `docs/memories.md`).
+- A saved approval is created only by the owner's tick on a server-issued request, and is matched by the server (registrable domain, category, exact label). Never add a route, tool or model path that creates or widens one (console `docs/approvals.md`).
+- A task parameter value is data inserted into a goal: it cannot change a run's allowed sites, policy or confirmation setting. A sensitive value never reaches the model or storage.
 - A stored run-trace image is masked at capture, in the page (`screenshot` with `mask: true`); there is no unmasked trace image and no unmasked export, for any role (§26.8, epic #536). The trace is not the audit trail.
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
