@@ -40,6 +40,8 @@ export interface FakeMcpOptions {
   results?: Record<string, (args: Record<string, unknown>) => { content: unknown[]; structuredContent?: unknown; isError?: boolean }>;
   /** Send these server-to-client requests in the stream of a `tools/call` before its result (sampling, elicitation, roots). */
   serverRequests?: { method: string; params?: unknown }[];
+  /** Answer every `tools/call` with this HTTP status instead of a result (a server that fails in the middle). */
+  callStatus?: number;
   /** Answer every POST with this redirect. */
   redirectTo?: string;
   /** Answer `initialize` with this server name. */
@@ -227,6 +229,7 @@ export class FakeMcpServer {
       case 'tools/call': {
         const name = String(body.params?.name ?? '');
         const args = (body.params?.arguments ?? {}) as Record<string, unknown>;
+        if (this.opts.callStatus) return void res.writeHead(this.opts.callStatus).end();
         if (this.opts.callDelayMs) await new Promise((r) => setTimeout(r, this.opts.callDelayMs).unref());
         if (!this.tools.some((t) => t.name === name)) return reply({ jsonrpc: '2.0', id: body.id, error: { code: -32602, message: `Unknown tool ${name}` } });
         const result = (this.opts.results?.[name] ?? ((a: Record<string, unknown>) => ({ content: [{ type: 'text', text: `ok ${name} ${JSON.stringify(a)}` }] })))(args);

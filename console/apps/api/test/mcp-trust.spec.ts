@@ -11,8 +11,8 @@ import { checkHostLists, hostMatches, normalizeMcpUrl } from '../src/connections
 import { checkArguments, schemaUsable } from '../src/connections/mcp/mcp-validate';
 import { resolveConnectionsSystemSettings, CONNECTIONS_SYSTEM_SETTINGS } from '../src/connections/connections.settings';
 
-const PUBLIC = [{ address: '93.184.216.34', family: 4 }];
-const PRIVATE = [{ address: '10.0.0.7', family: 4 }];
+const PUBLIC = [{ address: '93.184.216.34', family: 4 as const }];
+const PRIVATE = [{ address: '10.0.0.7', family: 4 as const }];
 
 describe('the address of a server', () => {
   it('has no user name, password, query or fragment, and is an http(s) URL', () => {

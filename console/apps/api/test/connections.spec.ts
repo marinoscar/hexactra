@@ -71,13 +71,13 @@ describe('the callback in logs', () => {
 
 describe('the connections system settings', () => {
   it('are off by default, with no client id and the common tenant', () => {
-    expect(resolveConnectionsSystemSettings(null)).toEqual({ google: { enabled: false, clientId: null }, microsoft: { enabled: false, clientId: null, tenant: 'common' } });
+    expect(resolveConnectionsSystemSettings(null)).toEqual({ mcp: { enabled: false, allowedHosts: [], blockedHosts: [] }, google: { enabled: false, clientId: null }, microsoft: { enabled: false, clientId: null, tenant: 'common' } });
   });
 
   it('merge a patch field by field, keep the rest, and tolerate a write to another namespace', () => {
     const merge = CONNECTIONS_SYSTEM_SETTINGS.merge as (c: unknown, p: unknown) => unknown;
     const base = merge(undefined, { providers: { google: { enabled: true, clientId: 'gid' }, microsoft: { tenant: 'consumers' } } });
-    expect(resolveConnectionsSystemSettings(base as never)).toEqual({ google: { enabled: true, clientId: 'gid' }, microsoft: { enabled: false, clientId: null, tenant: 'consumers' } });
+    expect(resolveConnectionsSystemSettings(base as never)).toEqual({ mcp: { enabled: false, allowedHosts: [], blockedHosts: [] }, google: { enabled: true, clientId: 'gid' }, microsoft: { enabled: false, clientId: null, tenant: 'consumers' } });
     const next = merge(base, { providers: { google: { clientId: null } } });
     expect(resolveConnectionsSystemSettings(next as never).google).toEqual({ enabled: true, clientId: null });
     expect(() => merge(base, undefined)).not.toThrow();

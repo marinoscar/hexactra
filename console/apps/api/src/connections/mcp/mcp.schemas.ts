@@ -97,3 +97,6 @@ export class SaveMcpAdminDto extends createZodDto(saveMcpAdminSchema) {}
 
 export const mcpAdminSchema = z.object({ enabled: z.boolean(), allowedHosts: z.array(z.string()), blockedHosts: z.array(z.string()) });
 export class McpAdminResponseDto extends createZodDto(mcpAdminSchema) {}
+
+export const mcpStatusSchema = z.object({ enabled: z.boolean().describe('Whether the administrator has switched MCP servers on for this deployment.'), restricted: z.boolean().describe('The administrator limits which hosts may be used.') });
+export class McpStatusResponseDto extends createZodDto(mcpStatusSchema) {}

@@ -1316,6 +1316,62 @@
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
       },
       "web": "/admin/settings/connections"
+    },
+    {
+      "id": "connections.mcp",
+      "description": "Add an MCP server as a connection (Streamable HTTP only; nothing, a bearer token, a header or OAuth), and give it a new sign-in when it needs reconnecting. The server is tested first and every one of its tools starts off",
+      "rest": [
+        "GET /api/connections/mcp/status",
+        "POST /api/connections/mcp",
+        "POST /api/connections/{id}/mcp-auth"
+      ],
+      "cli": {
+        "none": "Deliberate: a server's tools are reviewed on a screen that shows what each one says it does, and its secret is typed in a form, so adding one is done in the web app"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.mcp_tools",
+      "description": "See the tools of an MCP server (what each says it does, the server's hints, your decision), refresh the list, and decide for each tool: off, read or write. A tool that changed after you decided is off until you review it",
+      "rest": [
+        "GET /api/connections/{id}/tools",
+        "POST /api/connections/{id}/tools/refresh",
+        "PATCH /api/connections/{id}/tools/{toolId}"
+      ],
+      "cli": [
+        "connections tools"
+      ],
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.mcp_admin",
+      "description": "Administrator: the deployment switch for MCP servers (off by default) and the allow-list and block-list of hosts. No access to any owner's connection or tool",
+      "rest": [
+        "GET /api/connections/admin/mcp",
+        "PUT /api/connections/admin/mcp"
+      ],
+      "cli": {
+        "none": "Deliberate: an administrator sets the deployment's switch and host lists in Administration"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/admin/settings/connections"
     }
   ]
 }

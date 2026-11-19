@@ -110,8 +110,9 @@ export class McpRunService {
     if (row.status === 'paused') return { ok: false, text: `The connection "${row.label}" is paused by the owner. Tell the owner and continue without it, or finish.` };
     if (row.status !== 'active') return { ok: false, text: `The connection "${row.label}" must be connected again by the owner. Tell the owner and continue without it, or finish.` };
     const tool = await this.prisma.connectionMcpTool.findFirst({ where: { connectionId, name } });
-    if (!tool || tool.mode === 'off') return { ok: false, text: 'The owner has switched this tool off. It was not called. Tell the owner if you need it.' };
+    if (!tool) return { ok: false, text: 'The server no longer offers this tool. It was not called.' };
     if (tool.review !== null || tool.hash !== expect.hash) return { ok: false, text: 'This tool changed after the owner approved it, so it is off until the owner reviews it. It was not called.' };
+    if (tool.mode === 'off') return { ok: false, text: 'The owner has switched this tool off. It was not called. Tell the owner if you need it.' };
     if (tool.mode !== expect.mode) return { ok: false, text: 'The owner changed what this tool may do while this run was working. It was not called; it is available again in a new run.' };
     return { ok: true, row, tool };
   }

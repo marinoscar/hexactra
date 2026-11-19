@@ -12,7 +12,7 @@ import { bindingCookieName, type StartResult } from '../connection-flow.service'
 import { ConnectionsService } from '../connections.service';
 import { McpCatalogService } from './mcp-catalog.service';
 import { McpConnectionsService, type McpAuthInput } from './mcp-connections.service';
-import { AddMcpDto, AddMcpResponseDto, McpAdminResponseDto, McpAuthDto, McpAuthResponseDto, McpCatalogResponseDto, McpToolParamDto, McpToolResponseDto, SaveMcpAdminDto, SetToolModeDto } from './mcp.schemas';
+import { AddMcpDto, AddMcpResponseDto, McpAdminResponseDto, McpAuthDto, McpAuthResponseDto, McpCatalogResponseDto, McpStatusResponseDto, McpToolParamDto, McpToolResponseDto, SaveMcpAdminDto, SetToolModeDto } from './mcp.schemas';
 
 const secure = () => (process.env.APP_URL ?? '').startsWith('https://');
 
@@ -31,7 +31,18 @@ export class McpConnectionsController {
     private readonly mcp: McpConnectionsService,
     private readonly catalog: McpCatalogService,
     private readonly connections: ConnectionsService,
+    private readonly apps: ConnectionApps,
   ) {}
+
+  // Declared before `:id`.
+  @Get('mcp/status')
+  @ApiDataResponse(McpStatusResponseDto)
+  @Auth({ permissions: ['connections:read'] })
+  @ApiOperation({ summary: 'Whether MCP servers can be added here', description: 'Whether the administrator has switched MCP servers on (off by default) and whether the hosts are restricted. Never the lists.' })
+  async status() {
+    const s = await this.apps.mcp();
+    return { enabled: s.enabled, restricted: s.allowedHosts.length > 0 };
+  }
 
   @Post('mcp')
   @HttpCode(200)
