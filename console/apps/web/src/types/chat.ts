@@ -82,6 +82,8 @@ export interface ChatRun {
   finishedAt: string | null;
   /** The run's budget (#537): a chat run's limits are soft, shown and never enforced. Absent from older streams. */
   budget?: RunBudget | null;
+  /** The saved logins the run signed in with (E37.4): the login's name and the site. Absent from an older console. */
+  usedSavedLogins?: { itemName: string; origin: string }[];
 }
 
 /** A task drafted from a chat (`POST /chats/:id/task-draft`, and the `meta` of a `task_draft` message). */

@@ -10,6 +10,7 @@ import { AllowedSitesInput } from './AllowedSitesInput';
 import { MachinePicker, useFleetHosts } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { SuggestMemoriesSwitch } from '../memories/SuggestMemoriesSwitch';
+import { SavedLoginsToggle } from '../secrets/SavedLoginsSwitch';
 
 export interface ChatSettingsDialogProps {
   open: boolean;
@@ -74,15 +75,8 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             control={<Switch checked={values.confirmRiskyActions} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, confirmRiskyActions: e.target.checked }))} />}
             label="Ask me before a purchase or another step that is hard to undo"
           />
-          <div>
-            <FormControlLabel
-              control={<Switch checked={values.useSavedLogins} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, useSavedLogins: e.target.checked }))} />}
-              label="Sign in with my saved logins"
-            />
-            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }}>
-              When a page asks you to sign in and you saved a login for exactly that site, the agent signs in without asking. It never sees the password or the code.
-            </Typography>
-          </div>
+          {/* Disabled, with the reason, while no provider is connected or a switch is off (E37.4, #593). */}
+          <SavedLoginsToggle checked={values.useSavedLogins} disabled={busy} onChange={(useSavedLogins) => setValues((v) => ({ ...v, useSavedLogins }))} />
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
           <div>
             <SuggestMemoriesSwitch disabled={busy} />

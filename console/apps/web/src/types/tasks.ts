@@ -15,6 +15,10 @@ export interface Task {
   hostFallback: boolean;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  /** Let the agent sign in from the owner's saved logins (E37.3); absent from an older console: off. */
+  useSavedLogins?: boolean;
+  /** What an unattended run that used a saved login does at a payment (E37.3): `ask` or `allow`; absent: `ask`. */
+  unattendedPayments?: 'ask' | 'allow';
   /** What the task's runs spent in the last 30 days (#400, #408). */
   spend30d?: TaskSpend;
   /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */

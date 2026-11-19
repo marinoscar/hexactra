@@ -33,7 +33,7 @@ const PERMISSIONS = [
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
-  'memories:read', 'memories:write',
+  'memories:read', 'memories:write', 'secrets:read', 'secrets:write',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -385,6 +385,32 @@ const approvalRules = [
   { id: '5a000000-0000-4000-8000-000000000003', kind: 'gate', host: 'a-very-long-shop-name-for-narrow-screens.example.co.uk', category: 'purchase', matchKey: 'place your order', summary: "Press 'Place your order and pay with the saved card ending 1111' on a-very-long-shop-name-for-narrow-screens.example.co.uk", taskId: IDS.task, taskName: 'Weekly groceries', conversationId: null, maxAmount: 50, expiresAt: iso(40 * 86_400_000), enabled: false, createdFromQuestionId: null, useCount: 1, lastUsedAt: iso(-30 * 86_400_000), lastUsedRunId: null, createdAt: iso(-60 * 86_400_000), updatedAt: iso(-5 * 86_400_000) },
 ];
 
+/** Secrets (#593): the provider card in each state; the page's own address says which (`?state=`). */
+const vaultBase = { provider: 'vault', status: 'connected', configured: true, source: 'user', baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, redirectUri: 'https://console.example.test/api/secrets/vault/callback', scopes: ['vault:items_read', 'vault:items_fill', 'offline_access'], vaultUserId: 'abcdef12-0000-4000-8000-000000000000', agentAccess: 'on', connectedAt: iso(-5 * 86_400_000), lastUsedAt: iso(-3_600_000), lastSuccessAt: iso(-3_600_000), lastErrorCode: null, connecting: false };
+const stateOf = (referer) => (referer ? (new URL(referer).searchParams.get('state') ?? 'connected') : 'connected');
+const secretsStatus = (_url, _body, referer) => {
+  const st = stateOf(referer);
+  const vault = st === 'not_connected' ? { ...vaultBase, status: 'not_configured', configured: false, source: 'none', baseUrl: null, clientId: null, hasClientSecret: false, scopes: [], vaultUserId: null, agentAccess: 'unknown', connectedAt: null, lastUsedAt: null, lastSuccessAt: null } : st === 'needs_reconnect' ? { ...vaultBase, status: 'needs_reconnect', lastErrorCode: 'UNAUTHORIZED' } : vaultBase;
+  return { agentUse: { deployment: st !== 'deployment_off', user: st === 'connected' || st === 'empty', effective: st === 'connected' || st === 'empty' }, providers: { vault } };
+};
+const secretsActivity = (_url, _body, referer) =>
+  stateOf(referer) === 'empty'
+    ? { items: [], providerActivityUrl: 'https://vault.example.test/settings/agent-activity' }
+    : {
+        providerActivityUrl: 'https://vault.example.test/settings/agent-activity',
+        items: [
+          { id: 'ac000000-0000-4000-8000-000000000001', at: iso(-3_600_000), event: 'release', runId: IDS.finishedRun, site: 'app.example.test', loginName: 'Shop login', field: 'password', outcome: 'typed', refused: false, matches: null },
+          { id: 'ac000000-0000-4000-8000-000000000002', at: iso(-3_660_000), event: 'release', runId: IDS.finishedRun, site: 'app.example.test', loginName: 'Shop login', field: 'username', outcome: 'typed', refused: false, matches: null },
+          { id: 'ac000000-0000-4000-8000-000000000003', at: iso(-3_700_000), event: 'lookup', runId: IDS.finishedRun, site: 'app.example.test', field: null, outcome: 'ok', refused: false, matches: 1 },
+          { id: 'ac000000-0000-4000-8000-000000000004', at: iso(-26 * 3_600_000), event: 'release', runId: null, site: 'a-look-alike-of-a-long-shop-name.example.co.uk', field: 'password', outcome: 'origin_mismatch', refused: true, matches: null },
+          { id: 'ac000000-0000-4000-8000-000000000005', at: iso(-30 * 3_600_000), event: 'release', runId: IDS.liveRun, site: 'shop.example.test', field: 'one_time_code', outcome: 'rate_limited', refused: true, matches: null },
+        ],
+      };
+const secretsReach = (_url, _body, referer) =>
+  stateOf(referer) === 'empty'
+    ? { listing: 'per_origin', items: [] }
+    : { listing: 'per_origin', items: [{ site: 'app.example.test', fields: ['username', 'password', 'one_time_code'], uses: 7, lastUsedAt: iso(-3_600_000), lastRunId: IDS.finishedRun }, { site: 'shop.example.test', fields: ['username', 'password'], uses: 2, lastUsedAt: iso(-5 * 86_400_000), lastRunId: null }] };
+
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
 const memory = (id, kind, label, attributes, extra = {}) => ({
   id, kind, label, aliases: [], attributes, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null,
@@ -407,6 +433,7 @@ export const RESPONSES = {
     agentPricing: { currency: 'USD', models: { 'provider-a:model-small': { inputPerMTok: 0.25, outputPerMTok: 1.25 }, 'provider-a:model-mid': { inputPerMTok: 3, outputPerMTok: 15, cachedInputPerMTok: 0.3 }, 'provider-a:model-large-2026': { inputPerMTok: 15, outputPerMTok: 75, cachedInputPerMTok: 1.5 } } },
     browserAgentTiers: tiers,
     browserAgentCeilings: { ...limits, maxActiveMinutes: 60, maxCostUsd: 10 },
+    secrets: { agentUse: { enabled: true } },
   },
   'GET /tasks': tasksList,
   // The task page (#428) reads the task with its summary, and its statistics.
@@ -446,6 +473,12 @@ export const RESPONSES = {
   'GET /memories': (url) => (url.searchParams.get('status') === 'all' ? memories : memories.filter((m) => m.status === 'active')),
   // Saved approvals (#554): three rules on two sites, one limited, one off.
   'GET /approval-rules': { paused: false, rules: approvalRules },
+  // Secrets (#593).
+  'GET /secrets/status': secretsStatus,
+  'GET /secrets/activity': secretsActivity,
+  'GET /secrets/reach': secretsReach,
+  'GET /secrets/admin/summary': { deploymentEnabled: true, usersConnected: 3, usersNeedingReconnect: 1, usesThisWeek: 41, refusalsThisWeek: 4 },
+  'GET /secrets/vault/default-client': { baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, allowedHosts: [], redirectUri: 'https://console.example.test/api/secrets/vault/callback' },
   'GET /connected-apps/preflight': preflight,
   [`GET /connected-apps/${IDS.app}`]: connectedApps[0],
   'GET /notes': [{ id: 'note-1', title: 'A first note', body: '', archived: false }, { id: 'note-2', title: 'A note with a long title that has to wrap on a narrow phone screen', body: '', archived: true }],

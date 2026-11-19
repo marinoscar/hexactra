@@ -7,6 +7,9 @@ import { FABRIC_SECRETS_REGISTRY, FabricSessionSecretsRegistry } from './fabric-
 import { RunSecretsService } from './run-secrets.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar } from './secrets-provider.registrar';
+import { SecretsActivityController } from './secrets-activity.controller';
+import { SecretsActivityIngestHandler, SecretsActivityIngestTask } from './secrets-activity.jobs';
+import { SecretsActivityService } from './secrets-activity.service';
 import { SecretsController } from './secrets.controller';
 import { VaultConnectionsCheck, VaultEgressContributor } from './secrets.doctor';
 import { SecretsEvents } from './secrets.events';
@@ -29,11 +32,14 @@ import { VaultTokenService } from './vault-token.service';
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
-  controllers: [SecretsController],
+  controllers: [SecretsController, SecretsActivityController],
   providers: [
     { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricSessionSecretsRegistry },
     SecretsPolicyService,
     SecretsEvents,
+    SecretsActivityService,
+    SecretsActivityIngestHandler,
+    SecretsActivityIngestTask,
     VaultApiClient,
     VaultGrantStore,
     VaultClientConfigs,

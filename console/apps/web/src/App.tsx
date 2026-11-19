@@ -71,7 +71,9 @@ import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
 import { SavedApprovalsPage } from './pages/SavedApprovalsPage';
+import { AdminSecretsPage } from './pages/AdminSecretsPage';
 import { SecretsSettingsPage } from './pages/SecretsSettingsPage';
+import { SecretsMenuItem } from './secrets/SecretsMenuItem';
 import { AiAppCeilingsPage } from './pages/AiAppCeilingsPage';
 import { AiAppDetailPage } from './pages/AiAppDetailPage';
 import { AiAppsPage } from './pages/AiAppsPage';
@@ -166,7 +168,7 @@ function AppShell() {
           userMenu={
             <ShellUserMenu
               navigation={NAVIGATION}
-              items={(close) => [<MemoriesMenuItem key="memories" onDone={close} />, ...sliceUserMenuItems.map((item, index) => <Fragment key={index}>{item(close)}</Fragment>)]}
+              items={(close) => [<MemoriesMenuItem key="memories" onDone={close} />, <SecretsMenuItem key="secrets" onDone={close} />, ...sliceUserMenuItems.map((item, index) => <Fragment key={index}>{item(close)}</Fragment>)]}
             />
           }
         />
@@ -288,6 +290,9 @@ export function AppRoutes() {
           <Route path="settings/secrets" element={<Gate permission="secrets:read"><SecretsSettingsPage /></Gate>} />
           <Route path="secrets/*" element={<Gate permission="secrets:read"><SavedLoginsRoutes /></Gate>} />
           <Route path="settings/approvals" element={<Gate permission="approvals:read"><SavedApprovalsPage /></Gate>} />
+          {/* Secrets (#593): `secrets:read` is what /api/secrets/status enforces; writes are gated in the page. */}
+          <Route path="settings/secrets" element={<Gate permission="secrets:read"><SecretsSettingsPage /></Gate>} />
+          <Route path="admin/settings/secrets" element={<Gate permission="system_settings:read"><AdminSecretsPage /></Gate>} />
           <Route path="settings/ai-apps/connect" element={<Gate permission="connected_apps:read"><ConnectAiAppPage /></Gate>} />
           <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
           <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />

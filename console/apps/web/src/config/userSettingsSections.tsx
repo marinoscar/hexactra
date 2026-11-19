@@ -105,11 +105,11 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         path: '/settings/approvals',
         permission: 'approvals:read',
       },
-      // Secrets (E37.4, E37.5). `secrets:read` is what `GET /api/secrets/status` enforces
-      // (apps/api/src/secrets/secrets.controller.ts); the choices need `secrets:write`, checked in the page.
+      // Secrets (#593). `secrets:read` is what `GET /api/secrets/status`, `/activity` and `/reach` enforce
+      // (apps/api/src/secrets/); connecting, disconnecting and the switches need `secrets:write`, checked in the page.
       {
         title: 'Secrets',
-        description: 'Logins the agent can use without seeing them: choose between storing them in Hexactra and connecting your own Vault.',
+        description: 'Connect your secrets provider, choose whether the agent may sign in with your saved logins, and see what it used.',
         Icon: KeyOutlinedIcon,
         path: '/settings/secrets',
         permission: 'secrets:read',
