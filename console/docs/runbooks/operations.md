@@ -111,6 +111,7 @@ Every model call the browser agent makes is priced, so a run, a task (last 30 da
 - **Unpriced models.** A call on a model that is not in the table has no price, and counts as unknown, never as free. The run's `costKnown` becomes `false` and its cost is a lower bound: show it as "at least" (≥ $x.xx). Add the model's price to make later runs exact. Earlier runs are not re-priced, and runs from before cost tracking stay unknown.
 - **Same table, two uses.** The platform's usage report (Administration → AI → Usage) reads it through the `AI_PRICING` port: it shows `priced: true` and a cost per model, and a model with no price has no cost there either.
 - **Metrics.** `app.runs.model_calls` (counter) and `app.runs.cost` (histogram, USD, one value per finished run whose calls were all priced). Neither carries a user or run label.
+- **Stop.** `app.runs.stop_latency_ms` (histogram, label `status`) is the time from the owner's Stop to the run's terminal status; the API also logs `run <id>: Stop took <n> ms (<status>)`. It should sit under 2000 ms: the worker hears Stop on the event bus at once and polls the flag every second as the fallback. A high value means a long action on the host (the fabric cannot cancel an action it is running) or a worker that is not polling. How it works: [runs.md, Stop](../runs.md#stop-e381).
 
 ### Budget ceilings, run time and why a run stopped
 
