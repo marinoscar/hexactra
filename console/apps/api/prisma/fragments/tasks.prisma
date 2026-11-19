@@ -155,6 +155,11 @@ model Run {
   /// The AI conversation so far, so a run can resume after a handoff.
   /// Never holds secret values (they are typed by the runner, not the model).
   transcript      Json?
+  /// The job that holds the run (E38.3): a random token set at the start of every advance and checked before each action's
+  /// write. A job that finds another token has lost the run and stops without touching it. Null while no job holds it.
+  workerToken     String?    @map("worker_token") @db.VarChar(64)
+  /// How many times a job found the run interrupted (a crash, a deploy, a lost lease) and carried on from its last recorded step (E38.3).
+  recoveries      Int        @default(0)
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
   startedAt       DateTime?  @map("started_at") @db.Timestamptz
   finishedAt      DateTime?  @map("finished_at") @db.Timestamptz
@@ -266,6 +271,9 @@ model RunStep {
   screenshotNote   String? @map("screenshot_note") @db.VarChar(24)
   /// The question a `handoff` step asked, or answered (#541).
   questionId    String?  @map("question_id") @db.Uuid
+  /// Whether the step's effect is known (E38.3): `done` (the result is recorded), `intent` (an action that can commit something
+  /// was about to be sent; no result yet) or `unknown` (the job died while it was `intent`: it may or may not have happened).
+  phase         String   @default("done") @db.VarChar(10)
   durationMs    Int?     @map("duration_ms")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
