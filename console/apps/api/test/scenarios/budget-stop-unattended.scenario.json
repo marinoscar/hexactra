@@ -1,0 +1,21 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a budget stop on an unattended run",
+  "description": "A scheduled run has a hard action budget (#404, #537). When it is spent the run makes one last call that only finishes, and ends with a typed stop reason.",
+  "goal": "Read every page of the catalogue",
+  "trigger": "schedule",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["library.example.test"] },
+  "harness": { "budget": { "maxActions": 3 } },
+  "site": {
+    "start": "https://library.example.test/",
+    "state": {},
+    "pages": {
+      "https://library.example.test/": { "title": "Catalogue", "text": "Page 1 of many.", "elements": [{ "id": "next", "selector": "#next", "tag": "a", "role": "link", "label": "Next page", "on": [{ "goto": "https://library.example.test/" }] }] }
+    }
+  },
+  "script": [
+    [{ "tool": "click", "args": { "selector": "#next" } }, { "tool": "read_text" }, { "tool": "click", "args": { "selector": "#next" } }, { "tool": "read_text" }],
+    [{ "tool": "finish", "args": { "success": false, "result": "Stopped at the budget after reading 2 pages." } }]
+  ],
+  "expect": { "status": "failed", "stopReason": "budget_actions", "finishIncludes": "budget", "maxSteps": 6 }
+}

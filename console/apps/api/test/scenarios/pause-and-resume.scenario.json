@@ -1,0 +1,21 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "Pause in the middle of a chunk, then resume",
+  "description": "The owner presses Pause after the second action (#583): nothing is done while paused. On Resume the agent looks at the page again and finishes.",
+  "goal": "Read the first three pages of the catalogue",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["library.example.test"] },
+  "harness": {
+    "pauseAfterActions": 2,
+    "resumeAfterPause": true,
+    "scriptAfterPause": [[{ "tool": "read_text" }, { "tool": "click", "args": { "selector": "#next" } }], [{ "tool": "finish", "args": { "success": true, "result": "Read three pages." } }]]
+  },
+  "site": {
+    "start": "https://library.example.test/",
+    "state": {},
+    "pages": {
+      "https://library.example.test/": { "title": "Catalogue", "text": "Page 1.", "elements": [{ "id": "next", "selector": "#next", "tag": "a", "role": "link", "label": "Next page", "on": [{ "set": { "pages": "more" } }] }] }
+    }
+  },
+  "script": [[{ "tool": "read_text" }, { "tool": "click", "args": { "selector": "#next" } }, { "tool": "click", "args": { "selector": "#next" } }, { "tool": "read_text" }]],
+  "expect": { "status": "succeeded", "endState": { "pages": "more" }, "maxSteps": 12 }
+}
