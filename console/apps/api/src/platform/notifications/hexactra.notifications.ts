@@ -29,6 +29,8 @@ export const RUN_CARD_AMOUNT_MISMATCH_EVENT = 'runs.card_amount_mismatch';
 export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 /** A connected account (Google, Microsoft) stopped working and must be connected again (E39.2): once per episode. */
 export const CONNECTION_NEEDS_RECONNECT_EVENT = 'connections.needs_reconnect';
+/** A delivery after a run failed for good (E39.6): once per task per day. Names the kind and the reason, never an address, a subject or a file name. */
+export const DELIVERY_FAILED_EVENT = 'deliveries.failed';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -121,6 +123,11 @@ const connectionNeedsReconnect: BrowserNotificationTemplate = (d) => ({
   title: 'Reconnect an account',
   body: trim(`${str(d, 'label') || 'A connected account'} no longer works, so agents cannot use it. Connect it again in Settings → Connections.`, 180),
   link: '/settings/connections',
+});
+const deliveryFailed: BrowserNotificationTemplate = (d) => ({
+  title: 'A delivery after a run failed',
+  body: trim(str(d, 'line') || 'A result could not be sent. Open the run to see why.', 180),
+  link: str(d, 'runId') ? `/runs/${encodeURIComponent(str(d, 'runId'))}` : '/tasks',
 });
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
 export function failingScheduleLink(taskId: string | null | undefined): string {
@@ -285,6 +292,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
     },
     browserTemplate: connectionNeedsReconnect,
   },
+  {
+    event: {
+      key: DELIVERY_FAILED_EVENT,
+      label: 'A delivery after a run failed',
+      description: 'When the email, row, file or webhook that a task sends after a run could not be delivered (for instance because a connected account needs reconnecting). At most once a day for each task.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: deliveryFailed,
+  },
 ];
 
 /**
@@ -341,6 +358,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_SAVED_LOGIN_EVENT) return { tag: runId ? `saved-login-${runId}`.slice(0, 64) : 'saved-login', urgency: 'normal' };
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === CONNECTION_NEEDS_RECONNECT_EVENT) return { tag: `connection-${str(data, 'connectionId') || 'reconnect'}`.slice(0, 64), urgency: 'normal' };
+  if (event.key === DELIVERY_FAILED_EVENT) return { tag: `delivery-${str(data, 'taskId') || 'failed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };

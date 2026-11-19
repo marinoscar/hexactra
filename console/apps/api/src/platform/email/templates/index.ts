@@ -4,6 +4,8 @@ import { notesArchivedEmail, type NotesArchivedEmailData } from './notes-archive
 import { orgInvitationEmail, type OrgInvitationEmailData } from './org-invitation.email';
 import { questionAskedEmail, type QuestionAskedEmailData } from './question-asked.email';
 import { runNeedsYouEmail, type RunNeedsYouEmailData } from './run-needs-you.email';
+import { runReportEmail, type RunReportEmailData } from './run-report.email';
+import { deliveryNoticeEmail, type DeliveryNoticeEmailData } from './delivery-notice.email';
 
 // =============================================================================
 // Email templates this app owns the words of
@@ -23,6 +25,8 @@ declare module '@marinoscar/platform-api/email' {
     'notes-archived': NotesArchivedEmailData;
     'run-needs-you': RunNeedsYouEmailData;
     'question-asked': QuestionAskedEmailData;
+    'run-report': RunReportEmailData;
+    'delivery-notice': DeliveryNoticeEmailData;
   }
 }
 
@@ -32,6 +36,8 @@ export const EMAIL_SLICE_TEMPLATES: readonly EmailTemplateEntry[] = [
   { name: 'notes-archived', render: notesArchivedEmail as EmailTemplate<never>, registrant: 'notes' },
   { name: 'run-needs-you', render: runNeedsYouEmail as EmailTemplate<never>, registrant: 'runs' },
   { name: 'question-asked', render: questionAskedEmail as EmailTemplate<never>, registrant: 'questions' },
+  { name: 'run-report', render: runReportEmail as EmailTemplate<never>, registrant: 'deliveries' },
+  { name: 'delivery-notice', render: deliveryNoticeEmail as EmailTemplate<never>, registrant: 'deliveries' },
 ];
 
 export { notesArchivedEmail, orgInvitationEmail };
