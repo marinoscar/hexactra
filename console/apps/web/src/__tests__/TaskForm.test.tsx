@@ -161,6 +161,7 @@ describe('creating a task', () => {
       allowedDomains: ['shop.example.test', 'a.example.test'],
       confirmRiskyActions: true,
       useSavedLogins: false,
+      useSavedIdentity: false,
       unattendedPayments: 'ask',
       schedules: [{ cron: '0 9 * * 1-5', timezone: expect.any(String), enabled: true, concurrency: 'skip', policyId: OWN_ID }],
     });

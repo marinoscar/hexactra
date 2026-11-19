@@ -21,7 +21,7 @@ import {
 import { useId, useState } from 'react';
 
 import { ParameterField } from './ParameterField';
-import { TYPE_LABEL, TYPE_ORDER, defaultMode, type DefaultMode, type TaskParameter, type TaskParameterType } from './model';
+import { IDENTITY_FIELD_LABEL, TYPE_LABEL, TYPE_ORDER, defaultMode, type DefaultMode, type TaskParameter, type TaskParameterType } from './model';
 import type { MemoryOption } from './useMemoryOptions';
 
 export interface ParametersSectionProps {
@@ -53,6 +53,7 @@ function ParameterRow({ p, onChange, memories, error, disabled }: { p: TaskParam
       const { default: _d, ...rest } = p;
       onChange(rest);
     } else if (m === 'value') set({ default: { value: p.default && 'value' in p.default ? p.default.value : '' } });
+    else if (m === 'identity') set({ default: { identity: { field: p.default && 'identity' in p.default ? p.default.identity.field : 'full_name' } } });
     else {
       const first = memories?.[0];
       set({ default: { memory: { id: first?.id ?? '', attribute: first?.attributes[0] ?? '' } } });
@@ -64,6 +65,8 @@ function ParameterRow({ p, onChange, memories, error, disabled }: { p: TaskParam
     else if (!next.options) next.options = [];
     // A fixed default of another type would no longer fit.
     if (next.default && 'value' in next.default) next.default = { value: '' };
+    // A detail taken from the saved details is typed as text.
+    if (next.default && 'identity' in next.default && type !== 'text') delete next.default;
     onChange(next);
   };
   const setSensitive = (on: boolean) => {
@@ -85,6 +88,7 @@ function ParameterRow({ p, onChange, memories, error, disabled }: { p: TaskParam
   };
 
   const memory = p.default && 'memory' in p.default ? p.default.memory : null;
+  const identity = p.default && 'identity' in p.default ? p.default.identity : null;
   const picked = memory ? memories?.find((m) => m.id === memory.id) : undefined;
   const numeric = p.type === 'number' || p.type === 'money';
 
@@ -143,7 +147,20 @@ function ParameterRow({ p, onChange, memories, error, disabled }: { p: TaskParam
               <FormControlLabel value="ask" control={<Radio />} label="Ask every time" sx={TAP} />
               <FormControlLabel value="value" control={<Radio />} label="Always use this value" sx={TAP} />
               {memories !== null && <FormControlLabel value="memory" control={<Radio />} label="From a memory" sx={TAP} disabled={disabled || memories.length === 0} />}
+              <FormControlLabel value="identity" control={<Radio />} label="From your saved details" sx={TAP} disabled={disabled || p.type !== 'text'} />
             </RadioGroup>
+            {p.type !== 'text' && <FormHelperText>Saved details are filled as text: set the type to Text to use them.</FormHelperText>}
+            {mode === 'identity' && identity && (
+              <Box sx={{ mt: 1 }}>
+                <TextField select label="Which saved detail" value={identity.field} onChange={(e) => set({ default: { identity: { field: e.target.value } } })} fullWidth disabled={disabled} helperText="The agent fills it from your secrets provider. The value is never shown to the agent or stored.">
+                  {Object.entries(IDENTITY_FIELD_LABEL).map(([key, label]) => (
+                    <MenuItem key={key} value={key} sx={{ minHeight: 44 }}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            )}
             {memories !== null && memories.length === 0 && <FormHelperText>You have no memories yet. Add one on the Memories page to use it here.</FormHelperText>}
             {mode === 'value' && p.default && 'value' in p.default && (
               <Box sx={{ mt: 1 }}>

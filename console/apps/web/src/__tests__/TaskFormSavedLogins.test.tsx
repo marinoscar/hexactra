@@ -74,7 +74,7 @@ const fill = async () => {
   type(/^Name/, 'Miles');
   type(/^Goal/, 'Check my miles');
 };
-const savedLogins = () => screen.getByRole('switch', { name: 'Use my saved logins' });
+const savedLogins = () => screen.getByRole('switch', { name: 'Use my saved logins and details' });
 
 let restore: (() => void) | null = null;
 afterEach(() => {

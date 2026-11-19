@@ -130,6 +130,8 @@ export interface Run {
   confirmedActions?: ConfirmedAction[] | number;
   /** The saved logins the run signed in with (E37.3): the item's name and the site, never a username, password or code. */
   usedSavedLogins?: { provider: string; itemName: string; origin: string; at: string }[];
+  /** The identity details the run filled (E37.6): the item's name, the field's label and the site, never a value. */
+  usedSavedIdentity?: { provider: string; itemName: string; label: string; origin: string; at: string }[];
   /** The owner's memories this run used (#553). */
   memoryIds?: string[];
   /** `GET /runs/:id`: the used memories that still exist, with their labels (#553). */

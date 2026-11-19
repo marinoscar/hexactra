@@ -106,6 +106,12 @@ export class VaultConnectionService {
     return this.prisma.secretsConnection.findUnique({ where: { userId_provider: { userId, provider: 'vault' } } });
   }
 
+  /** The scopes the owner's live grant holds (empty when not connected): what the runner reads to offer identity details. */
+  async grantedScopes(userId: string): Promise<string[]> {
+    const row = await this.row(userId);
+    return row?.status === 'connected' ? [...(row.scopes ?? [])] : [];
+  }
+
   /** The address Vault must list as the client's redirect URI. */
   redirectUri(): string {
     return `${(this.config.get<string>('appUrl') ?? process.env.APP_URL ?? 'http://localhost:3535').replace(/\/+$/, '')}${CALLBACK_PATH}`;
@@ -193,7 +199,7 @@ export class VaultConnectionService {
    * Starts the flow: returns the URL to send the owner's browser to and the value of the binding cookie the
    * controller must set. `allowWrite` adds `vault:items_write` (a new consent), only for E37.4's switch.
    */
-  async connect(userId: string, opts: { allowWrite?: boolean; returnTo?: string | null } = {}): Promise<{ authorizeUrl: string; expiresAt: Date; binding: string }> {
+  async connect(userId: string, opts: { allowWrite?: boolean; allowIdentity?: boolean; returnTo?: string | null } = {}): Promise<{ authorizeUrl: string; expiresAt: Date; binding: string }> {
     const row = await this.row(userId);
     const config = await this.configs.effective(userId, row);
     if (!config?.clientSecret) throw problem(HttpStatus.CONFLICT, 'SECRETS_VAULT_NOT_CONFIGURED', 'Set the Vault address, client id and client secret first.');
@@ -209,7 +215,7 @@ export class VaultConnectionService {
     const state = randomToken(32);
     const binding = randomToken(32);
     const verifier = newCodeVerifier();
-    const scopes = vaultConnectScopes(opts.allowWrite === true);
+    const scopes = vaultConnectScopes(opts.allowWrite === true, opts.allowIdentity === true);
     const expiresAt = new Date(this.clock() + CONNECT_TTL_MS);
     const flow: PendingVaultFlow = {
       verifier,

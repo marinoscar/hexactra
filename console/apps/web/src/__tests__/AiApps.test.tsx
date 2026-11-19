@@ -191,6 +191,19 @@ describe('an AI app\'s page', () => {
     await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { allowSavedLogins: true } }));
   });
 
+  it('saved identity details (E37.6): off by default, needs saved logins, saved as allowSavedIdentity', async () => {
+    restore = mockViewport(1440);
+    const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses());
+    const identity = await screen.findByRole('switch', { name: 'Let it fill my saved identity details' });
+    expect(identity).not.toBeChecked();
+    expect(identity).toBeDisabled();
+    fireEvent.click(screen.getByRole('switch', { name: 'Let it sign in with my saved logins' }));
+    await waitFor(() => expect(identity).toBeEnabled());
+    fireEvent.click(identity);
+    fireEvent.click(screen.getByRole('button', { name: 'Save limits' }));
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { allowSavedLogins: true, allowSavedIdentity: true } }));
+  });
+
   it('shows the consent text of each scope, the limits, and the app\'s runs (scoped by clientId)', async () => {
     restore = mockViewport(1440);
     const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses());

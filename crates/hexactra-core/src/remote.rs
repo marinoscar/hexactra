@@ -118,6 +118,21 @@ pub enum SecretField {
 }
 
 impl SecretField {
+    /// Whether the fabric types this field only into an `https` page, whatever
+    /// the provider says (E37.6): government ID numbers, a full date of birth,
+    /// card numbers and security codes. A provider may flag more fields as
+    /// sensitive in its lookup (that decides **where** they may be typed); this
+    /// fixed list decides what is refused on an insecure page.
+    pub fn requires_https(&self) -> bool {
+        matches!(
+            self,
+            SecretField::DateOfBirth
+                | SecretField::IdNumber
+                | SecretField::CardNumber
+                | SecretField::SecurityCode
+        )
+    }
+
     /// The wire name, for audit events and logs (never a value).
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -211,6 +226,38 @@ pub struct ItemSummary {
     pub has_code: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<DateTime<Utc>>,
+    /// The fields of an identity item (E37.6): a key, a label and whether it
+    /// is sensitive and usable on this page. Never a value. Empty for a login.
+    /// For an identity item `match_kind` is `exact` when the page's origin is
+    /// on the item's allowed list (where its sensitive fields may be typed).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<FieldSummary>,
+}
+
+/// One field of an identity item as a lookup lists it: what it is called and
+/// where it may be typed. Never its value, never its length.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldSummary {
+    pub key: SecretField,
+    /// What the owner calls it (`Date of birth`).
+    pub label: String,
+    /// Released only to a site on the item's allowed list (exact origin).
+    pub sensitive: bool,
+    /// A fill of this field on the page the lookup was for would be allowed:
+    /// not sensitive, or sensitive and the page's origin is on the list.
+    pub usable_here: bool,
+}
+
+/// Which part of a date a `select_from_provider` action chooses, when a date
+/// of birth is split into three selects.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SelectPart {
+    Day,
+    Month,
+    Year,
 }
 
 /// A point in a page's viewport, in CSS pixels.
@@ -241,6 +288,14 @@ pub struct ProviderTypedResult {
     pub typed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// `result` of `select_from_provider`: that an option was chosen. Never the
+/// value, never which option.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderSelectedResult {
+    pub selected: bool,
 }
 
 /// The failure codes of the provider actions. An operation that fails with
@@ -275,6 +330,12 @@ pub mod provider_error_codes {
     /// The provider cannot produce what was asked (for example a code for
     /// an item without one).
     pub const UNSUPPORTED: &str = "unsupported";
+    /// A sensitive field (an ID number, a date of birth, a card number) is
+    /// only typed into an `https` page (E37.6).
+    pub const INSECURE_ORIGIN: &str = "insecure_origin";
+    /// `select_from_provider`: the target is not a `<select>`, or none of its
+    /// options is the stored value.
+    pub const NO_OPTION: &str = "no_option";
 }
 
 /// The provider implementations a registration can name.
@@ -460,6 +521,29 @@ pub enum RemoteAction {
         /// Press Enter after typing.
         #[serde(default)]
         submit: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Choose the `<select>` option that matches one field of one item from
+    /// the owner's provider (E37.6): a country, or the day, month or year of a
+    /// date of birth split into three selects (`part`). The control plane
+    /// reads the page's origin, lists the select's options, asks the provider
+    /// for the value bound to that origin, picks the matching option itself
+    /// and wipes the value. Result: [`ProviderSelectedResult`]; never the
+    /// value, never which option. Failure `no_option` when nothing matches.
+    SelectFromProvider {
+        item_id: String,
+        field: SecretField,
+        selector: String,
+        /// For a date field in separate selects: `day`, `month` or `year`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        part: Option<SelectPart>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -847,6 +931,7 @@ impl RemoteAction {
             RemoteAction::SecretsLookup { .. } => "secrets_lookup",
             RemoteAction::TypeFromProvider { .. } => "type_from_provider",
             RemoteAction::TypeCodeFromProvider { .. } => "type_code_from_provider",
+            RemoteAction::SelectFromProvider { .. } => "select_from_provider",
             RemoteAction::Press { .. } => "press",
             RemoteAction::Scroll { .. } => "scroll",
             RemoteAction::Screenshot { .. } => "screenshot",
@@ -900,6 +985,7 @@ impl RemoteAction {
             RemoteAction::SecretsLookup { .. }
                 | RemoteAction::TypeFromProvider { .. }
                 | RemoteAction::TypeCodeFromProvider { .. }
+                | RemoteAction::SelectFromProvider { .. }
         )
     }
 
@@ -960,6 +1046,25 @@ impl RemoteAction {
                     (Some(s), None) => check_selector(s),
                     (None, Some(p)) => check_point(p.x, p.y),
                 }
+            }
+            RemoteAction::SelectFromProvider {
+                item_id,
+                selector,
+                field,
+                part,
+                provider,
+                run_id,
+                client_label,
+                ..
+            } => {
+                check_item_id(item_id)?;
+                check_provider_meta(provider, run_id, client_label)?;
+                if part.is_some() && *field != SecretField::DateOfBirth {
+                    return Err(ActionValidationError(
+                        "part is only for date_of_birth".into(),
+                    ));
+                }
+                check_selector(selector)
             }
             RemoteAction::Evaluate { script, .. } => {
                 if script.trim().is_empty() {
@@ -2890,6 +2995,20 @@ mod tests {
                 },
                 "type_code_from_provider",
             ),
+            (
+                json!({"type": "select_from_provider", "item_id": "i1", "field": "date_of_birth", "selector": "#dob-month", "part": "month"}),
+                RemoteAction::SelectFromProvider {
+                    item_id: "i1".into(),
+                    field: SecretField::DateOfBirth,
+                    selector: "#dob-month".into(),
+                    part: Some(SelectPart::Month),
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+                "select_from_provider",
+            ),
         ];
         for (wire, action, kind) in cases {
             let parsed: RemoteAction = serde_json::from_value(wire.clone()).unwrap();
@@ -2918,6 +3037,9 @@ mod tests {
             json!({"type": "secrets_lookup", "run_id": "a\nb"}),
             // A point outside the viewport bounds.
             json!({"type": "type_from_provider", "item_id": "i", "field": "password", "point": {"x": -1, "y": 1}}),
+            // A part only makes sense for a date of birth; a select needs a selector.
+            json!({"type": "select_from_provider", "item_id": "i", "field": "country", "selector": "#c", "part": "day"}),
+            json!({"type": "select_from_provider", "item_id": "i", "field": "country", "selector": ""}),
         ];
         for wire in bad {
             let a: RemoteAction = serde_json::from_value(wire.clone()).unwrap();
@@ -2944,7 +3066,30 @@ mod tests {
             match_kind: MatchKind::Exact,
             has_code: true,
             updated_at: Some(Utc::now()),
+            fields: Vec::new(),
         };
+        // A login has no `fields` on the wire; an identity item lists labels and flags only.
+        assert!(serde_json::to_value(&item).unwrap().get("fields").is_none());
+        let identity = ItemSummary {
+            fields: vec![FieldSummary {
+                key: SecretField::DateOfBirth,
+                label: "Date of birth".into(),
+                sensitive: true,
+                usable_here: false,
+            }],
+            ..item.clone()
+        };
+        let wire = serde_json::to_value(&identity).unwrap();
+        assert_eq!(
+            wire["fields"][0],
+            json!({"key": "date_of_birth", "label": "Date of birth", "sensitive": true, "usable_here": false})
+        );
+        assert_eq!(
+            serde_json::from_value::<ItemSummary>(wire).unwrap(),
+            identity
+        );
+        assert!(SecretField::IdNumber.requires_https());
+        assert!(!SecretField::City.requires_https());
         let r = SecretsLookupResult {
             origin: "https://app.example.test".into(),
             provider: "test".into(),

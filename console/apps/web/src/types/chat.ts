@@ -24,6 +24,8 @@ export interface Chat {
   confirmRiskyActions: boolean;
   /** Let the chat's runs sign in from the owner's saved logins (E37.3); absent from an older console: off. */
   useSavedLogins?: boolean;
+  /** Let the chat's runs fill identity details from the owner's saved details (E37.6); absent from an older console: off. */
+  useSavedIdentity?: boolean;
   lastMessageAt: string;
   createdAt: string;
   updatedAt: string;
@@ -98,6 +100,8 @@ export interface ChatTaskDraft {
   confirmRiskyActions: boolean;
   /** The chat's saved-logins switch (E37.3), carried over to the task. */
   useSavedLogins?: boolean;
+  /** The chat's saved-details switch (E37.6), carried over to the task. */
+  useSavedIdentity?: boolean;
   /** The goal's parameters the draft proposes (#556); absent in drafts from before. */
   parameters?: TaskParameter[];
 }
@@ -109,7 +113,7 @@ export interface ChatDraftState {
 }
 
 /** What a chat's run settings dialog edits. */
-export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean };
+export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean };
 
 /** What became of an owner message passed to a run as guidance (#490): waiting for the agent's next step, read by it, or the run ended first. */
 export type ChatGuidanceState = 'queued' | 'delivered' | 'missed';

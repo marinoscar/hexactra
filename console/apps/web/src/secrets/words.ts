@@ -6,6 +6,8 @@ export const SCOPE_WORDS: Record<string, string> = {
   'vault:items_read': 'Find your logins',
   'vault:items_fill': 'Type them for you',
   'vault:items_write': 'Save and change logins',
+  'vault:identity_read': 'See which identity details you saved',
+  'vault:identity_fill': 'Fill them into forms for you',
 };
 
 /** The granted permissions in plain words, in the order the owner would read them; scopes that are not permissions (`offline_access`) are left out. */
@@ -16,8 +18,28 @@ export function permissionWords(scopes: readonly string[]): string[] {
 }
 
 export const hasWriteScope = (scopes: readonly string[]): boolean => scopes.includes('vault:items_write');
+export const hasIdentityScope = (scopes: readonly string[]): boolean => scopes.includes('vault:identity_read') && scopes.includes('vault:identity_fill');
 
-const FIELD_WORDS: Record<ActivityField, string> = { username: 'username', password: 'password', one_time_code: 'code' };
+const FIELD_WORDS: Record<ActivityField, string> = {
+  username: 'username',
+  password: 'password',
+  one_time_code: 'code',
+  full_name: 'full name',
+  date_of_birth: 'date of birth',
+  id_type: 'ID type',
+  id_number: 'ID number',
+  id_issuing_country: 'ID issuing country',
+  address_line1: 'address',
+  address_line2: 'address line 2',
+  city: 'city',
+  region: 'region',
+  postal_code: 'postal code',
+  country: 'country',
+  phone: 'phone number',
+  email: 'email address',
+};
+
+const IDENTITY_FIELDS: readonly ActivityField[] = ['full_name', 'date_of_birth', 'id_type', 'id_number', 'id_issuing_country', 'address_line1', 'address_line2', 'city', 'region', 'postal_code', 'country', 'phone', 'email'];
 
 /** "username and password", "code": the fields typed, in words (a list of kinds). */
 export function fieldsWords(fields: readonly ActivityField[]): string {
@@ -28,16 +50,20 @@ export function fieldsWords(fields: readonly ActivityField[]): string {
 }
 
 /** What the agent did, for one activity row. */
-export function whatWords(item: Pick<ActivityItem, 'event' | 'field' | 'matches'>): string {
+export function whatWords(item: Pick<ActivityItem, 'event' | 'field' | 'matches'> & { outcome?: string }): string {
   if (item.event === 'lookup') {
     if (item.matches === null) return 'Looked for a saved login';
     return item.matches === 0 ? 'Looked for a saved login: none found' : `Looked for a saved login: ${item.matches} found`;
   }
+  if (item.field && IDENTITY_FIELDS.includes(item.field)) return item.outcome === 'selected' ? `Chose the ${FIELD_WORDS[item.field]}` : `Filled the ${FIELD_WORDS[item.field]}`;
   return item.field ? `Typed the ${FIELD_WORDS[item.field]}` : 'Typed a field';
 }
 
 const OUTCOME_WORDS: Record<string, string> = {
   typed: 'Typed',
+  selected: 'Chosen',
+  insecure_origin: 'Refused: the page does not use https',
+  no_option: 'Failed: no option matched',
   ok: 'Done',
   no_provider: 'Refused: no provider was connected',
   not_found: 'Refused: no saved login for this page',

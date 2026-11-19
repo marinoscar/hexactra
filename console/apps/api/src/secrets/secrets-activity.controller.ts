@@ -7,7 +7,8 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { SecretsActivityService } from './secrets-activity.service';
-import { AdminSummaryResponseDto, ActivityListResponseDto, ReachResponseDto } from './secrets-activity.schemas';
+import { AdminSummaryResponseDto, ActivityListResponseDto, IdentityListingResponseDto, ReachResponseDto } from './secrets-activity.schemas';
+import { SecretsIdentityService } from './secrets-identity.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { VaultConnectionService } from './vault-connection.service';
 
@@ -18,7 +19,20 @@ export class SecretsActivityController {
     private readonly activity: SecretsActivityService,
     private readonly policy: SecretsPolicyService,
     private readonly vault: VaultConnectionService,
+    private readonly identity: SecretsIdentityService,
   ) {}
+
+  @Get('identity')
+  @ApiDataResponse(IdentityListingResponseDto)
+  @Auth({ permissions: ['secrets:read'] })
+  @ApiOperation({
+    summary: 'The identity details you saved',
+    description:
+      "The identity items you opened to the agent, by name, with each field's label and whether it is sensitive (a date of birth, an ID number: typed only on the sites you listed for the item in your provider). Read-only: manage them, and their allowed sites, in the provider (`manageUrl`). Never a value, never a length. `available` is false, with a `reason`, until Vault is connected with the identity permissions and its identity details are switched on.",
+  })
+  async identityDetails(@CurrentUser('id') userId: string) {
+    return this.identity.list(userId);
+  }
 
   @Get('activity')
   @ApiDataResponse(ActivityListResponseDto)

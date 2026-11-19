@@ -4,6 +4,10 @@
 //! * `secrets_lookup`: which items the owner's provider offers for the page.
 //! * `type_from_provider`: one field of one item, typed into the page.
 //! * `type_code_from_provider`: a one-time code, typed into the page.
+//! * `select_from_provider` (E37.6): the `<select>` option that matches a
+//!   field of an identity item (a country, or the day, month or year of a date
+//!   of birth); the fabric lists the options, picks one itself and answers only
+//!   `{ selected: true }`.
 //!
 //! The control plane answers these itself. It reads the tab's top-level
 //! origin from the extension (a `tabs` operation) at that moment, so the model
@@ -24,9 +28,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    provider_error_codes as code, ItemKind, OperationState, OperationView, ProviderTypedResult,
-    RegisterSecretsProviderRequest, RemoteAction, SecretField, SecretPurpose, SecretsLookupResult,
-    SecretsProviderKind, SecretsProviderView, ViewportPoint,
+    provider_error_codes as code, ItemKind, OperationState, OperationView, ProviderSelectedResult,
+    ProviderTypedResult, RegisterSecretsProviderRequest, RemoteAction, SecretField, SecretPurpose,
+    SecretsLookupResult, SecretsProviderKind, SecretsProviderView, SelectPart, ViewportPoint,
 };
 use hexactra_credential_resolver::{
     CodeRequest, Origin, OwnerId, ProviderError, ReleaseRequest, SecretValue, SecretsProvider,
@@ -423,6 +427,162 @@ fn secret_text(v: &SecretValue) -> Option<String> {
     })
 }
 
+/// A sensitive field (an ID number, a date of birth, a card number, a
+/// security code) is typed only into an `https` page, even when the provider
+/// would release it (E37.6).
+fn require_secure(field: SecretField, origin: &Origin) -> Result<(), Fail> {
+    if field.requires_https() && origin.scheme() != "https" {
+        return Err(Fail::new(
+            code::INSECURE_ORIGIN,
+            "this detail is only typed into a page that uses https; nothing was typed",
+        ));
+    }
+    Ok(())
+}
+
+/// One `<option>` of a select: its `value` attribute and its visible text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SelectOption {
+    value: String,
+    text: String,
+}
+
+/// The most options read from one select.
+const MAX_OPTIONS: usize = 1_000;
+
+/// The script that lists a select's options. The selector is a JSON string
+/// literal; nothing else page-controlled is spliced in.
+fn list_options_script(selector: &str) -> String {
+    format!(
+        "(()=>{{const e=document.querySelector({sel});if(!e)return {{found:false}};\
+         if(e.tagName!=='SELECT')return {{found:true,select:false}};\
+         const o=Array.from(e.options).slice(0,{max}).map(x=>({{v:x.value,t:(x.textContent||'').trim().slice(0,100)}}));\
+         return {{found:true,select:true,options:o}}}})()",
+        sel = serde_json::to_string(selector).unwrap_or_else(|_| "\"\"".into()),
+        max = MAX_OPTIONS
+    )
+}
+
+/// The script that chooses one option by index and tells the page's own
+/// handlers. It checks the select still has as many options as were listed.
+fn choose_option_script(selector: &str, index: usize, count: usize) -> String {
+    format!(
+        "(()=>{{const e=document.querySelector({sel});if(!e||e.tagName!=='SELECT'||e.options.length!=={count}||{index}>=e.options.length)return {{ok:false}};\
+         e.selectedIndex={index};e.dispatchEvent(new Event('input',{{bubbles:true}}));\
+         e.dispatchEvent(new Event('change',{{bubbles:true}}));return {{ok:e.selectedIndex==={index}}}}})()",
+        sel = serde_json::to_string(selector).unwrap_or_else(|_| "\"\"".into()),
+    )
+}
+
+fn parse_options(listing: &Value) -> Result<Vec<SelectOption>, Fail> {
+    if listing.get("found").and_then(Value::as_bool) != Some(true) {
+        return Err(Fail::new(code::TYPING_FAILED, "there is no such element"));
+    }
+    if listing.get("select").and_then(Value::as_bool) != Some(true) {
+        return Err(Fail::new(
+            code::NO_OPTION,
+            "the element is not a select; type into it instead",
+        ));
+    }
+    let options = listing
+        .get("options")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|o| SelectOption {
+                    value: o.get("v").and_then(Value::as_str).unwrap_or("").to_string(),
+                    text: o.get("t").and_then(Value::as_str).unwrap_or("").to_string(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok(options)
+}
+
+fn norm(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+const MONTHS: [(&str, &str); 12] = [
+    ("january", "jan"),
+    ("february", "feb"),
+    ("march", "mar"),
+    ("april", "apr"),
+    ("may", "may"),
+    ("june", "jun"),
+    ("july", "jul"),
+    ("august", "aug"),
+    ("september", "sep"),
+    ("october", "oct"),
+    ("november", "nov"),
+    ("december", "dec"),
+];
+
+/// `(year, month, day)` of a stored date: `YYYY-MM-DD`, `YYYY/MM/DD`, an ISO
+/// date-time, or `YYYYMMDD`.
+fn parse_date(v: &str) -> Option<(u32, u32, u32)> {
+    let d = v.trim().get(..10).unwrap_or(v.trim());
+    let digits: Vec<&str> = d.split(['-', '/']).collect();
+    let (y, m, day) = match digits.as_slice() {
+        [y, m, d] => (y.parse().ok()?, m.parse().ok()?, d.parse().ok()?),
+        [one] if one.len() == 8 => (
+            one[..4].parse().ok()?,
+            one[4..6].parse().ok()?,
+            one[6..].parse().ok()?,
+        ),
+        _ => return None,
+    };
+    ((1900..=2100).contains(&y) && (1..=12).contains(&m) && (1..=31).contains(&day))
+        .then_some((y, m, day))
+}
+
+/// The index of the option that is the stored value, or `None`. With a
+/// `part`, the value is a date and the option is its day, month (a number, a
+/// name or an abbreviation) or year. The value never leaves this function.
+fn choose_option(options: &[SelectOption], value: &str, part: Option<SelectPart>) -> Option<usize> {
+    let candidates: Vec<String> = match part {
+        None => vec![norm(value)],
+        Some(p) => {
+            let (y, m, d) = parse_date(value)?;
+            match p {
+                SelectPart::Day => vec![d.to_string(), format!("{d:02}")],
+                SelectPart::Year => vec![y.to_string(), format!("{:02}", y % 100)],
+                SelectPart::Month => {
+                    let (full, abbr) = MONTHS[(m - 1) as usize];
+                    vec![m.to_string(), format!("{m:02}"), full.into(), abbr.into()]
+                }
+            }
+        }
+    };
+    if candidates.iter().all(|c| c.is_empty()) {
+        return None;
+    }
+    let exact = |o: &SelectOption| {
+        let (v, t) = (norm(&o.value), norm(&o.text));
+        !v.is_empty() && candidates.contains(&v) || !t.is_empty() && candidates.contains(&t)
+    };
+    if let Some(i) = options.iter().position(exact) {
+        return Some(i);
+    }
+    // A date part may sit in a longer label ("03 - March", "March (3)").
+    if part.is_some() {
+        let tokens = |s: &str| -> Vec<String> {
+            norm(s)
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+                .collect()
+        };
+        return options
+            .iter()
+            .position(|o| tokens(&o.text).iter().any(|t| candidates.contains(t)));
+    }
+    None
+}
+
 impl Run {
     fn remaining(&self) -> Result<Duration, Fail> {
         let left = self.deadline.saturating_duration_since(Instant::now());
@@ -619,6 +779,9 @@ impl Run {
         // 1. Where are we? Read the origin now, and pin the tab.
         let (origin, tab) = self.read_origin(tab_id).await?;
         self.audit.origin = Some(origin.to_string());
+        if let Source::Field { field, .. } = &source {
+            require_secure(*field, &origin)?;
+        }
         if let Some(p) = target.point {
             self.check_point(tab, p).await?;
         }
@@ -681,6 +844,116 @@ impl Run {
             typed: true,
             expires_at,
         }))
+    }
+
+    /// `select_from_provider`: choose the option of a `<select>` that matches a
+    /// field of an identity item. The options are listed first (page data, no
+    /// secret), then the provider is asked with the origin, the match is made
+    /// here and the value is dropped; only the option's index goes back to the
+    /// page, after the origin is read once more.
+    async fn select_value(
+        &mut self,
+        item_id: String,
+        field: SecretField,
+        selector: String,
+        part: Option<SelectPart>,
+        provider: Option<String>,
+        tab_id: Option<i64>,
+    ) -> Result<Value, Fail> {
+        let owner = self.owner.clone();
+        let (pid, provider) = self
+            .providers
+            .resolve(owner.as_deref(), provider.as_deref())?;
+        self.audit.provider = Some(pid);
+        let owner_id =
+            OwnerId::new(owner.unwrap_or_default()).map_err(|m| Fail::new(code::NO_PROVIDER, m))?;
+
+        let (origin, tab) = self.read_origin(tab_id).await?;
+        self.audit.origin = Some(origin.to_string());
+        require_secure(field, &origin)?;
+        let _no_pictures = self.store.secret_guard(self.session_id);
+
+        // The select's options: what the page shows anyone, not a secret.
+        let listed = self
+            .op(
+                RemoteAction::Evaluate {
+                    script: list_options_script(&selector),
+                    await_promise: false,
+                    tab_id: Some(tab),
+                },
+                code::TYPING_FAILED,
+            )
+            .await?;
+        let listing = listed
+            .result
+            .as_ref()
+            .and_then(|r| r.get("value"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        self.store.discard_result(listed.id);
+        let options = parse_options(&listing)?;
+
+        let left = self.remaining()?;
+        let req = ReleaseRequest {
+            owner: owner_id,
+            item_id,
+            field,
+            origin: origin.clone(),
+            purpose: SecretPurpose::Form,
+            run_id: self.audit.run_id.clone(),
+            client_label: self.audit.client_label.clone(),
+        };
+        let value = tokio::time::timeout(left, provider.release(req))
+            .await
+            .map_err(|_| provider_fail(ProviderError::Unavailable))?
+            .map_err(provider_fail)?;
+        self.audit.released = true;
+
+        let index = value.expose(|b| {
+            std::str::from_utf8(b)
+                .ok()
+                .and_then(|v| choose_option(&options, v, part))
+        });
+        drop(value);
+        let Some(index) = index else {
+            return Err(Fail::new(
+                code::NO_OPTION,
+                "none of the select's options is that saved detail; nothing was chosen",
+            ));
+        };
+
+        let (again, _) = self.read_origin(Some(tab)).await?;
+        if again != origin {
+            return Err(Fail::new(
+                code::ORIGIN_MISMATCH,
+                "the page navigated while the value was fetched; nothing was chosen",
+            ));
+        }
+        let done = self
+            .op(
+                RemoteAction::Evaluate {
+                    script: choose_option_script(&selector, index, options.len()),
+                    await_promise: false,
+                    tab_id: Some(tab),
+                },
+                code::TYPING_FAILED,
+            )
+            .await?;
+        let ok = done
+            .result
+            .as_ref()
+            .and_then(|r| r.get("value"))
+            .and_then(|v| v.get("ok"))
+            .and_then(Value::as_bool)
+            == Some(true);
+        self.store.discard_result(done.id);
+        if !ok {
+            return Err(Fail::new(
+                code::TYPING_FAILED,
+                "the select changed while it was filled; nothing was chosen",
+            ));
+        }
+        Ok(json!(ProviderSelectedResult { selected: true }))
     }
 
     async fn type_into(&self, value: &SecretValue, target: &Target, tab: i64) -> Result<(), Fail> {
@@ -821,6 +1094,21 @@ async fn execute(mut run: Run, action: RemoteAction) -> (Run, Result<Value, Fail
             )
             .await
         }
+        RemoteAction::SelectFromProvider {
+            item_id,
+            field,
+            selector,
+            part,
+            provider,
+            tab_id,
+            ..
+        } => {
+            run.audit.item_id = Some(item_id.clone());
+            run.audit.field = Some(field.as_str());
+            run.audit.purpose = Some(SecretPurpose::Form.as_str());
+            run.select_value(item_id, field, selector, part, provider, tab_id)
+                .await
+        }
         _ => Err(Fail::new("internal", "not a provider action")),
     };
     (run, result)
@@ -852,6 +1140,11 @@ pub(super) fn start(
             ..
         }
         | RemoteAction::TypeCodeFromProvider {
+            run_id,
+            client_label,
+            ..
+        }
+        | RemoteAction::SelectFromProvider {
             run_id,
             client_label,
             ..
@@ -888,6 +1181,7 @@ pub(super) fn start(
     let store = state.store.clone();
     let op_id = op.id;
     let started = op.clone();
+    let is_select = matches!(action, RemoteAction::SelectFromProvider { .. });
     // Two tasks: a panic in the inner one still ends the operation, and a
     // caller that goes away does not cancel it half way through a typing.
     let handle = tokio::spawn(async move {
@@ -897,6 +1191,7 @@ pub(super) fn start(
                 run.audit.emit(
                     &run.store.log,
                     match &result {
+                        Ok(_) if is_select => "selected",
                         Ok(_) if run.audit.event == "secrets.release" => "typed",
                         Ok(_) => "ok",
                         Err(f) => f.code,
@@ -1087,5 +1382,101 @@ mod tests {
             Some("plain")
         );
         assert!(secret_text(&SecretValue::new(vec![0xff, 0xfe, 0x00])).is_none());
+    }
+
+    fn opts(list: &[(&str, &str)]) -> Vec<SelectOption> {
+        list.iter()
+            .map(|(v, t)| SelectOption {
+                value: v.to_string(),
+                text: t.to_string(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn options_are_matched_by_value_or_text_and_a_date_by_its_part() {
+        let countries = opts(&[("", "Choose"), ("us", "United  States"), ("ca", "Canada")]);
+        assert_eq!(choose_option(&countries, "canada", None), Some(2));
+        assert_eq!(choose_option(&countries, " CA ", None), Some(2));
+        assert_eq!(choose_option(&countries, "united states", None), Some(1));
+        assert_eq!(choose_option(&countries, "France", None), None);
+        assert_eq!(choose_option(&countries, "", None), None);
+
+        let months = opts(&[
+            ("", "Month"),
+            ("1", "Jan"),
+            ("3", "03 - March"),
+            ("12", "December"),
+        ]);
+        for date in [
+            "1990-03-27",
+            "1990/03/27",
+            "19900327",
+            "1990-03-27T00:00:00Z",
+        ] {
+            assert_eq!(
+                choose_option(&months, date, Some(SelectPart::Month)),
+                Some(2),
+                "{date}"
+            );
+        }
+        assert_eq!(
+            choose_option(&months, "2001-12-01", Some(SelectPart::Month)),
+            Some(3)
+        );
+        assert_eq!(
+            choose_option(&months, "2001-02-01", Some(SelectPart::Month)),
+            None
+        );
+        let days = opts(&[("", "Day"), ("07", "7"), ("27", "27")]);
+        assert_eq!(
+            choose_option(&days, "1990-03-27", Some(SelectPart::Day)),
+            Some(2)
+        );
+        assert_eq!(
+            choose_option(&days, "1990-03-07", Some(SelectPart::Day)),
+            Some(1)
+        );
+        let years = opts(&[("1989", "1989"), ("1990", "1990")]);
+        assert_eq!(
+            choose_option(&years, "1990-03-27", Some(SelectPart::Year)),
+            Some(1)
+        );
+        // A value that is not a date has no date part.
+        assert_eq!(
+            choose_option(&years, "March 27th", Some(SelectPart::Year)),
+            None
+        );
+        assert_eq!(parse_date("1990-13-01"), None);
+        assert_eq!(parse_date("90-03-27"), None);
+    }
+
+    #[test]
+    fn the_scripts_splice_only_a_quoted_selector_and_numbers() {
+        let evil = "a\"]);alert(1);//";
+        for script in [list_options_script(evil), choose_option_script(evil, 3, 12)] {
+            // The selector is one JSON string literal.
+            assert!(
+                script.contains(&serde_json::to_string(evil).unwrap()),
+                "{script}"
+            );
+        }
+        assert!(choose_option_script("#m", 3, 12).contains("selectedIndex=3"));
+    }
+
+    #[test]
+    fn a_sensitive_field_needs_https() {
+        let https = Origin::from_browser_url("https://app.example.test/").unwrap();
+        let http = Origin::from_browser_url("http://127.0.0.1:8080/").unwrap();
+        assert!(require_secure(SecretField::IdNumber, &https).is_ok());
+        assert_eq!(
+            require_secure(SecretField::IdNumber, &http)
+                .err()
+                .unwrap()
+                .code,
+            code::INSECURE_ORIGIN
+        );
+        assert!(require_secure(SecretField::City, &http).is_ok());
+        assert!(require_secure(SecretField::Password, &http).is_ok());
     }
 }

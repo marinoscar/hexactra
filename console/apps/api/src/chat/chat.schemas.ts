@@ -22,6 +22,7 @@ const runSettings = {
   allowedDomains: z.array(domainSchema).max(50).describe("Sites the chat's runs may visit, as on a task; empty (the default) is any site."),
   confirmRiskyActions: z.boolean().describe('Ask the owner before a purchase or another step that is hard to undo. On by default in a chat.'),
   useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."),
+  useSavedIdentity: z.boolean().describe("Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`."),
 };
 
 /** `GET /chats`. */
@@ -41,6 +42,7 @@ export const createChatSchema = z.object({
   allowedDomains: runSettings.allowedDomains.optional(),
   confirmRiskyActions: runSettings.confirmRiskyActions.optional(),
   useSavedLogins: runSettings.useSavedLogins.optional(),
+  useSavedIdentity: runSettings.useSavedIdentity.optional(),
 });
 
 /** `PATCH /chats/:id`: at least one field. `status` archives and unarchives. */
@@ -55,6 +57,7 @@ export const updateChatSchema = z
   allowedDomains: runSettings.allowedDomains.optional(),
   confirmRiskyActions: runSettings.confirmRiskyActions.optional(),
   useSavedLogins: runSettings.useSavedLogins.optional(),
+  useSavedIdentity: runSettings.useSavedIdentity.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Nothing to update' });
 

@@ -17,6 +17,7 @@ export class SaveVaultClientDto extends createZodDto(saveVaultClientSchema) {}
 export const connectVaultSchema = z
   .object({
     allowWrite: z.boolean().optional().describe('Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default.'),
+    allowIdentity: z.boolean().optional().describe('Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default.'),
     returnTo: z.string().max(200).optional().describe('A path on this console to return to after the consent (default `/settings/secrets`).'),
   })
   .strict();

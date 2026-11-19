@@ -55,6 +55,17 @@ export type SecretPurpose = 'login' | 'signup' | 'password_change' | 'mfa' | 'fo
 /** `exact`: one of the item's origins equals the page's. `site`: same registrable domain only; never fillable. */
 export type MatchKind = 'exact' | 'site';
 
+/** One field of an identity item as a lookup lists it (E37.6): a label and two flags, never a value or a length. */
+export interface FieldSummary {
+  key: SecretField;
+  /** What the owner calls it ("Date of birth"). */
+  label: string;
+  /** Released only to a site on the item's allowed list (exact origin). */
+  sensitive: boolean;
+  /** A fill on the page the lookup was for would be allowed: not sensitive, or the page's origin is on the list. */
+  usableHere: boolean;
+}
+
 /** What a provider says about an item the owner opened to the agent. Never a value (a login's username is not secret). */
 export interface ItemSummary {
   id: string;
@@ -66,6 +77,8 @@ export interface ItemSummary {
   /** A one-time code can be produced for the item. */
   hasCode: boolean;
   updatedAt?: Date | null;
+  /** An identity item's fields (E37.6); absent for a login. For an identity item `matchKind` is `exact` when the page's origin is on the item's allowed list. */
+  fields?: FieldSummary[];
 }
 
 /** One field of one item, for one purpose, bound to the page's origin (read by the fabric from the browser). */
@@ -157,6 +170,8 @@ export type SecretsErrorCode =
   | 'origin_unavailable'
   | 'cross_origin_frame'
   | 'typing_failed'
+  | 'insecure_origin'
+  | 'no_option'
   | 'unsupported'
   | 'timed_out'
   | 'cancelled'
@@ -175,6 +190,8 @@ export const SECRETS_ERROR_CODES: readonly SecretsErrorCode[] = [
   'origin_unavailable',
   'cross_origin_frame',
   'typing_failed',
+  'insecure_origin',
+  'no_option',
   'unsupported',
   'timed_out',
   'cancelled',

@@ -80,6 +80,7 @@ export function limitsOf(row: SettingsRow | null): AppLimits {
     confirmPurchases: row.confirmPurchases,
     confirmSensitiveActions: row.confirmSensitiveActions,
     allowSavedLogins: row.allowSavedLogins,
+    allowSavedIdentity: row.allowSavedIdentity,
     paused: row.paused,
   };
 }
@@ -315,6 +316,7 @@ export class ConnectedAppsService {
       confirmPurchases: next.confirmPurchases,
       confirmSensitiveActions: next.confirmSensitiveActions,
       allowSavedLogins: next.allowSavedLogins,
+      allowSavedIdentity: next.allowSavedIdentity,
       paused: next.paused,
     };
     const saved = row
@@ -328,7 +330,7 @@ export class ConnectedAppsService {
       credentialKind: 'jwt',
       clientId,
       outcome: 'ok',
-      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}) },
+      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}), ...(patch.allowSavedIdentity !== undefined ? { allowSavedIdentity: patch.allowSavedIdentity } : {}) },
     });
     return clampLimits(limitsOf(saved), ceilings);
   }

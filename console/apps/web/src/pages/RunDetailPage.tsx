@@ -21,6 +21,7 @@ import { runCost } from '../components/runBudget';
 import { runAgain, runAgainQuestionFor } from '../components/runRow';
 import { RunExportButton, RunExportMenu, useRunExport } from '../components/RunExport';
 import { UsedSavedLogins } from '../components/UsedSavedLogins';
+import { UsedSavedIdentity } from '../components/UsedSavedIdentity';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -313,6 +314,7 @@ export function RunDetailPage() {
       <RunInputs inputs={run.inputs} />
       <UsedMemories memories={run.memories} />
       <UsedSavedLogins logins={run.usedSavedLogins} />
+      <UsedSavedIdentity details={run.usedSavedIdentity} />
     </>
   );
   // A typed stop reason (#404) says why in one line; older runs keep the plain result and error.

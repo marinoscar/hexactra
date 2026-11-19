@@ -88,6 +88,7 @@ describe('the task draft the AI writes', () => {
       allowedDomains: ['cinema.example.test'],
       confirmRiskyActions: true,
       useSavedLogins: false,
+      useSavedIdentity: false,
       // Nothing in it varies between runs: no parameters.
       parameters: [],
     });
@@ -295,7 +296,7 @@ describe('the draft_task tool', () => {
     expect(outputs).toEqual(['Drafted. The owner reviews and saves it from the chat.']);
     const last = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id }, orderBy: { seq: 'desc' } });
     expect(last).toMatchObject({ role: 'assistant', kind: 'task_draft', text: 'Book 2 tickets for the 7:30 PM showing.' });
-    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, useSavedLogins: false, parameters: [] });
+    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, useSavedLogins: false, useSavedIdentity: false, parameters: [] });
   });
 });
 

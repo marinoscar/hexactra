@@ -12,7 +12,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use hexactra_core::remote::{ItemKind, ItemSummary, MatchKind, SecretField};
+use hexactra_core::remote::{
+    FieldSummary, ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose,
+};
 
 use crate::{
     CodeRequest, Origin, OwnerId, ProviderError, ReleaseRequest, SecretValue, SecretsProvider,
@@ -27,6 +29,14 @@ pub const FIXTURE_SITE_ITEM_ID: &str = "test-login-2";
 pub const FIXTURE_USERNAME: &str = "person-a@example.test";
 pub const FIXTURE_PASSWORD: &str = "canary-pw-7f3a9c1e-test";
 pub const FIXTURE_CODE: &str = "246810";
+/// The fixture's identity item (E37.6): its sensitive fields may be typed
+/// only on [`FIXTURE_ORIGIN`]; the others anywhere on `https`.
+pub const FIXTURE_IDENTITY_ID: &str = "test-identity-1";
+pub const FIXTURE_FULL_NAME: &str = "Person A Canary-Name";
+pub const FIXTURE_DOB: &str = "1990-03-27";
+pub const FIXTURE_ID_NUMBER: &str = "CANARY-ID-5521-7788";
+pub const FIXTURE_COUNTRY: &str = "Canada";
+pub const FIXTURE_CITY: &str = "Exampleton";
 
 /// One login in the fixture.
 #[derive(Debug, Clone)]
@@ -37,6 +47,25 @@ pub struct TestItem {
     pub password: String,
     pub code: Option<String>,
     pub origins: Vec<String>,
+}
+
+/// One field of an identity item.
+#[derive(Debug, Clone)]
+pub struct TestIdentityField {
+    pub key: SecretField,
+    pub label: String,
+    pub value: String,
+    pub sensitive: bool,
+}
+
+/// One identity item in the fixture.
+#[derive(Debug, Clone)]
+pub struct TestIdentity {
+    pub id: String,
+    pub name: String,
+    /// Where its sensitive fields may be typed (exact origins).
+    pub allowed_origins: Vec<String>,
+    pub fields: Vec<TestIdentityField>,
 }
 
 /// What the provider was asked; never a value.
@@ -57,6 +86,7 @@ pub struct TestProvider {
     /// Only this owner's sessions see the items; `None`: every owner.
     owner: Option<String>,
     items: Vec<TestItem>,
+    identities: Vec<TestIdentity>,
     failure: Mutex<Option<ProviderError>>,
     calls: Mutex<Vec<TestCall>>,
 }
@@ -73,6 +103,7 @@ impl TestProvider {
         Self {
             owner: None,
             items: Vec::new(),
+            identities: Vec::new(),
             failure: Mutex::new(None),
             calls: Mutex::new(Vec::new()),
         }
@@ -98,6 +129,37 @@ impl TestProvider {
                 code: None,
                 origins: vec![FIXTURE_SITE_ORIGIN.into()],
             })
+            .with_identity(Self::fixture_identity())
+    }
+
+    /// Add an identity item.
+    pub fn with_identity(mut self, item: TestIdentity) -> Self {
+        self.identities.push(item);
+        self
+    }
+
+    /// The default fixture's identity item: name, date of birth, ID number,
+    /// country and city; the date of birth and ID number are sensitive and
+    /// allowed only on [`FIXTURE_ORIGIN`].
+    pub fn fixture_identity() -> TestIdentity {
+        let f = |key, label: &str, value: &str, sensitive| TestIdentityField {
+            key,
+            label: label.into(),
+            value: value.into(),
+            sensitive,
+        };
+        TestIdentity {
+            id: FIXTURE_IDENTITY_ID.into(),
+            name: "Passport".into(),
+            allowed_origins: vec![FIXTURE_ORIGIN.into()],
+            fields: vec![
+                f(SecretField::FullName, "Full name", FIXTURE_FULL_NAME, false),
+                f(SecretField::DateOfBirth, "Date of birth", FIXTURE_DOB, true),
+                f(SecretField::IdNumber, "ID number", FIXTURE_ID_NUMBER, true),
+                f(SecretField::Country, "Country", FIXTURE_COUNTRY, false),
+                f(SecretField::City, "City", FIXTURE_CITY, false),
+            ],
+        }
     }
 
     pub fn with_item(mut self, item: TestItem) -> Self {
@@ -182,6 +244,20 @@ impl TestProvider {
             .any(|o| o.matches_exact(origin))
     }
 
+    fn identity(&self, id: &str) -> Result<&TestIdentity, ProviderError> {
+        self.identities
+            .iter()
+            .find(|i| i.id == id)
+            .ok_or(ProviderError::NotFound)
+    }
+
+    fn allowed(&self, item: &TestIdentity, origin: &Origin) -> bool {
+        item.allowed_origins
+            .iter()
+            .filter_map(|o| Origin::from_stored(o).ok())
+            .any(|o| o.matches_exact(origin))
+    }
+
     fn log(&self, call: TestCall) {
         self.calls.lock().unwrap().push(call);
     }
@@ -210,6 +286,40 @@ impl SecretsProvider for TestProvider {
             run_id: None,
         });
         self.check(owner)?;
+        if kind == ItemKind::Identity {
+            let mut out: Vec<ItemSummary> = self
+                .identities
+                .iter()
+                .map(|i| {
+                    let allowed = self.allowed(i, origin);
+                    ItemSummary {
+                        id: i.id.clone(),
+                        name: i.name.clone(),
+                        username: None,
+                        origins: Vec::new(),
+                        match_kind: if allowed {
+                            MatchKind::Exact
+                        } else {
+                            MatchKind::Site
+                        },
+                        has_code: false,
+                        updated_at: None,
+                        fields: i
+                            .fields
+                            .iter()
+                            .map(|f| FieldSummary {
+                                key: f.key,
+                                label: f.label.clone(),
+                                sensitive: f.sensitive,
+                                usable_here: !f.sensitive || allowed,
+                            })
+                            .collect(),
+                    }
+                })
+                .collect();
+            out.sort_by_key(|s| s.match_kind != MatchKind::Exact);
+            return Ok(out);
+        }
         if kind != ItemKind::Login {
             return Ok(Vec::new());
         }
@@ -231,6 +341,7 @@ impl SecretsProvider for TestProvider {
                     match_kind: kind,
                     has_code: i.code.is_some(),
                     updated_at: Some(DateTime::<Utc>::UNIX_EPOCH),
+                    fields: Vec::new(),
                 })
             })
             .collect();
@@ -250,6 +361,20 @@ impl SecretsProvider for TestProvider {
             run_id: req.run_id.clone(),
         });
         self.check(&req.owner)?;
+        if let Ok(identity) = self.identity(&req.item_id) {
+            if req.purpose != SecretPurpose::Form {
+                return Err(ProviderError::Refused("unsupported_purpose".into()));
+            }
+            let f = identity
+                .fields
+                .iter()
+                .find(|f| f.key == req.field)
+                .ok_or(ProviderError::NotFound)?;
+            if f.sensitive && !self.allowed(identity, &req.origin) {
+                return Err(ProviderError::OriginMismatch);
+            }
+            return Ok(SecretValue::from_string(f.value.clone()));
+        }
         let item = self.item(&req.item_id)?;
         if !self.exact(item, &req.origin) {
             return Err(ProviderError::OriginMismatch);
@@ -376,6 +501,89 @@ mod tests {
         assert_eq!(calls[0].op, "release");
         assert_eq!(calls[0].origin, FIXTURE_ORIGIN);
         assert_eq!(calls[0].field, Some("password"));
+    }
+
+    #[tokio::test]
+    async fn identity_lookup_lists_labels_and_flags_and_never_a_value() {
+        let p = TestProvider::with_fixture();
+        let allowed = Origin::from_browser_url(FIXTURE_ORIGIN).unwrap();
+        let elsewhere = Origin::from_browser_url("https://other.example.test").unwrap();
+        let on = p
+            .lookup(&owner(), &allowed, ItemKind::Identity)
+            .await
+            .unwrap();
+        assert_eq!(on.len(), 1);
+        assert_eq!(on[0].match_kind, MatchKind::Exact);
+        assert!(on[0].fields.iter().all(|f| f.usable_here));
+        let off = p
+            .lookup(&owner(), &elsewhere, ItemKind::Identity)
+            .await
+            .unwrap();
+        let usable = |k: SecretField| {
+            off[0]
+                .fields
+                .iter()
+                .find(|f| f.key == k)
+                .unwrap()
+                .usable_here
+        };
+        assert!(usable(SecretField::FullName) && usable(SecretField::City));
+        assert!(!usable(SecretField::DateOfBirth) && !usable(SecretField::IdNumber));
+        for items in [&on, &off] {
+            let json = serde_json::to_string(items).unwrap();
+            for canary in [
+                FIXTURE_FULL_NAME,
+                FIXTURE_DOB,
+                FIXTURE_ID_NUMBER,
+                FIXTURE_COUNTRY,
+            ] {
+                assert!(!json.contains(canary));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn identity_release_enforces_the_allowed_list_for_sensitive_fields_only() {
+        let p = TestProvider::with_fixture();
+        let form = |field, origin: &str| ReleaseRequest {
+            purpose: SecretPurpose::Form,
+            ..rel(FIXTURE_IDENTITY_ID, field, origin)
+        };
+        // Not sensitive: any site.
+        let v = p
+            .release(form(SecretField::FullName, "https://other.example.test"))
+            .await
+            .unwrap();
+        assert!(v.expose(|b| b == FIXTURE_FULL_NAME.as_bytes()));
+        // Sensitive: only the allowed exact origin.
+        let v = p
+            .release(form(SecretField::IdNumber, FIXTURE_ORIGIN))
+            .await
+            .unwrap();
+        assert!(v.expose(|b| b == FIXTURE_ID_NUMBER.as_bytes()));
+        for origin in [
+            "https://other.example.test",
+            "https://sub.login.example.test",
+        ] {
+            assert_eq!(
+                p.release(form(SecretField::IdNumber, origin)).await.err(),
+                Some(ProviderError::OriginMismatch)
+            );
+        }
+        // Only the purpose `form` releases identity.
+        assert!(matches!(
+            p.release(rel(FIXTURE_IDENTITY_ID, SecretField::City, FIXTURE_ORIGIN))
+                .await
+                .err(),
+            Some(ProviderError::Refused(_))
+        ));
+        // A field the item does not have is the identical not found.
+        assert_eq!(
+            p.release(form(SecretField::Phone, FIXTURE_ORIGIN))
+                .await
+                .err(),
+            Some(ProviderError::NotFound)
+        );
     }
 
     #[tokio::test]

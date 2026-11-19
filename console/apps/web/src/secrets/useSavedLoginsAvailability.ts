@@ -17,6 +17,10 @@ export interface SavedLoginsAvailability {
   fixTo: string | null;
   /** The owner's default for a new task or chat (`secrets.defaultUseSavedLogins`). */
   defaultOn: boolean;
+  /** Whether the "identity details" sub-switch can work (E37.6): saved logins can, and the provider's identity permissions are granted. */
+  identityAvailable: boolean;
+  /** Why not, in one sentence, when saved logins can work but identity cannot; null otherwise. */
+  identityReason: string | null;
 }
 
 /** The reason in words, from a status. Pure. */
@@ -27,6 +31,15 @@ export function unavailableReason(status: SecretsStatus | null, canRead: boolean
   if (status.providers.vault.status !== 'connected') return { reason: 'Connect a secrets provider first.', fixTo: '/settings/secrets' };
   if (!status.agentUse.user) return { reason: 'Turn on “Let the agent use saved logins” first.', fixTo: '/settings/secrets' };
   return null;
+}
+
+/** Whether a grant's scopes let the agent fill identity details (E37.6). */
+export const hasIdentityScopes = (scopes: readonly string[] | undefined): boolean => !!scopes && scopes.includes('vault:identity_read') && scopes.includes('vault:identity_fill');
+
+/** Why the identity sub-switch cannot be used, given that saved logins can. Pure. */
+export function identityReason(status: SecretsStatus | null): string | null {
+  if (!status) return 'Saved details could not be checked.';
+  return hasIdentityScopes(status.providers.vault.scopes) ? null : 'Allow “Let the agent fill identity details” on the Secrets page first.';
 }
 
 export function useSavedLoginsAvailability(): SavedLoginsAvailability {
@@ -46,5 +59,7 @@ export function useSavedLoginsAvailability(): SavedLoginsAvailability {
   }, [api, canRead]);
 
   const why = state.loaded ? unavailableReason(state.status, canRead) : null;
-  return { loaded: state.loaded, available: state.loaded && why === null, reason: why?.reason ?? null, fixTo: why?.fixTo ?? null, defaultOn: state.defaultOn };
+  const available = state.loaded && why === null;
+  const idReason = available ? identityReason(state.status) : null;
+  return { loaded: state.loaded, available, reason: why?.reason ?? null, fixTo: why?.fixTo ?? null, defaultOn: state.defaultOn, identityAvailable: available && idReason === null, identityReason: idReason };
 }

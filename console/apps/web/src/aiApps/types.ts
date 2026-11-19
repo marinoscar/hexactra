@@ -24,6 +24,8 @@ export interface AppLimits {
   confirmSensitiveActions?: boolean;
   /** Let this app's runs sign in from the owner's saved logins (E37.3); absent from an older console: off. */
   allowSavedLogins?: boolean;
+  /** Let this app's runs fill identity details from the owner's saved details (E37.6); absent from an older console: off. */
+  allowSavedIdentity?: boolean;
   paused: boolean;
 }
 
@@ -103,6 +105,7 @@ export interface LimitsDraft {
   confirmPurchases: boolean;
   confirmSensitiveActions: boolean;
   allowSavedLogins: boolean;
+  allowSavedIdentity: boolean;
 }
 
 /** The highest values the API accepts (it may refuse more, above the deployment's ceilings). */
@@ -119,6 +122,7 @@ export function toDraft(l: AppLimits): LimitsDraft {
     confirmPurchases: l.confirmPurchases,
     confirmSensitiveActions: l.confirmSensitiveActions ?? true,
     allowSavedLogins: l.allowSavedLogins ?? false,
+    allowSavedIdentity: l.allowSavedIdentity ?? false,
   };
 }
 
@@ -156,10 +160,11 @@ export function draftPatch(d: LimitsDraft, saved: AppLimits): Partial<AppLimits>
     confirmPurchases: d.confirmPurchases,
     confirmSensitiveActions: d.confirmSensitiveActions,
     allowSavedLogins: d.allowSavedLogins,
+    allowSavedIdentity: d.allowSavedIdentity,
   };
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(next)) {
-    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : k === 'allowSavedLogins' ? (saved.allowSavedLogins ?? false) : saved[k as keyof AppLimits];
+    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : k === 'allowSavedLogins' ? (saved.allowSavedLogins ?? false) : k === 'allowSavedIdentity' ? (saved.allowSavedIdentity ?? false) : saved[k as keyof AppLimits];
     if (JSON.stringify(v) !== JSON.stringify(before)) patch[k] = v;
   }
   return patch as Partial<AppLimits>;

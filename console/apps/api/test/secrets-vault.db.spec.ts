@@ -288,6 +288,18 @@ describe('connecting', () => {
     )).rejects.toMatchObject({ kind: 'invalid_grant' });
   });
 
+  it('asks for the identity scopes only when the owner asks (a new consent), and the grant says so', async () => {
+    const s = await connected('sec-identity-scope');
+    expect((await rowOf(s.userId)).scopes).not.toContain('vault:identity_read');
+    const { start, res } = await connect(s, { allowIdentity: true });
+    expect(new URL(start.data.authorizeUrl).searchParams.get('scope')).toBe('vault:items_read vault:items_fill vault:identity_read vault:identity_fill offline_access');
+    expect(res.headers.location).toBe('/settings/secrets?vault=connected');
+    expect((await rowOf(s.userId)).scopes).toEqual(expect.arrayContaining(['vault:identity_read', 'vault:identity_fill']));
+    // Both extras at once.
+    const both = await connect(s, { allowWrite: true, allowIdentity: true });
+    expect(new URL(both.start.data.authorizeUrl).searchParams.get('scope')).toBe('vault:items_read vault:items_fill vault:items_write vault:identity_read vault:identity_fill offline_access');
+  });
+
   it('refuses a callback with a wrong state, and one with no state', async () => {
     const s = await login('sec-wrong-state');
     await saveClient(s);
@@ -787,5 +799,61 @@ describe('no secret leaks (seeded markers)', () => {
     // the authorization codes never appear either (the redirect carries only the outcome)
     expect(vault.issuedCodes.length).toBeGreaterThan(0);
     for (const code of vault.issuedCodes) for (const place of everything) expect(place).not.toContain(code);
+  });
+});
+
+
+describe('the identity listing for the Secrets page (E37.6)', () => {
+  let admin: Session;
+  beforeAll(async () => {
+    admin = await login('sec-id-admin', 'admin');
+  });
+  const switches = async (s: Session, on: boolean) => {
+    expect((await call(admin, 'PATCH', '/api/system-settings', { secrets: { agentUse: { enabled: on } } })).statusCode).toBe(200);
+    policy.invalidate();
+    expect((await call(s, 'PATCH', '/api/user-settings', { secrets: { agentUse: { enabled: on } } })).statusCode).toBe(200);
+  };
+  type Listing = { available: boolean; reason: string; items: { name: string; fields: { label: string; sensitive: boolean }[] }[]; manageUrl: string | null };
+
+  it('lists item names and field labels only, once the identity permissions are granted and the switches are on', async () => {
+    const s = await login('sec-id-list');
+    expect((await saveClient(s)).statusCode).toBe(200);
+    // Not connected, then connected without the identity permissions, then with them.
+    expect((await call<Listing>(s, 'GET', '/api/secrets/identity')).data).toMatchObject({ available: false, reason: 'switched_off' });
+    await switches(s, true);
+    try {
+      expect((await call<Listing>(s, 'GET', '/api/secrets/identity')).data).toMatchObject({ available: false, reason: 'not_connected', items: [] });
+      await connect(s);
+      expect((await call<Listing>(s, 'GET', '/api/secrets/identity')).data).toMatchObject({ available: false, reason: 'needs_scope', items: [], manageUrl: vault.baseUrl });
+      await connect(s, { allowIdentity: true });
+      const ok = await call<Listing>(s, 'GET', '/api/secrets/identity');
+      expect(ok.statusCode).toBe(200);
+      expect(ok.data).toEqual({
+        available: true,
+        reason: 'ok',
+        manageUrl: vault.baseUrl,
+        items: [
+          {
+            name: 'Passport',
+            fields: [
+              { label: 'Full name', sensitive: false },
+              { label: 'Date of birth', sensitive: true },
+              { label: 'ID number', sensitive: true },
+            ],
+          },
+        ],
+      });
+      // The provider's own switch for identity details is off: its own reason, not a failure.
+      vault.identityAccess = false;
+      expect((await call<Listing>(s, 'GET', '/api/secrets/identity')).data).toMatchObject({ available: false, reason: 'provider_off', items: [] });
+      vault.identityAccess = true;
+      // A viewer may read the page's list; nobody else's.
+      const viewer = await login('sec-id-viewer', 'viewer');
+      expect((await call<Listing>(viewer, 'GET', '/api/secrets/identity')).data).toMatchObject({ available: false });
+      expect((await app.inject({ method: 'GET', url: '/api/secrets/identity' })).statusCode).toBe(401);
+    } finally {
+      await call(admin, 'PATCH', '/api/system-settings', { secrets: { agentUse: { enabled: false } } });
+      policy.invalidate();
+    }
   });
 });

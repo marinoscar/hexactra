@@ -7,7 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { readUsedSavedLogins } from '../runner/saved-logins';
 import { PrismaService } from '../prisma/prisma.service';
-import { SECRETS_ACTIVITY_KEEP_DAYS, isRefusal, sanitizeSecretsEvent, type SanitizedActivity } from './secrets-activity';
+import { ACTIVITY_FIELDS, SECRETS_ACTIVITY_KEEP_DAYS, isRefusal, sanitizeSecretsEvent, type SanitizedActivity } from './secrets-activity';
 
 /** The newest uses the page lists. */
 export const ACTIVITY_PAGE_SIZE = 100;
@@ -23,7 +23,7 @@ export interface ActivityItem {
   site: string | null;
   /** The saved login's name, as the run recorded it when it signed in (E37.3); null when the run is gone or did not record this site. */
   loginName: string | null;
-  field: 'username' | 'password' | 'one_time_code' | null;
+  field: (typeof ACTIVITY_FIELDS)[number] | null;
   outcome: string;
   /** The fabric refused or failed: nothing was typed. */
   refused: boolean;
@@ -56,7 +56,7 @@ const hostOfOrigin = (origin: string): string | null => {
   }
 };
 
-const FIELD_ORDER = ['username', 'password', 'one_time_code'];
+const FIELD_ORDER: readonly string[] = ACTIVITY_FIELDS;
 
 @Injectable()
 export class SecretsActivityService {
@@ -153,7 +153,7 @@ export class SecretsActivityService {
    */
   async reach(userId: string): Promise<ReachItem[]> {
     const rows = await this.prisma.secretsActivity.findMany({
-      where: { userId, event: 'release', outcome: 'typed' },
+      where: { userId, event: 'release', outcome: { in: ['typed', 'selected'] } },
       orderBy: { occurredAt: 'desc' },
       take: 1000,
       select: { itemId: true, site: true, field: true, occurredAt: true, runId: true },
@@ -177,8 +177,8 @@ export class SecretsActivityService {
     const [connected, reconnect, uses, refusals] = await Promise.all([
       this.prisma.secretsConnection.count({ where: { provider: 'vault', status: 'connected' } }),
       this.prisma.secretsConnection.count({ where: { provider: 'vault', status: 'needs_reconnect' } }),
-      this.prisma.secretsActivity.count({ where: { event: 'release', outcome: 'typed', occurredAt: { gte: since } } }),
-      this.prisma.secretsActivity.count({ where: { outcome: { notIn: ['typed', 'ok'] }, occurredAt: { gte: since } } }),
+      this.prisma.secretsActivity.count({ where: { event: 'release', outcome: { in: ['typed', 'selected'] }, occurredAt: { gte: since } } }),
+      this.prisma.secretsActivity.count({ where: { outcome: { notIn: ['typed', 'selected', 'ok'] }, occurredAt: { gte: since } } }),
     ]);
     return { deploymentEnabled, usersConnected: connected, usersNeedingReconnect: reconnect, usesThisWeek: uses, refusalsThisWeek: refusals };
   }

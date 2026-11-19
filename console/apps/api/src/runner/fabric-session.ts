@@ -300,6 +300,22 @@ export class FabricSession {
     return { typed: true };
   }
 
+  /**
+   * Choose the option of a `<select>` that matches one field of one item (E37.6): a country, or the day, month or year of
+   * a date of birth split in three selects (`part`). The fabric lists the options, picks one itself and wipes the value:
+   * the answer is only `{ selected: true }`, never the value, never which option.
+   */
+  async selectFromProvider(sessionId: string, opts: SelectFromProviderOptions): Promise<{ selected: true }> {
+    const op = await this.act(
+      sessionId,
+      { type: 'select_from_provider', item_id: opts.itemId, field: opts.field, selector: opts.selector, ...(opts.part ? { part: opts.part } : {}), ...providerMeta(opts) },
+      opts.timeoutMs,
+      { waitForTakeover: opts.waitForTakeover },
+    );
+    secretsResult(op);
+    return { selected: true };
+  }
+
   /** Like {@link typeFromProvider} with a one-time code fetched immediately before typing. */
   async typeCodeFromProvider(sessionId: string, opts: TypeCodeFromProviderOptions): Promise<{ typed: true; expiresAt: Date | null }> {
     const op = await this.act(
@@ -372,6 +388,15 @@ export type TypeFromProviderOptions = ProviderCallOptions &
     submit?: boolean;
   };
 
+export type SelectFromProviderOptions = ProviderCallOptions & {
+  itemId: string;
+  field: SecretField;
+  /** The `<select>` in the top-level document. */
+  selector: string;
+  /** For a date of birth in separate selects. */
+  part?: 'day' | 'month' | 'year';
+};
+
 export type TypeCodeFromProviderOptions = ProviderCallOptions &
   ProviderTarget & {
     itemId: string;
@@ -395,6 +420,7 @@ interface WireItem {
   match_kind: 'exact' | 'site';
   has_code?: boolean;
   updated_at?: string | null;
+  fields?: { key: SecretField; label?: string; sensitive?: boolean; usable_here?: boolean }[];
 }
 
 interface WireProviderView {
@@ -421,6 +447,7 @@ function itemOf(i: WireItem): ItemSummary {
     matchKind: i.match_kind,
     hasCode: i.has_code ?? false,
     updatedAt: dateOf(i.updated_at),
+    ...(i.fields ? { fields: i.fields.map((f) => ({ key: f.key, label: f.label ?? String(f.key), sensitive: f.sensitive === true, usableHere: f.usable_here === true })) } : {}),
   };
 }
 

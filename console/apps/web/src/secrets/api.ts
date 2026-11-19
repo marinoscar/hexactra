@@ -28,7 +28,23 @@ export interface SecretsStatus {
   providers: { vault: VaultStatus };
 }
 
-export type ActivityField = 'username' | 'password' | 'one_time_code';
+export type ActivityField =
+  | 'username'
+  | 'password'
+  | 'one_time_code'
+  | 'full_name'
+  | 'date_of_birth'
+  | 'id_type'
+  | 'id_number'
+  | 'id_issuing_country'
+  | 'address_line1'
+  | 'address_line2'
+  | 'city'
+  | 'region'
+  | 'postal_code'
+  | 'country'
+  | 'phone'
+  | 'email';
 
 export interface ActivityItem {
   id: string;
@@ -95,11 +111,20 @@ export interface DefaultClient {
 export const getStatus = (api: PlatformApiClient) => api.get<SecretsStatus>('/secrets/status');
 export const getActivity = (api: PlatformApiClient) => api.get<ActivityList>('/secrets/activity');
 export const getReach = (api: PlatformApiClient) => api.get<Reach>('/secrets/reach');
+/** `GET /api/secrets/identity` (E37.6): the identity items the owner saved, by name, with field labels. Never a value. */
+export interface IdentityListing {
+  available: boolean;
+  reason: 'ok' | 'not_connected' | 'needs_reconnect' | 'needs_scope' | 'switched_off' | 'provider_off' | 'unavailable';
+  items: { name: string; fields: { label: string; sensitive: boolean }[] }[];
+  manageUrl: string | null;
+}
+
+export const getIdentity = (api: PlatformApiClient) => api.get<IdentityListing>('/secrets/identity');
 export const getAdminSummary = (api: PlatformApiClient) => api.get<AdminSummary>('/secrets/admin/summary');
 export const getDefaultClient = (api: PlatformApiClient) => api.get<DefaultClient>('/secrets/vault/default-client');
 
 export const saveClient = (api: PlatformApiClient, body: { baseUrl: string; clientId: string; clientSecret?: string }) => api.put<SecretsStatus>('/secrets/vault/client', body);
-export const connect = (api: PlatformApiClient, body: { allowWrite?: boolean; returnTo?: string }) => api.post<{ authorizeUrl: string; expiresAt: string }>('/secrets/vault/connect', body);
+export const connect = (api: PlatformApiClient, body: { allowWrite?: boolean; allowIdentity?: boolean; returnTo?: string }) => api.post<{ authorizeUrl: string; expiresAt: string }>('/secrets/vault/connect', body);
 export const disconnect = (api: PlatformApiClient, forgetClient = false) => api.post<{ revoked: boolean; status: SecretsStatus }>('/secrets/vault/disconnect', forgetClient ? { forgetClient } : {});
 
 /** The owner's own switch: the user setting `secrets.agentUse.enabled`. */

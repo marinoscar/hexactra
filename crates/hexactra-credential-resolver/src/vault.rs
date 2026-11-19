@@ -36,7 +36,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use hexactra_core::remote::{ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose};
+use hexactra_core::remote::{
+    FieldSummary, ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose,
+};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, RETRY_AFTER, WWW_AUTHENTICATE};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -89,6 +91,29 @@ struct WireCredential {
     has_totp: bool,
     #[serde(default, rename = "updatedAt")]
     updated_at: Option<String>,
+}
+
+/// One entry of `GET /identity` (contract 1.1): an opened identity item and,
+/// per field, a label and two flags. Never a value.
+#[derive(Deserialize)]
+struct WireIdentity {
+    id: String,
+    name: String,
+    #[serde(default, rename = "originAllowed")]
+    origin_allowed: bool,
+    #[serde(default)]
+    fields: Vec<WireIdentityField>,
+}
+
+#[derive(Deserialize)]
+struct WireIdentityField {
+    field: String,
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    sensitive: bool,
+    #[serde(default)]
+    fillable: bool,
 }
 
 /// `POST .../fill`: the one secret field. No `Debug`.
@@ -242,6 +267,70 @@ impl VaultProvider {
         })
     }
 
+    /// `GET /identity` (E37.6): the owner's opened identity items with, per
+    /// field, a label and whether it is sensitive and usable on this origin.
+    /// Vault does not filter by origin here: an item is listed whatever the
+    /// page, and `originAllowed` says whether this page is on its allowed list
+    /// (`match_kind: exact`). A field this build does not know is skipped.
+    async fn lookup_identity(&self, origin: &Origin) -> Result<Vec<ItemSummary>, ProviderError> {
+        let mut url = self.url(&["identity"]);
+        url.query_pairs_mut()
+            .append_pair("origin", &origin.to_string());
+        let bytes = self.request(false, url, None).await?;
+        let wire: Envelope<Vec<WireIdentity>> =
+            serde_json::from_slice(&bytes).map_err(|_| ProviderError::Unavailable)?;
+        let mut items: Vec<ItemSummary> = wire
+            .data
+            .into_iter()
+            .map(|i| ItemSummary {
+                id: i.id,
+                name: i.name,
+                username: None,
+                origins: Vec::new(),
+                match_kind: if i.origin_allowed {
+                    MatchKind::Exact
+                } else {
+                    MatchKind::Site
+                },
+                has_code: false,
+                updated_at: None,
+                fields: i
+                    .fields
+                    .into_iter()
+                    .filter_map(|f| {
+                        let key = identity_field(&f.field)?;
+                        Some(FieldSummary {
+                            key,
+                            label: clean_label(&f.label, key),
+                            sensitive: f.sensitive,
+                            // Never usable beyond what Vault says: a sensitive
+                            // field off the allowed list is not.
+                            usable_here: f.fillable && (!f.sensitive || i.origin_allowed),
+                        })
+                    })
+                    .collect(),
+            })
+            .collect();
+        items.sort_by_key(|i| i.match_kind != MatchKind::Exact);
+        Ok(items)
+    }
+
+    /// `POST /identity/{id}/fill`: one identity field, bound to the origin,
+    /// purpose `form`. Vault enforces the allowed-origins list for a sensitive
+    /// field (`403 ORIGIN_MISMATCH`).
+    async fn release_identity(&self, req: ReleaseRequest) -> Result<SecretValue, ProviderError> {
+        if req.purpose != SecretPurpose::Form {
+            return Err(ProviderError::Refused("unsupported_purpose".into()));
+        }
+        let id = path_id(&req.item_id)?;
+        let url = self.url(&["identity", id, "fill"]);
+        let body = json!({ "field": req.field.as_str(), "origin": req.origin.to_string(), "purpose": "form" });
+        let bytes = self.request(true, url, Some(body)).await?;
+        let wire: Envelope<WireFill> =
+            serde_json::from_slice(&bytes).map_err(|_| ProviderError::Unavailable)?;
+        Ok(SecretValue::from_string(wire.data.value))
+    }
+
     /// `POST .../totp` once.
     async fn fetch_code(
         &self,
@@ -272,8 +361,10 @@ impl SecretsProvider for VaultProvider {
         origin: &Origin,
         kind: ItemKind,
     ) -> Result<Vec<ItemSummary>, ProviderError> {
-        if kind != ItemKind::Login {
-            return Err(ProviderError::Refused("unsupported_kind".into()));
+        match kind {
+            ItemKind::Login => {}
+            ItemKind::Identity => return self.lookup_identity(origin).await,
+            ItemKind::Card => return Err(ProviderError::Refused("unsupported_kind".into())),
         }
         let mut url = self.url(&["credentials"]);
         url.query_pairs_mut()
@@ -303,6 +394,7 @@ impl SecretsProvider for VaultProvider {
                         .updated_at
                         .and_then(|t| DateTime::parse_from_rfc3339(&t).ok())
                         .map(|t| t.with_timezone(&Utc)),
+                    fields: Vec::new(),
                 })
             })
             .collect();
@@ -312,6 +404,9 @@ impl SecretsProvider for VaultProvider {
     }
 
     async fn release(&self, req: ReleaseRequest) -> Result<SecretValue, ProviderError> {
+        if is_identity_field(req.field) {
+            return self.release_identity(req).await;
+        }
         let field = match req.field {
             SecretField::Username => "username",
             SecretField::Password => "password",
@@ -348,6 +443,54 @@ impl SecretsProvider for VaultProvider {
         drop(code);
         tokio::time::sleep((left + NEXT_PERIOD_MARGIN).min(MAX_NEXT_PERIOD_WAIT)).await;
         self.fetch_code(&req).await
+    }
+}
+
+// ------------------------------------------------------------- identity fields
+
+/// The fields of Vault's `Identity` type an agent may ask for
+/// (`AGENT_IDENTITY_FIELDS`).
+fn is_identity_field(f: SecretField) -> bool {
+    matches!(
+        f,
+        SecretField::FullName
+            | SecretField::DateOfBirth
+            | SecretField::IdType
+            | SecretField::IdNumber
+            | SecretField::IdIssuingCountry
+            | SecretField::AddressLine1
+            | SecretField::AddressLine2
+            | SecretField::City
+            | SecretField::Region
+            | SecretField::PostalCode
+            | SecretField::Country
+            | SecretField::Phone
+            | SecretField::Email
+    )
+}
+
+/// A wire field name as an identity field; `None` for anything else (a field
+/// a later contract adds is skipped, as the stability rules ask).
+fn identity_field(name: &str) -> Option<SecretField> {
+    let f: SecretField = serde_json::from_value(Value::String(name.to_string())).ok()?;
+    is_identity_field(f).then_some(f)
+}
+
+/// A label as the model may read it: one line, no control characters, at most
+/// 80 characters; the field's own name when Vault sent nothing usable.
+fn clean_label(label: &str, key: SecretField) -> String {
+    let one_line: String = label
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let clipped: String = one_line.chars().take(80).collect();
+    if clipped.is_empty() {
+        key.as_str().replace('_', " ")
+    } else {
+        clipped
     }
 }
 
@@ -1039,6 +1182,202 @@ mod tests {
         // No error text carries the token.
         let e = VaultProvider::new("nope", TOKEN.into(), None).unwrap_err();
         assert!(!e.contains(TOKEN));
+    }
+
+    fn form(item: &str, field: SecretField, o: &str) -> ReleaseRequest {
+        ReleaseRequest {
+            purpose: SecretPurpose::Form,
+            ..release(item, field, o)
+        }
+    }
+
+    #[tokio::test]
+    async fn identity_lookup_lists_labels_and_flags_for_the_page_and_never_a_value() {
+        let fake = FakeVault::start().await;
+        let p = VaultProvider::new(&fake.base_url, fake.identity_token(), None).unwrap();
+        // On the item's allowed origin every field is usable.
+        let on = p
+            .lookup(
+                &owner(),
+                &origin(IDENTITY_ALLOWED_ORIGIN),
+                ItemKind::Identity,
+            )
+            .await
+            .unwrap();
+        // The closed item is not listed (Vault's opt-in).
+        assert_eq!(on.len(), 1);
+        let i = &on[0];
+        assert_eq!((i.id.as_str(), i.name.as_str()), (IDENTITY_ID, "Passport"));
+        assert_eq!(i.match_kind, MatchKind::Exact);
+        assert!(i.username.is_none() && !i.has_code);
+        assert_eq!(i.fields.len(), 5);
+        assert!(i.fields.iter().all(|f| f.usable_here));
+        // Elsewhere the sensitive ones are listed but not usable.
+        let off = p
+            .lookup(
+                &owner(),
+                &origin("https://other.example.test"),
+                ItemKind::Identity,
+            )
+            .await
+            .unwrap();
+        assert_eq!(off[0].match_kind, MatchKind::Site);
+        let f = |k: SecretField| off[0].fields.iter().find(|f| f.key == k).unwrap().clone();
+        assert!(f(SecretField::DateOfBirth).sensitive && !f(SecretField::DateOfBirth).usable_here);
+        assert!(f(SecretField::IdNumber).sensitive && !f(SecretField::IdNumber).usable_here);
+        assert_eq!(f(SecretField::DateOfBirth).label, "Date of birth");
+        assert!(!f(SecretField::FullName).sensitive && f(SecretField::FullName).usable_here);
+        assert!(f(SecretField::City).usable_here);
+        // Never a value, never a length.
+        let json = serde_json::to_string(&(on, off)).unwrap();
+        for canary in fake.canaries() {
+            assert!(!json.contains(&canary));
+        }
+        // The lookup asked for the page's origin, as the logins' does.
+        let seen = fake.requests_to("/identity");
+        assert_eq!(seen.len(), 2);
+        assert_eq!(seen[0].params["origin"], IDENTITY_ALLOWED_ORIGIN);
+        // Cards stay unsupported.
+        assert_eq!(
+            p.lookup(&owner(), &origin(IDENTITY_ALLOWED_ORIGIN), ItemKind::Card)
+                .await
+                .err(),
+            Some(ProviderError::Refused("unsupported_kind".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn identity_fill_is_one_field_bound_to_the_origin_and_the_form_purpose() {
+        let fake = FakeVault::start().await;
+        let p = VaultProvider::new(&fake.base_url, fake.identity_token(), None).unwrap();
+        // Not sensitive: any origin.
+        let v = p
+            .release(form(
+                IDENTITY_ID,
+                SecretField::FullName,
+                "https://other.example.test",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(text(&v), IDENTITY_FULL_NAME);
+        // Sensitive: the allowed exact origin.
+        let v = p
+            .release(form(
+                IDENTITY_ID,
+                SecretField::IdNumber,
+                IDENTITY_ALLOWED_ORIGIN,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(text(&v), IDENTITY_ID_NUMBER);
+        // Elsewhere: refused, and never retried.
+        let before = fake.requests_to("/fill").len();
+        assert_eq!(
+            p.release(form(
+                IDENTITY_ID,
+                SecretField::DateOfBirth,
+                "https://other.example.test"
+            ))
+            .await
+            .err(),
+            Some(ProviderError::OriginMismatch)
+        );
+        assert_eq!(fake.requests_to("/fill").len(), before + 1);
+        // An empty field and a closed item are the identical not found.
+        for (id, field) in [
+            (IDENTITY_ID, SecretField::Phone),
+            (IDENTITY_CLOSED_ID, SecretField::FullName),
+            ("not-an-item", SecretField::FullName),
+        ] {
+            assert_eq!(
+                p.release(form(id, field, IDENTITY_ALLOWED_ORIGIN))
+                    .await
+                    .err(),
+                Some(ProviderError::NotFound)
+            );
+        }
+        // Identity is only released for the form purpose.
+        assert_eq!(
+            p.release(release(
+                IDENTITY_ID,
+                SecretField::City,
+                IDENTITY_ALLOWED_ORIGIN
+            ))
+            .await
+            .err(),
+            Some(ProviderError::Refused("unsupported_purpose".into()))
+        );
+        // The request carried the field, the origin and the purpose, never a value.
+        let r = &fake.requests_to("/fill")[0];
+        assert_eq!(r.path, format!("/api/agent/v1/identity/{IDENTITY_ID}/fill"));
+        assert_eq!(r.params["field"], "full_name");
+        assert_eq!(r.params["purpose"], "form");
+    }
+
+    #[tokio::test]
+    async fn identity_needs_its_scope_and_its_switch() {
+        let fake = FakeVault::start().await;
+        // The logins' token has no identity scope.
+        let logins = VaultProvider::new(&fake.base_url, fake.default_token(), None).unwrap();
+        assert_eq!(
+            logins
+                .lookup(
+                    &owner(),
+                    &origin(IDENTITY_ALLOWED_ORIGIN),
+                    ItemKind::Identity
+                )
+                .await
+                .err(),
+            Some(ProviderError::Refused("insufficient_scope".into()))
+        );
+        assert_eq!(
+            logins
+                .release(form(
+                    IDENTITY_ID,
+                    SecretField::City,
+                    IDENTITY_ALLOWED_ORIGIN
+                ))
+                .await
+                .err(),
+            Some(ProviderError::Refused("insufficient_scope".into()))
+        );
+        // The deployment's identity switch is off: its own code, not "the vault is off".
+        let p = VaultProvider::new(&fake.base_url, fake.identity_token(), None).unwrap();
+        fake.set_identity_access(false);
+        assert_eq!(
+            p.lookup(
+                &owner(),
+                &origin(IDENTITY_ALLOWED_ORIGIN),
+                ItemKind::Identity
+            )
+            .await
+            .err(),
+            Some(ProviderError::Refused("identity_access_disabled".into()))
+        );
+        // Logins still work.
+        assert!(p
+            .lookup(&owner(), &origin(SHOP_ORIGIN), ItemKind::Login)
+            .await
+            .is_ok());
+    }
+
+    #[test]
+    fn identity_fields_and_labels_are_cleaned() {
+        assert_eq!(
+            identity_field("date_of_birth"),
+            Some(SecretField::DateOfBirth)
+        );
+        // Logins' and cards' fields, and anything unknown, are not identity fields.
+        for f in ["password", "card_number", "nope", ""] {
+            assert_eq!(identity_field(f), None, "{f}");
+        }
+        assert_eq!(
+            clean_label("  Date \n of\tbirth ", SecretField::DateOfBirth),
+            "Date of birth"
+        );
+        assert_eq!(clean_label("", SecretField::IdNumber), "id number");
+        assert_eq!(clean_label("\u{7}\u{1b}", SecretField::City), "city");
+        assert_eq!(clean_label(&"x".repeat(200), SecretField::City).len(), 80);
     }
 
     #[tokio::test]

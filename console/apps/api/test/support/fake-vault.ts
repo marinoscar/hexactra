@@ -151,6 +151,9 @@ export class FakeVault {
   // ---- controls ----
 
   /** The agent API's deployment kill switch. */
+  /** `agentAccess.identity.enabled` of the fake: off answers `403 IDENTITY_ACCESS_DISABLED` on the identity routes. */
+  identityAccess = true;
+
   setAgentAccess(on: boolean): void {
     this.options.agentAccess = on;
   }
@@ -233,7 +236,7 @@ export class FakeVault {
       authorization_endpoint: `${this.baseUrl}/api/oauth/authorize`,
       token_endpoint: `${this.baseUrl}/api/oauth/token`,
       revocation_endpoint: `${this.baseUrl}/api/oauth/revoke`,
-      scopes_supported: ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'offline_access'],
+      scopes_supported: ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'vault:identity_read', 'vault:identity_fill', 'offline_access'],
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code', 'refresh_token'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post', 'client_secret_basic'],
@@ -264,7 +267,7 @@ export class FakeVault {
     if (q.get('code_challenge_method') !== 'S256' || !q.get('code_challenge')) return back({ error: 'invalid_request' });
     if (q.get('resource') !== this.resource) return back({ error: 'invalid_target' });
     const scopes = (q.get('scope') ?? '').split(/\s+/).filter(Boolean);
-    const allowed = ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'offline_access'];
+    const allowed = ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'vault:identity_read', 'vault:identity_fill', 'offline_access'];
     if (scopes.some((s) => !allowed.includes(s))) return back({ error: 'invalid_scope' });
     if (this.denyNext) {
       this.denyNext = false;
@@ -377,6 +380,25 @@ export class FakeVault {
     if (route === '/credentials' && req.method === 'GET') {
       if (!need('vault:items_read')) return insufficient();
       return this.lookup(res, url.searchParams.get('origin') ?? '');
+    }
+    if (route === '/identity' && req.method === 'GET') {
+      if (!need('vault:identity_read')) return insufficient();
+      if (!this.identityAccess) return this.json(res, 403, { code: 'IDENTITY_ACCESS_DISABLED', message: 'Identity access is not enabled' });
+      // Labels and flags only, as Vault's contract 1.1 lists them: never a value.
+      return this.json(res, 200, {
+        data: [
+          {
+            id: '7f1c2e9a-0000-4000-8000-0000000000a1',
+            name: 'Passport',
+            originAllowed: false,
+            fields: [
+              { field: 'full_name', label: 'Full name', sensitive: false, fillable: true },
+              { field: 'date_of_birth', label: 'Date of birth', sensitive: true, fillable: false },
+              { field: 'id_number', label: 'ID number', sensitive: true, fillable: false },
+            ],
+          },
+        ],
+      });
     }
     const m = /^\/credentials\/([^/]+)\/(fill|totp)$/.exec(route);
     if (m && req.method === 'POST') {

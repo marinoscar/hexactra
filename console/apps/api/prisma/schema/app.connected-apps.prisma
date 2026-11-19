@@ -32,6 +32,8 @@ model ConnectedAppSettings {
   confirmSensitiveActions Boolean @default(true) @map("confirm_sensitive_actions")
   /// Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here.
   allowSavedLogins  Boolean  @default(false) @map("allow_saved_logins")
+  /// Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default; needs `allowSavedLogins`.
+  allowSavedIdentity Boolean @default(false) @map("allow_saved_identity")
   /// Refuse new runs and sessions from this app without disconnecting it.
   paused            Boolean  @default(false)
   /// The scopes the owner was already told about (`app.connected`, `app.scope_added`), so a step-up announces only what it adds.

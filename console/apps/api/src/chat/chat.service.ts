@@ -21,6 +21,7 @@ export interface ChatView {
   allowedDomains: string[];
   confirmRiskyActions: boolean;
   useSavedLogins: boolean;
+  useSavedIdentity: boolean;
   lastMessageAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -79,7 +80,7 @@ export function titleFromMessage(text: string): string {
 }
 
 function view(c: Conversation): ChatView {
-  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
+  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
 }
 function messageView(m: ChatMessage): ChatMessageView {
   return { id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt };
@@ -180,6 +181,7 @@ export class ChatService {
         ...(input.confirmRiskyActions !== undefined ? { confirmRiskyActions: input.confirmRiskyActions } : {}),
         // Absent: the owner's `secrets.defaultUseSavedLogins` (off unless they turned it on).
         useSavedLogins: input.useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
+        ...(input.useSavedIdentity !== undefined ? { useSavedIdentity: input.useSavedIdentity } : {}),
       },
     });
     return view(c);

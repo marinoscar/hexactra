@@ -80,6 +80,45 @@ describe('typeFromProvider', () => {
   });
 });
 
+describe('selectFromProvider and identity lookups (E37.6)', () => {
+  it('names the item, field and selector and answers only selected', async () => {
+    const { calls, session } = fake(() => ok({ selected: true }));
+    const r = await session.selectFromProvider('s1', { itemId: 'i1', field: 'date_of_birth', selector: '#month', part: 'month', runId: 'run-1' });
+    expect(r).toEqual({ selected: true });
+    expect(calls[0]![2]).toEqual({
+      action: { type: 'select_from_provider', item_id: 'i1', field: 'date_of_birth', selector: '#month', part: 'month', run_id: 'run-1' },
+      timeout_ms: 45_000,
+    });
+    expect(JSON.stringify(calls)).not.toMatch(/"(text|value)"/);
+    const noPart = fake(() => ok({ selected: true }));
+    await noPart.session.selectFromProvider('s1', { itemId: 'i1', field: 'country', selector: '#c' });
+    expect(noPart.calls[0]![2]).toEqual({ action: { type: 'select_from_provider', item_id: 'i1', field: 'country', selector: '#c' }, timeout_ms: 45_000 });
+  });
+
+  it('reads an identity lookup as labels and flags', async () => {
+    const { calls, session } = fake(() =>
+      ok({
+        origin: 'https://forms.example.test',
+        provider: 'vault',
+        items: [{ id: 'i1', name: 'Passport', origins: [], match_kind: 'exact', has_code: false, fields: [{ key: 'id_number', label: 'ID number', sensitive: true, usable_here: true }, { key: 'city' }] }],
+      }),
+    );
+    const r = await session.secretsLookup('s1', 'identity');
+    expect(calls[0]![2]).toMatchObject({ action: { type: 'secrets_lookup', kind: 'identity' } });
+    expect(r.items[0]!.fields).toEqual([
+      { key: 'id_number', label: 'ID number', sensitive: true, usableHere: true },
+      { key: 'city', label: 'city', sensitive: false, usableHere: false },
+    ]);
+  });
+
+  it('maps the two new failure codes', async () => {
+    for (const code of ['insecure_origin', 'no_option']) {
+      const { session } = fake(() => failed(`${code}: nothing was typed`));
+      await expect(session.selectFromProvider('s1', { itemId: 'i', field: 'country', selector: '#c' })).rejects.toMatchObject({ code });
+    }
+  });
+});
+
 describe('typeCodeFromProvider', () => {
   it('returns when the code expires', async () => {
     const { calls, session } = fake(() => ok({ typed: true, expires_at: '2030-01-01T00:00:30Z' }));

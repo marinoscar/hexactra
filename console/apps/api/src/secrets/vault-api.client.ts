@@ -5,7 +5,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { OutboundHttp, OutboundHttpError } from '../oauth-client';
-import { VAULT_AGENT_API_PATH, VAULT_ERROR_CODES, vaultWhoamiSchema, type VaultWhoami } from './vault-contract';
+import { VAULT_AGENT_API_PATH, VAULT_ERROR_CODES, VAULT_IDENTITY_DISABLED, vaultIdentityLookupSchema, vaultWhoamiSchema, type VaultIdentityItem, type VaultWhoami } from './vault-contract';
 
 export type WhoamiResult =
   | { status: 'ok'; whoami: VaultWhoami }
@@ -15,9 +15,53 @@ export type WhoamiResult =
   | { status: 'unauthorized' }
   | { status: 'unavailable'; code: string };
 
+export type IdentityListResult =
+  | { status: 'ok'; items: VaultIdentityItem[] }
+  /** The deployment's identity switch is off in Vault (`403 IDENTITY_ACCESS_DISABLED`). */
+  | { status: 'identity_disabled' }
+  /** The token is not accepted (401), or lacks an identity scope (403 insufficient_scope). */
+  | { status: 'unauthorized' }
+  | { status: 'unavailable'; code: string };
+
 @Injectable()
 export class VaultApiClient {
   constructor(private readonly http: OutboundHttp) {}
+
+  /**
+   * `GET /identity?origin=` (contract 1.1, scope `vault:identity_read`): the owner's opened identity items with their field
+   * labels and flags, to LIST on the Secrets page. `origin` is the Vault's own origin: `originAllowed` and `fillable` are then
+   * not about a page and are not used. Never a value (the lookup has none); nothing is logged.
+   */
+  async identity(baseUrl: string, accessToken: string, allowedHosts: readonly string[] = []): Promise<IdentityListResult> {
+    const base = baseUrl.replace(/\/+$/, '');
+    let res;
+    try {
+      res = await this.http.send({ method: 'GET', url: `${base}${VAULT_AGENT_API_PATH}/identity?origin=${encodeURIComponent(new URL(base).origin)}`, headers: { authorization: `Bearer ${accessToken}` }, allowedHosts, maxBytes: 256 * 1024 });
+    } catch (e) {
+      return { status: 'unavailable', code: e instanceof OutboundHttpError ? e.code : 'network' };
+    }
+    if (res.status === 200) {
+      let doc: unknown = null;
+      try {
+        doc = JSON.parse(res.body);
+      } catch {
+        // not JSON
+      }
+      const parsed = vaultIdentityLookupSchema.safeParse(doc);
+      return parsed.success ? { status: 'ok', items: parsed.data.data } : { status: 'unavailable', code: 'bad_response' };
+    }
+    if (res.status === 401) return { status: 'unauthorized' };
+    if (res.status === 403) {
+      let code: unknown;
+      try {
+        code = (JSON.parse(res.body) as { code?: unknown } | null)?.code;
+      } catch {
+        // not JSON
+      }
+      return code === VAULT_IDENTITY_DISABLED || code === VAULT_ERROR_CODES.disabled ? { status: 'identity_disabled' } : { status: 'unauthorized' };
+    }
+    return { status: 'unavailable', code: `http_${res.status}` };
+  }
 
   async whoami(baseUrl: string, accessToken: string, allowedHosts: readonly string[] = []): Promise<WhoamiResult> {
     let res;
