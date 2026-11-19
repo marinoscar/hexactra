@@ -37,6 +37,8 @@ import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
 import { isSliceEnabled } from './platform/slices/manifest';
 import { PrismaModule } from './prisma/prisma.service';
+// Last, so the MCP connection routes and schemas follow everything else in the generated OpenAPI document (E39.9).
+import { McpConnectionsModule } from './connections/mcp/mcp.module';
 
 /**
  * The root module: framework modules, the platform (src/platform/platform.ts)
@@ -83,7 +85,7 @@ import { PrismaModule } from './prisma/prisma.service';
     // Alerts (Administration → Alerts): the platform slice plus the console's rule kinds.
     ...(alertsMounted() ? [alertsModule, HexactraAlertsModule] : []),
     // Deliveries after a run (E39.6): an email with the report, a signed webhook, a spreadsheet row, files in a folder. Mounted with Connections; last, so its routes follow the others in the OpenAPI document.
-    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule] : []),
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule, McpConnectionsModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

@@ -71,7 +71,7 @@ export async function assertSelectable(prisma: PrismaService | Prisma.Transactio
   const ids = items.map((i) => i.connectionId);
   const bad = new Set(ids.filter((id, i) => ids.indexOf(id) !== i));
   if (ids.length > 0) {
-    const own = await prisma.connection.findMany({ where: { userId, id: { in: ids }, NOT: { provider: 'mcp' } }, select: { id: true } });
+    const own = await prisma.connection.findMany({ where: { userId, id: { in: ids } }, select: { id: true } });
     const ok = new Set(own.map((c) => c.id));
     for (const id of ids) if (!ok.has(id)) bad.add(id);
   }

@@ -24,6 +24,7 @@ import {
 import { ConnectionFlowService, bindingCookieName, type StartResult } from './connection-flow.service';
 import { ConnectionsService } from './connections.service';
 import { isProviderId } from './connections.constants';
+import { McpOAuthService } from './mcp/mcp-oauth.service';
 
 const secure = () => (process.env.APP_URL ?? '').startsWith('https://');
 const COOKIE_PATH = '/api/connections';
@@ -41,6 +42,7 @@ export class ConnectionsController {
   constructor(
     private readonly connections: ConnectionsService,
     private readonly flows: ConnectionFlowService,
+    private readonly mcpOAuth: McpOAuthService,
   ) {}
 
   @Get()
@@ -92,10 +94,14 @@ export class ConnectionsController {
   @Get('callback/:provider')
   @Public()
   @ApiResponse({ status: 302, description: 'Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `admin_consent_required`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...).' })
-  @ApiOperation({ summary: 'The provider redirects the browser here after the consent', description: 'The redirect URI to register at the provider: `/api/connections/callback/google` or `/api/connections/callback/microsoft` under this console\'s address. Not called by API clients.' })
+  @ApiOperation({ summary: 'The provider redirects the browser here after the consent', description: 'The redirect URI to register at the provider: `/api/connections/callback/google`, `/api/connections/callback/microsoft` or (an MCP server that uses OAuth) `/api/connections/callback/mcp` under this console\'s address. Not called by API clients.' })
   async callback(@Param() p: CallbackParamDto, @Query() q: CallbackQueryDto, @Req() req: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
     const cookies = (req as FastifyRequest & { cookies?: Record<string, string | undefined> }).cookies;
-    const r = await this.flows.handleCallback(p.provider, { code: q.code, state: q.state, error: q.error, errorDescription: q.error_description }, (name) => cookies?.[name]);
+    // An MCP server's own OAuth (E39.9) comes back here too: `/api/connections/callback/mcp`.
+    const r =
+      p.provider === 'mcp'
+        ? await this.mcpOAuth.handleCallback({ code: q.code, state: q.state, error: q.error, iss: q.iss }, (name) => cookies?.[name])
+        : await this.flows.handleCallback(p.provider, { code: q.code, state: q.state, error: q.error, errorDescription: q.error_description }, (name) => cookies?.[name]);
     const sep = r.returnTo.includes('?') ? '&' : '?';
     const extra = `${r.connectionId ? `&connection=${r.connectionId}` : ''}${r.missing && r.missing.length > 0 ? `&missing=${r.missing.join(',')}` : ''}`;
     void reply

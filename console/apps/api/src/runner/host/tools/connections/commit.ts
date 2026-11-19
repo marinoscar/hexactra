@@ -24,7 +24,7 @@ export interface WriteSpec<S extends Service, T> {
 }
 
 /** Spends the owner's approval of a call that was carried out: the confirmed step, or the saved approval's use. */
-async function settle(ctx: HostContext, decision: ConnectionDecision, tool: string, seqBefore: number): Promise<void> {
+export async function settle(ctx: HostContext, decision: ConnectionDecision, tool: string, seqBefore: number): Promise<void> {
   if (decision.via === 'rule' && decision.rule) {
     await allowedByRule(ctx as never, decision.rule as SavedApproval, seqBefore, tool);
     return;

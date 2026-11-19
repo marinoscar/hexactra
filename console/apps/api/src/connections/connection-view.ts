@@ -4,6 +4,15 @@ import type { Connection } from '@prisma/client';
 
 import { CAPABILITIES, CAPABILITY_GROUPS, isCapability, type Capability, type CapabilityGroup } from './connections.constants';
 
+/** What an MCP connection adds to its view (E39.9): where it points, how it signs in, and what its tools stand at. Never a secret. */
+export interface McpConnectionInfo {
+  url: string;
+  auth: 'none' | 'bearer' | 'header' | 'oauth';
+  serverName: string | null;
+  tools: { total: number; enabled: number; needsReview: number };
+  toolsFetchedAt: string | null;
+}
+
 export interface ConnectionView {
   id: string;
   provider: 'google' | 'microsoft' | 'mcp';
@@ -22,6 +31,8 @@ export interface ConnectionView {
   connectedAt: string;
   lastUsedAt: string | null;
   lastRefreshAt: string | null;
+  /** Provider `mcp` only. */
+  mcp?: McpConnectionInfo;
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);

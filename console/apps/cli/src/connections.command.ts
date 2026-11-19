@@ -16,6 +16,19 @@ export interface ConnectionView {
   status: 'active' | 'paused' | 'needs_reconnect' | 'revoked';
   statusReason: string | null;
   lastUsedAt: string | null;
+  /** An MCP server (`provider: mcp`): where it points, how it signs in and what its tools stand at. */
+  mcp?: { url: string; auth: string; serverName: string | null; tools: { total: number; enabled: number; needsReview: number } };
+}
+
+/** A tool of an MCP server as `GET /api/connections/{id}/tools` returns it. */
+export interface McpToolView {
+  id: string;
+  name: string;
+  title: string | null;
+  description: string;
+  suggested: 'read' | 'write';
+  mode: 'off' | 'read' | 'write';
+  review: 'new' | 'changed' | null;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,8 +59,9 @@ export function capabilitiesText(caps: readonly string[]): string {
 
 /** The list line: id prefix, provider, label, account, what it can do, flags. */
 export function connectionLine(c: ConnectionView): string {
+  const what = c.mcp ? `${c.mcp.tools.enabled} of ${c.mcp.tools.total} tools on${c.mcp.tools.needsReview > 0 ? `, ${c.mcp.tools.needsReview} to review` : ''}` : capabilitiesText(c.capabilities);
   const flags = [c.status !== 'active' ? `${c.status.replace('_', ' ')}${c.statusReason ? ` (${c.statusReason})` : ''}` : null, c.defaultFor.length > 0 ? `default for ${c.defaultFor.join(', ')}` : null].filter(Boolean).join('; ');
-  return `${c.id.slice(0, 8)}  ${c.provider.padEnd(9)}  ${c.label.padEnd(24)}  ${c.accountEmail.padEnd(28)}  ${capabilitiesText(c.capabilities)}${flags ? `  [${flags}]` : ''}`;
+  return `${c.id.slice(0, 8)}  ${c.provider.padEnd(9)}  ${c.label.padEnd(24)}  ${c.accountEmail.padEnd(28)}  ${what}${flags ? `  [${flags}]` : ''}`;
 }
 
 /** A connection by full id, id prefix or exact label (ignoring case). */
@@ -63,7 +77,7 @@ export async function findConnection(ref: string): Promise<ConnectionView> {
 
 /** `hexactra connections …` over /api/connections: your connected Google and Microsoft accounts. Connecting is done in the web app (it needs a browser). */
 export const connectionsCommand: CliCommandRegistration = (program: Command) => {
-  const connections = program.command('connections').description('Connections: your Google and Microsoft accounts (connect them in the web app: Settings → Connections)');
+  const connections = program.command('connections').description('Connections: your Google and Microsoft accounts and MCP servers (connect them in the web app: Settings → Connections)');
   connections
     .command('list')
     .description('Your connected accounts: label, account, what each may do, status')
@@ -83,8 +97,23 @@ export const connectionsCommand: CliCommandRegistration = (program: Command) => 
       const r = await consoleApi().post<{ results: { capability: string; ok: boolean; code: string | null }[] }>(`/connections/${c.id}/test`, {});
       if (o.json) return out(JSON.stringify(r, null, 2));
       for (const x of r.results) out(`${x.ok ? 'ok  ' : 'FAIL'}  ${x.capability}${x.code ? `  (${x.code})` : ''}`);
-      if (r.results.length === 0) out('Nothing is switched on for this connection.');
+      if (r.results.length === 0) out(c.provider === 'mcp' ? 'The server answered and listed its tools.' : 'Nothing is switched on for this connection.');
       if (r.results.some((x) => !x.ok)) process.exitCode = 1;
+    });
+  connections
+    .command('tools <connection>')
+    .description('The tools of an MCP server and what you decided for each (off, read, write); --refresh lists them again (changed or new tools are off until you review them in the web app)')
+    .option('--refresh', 'ask the server for its tools again first')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { refresh?: boolean; json?: boolean }) => {
+      const c = await findConnection(ref);
+      if (c.provider !== 'mcp') throw new Error(`${c.label} is not an MCP server`);
+      const api = consoleApi();
+      const r = o.refresh ? await api.post<{ tools: McpToolView[]; needsReview: number }>(`/connections/${c.id}/tools/refresh`, {}) : await api.get<{ tools: McpToolView[]; needsReview: number }>(`/connections/${c.id}/tools`);
+      if (o.json) return out(JSON.stringify(r, null, 2));
+      if (r.tools.length === 0) return out('The server lists no tools.');
+      for (const t of r.tools) out(`${t.mode.padEnd(5)}  ${t.name.padEnd(32)}  ${t.review ? `[${t.review}: review in the web app]  ` : ''}suggested ${t.suggested}${t.title ? `  ${t.title}` : ''}`);
+      if (r.needsReview > 0) out(`${r.needsReview} tool${r.needsReview === 1 ? '' : 's'} to review: Settings → Connections.`);
     });
   connections
     .command('pause <connection>')

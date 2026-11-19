@@ -24,6 +24,9 @@ import { ConnectionTokenStore } from './connection-token.store';
 import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry, type ConnectionUsage } from './connection-usage.registry';
 import { capabilitiesOf, toView, type ConnectionView } from './connection-view';
+import { McpCatalogService } from './mcp/mcp-catalog.service';
+import { McpConnectionsService } from './mcp/mcp-connections.service';
+import { readMcpConfig } from './mcp/mcp-config';
 
 export interface UpdateInput {
   label?: string;
@@ -57,15 +60,26 @@ export class ConnectionsService {
     private readonly tokens: ConnectionTokensService,
     private readonly usage: ConnectionUsageRegistry,
     private readonly events: ConnectionEvents,
+    private readonly mcp: McpConnectionsService,
+    private readonly mcpCatalog: McpCatalogService,
   ) {}
 
   private db(userId: string) {
     return this.prisma.forUser({ userId });
   }
 
-  private view(row: Connection): ConnectionView {
+  private view(row: Connection, mcp?: Map<string, { total: number; enabled: number; needsReview: number }>): ConnectionView {
+    if (row.provider === 'mcp') {
+      const cfg = readMcpConfig(row.config);
+      return { ...toView(row, []), ...(cfg ? { mcp: { url: cfg.url, auth: cfg.auth.kind, serverName: cfg.server?.name ?? null, tools: mcp?.get(row.id) ?? { total: 0, enabled: 0, needsReview: 0 }, toolsFetchedAt: cfg.toolsFetchedAt ?? null } } : {}) };
+    }
     const adapter = isProviderId(row.provider) ? this.registry.get(row.provider) : undefined;
     return toView(row, adapter ? adapter.capabilitiesGranted(row.grantedScopes) : capabilitiesOf(row));
+  }
+
+  /** A view with what an MCP connection adds (its tool counts). */
+  private async viewOf(row: Connection): Promise<ConnectionView> {
+    return this.view(row, row.provider === 'mcp' ? await this.mcpCatalog.summaries([row.id]) : undefined);
   }
 
   private async mine(userId: string, id: string): Promise<Connection> {
@@ -79,13 +93,15 @@ export class ConnectionsService {
   /** The owner's connections: those that need a reconnect first, then by provider and label. */
   async list(userId: string): Promise<ConnectionView[]> {
     const rows = await this.db(userId).connection.findMany({ orderBy: [{ provider: 'asc' }, { label: 'asc' }] });
-    return rows.map((r) => this.view(r)).sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
+    const mcp = await this.mcpCatalog.summaries(rows.filter((r) => r.provider === 'mcp').map((r) => r.id));
+    return rows.map((r) => this.view(r, mcp)).sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
   }
 
   /** One connection with what uses it (tasks, deliveries: nothing registers a source until E39.6). */
   async get(userId: string, id: string): Promise<ConnectionView & { usedBy: ConnectionUsage[] }> {
     const row = await this.mine(userId, id);
-    return { ...this.view(row), usedBy: await this.usage.list(userId, id) };
+    const mcp = row.provider === 'mcp' ? await this.mcpCatalog.summaries([row.id]) : undefined;
+    return { ...this.view(row, mcp), usedBy: await this.usage.list(userId, id) };
   }
 
   providers(): Promise<ProviderAvailability[]> {
@@ -102,6 +118,7 @@ export class ConnectionsService {
   async update(userId: string, id: string, input: UpdateInput): Promise<UpdateResult> {
     const row = await this.mine(userId, id);
     if (row.status === 'revoked') throw new ConnectionError('CONNECTION_NEEDS_RECONNECT', 'This connection must be connected again.', { label: row.label });
+    if (row.provider === 'mcp') return this.updateMcp(userId, row, input);
     const adapter = isProviderId(row.provider) ? this.registry.get(row.provider) : undefined;
     const current = capabilitiesOf(row);
     const granted = adapter ? adapter.capabilitiesGranted(row.grantedScopes) : current;
@@ -148,24 +165,39 @@ export class ConnectionsService {
     return { connection: this.view(updated), consent };
   }
 
+  /** An MCP connection has a name and tools, not capabilities or defaults (the owner switches tools in its tool list). */
+  private async updateMcp(userId: string, row: Connection, input: UpdateInput): Promise<UpdateResult> {
+    if (input.capabilities !== undefined || input.defaultFor !== undefined) throw new ConnectionError('CONNECTION_CAPABILITY_OFF', 'An MCP server has tools, not capabilities: switch its tools in the tool list.', { label: row.label });
+    let label = row.label;
+    if (input.label !== undefined) {
+      label = input.label.trim().slice(0, MAX_LABEL_LENGTH);
+      const others = await this.prisma.connection.findMany({ where: { userId, NOT: { id: row.id } }, select: { label: true } });
+      if (others.some((o) => o.label.toLowerCase() === label.toLowerCase())) throw new ConnectionError('CONNECTION_LABEL_TAKEN', 'You already have a connection with this name.');
+    }
+    const updated = label === row.label ? row : await this.prisma.connection.update({ where: { id: row.id }, data: { label } });
+    if (label !== row.label) await this.events.audit(userId, CONNECTION_AUDIT.updated, row.id, { provider: 'mcp', renamed: true });
+    const mcp = await this.mcpCatalog.summaries([row.id]);
+    return { connection: this.view(updated, mcp), consent: null };
+  }
+
   async pause(userId: string, id: string): Promise<ConnectionView> {
     const row = await this.mine(userId, id);
-    if (row.status === 'paused') return this.view(row);
+    if (row.status === 'paused') return this.viewOf(row);
     if (row.status !== 'active') throw new ConnectionError('CONNECTION_NEEDS_RECONNECT', 'This connection must be connected again.', { label: row.label });
     const updated = await this.prisma.connection.update({ where: { id }, data: { status: 'paused' } });
     await this.events.audit(userId, CONNECTION_AUDIT.paused, id, { provider: row.provider, capabilities: row.capabilities });
     this.events.count(row.provider, 'paused');
-    return this.view(updated);
+    return this.viewOf(updated);
   }
 
   async resume(userId: string, id: string): Promise<ConnectionView> {
     const row = await this.mine(userId, id);
-    if (row.status === 'active') return this.view(row);
+    if (row.status === 'active') return this.viewOf(row);
     if (row.status !== 'paused') throw new ConnectionError('CONNECTION_NEEDS_RECONNECT', 'This connection must be connected again.', { label: row.label });
     const updated = await this.prisma.connection.update({ where: { id }, data: { status: 'active', statusReason: null } });
     await this.events.audit(userId, CONNECTION_AUDIT.resumed, id, { provider: row.provider, capabilities: row.capabilities });
     this.events.count(row.provider, 'resumed');
-    return this.view(updated);
+    return this.viewOf(updated);
   }
 
   /**
@@ -174,6 +206,11 @@ export class ConnectionsService {
    */
   async test(userId: string, id: string): Promise<TestResult> {
     const row = await this.mine(userId, id);
+    if (row.provider === 'mcp') {
+      // The server answers `initialize` and lists its tools: no capability to probe.
+      await this.mcp.test(userId, row);
+      return { results: [] };
+    }
     const adapter = isProviderId(row.provider) ? this.registry.get(row.provider) : undefined;
     if (!adapter) throw new ConnectionError('CONNECTION_PROVIDER_UNAVAILABLE', 'This provider is not installed on this deployment.', { reason: 'not_installed' });
     const accessToken = await this.tokens.getAccessToken(id, userId);
@@ -198,6 +235,7 @@ export class ConnectionsService {
    */
   async remove(userId: string, id: string): Promise<{ revoked: boolean; clearedReferences: number }> {
     const row = await this.mine(userId, id);
+    if (row.provider === 'mcp') return this.removeMcp(userId, row);
     let revoked = false;
     const adapter = isProviderId(row.provider) ? this.registry.get(row.provider) : undefined;
     const app = adapter && isProviderId(row.provider) ? await this.apps.app(row.provider, { ignoreSwitch: true }).catch(() => null) : null;
@@ -218,6 +256,17 @@ export class ConnectionsService {
     await this.prisma.connection.deleteMany({ where: { id, userId } });
     await this.events.audit(userId, CONNECTION_AUDIT.removed, id, { provider: row.provider, capabilities: row.capabilities, revoked, clearedReferences: used.length });
     this.events.count(row.provider, 'removed');
+    return { revoked, clearedReferences: used.length };
+  }
+
+  /** Removes an MCP connection: the OAuth grant is revoked (best effort), every secret kept for it is deleted, what references it is cleared. Its tools go with the row. */
+  private async removeMcp(userId: string, row: Connection): Promise<{ revoked: boolean; clearedReferences: number }> {
+    const revoked = await this.mcp.beforeRemove(row);
+    const used = await this.usage.list(userId, row.id);
+    await this.usage.clear(userId, row.id);
+    await this.prisma.connection.deleteMany({ where: { id: row.id, userId } });
+    await this.events.audit(userId, CONNECTION_AUDIT.removed, row.id, { provider: 'mcp', revoked, clearedReferences: used.length });
+    this.events.count('mcp', 'removed');
     return { revoked, clearedReferences: used.length };
   }
 }

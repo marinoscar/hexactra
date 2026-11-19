@@ -4,6 +4,7 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 import type { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import type { CapabilityHub } from '../../connections/capability-hub';
+import type { McpRunService } from '../../connections/mcp/mcp-run.service';
 import type { ApprovalRulesService } from '../../approvals/approval-rules.service';
 import type { FabricClient } from '../../fabric/fabric.client';
 import type { MemoryContext } from '../../memories/memory-context';
@@ -40,6 +41,8 @@ export interface HostDeps {
   secrets?: RunSecretsService;
   /** The owner's connections (E39.7): the provider-neutral mail, calendar and documents of one connection. Absent without the connections module: then no run is offered a connection tool. */
   connections?: Pick<CapabilityHub, 'mail' | 'calendar' | 'documents'>;
+  /** The owner's MCP servers (E39.9): the tools a run may be offered and calling one. Absent without the connections module. */
+  mcp?: Pick<McpRunService, 'toolsFor' | 'call' | 'check' | 'exactSecrets'>;
   /** The run's trace and PDF report (E35): `file_upload` hands the report to a connection. */
   traces?: Pick<RunTraceService, 'exportPdf'>;
   /** The wall clock; tests replace it to pass time without waiting. */

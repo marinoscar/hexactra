@@ -74,6 +74,16 @@ export const connectionViewSchema = z.object({
   connectedAt: iso,
   lastUsedAt: iso.nullable(),
   lastRefreshAt: iso.nullable(),
+  mcp: z
+    .object({
+      url: z.string(),
+      auth: z.enum(['none', 'bearer', 'header', 'oauth']),
+      serverName: z.string().nullable(),
+      tools: z.object({ total: z.number().int(), enabled: z.number().int(), needsReview: z.number().int().describe('Tools that are new or changed since you last decided: they are off until you review them.') }),
+      toolsFetchedAt: iso.nullable(),
+    })
+    .optional()
+    .describe('MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret.'),
 });
 export class ConnectionResponseDto extends createZodDto(connectionViewSchema) {}
 

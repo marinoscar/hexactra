@@ -439,6 +439,6 @@ describe('the administrator page', () => {
     const g = within(await screen.findByRole('region', { name: 'Google' }));
     expect(g.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(g.getByLabelText('Client ID')).toBeDisabled();
-    expect(host.requests.every((r) => r.path.startsWith('/connections/admin/apps'))).toBe(true);
+    expect(host.requests.every((r) => r.path.startsWith('/connections/admin/'))).toBe(true);
   });
 });
