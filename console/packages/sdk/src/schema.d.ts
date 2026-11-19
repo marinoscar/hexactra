@@ -15726,6 +15726,32 @@ export interface components {
                 supported: boolean;
                 note: string;
             }[];
+            /** @description The kinds of account the capability matrix distinguishes at this provider. */
+            matrixColumns: ("google" | "microsoft_work" | "microsoft_personal")[];
+            /** @description What each kind of account can do, per method. A method marked `unsupported` fails with `NOT_SUPPORTED`; do not offer it. */
+            capabilityMatrix: {
+                /** @description `mail.search`, `calendar.createEvent`, `documents.appendRows`, ... */
+                method: string;
+                /** @enum {string} */
+                service: "mail" | "calendar" | "documents";
+                /** @enum {string} */
+                effect: "read" | "write";
+                /**
+                 * @description The switch the method needs.
+                 * @enum {string}
+                 */
+                capability: "mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
+                /** @description Per matrix column: whether the method works, and how it is limited or why it is not supported. */
+                support: {
+                    [key: string]: {
+                        /** @enum {string} */
+                        support: "supported" | "limited" | "unsupported";
+                        note?: string;
+                    };
+                };
+            }[];
+            /** @description Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone. Null elsewhere. */
+            adminConsentUrl: string | null;
         };
         AuthorizeResponseDto: {
             /** @description Send the browser here: the provider's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
@@ -40343,7 +40369,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
+            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `admin_consent_required`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
             302: {
                 headers: {
                     [name: string]: unknown;

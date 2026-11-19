@@ -30,6 +30,7 @@ export class ConnectionCapabilities extends CapabilityHub {
           provider: row.provider,
           label: row.label,
           accountEmail: row.accountEmail,
+          accountId: row.accountId,
           capabilities: on,
           // With no adapter installed the grants cannot be read; the switches stand in (the same rule as ConnectionsService.update).
           granted: adapter ? adapter.capabilitiesGranted(row.grantedScopes) : on,

@@ -27,6 +27,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { GoogleConnectionsModule } from './connections/google/google.module';
+import { MicrosoftConnectionsModule } from './connections/microsoft/microsoft.module';
 import { MailTriggersModule } from './mail-triggers/mail-triggers.module';
 import { loadSecretsStoreModule, secretsStoreEnabled } from './secrets/builtin/secrets-store.loader';
 import { TasksModule } from './tasks/tasks.module';
@@ -60,7 +61,7 @@ import { PrismaModule } from './prisma/prisma.service';
     // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
     // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
-    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MailTriggersModule] : []),
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MicrosoftConnectionsModule, MailTriggersModule] : []),
     // The built-in secrets store (E37.5): the Vault packages embedded, OFF by default. With SECRETS_STORE_ENABLED unset no
     // Vault package is loaded; with it on and no valid SECRETS_STORE_KEY the API refuses to start (one clear error).
     ...(secretsStoreEnabled() ? [loadSecretsStoreModule()] : []),
