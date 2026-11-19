@@ -28,6 +28,8 @@ export interface AlertSources {
   busyApprovals?(minUses: number, since: Date): Promise<BusyApproval[]>;
   /** Runs created since `since` that were recovered at least `minRecoveries` times after an interruption (E38.3), most recovered first. Optional. */
   recoveredRuns?(minRecoveries: number, since: Date): Promise<RecoveredRun[]>;
+  /** Deliveries (E39.6, #603) whose runs failed to deliver at least `minFailures` times since `since`, most failures first. Optional. */
+  failingDeliveries?(minFailures: number, since: Date): Promise<FailingDelivery[]>;
   /** Saved card payments (E37.7) per user since `since`: how many cards were typed (`number` released) and the largest declared amount. Optional. */
   cardUsage?(since: Date): Promise<CardUsage[]>;
 }
@@ -36,6 +38,15 @@ export interface AlertSources {
 export interface RecoveredRun extends AlertRunRef {
   userId: string;
   recoveries: number;
+}
+
+/** One delivery that kept failing (E39.6): its id, kind and the task's name; never an address, a subject, a cell or a file name. */
+export interface FailingDelivery {
+  deliveryId: string;
+  userId: string;
+  kind: string;
+  taskName: string | null;
+  failures: number;
 }
 
 /** One user's saved-card payments in a window: counts and the largest declared amount; never a card, a merchant or a value. */
@@ -144,6 +155,8 @@ export const HEXACTRA_ALERT_KINDS = {
   CARD_USE: 'hexactra_card_use',
   /** E38.3. The starter rule's key is `hexactra.run_recovered`. */
   RUN_RECOVERED: 'hexactra_run_recovered',
+  /** E39.6. The starter rule's key is `hexactra.delivery_failing`. */
+  DELIVERY_FAILING: 'hexactra_delivery_failing',
 } as const;
 
 const hostOfflineConfig = z.object({ includeDraining: z.boolean().default(false) });
@@ -357,8 +370,32 @@ export const runRecoveredKind: AlertRuleKind<z.infer<typeof recoveredConfig>> = 
   describe: (rule) => `One run recovered ${rule.config.minRecoveries} or more times after an interruption (runs of the last ${rule.config.windowHours} h)`,
 };
 
+const deliveryFailingConfig = z.object({
+  /** Failed deliveries of one delivery in the window that fire the alert. */
+  minFailures: z.number().int().min(1).max(100).default(3),
+  windowHours: z.number().int().min(1).max(168).default(24),
+});
+export const deliveryFailingKind: AlertRuleKind<z.infer<typeof deliveryFailingConfig>> = {
+  id: HEXACTRA_ALERT_KINDS.DELIVERY_FAILING,
+  label: 'Delivery keeps failing',
+  description: 'The email, spreadsheet row, file or webhook a task sends after its runs failed several times: a connection that needs reconnecting, a folder that was removed, a destination that is down.',
+  configSchema: deliveryFailingConfig,
+  async evaluate(ctx, rule) {
+    const { minFailures, windowHours } = rule.config;
+    const since = new Date(ctx.now.getTime() - windowHours * 3_600_000);
+    const rows = (await need().failingDeliveries?.(minFailures, since)) ?? [];
+    return rows.map((d) => ({
+      labels: { 'delivery.id': d.deliveryId, 'user.id': d.userId },
+      value: d.failures,
+      breached: true,
+      summary: `${rule.name}: a ${d.kind} delivery${d.taskName ? ` of task "${goalExcerpt(d.taskName)}"` : ''} failed ${d.failures} times in ${windowHours} h (limit ${minFailures - 1})`,
+    }));
+  },
+  describe: (rule) => `One delivery failed ${rule.config.minFailures} or more times within ${rule.config.windowHours} h`,
+};
+
 // Run retention keeps runs for these kinds' windows: a new kind that reads `runs` joins the list.
-const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, HEXACTRA_ALERT_KINDS.RUN_RECOVERED];
+const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, HEXACTRA_ALERT_KINDS.RUN_RECOVERED, HEXACTRA_ALERT_KINDS.DELIVERY_FAILING];
 if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_KINDS.some((k) => !RUN_READERS.includes(k))) {
   throw new Error('RUN_READING_ALERT_KINDS (run-alert-kinds.ts) must list exactly the alert kinds that read runs');
 }
@@ -371,6 +408,7 @@ registerAlertRuleKind(runCostSpikeKind);
 registerAlertRuleKind(approvalBusyKind);
 registerAlertRuleKind(cardUseKind);
 registerAlertRuleKind(runRecoveredKind);
+registerAlertRuleKind(deliveryFailingKind);
 
 /**
  * The rules the console creates once (by key); admins tune them at
@@ -390,4 +428,6 @@ export const HEXACTRA_ALERT_RULES = [
   { key: 'hexactra.card_use', name: 'Saved card used a lot', kind: HEXACTRA_ALERT_KINDS.CARD_USE, severity: 'warning', config: { maxUses: 5, maxAmount: null, windowHours: 24 }, forSeconds: 0, enabled: true },
   // E38.3: a run whose job keeps dying: more than three recoveries of one run in a day.
   { key: 'hexactra.run_recovered', name: 'Run keeps being interrupted', kind: HEXACTRA_ALERT_KINDS.RUN_RECOVERED, severity: 'warning', config: { minRecoveries: 4, windowHours: 24 }, forSeconds: 0, enabled: true },
+  // E39.6: a delivery after a run that failed three times in a day (its runs read the log, so retention keeps them as long as the window).
+  { key: 'hexactra.delivery_failing', name: 'Delivery keeps failing', kind: HEXACTRA_ALERT_KINDS.DELIVERY_FAILING, severity: 'warning', config: { minFailures: 3, windowHours: 24 }, forSeconds: 0, enabled: true },
 ] as const;
