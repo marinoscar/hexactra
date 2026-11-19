@@ -1,6 +1,6 @@
 // Response shapes of the chat routes (#483), for the OpenAPI document and the
 // generated SDK. `@ApiDataResponse` wraps each in the platform's `{ data }` envelope.
-import { taskParameterResponseSchema } from './console.responses';
+import { taskOutputResponseSchema, taskParameterResponseSchema } from './console.responses';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -62,6 +62,7 @@ export const chatTaskDraftResponseSchema = z.object({
   useSavedIdentity: z.boolean().describe("The chat's saved-details switch (E37.6), carried over to the task"),
   useSavedCards: z.boolean().describe("The chat's saved-cards switch (E37.7), carried over to the task"),
   parameters: z.array(taskParameterResponseSchema).describe("The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."),
+  outputs: z.array(taskOutputResponseSchema).describe('The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping.'),
 });
 export class ChatTaskDraftResponseDto extends createZodDto(chatTaskDraftResponseSchema) {}
 

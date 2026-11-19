@@ -14,6 +14,8 @@ import { taskPaths } from '../components/taskList';
 import { TaskSchedulesSection } from '../components/TaskSchedulesSection';
 import { TaskStats } from '../components/TaskStats';
 import { useTaskActions } from '../components/useTaskActions';
+import { TaskOutputsTable } from '../taskOutputs/TaskOutputsTable';
+import { OUTPUT_TYPE_LABEL } from '../taskOutputs/model';
 import { useRunInputs } from '../taskParams/RunInputsDialog';
 import { savedValueText } from '../taskParams/model';
 import { policyLine, startModel } from '../policies/format';
@@ -402,6 +404,11 @@ export function TaskDetailPage() {
         {canReadRuns && (
           <Stack spacing={3} sx={{ minWidth: 0 }}>
             <TaskStats taskId={task.id} lastRun={summary.lastRun} lastStopReason={lastRun && lastRun.id === summary.lastRun?.id ? lastRun.stopReason : null} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />
+            {(task.outputs?.length ?? 0) > 0 && (
+              <Section id="outputs" title="Outputs">
+                <TaskOutputsTable taskId={task.id} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />
+              </Section>
+            )}
             <Section
               id="runs"
               title="Runs"
@@ -449,6 +456,19 @@ export function TaskDetailPage() {
                       {task.parameters!.map((p) => (
                         <li key={p.key}>
                           {p.label}: {p.sensitive ? 'asked every time, never stored' : savedValueText(p)}
+                        </li>
+                      ))}
+                    </Box>
+                  </Row>
+                )}
+                {(task.outputs?.length ?? 0) > 0 && (
+                  <Row term="Outputs">
+                    <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                      {task.outputs!.map((o) => (
+                        <li key={o.key}>
+                          {o.label} ({OUTPUT_TYPE_LABEL[o.type].toLowerCase()}
+                          {o.required === false ? ', optional' : ''}
+                          {o.sensitive ? ', sensitive' : ''})
                         </li>
                       ))}
                     </Box>

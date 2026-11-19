@@ -8,6 +8,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { subscribeRun } from '../live';
+import { RunOutputs } from '../taskOutputs/RunOutputs';
+import type { RunOutput } from '../taskOutputs/model';
 import type { ChatMessage, ChatRun } from '../types/chat';
 import type { RunStep } from '../types/runs';
 import { StatusChip, formatCost, isLive, stopReasonLabel } from '../ui';
@@ -318,6 +320,9 @@ interface ResultMeta {
   confirmedActions?: number;
   /** Steps that went ahead on saved approvals (#555), in one sentence; absent when none did. */
   savedApprovals?: string;
+  /** What the run returned (E39.5, #600), masked; absent for a run without outputs. */
+  outputs?: RunOutput[] | null;
+  outputsComplete?: boolean | null;
 }
 
 /** The step a result's lead sentence names (#540), for the "Run again" question; null when it names none. */
@@ -367,6 +372,7 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
         {message.text}
       </Typography>
+      <RunOutputs outputs={meta.outputs} complete={meta.outputsComplete} dense />
       {meta.savedApprovals && (
         <Typography variant="body2" color="text.secondary" data-testid="saved-approvals-line" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
           {meta.savedApprovals}

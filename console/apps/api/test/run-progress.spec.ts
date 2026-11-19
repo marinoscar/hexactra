@@ -13,6 +13,7 @@ import {
   answerableHere,
   decodeCursor,
   encodeCursor,
+  progressHasPageText,
   progressSummary,
   runProgress,
   runProgressSchema,
@@ -78,6 +79,33 @@ describe('the progress block', () => {
     const done = runProgress({ ...base, status: 'succeeded', result: 'The cheapest fare is 120 EUR' }, null, { appUrl: APP, via: 'oauth', changed: true, cursor: 'c', now });
     expect(done.result).toBe('The cheapest fare is 120 EUR');
     expect(progressSummary(done)).toMatch(/^Finished .*: The cheapest fare is 120 EUR\./);
+  });
+});
+
+describe('the progress block of a run with outputs (E39.5)', () => {
+  const base = { id: RID, stepCount: 4, createdAt: '2026-01-01T10:00:00.000Z', startedAt: '2026-01-01T10:00:00.000Z', finishedAt: '2026-01-01T10:01:00.000Z', result: 'Paid the rent.' };
+  const outputs = [
+    { key: 'confirmation_number', label: 'Confirmation number', type: 'text' as const, required: true, sensitive: false, value: 'C-8841', ok: true, note: null },
+    { key: 'amount_paid', label: 'Amount paid', type: 'money' as const, required: true, sensitive: false, value: { amount: 1250, currency: 'USD' }, ok: true, note: null },
+    { key: 'paid_on', label: 'Paid on', type: 'date' as const, required: true, sensitive: false, value: null, ok: false, note: 'Not found' },
+    { key: 'account', label: 'Account', type: 'text' as const, required: false, sensitive: true, value: '[hidden]', ok: true, note: null },
+  ];
+  const opts = { appUrl: APP, via: 'pat' as const, changed: true, cursor: 'c' };
+
+  it('carries the outputs of a finished run, says them in the summary and is marked as web text', () => {
+    const p = runProgress({ ...base, status: 'succeeded', outputs, outputsComplete: false }, null, opts);
+    expect(p.outputs).toHaveLength(4);
+    expect(p.outputs_complete).toBe(false);
+    expect(runProgressSchema.safeParse(p).success).toBe(true);
+    expect(progressSummary(p)).toContain('Outputs: Confirmation number: C-8841; Amount paid: USD 1250; Paid on: not found; Account: [hidden] (not all were found).');
+    expect(progressHasPageText(p)).toBe(true);
+  });
+
+  it('has none for a live run or a run without outputs', () => {
+    expect(runProgress({ ...base, status: 'running', outputs, outputsComplete: null }, null, opts)).not.toHaveProperty('outputs');
+    const plain = runProgress({ ...base, status: 'succeeded', outputs: null }, null, opts);
+    expect(plain).not.toHaveProperty('outputs');
+    expect(progressSummary(plain)).not.toContain('Outputs:');
   });
 });
 

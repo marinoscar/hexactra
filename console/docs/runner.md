@@ -75,6 +75,15 @@ Every tool the model calls goes through `executeTool` (`harness/execute-tool.ts`
 
 What a tool may do through `ctx`: `ctx.record`, `ctx.openIntent`, `ctx.note` (a trace record that is not an action), `ctx.askPerson`, `ctx.setActivity`, `ctx.budgetStop`, `ctx.preflight`, `ctx.checkpoint`, `ctx.memory`, `ctx.state`, and the ports. A browser tool additionally has `ctx.ext` (the browser, the site list, the marks, the masking hooks).
 
+## A structured result: task outputs (E39.5)
+
+A task can declare outputs the run must return ([api-tasks-runs.md](api-tasks-runs.md#task-outputs)). The harness knows only that a finished run may carry a `StructuredResult` (`fields` by key, `complete`) and a count of refused `finish` calls (`memory.outputAttempts`); what a field is, how it is read and the words about it are the host's (`runner/outputs.ts`), handed to the toolset as an `OutputsHandle` in `ctx.ext.outputs` (null for a task without outputs):
+
+- **The `finish` tool** offers `ctx.ext.outputs.parameters` through the tool's optional `parametersFor(ctx)` (a pure function of the run, so the schema is identical in every round; without outputs `parameters` is offered, unchanged), reads what it was given with `decide`, refuses a success finish with a problem twice at most (a note step, not an action), and strips a sensitive value from the result text with `scrub`. A failed finish and the wrap-up (`state.wrappingUp`) are never refused.
+- **The instructions** gain the list of outputs in `host/build-context.ts` (`instructionsWithOutputs`), once per run, so the stable prefix is unchanged between rounds.
+- **The loop** asks for them when the model stops without `finish`: `LoopProfile.beforeImplicitFinish` returns the nudge (and counts the attempt); `wrapUpNote` adds a line to the wrap-up call's input.
+- **Ending the run** (`closeRun`, `wrapUp`, the loop's finish) passes `outputs` and `outputsComplete` to `RunStorePort.finish`, which the host writes with the status in one transition; a run with outputs that ends without them is marked `outputsComplete: false` there.
+
 ## A round, as the loop sees it
 
 `runLoop` (`harness/run-loop.ts`) checks Stop, Pause, the budgets and the hop to a new job at each chunk boundary, moves the tier if the policy says so, folds in the owner's chat guidance, asks the profile to `observe` (the browser takes its screenshot), judges the stall detector on the new page, builds the input and calls the model for up to `callsPerChunk` tool calls. After the chunk it saves the memory and the usage, and decides: finished, waiting for a person, paused, wrapped up on a budget, handed on, stalled. The input is built so that the provider's cache holds (#406): the **stable prefix** (goal, memories, context, allowed sites, the progress log) is identical between rounds of a chunk and comes first; the volatile status (steps used, the owner's ask rules for the page) comes last, after the screenshots. `test/runner-harness.spec.ts` asserts it.

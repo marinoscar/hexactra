@@ -8,7 +8,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { runClientSchema, runOriginSchema } from '../connected-apps/connected-apps.schemas';
-import { runBudgetSchema, runStepResponseSchema } from '../openapi/console.responses';
+import { runBudgetSchema, runOutputResponseSchema, runStepResponseSchema } from '../openapi/console.responses';
 import { TIERS } from '../policies/agent-policy.schema';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { POLICY_SOURCES } from '../policies/policy-snapshot';
@@ -115,6 +115,12 @@ export const runTraceSchema = z
         })
         .describe('What the run used'),
     }),
+    outputs: z
+      .array(runOutputResponseSchema)
+      .nullable()
+      .optional()
+      .describe("What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed."),
+    outputsComplete: z.boolean().nullable().optional().describe('Whether every output was returned and valid; null when the run has no outputs or has not finished'),
     policy: z
       .object({ id: z.string(), name: z.string(), version: z.number().int(), builtin: z.boolean(), source: z.enum(POLICY_SOURCES).nullable(), spec: agentPolicySpecSchema })
       .nullable()

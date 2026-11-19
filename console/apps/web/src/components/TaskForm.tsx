@@ -40,6 +40,8 @@ import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { ScheduleDraft } from '../schedule/draft';
 import { useSchedulePreview } from '../schedule/useSchedulePreview';
 import { createTask, deleteTask, replaceTaskSchedules, updateTask } from '../taskForm/api';
+import { effectiveKeys, type TaskOutput } from '../taskOutputs/model';
+import { OutputsSection } from '../taskOutputs/OutputsSection';
 import { GoalField } from '../taskParams/GoalField';
 import { previewGoal, syncParameters, type TaskParameter } from '../taskParams/model';
 import { ParametersSection } from '../taskParams/ParametersSection';
@@ -116,7 +118,7 @@ function initialState(initial: TaskFormValues): FormState {
   return { fields, rows: schedules.map(toRow), initial, errors: {}, banner: null, saving: null };
 }
 
-const FIELD_ORDER = ['name', 'goal', 'parameters', 'hostId', 'profile', 'policyId', 'allowedDomains'];
+const FIELD_ORDER = ['name', 'goal', 'parameters', 'outputs', 'hostId', 'profile', 'policyId', 'allowedDomains'];
 
 function Section({ title, id, children, anchor }: { title: string; id: string; children: ReactNode; anchor?: string }) {
   return (
@@ -251,11 +253,26 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
       return { ...f, fields: { ...f.fields, parameters: list }, errors: rest };
     });
 
+  const setOutputs = (outputs: TaskOutput[]) =>
+    setForm((f) => {
+      const { outputs: _section, ...rest } = f.errors;
+      for (const k of Object.keys(rest)) if (k.startsWith('output:')) delete rest[k];
+      return { ...f, fields: { ...f.fields, outputs }, errors: rest };
+    });
+
   const values: TaskFormValues = useMemo(() => ({ ...fields, schedules: rows.filter((r) => !r.removed).map((r) => r.draft) }), [fields, rows]);
   const dirty = isDirty(values, form.initial);
   const local = validateValues(values, { checkProfile: true });
+
+  // The outputs' messages by row: the form's own checks while editing, and the server's after a failed save.
+  const outputErrorsByRow: Record<number, string> = {};
+  for (const [k, v] of Object.entries({ ...local, ...errors })) {
+    if (k === 'outputs') outputErrorsByRow[-1] = v;
+    else if (k.startsWith('output:')) outputErrorsByRow[Number(k.slice(7))] = v;
+  }
   const required = Boolean(fields.name.trim() && fields.goal.trim()) && synced.errors.length === 0;
-  const blocked = saving !== null || !required || Boolean(local.profile) || Boolean(local.allowedDomains) || invalid.size > 0 || (mode === 'edit' && !dirty);
+  const outputErrors = Object.keys(local).some((k) => k === 'outputs' || k.startsWith('output:'));
+  const blocked = saving !== null || !required || Boolean(local.profile) || Boolean(local.allowedDomains) || outputErrors || invalid.size > 0 || (mode === 'edit' && !dirty);
   const busy = saving !== null;
   const activeRows = rows.filter((r) => !r.removed);
   const savedById = useMemo(() => new Map((savedSchedules ?? []).map((s) => [s.id, s])), [savedSchedules]);
@@ -285,7 +302,12 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
     for (const [field, message] of Object.entries(mapped.fields)) {
       const index = /^schedules\[(\d+)\]$/.exec(field);
       const row = index ? sent[Number(index[1])] : undefined;
+      // An output's problem (E39.5): by the index of what was sent (cleaned rows) or by its key; the row shows it.
+      const sentOutput = /^outputs\[(\d+)\]$/.exec(field);
+      const keyed = field.startsWith('output-key:') ? effectiveKeys(fields.outputs).indexOf(field.slice('output-key:'.length)) : -1;
       if (field.startsWith('param:')) next[field] = message;
+      else if (sentOutput) next[`output:${fields.outputs.map((o, i) => (o.label.trim() ? i : -1)).filter((i) => i >= 0)[Number(sentOutput[1])] ?? 0}`] = message;
+      else if (field.startsWith('output-key:')) next[keyed >= 0 ? `output:${keyed}` : 'outputs'] = message;
       else if (row) {
         next[`schedule:${row.key}`] = message;
         opened.push(row.key);
@@ -293,7 +315,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
       else next[field] = message;
     }
     if (opened.length > 0) setOpen((o) => new Set([...o, ...opened]));
-    const first = FIELD_ORDER.find((f) => f in next) ?? Object.keys(next).find((k) => k.startsWith('param:')) ?? Object.keys(next)[0];
+    const first = FIELD_ORDER.find((f) => f in next) ?? Object.keys(next).find((k) => k.startsWith('param:') || k.startsWith('output:')) ?? Object.keys(next)[0];
     const text = error instanceof Error && error.message ? error.message : fallback;
     update({ saving: null, errors: next, banner: prefix ? `${prefix}${text}` : mapped.banner });
     if (first) setFocusField(first);
@@ -504,6 +526,16 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             />
           </Section>
         )}
+
+        <Section title="Outputs" id={`${uid}-outputs`} anchor="outputs">
+          <OutputsSection
+            outputs={fields.outputs}
+            onChange={setOutputs}
+            errors={outputErrorsByRow}
+            scheduled={activeRows.length > 0}
+            disabled={busy}
+          />
+        </Section>
 
         <Section title="Where it runs" id={`${uid}-where`}>
           <Box data-field="hostId">

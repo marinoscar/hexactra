@@ -10,7 +10,7 @@ import { stallResponse, nextTier } from './stall-policy';
 import { switchTier } from './tiers';
 import { withinMs } from './time';
 import { offerTools } from './execute-tool';
-import type { HarnessMemory, RunOutcome } from './types';
+import { structuredPatch, type HarnessMemory, type ResultField, type RunOutcome, type RunState } from './types';
 
 type Ctx = RunContext<HarnessMemory>;
 type Profile = LoopProfile<Ctx>;
@@ -23,7 +23,7 @@ const WRAP_UP_MAX_OUTPUT_TOKENS = 1_500;
 const STOP_FINAL_SHOT_MS = 2_000;
 
 /** End the run with a closing `end` step holding the final screen (#541), taken before the browser is released. */
-export async function closeRun(ctx: Ctx, to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason }): Promise<void> {
+export async function closeRun(ctx: Ctx, to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason; outputs?: Record<string, ResultField>; outputsComplete?: boolean }): Promise<void> {
   try {
     const seq = await ctx.note('end', null, `The run ended: ${to}`, { ok: to === 'succeeded' });
     // A Stop never waits long for the closing picture (E38.1).
@@ -75,8 +75,9 @@ export async function wrapUp(ctx: Ctx, profile: Profile, cause: BudgetKey | Stal
   memory.log.push(`${error}: asking the model to wrap up.`);
   state.stop = null;
   state.finished = null;
+  state.wrappingUp = true;
   const finishTool = offerTools(ctx, profile.registry, profile.pipeline).filter((t) => t.name === 'finish');
-  const input = [`Goal: ${ctx.run.goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', instruction].filter(Boolean).join('\n\n');
+  const input = [`Goal: ${ctx.run.goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', instruction, profile.wrapUpNote?.(ctx) ?? ''].filter(Boolean).join('\n\n');
   await ctx.setActivity('thinking');
   try {
     await ports.telemetry.within(() =>
@@ -98,13 +99,15 @@ export async function wrapUp(ctx: Ctx, profile: Profile, cause: BudgetKey | Stal
   await ctx.checkpoint();
   // Stop during the wrap-up call (E38.1): the run ends cancelled, whatever the model said.
   if (ports.control.requested) return cancelRun(ctx);
-  const done = state.finished as { success: boolean; result: string } | null;
+  state.wrappingUp = false;
+  // `state.finished` was reset above; the wrap-up's `finish` call set it again.
+  const done = state.finished as RunState['finished'];
   if (done?.success) {
-    await closeRun(ctx, 'succeeded', { result: done.result, stopReason });
+    await closeRun(ctx, 'succeeded', { result: done.result, stopReason, ...structuredPatch(done) });
     return 'succeeded';
   }
   // No words from the model: the result is the run's own last steps, masked (#540), never only the budget message.
-  await closeRun(ctx, 'failed', { result: done ? done.result : noReportResult(memory.log, ports.policy.mask), error, stopReason });
+  await closeRun(ctx, 'failed', { result: done ? done.result : noReportResult(memory.log, ports.policy.mask), error, stopReason, ...structuredPatch(done) });
   return 'failed';
 }
 

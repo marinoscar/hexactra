@@ -548,6 +548,12 @@ In the form (#556):
 - A schedule's editor has **Values for this schedule** for each parameter without a saved value; an active schedule cannot be saved while a required one is missing. A run started elsewhere (a schedule, the API, an AI app, the chat) without every value waits on one **A few details to start** card in the Inbox and the chat.
 - The run page shows an **Inputs** block under the goal: each value masked, and where it came from (you entered, saved value, from a memory, schedule).
 
+**Task outputs.** A task can name the values its runs must return: `Amount paid` (money), `Confirmation number` (text), `Paid on` (date), `Remaining balance`. The agent has to give them when it finishes; the server reads each by its type (`$1,234.50`, `March 25, 2026`), asks the agent again (twice at most) for a missing required one or one that does not parse, and keeps the values on the run with `outputsComplete`. They are shown in an **Outputs** block on the run and in the chat's result card, in a table of the last runs on the task page, in the webhook (`runs.run.finished`), the JSON trace and the PDF report, and in MCP's `run_status` and `run_wait`. A *sensitive* output reads `[hidden]` everywhere. `hexactra tasks outputs <task> --csv` writes the history for a spreadsheet. The rules, the API and the clients are in [docs/api-tasks-runs.md, "Task outputs"](docs/api-tasks-runs.md#task-outputs).
+
+In the form (E39.5):
+- An **Outputs** section lists one row per output: label, type (Text, Number, Amount of money, Date, Date and time, Yes or no, Web address, Choice), Required, Sensitive and *What to look for* (the agent reads it). **Add an output**, move a row up or down, or remove it; under **More** the key (derived from the label, used in exports, webhooks and the API) can be edited. A scheduled task with no outputs shows "Add outputs to keep a record of each run."
+- A finished run's page shows an **Outputs** block under its result (the same block is in the chat's result card): each label and value, "Not found" with the reason for a missing one, `[hidden]` for a sensitive one. The task page has an **Outputs** table of its last runs (a card per run on a phone, **Show older runs** for more). **Save as task** in a chat proposes outputs from what the finished run reported; you review each row before saving.
+
 - **Save and run now** (with `runs:write`) saves, starts a run and opens it.
 - A value the server refuses is shown on its field, and the form scrolls to it.
 - Leaving the page with unsaved changes asks first.

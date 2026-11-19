@@ -99,6 +99,8 @@ export interface HarnessMemory {
   lastSeq?: number;
   /** Actions that may or may not have happened (E38.3): asked again, and no saved approval covers them. */
   unknownSteps?: UnknownStep[];
+  /** How many times `finish` was refused for a missing or invalid field of the structured result (E39.5): two at most, then the run ends with what it has. */
+  outputAttempts?: number;
   /** Trace screenshots stored so far (#541), for the cap. */
   traceShots?: number;
   /** Screens the next round shows the model; a toolset without screens leaves it. */
@@ -107,6 +109,24 @@ export interface HarnessMemory {
   visionOff?: boolean;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
+}
+
+/** One named value a run returns beside its words (task outputs, E39.5): the toolset checks it, the harness only carries it to the store. */
+export interface ResultField {
+  value: unknown;
+  ok: boolean;
+  note?: string;
+}
+
+/** What a run returns beside its result text: its fields by key, and whether every one was returned and valid. */
+export interface StructuredResult {
+  fields: Record<string, ResultField>;
+  complete: boolean;
+}
+
+/** The patch fields of a finished run that carry a {@link StructuredResult}. */
+export function structuredPatch(result: { outputs?: StructuredResult } | null | undefined): { outputs?: Record<string, ResultField>; outputsComplete?: boolean } {
+  return result?.outputs ? { outputs: result.outputs.fields, outputsComplete: result.outputs.complete } : {};
 }
 
 /** The mutable facts of one job's run: counters, the reason the chunk ends, and what a pause waits for. */
@@ -118,7 +138,9 @@ export interface RunState {
   stop: StopReason | null;
   /** Which budget ended the run (set with `stop = 'budget'`). */
   budgetKey: BudgetKey | null;
-  finished: { success: boolean; result: string } | null;
+  finished: { success: boolean; result: string; outputs?: StructuredResult } | null;
+  /** The wrap-up call is under way (a budget or a stall ended the loop): a toolset that checks what `finish` is given accepts whatever it is. */
+  wrappingUp: boolean;
   handoffId: string | null;
   handoffExpiresAt: Date | null;
   handoffAsk: { prompt: string; kind: string; input: string } | null;

@@ -5,6 +5,8 @@ import type { Conversation } from '@prisma/client';
 import { PARAMETER_TYPES, paramKey, type TaskParameter, type TaskParameterType } from '@app/shared/task-params';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { OUTPUT_TYPES, outputKey, type TaskOutput, type TaskOutputType } from '@app/shared/task-fields';
+import { prepareOutputs } from '../tasks/task-outputs';
 import { prepareParameters } from '../tasks/task-params';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
 import { ChatService, titleFromMessage } from './chat.service';
@@ -25,6 +27,8 @@ export interface ChatTaskDraft {
   useSavedCards: boolean;
   /** The goal's `{{Name}}` parameters the draft proposes (#556): checked like a saved task's; empty when nothing varies. */
   parameters: TaskParameter[];
+  /** The values a run of the task would return (E39.5, #600), proposed from what the finished run reported (an amount paid, a confirmation number, a date); empty when nothing is worth keeping. */
+  outputs: TaskOutput[];
 }
 
 const NAME_MAX = 200;
@@ -37,7 +41,8 @@ export const TASK_DRAFT_INSTRUCTIONS = [
   'Write the goal as a complete, standalone instruction: someone who never saw the conversation must be able to run it. Fold in what the owner clarified, the choices they made and what turned out to work. Leave out one-off details that would be wrong next time (a specific date that has passed, an order number), or say how to choose them ("the next Saturday").',
   'Never include a password, a code, a card number or any other secret, and never invent facts the conversation does not contain.',
   'Parameters: a value that would change between runs (an amount, a date, a quantity) becomes a placeholder {{Name}} in the goal, with no default: it is asked every time. A person, a phone number, an email or an account ending becomes a placeholder too, with a default: the matching memory and its value name when the owner has one (listed in the input as "Memories"), otherwise the value from the conversation. Everything else stays text. Use names of letters, digits and spaces ("Amount", "Recipient phone", "Account last 4"). No placeholder when nothing varies.',
-  'Answer with JSON only, no prose and no code fence: {"name": "<a short name, at most 60 characters>", "goal": "<the instruction, at most 3000 characters>", "parameters": [{"name": "<the placeholder\'s name>", "type": "text|number|money|date|choice|phone|email", "default": "<a fixed value, optional>", "memory": "<a memory\'s label, optional>", "attribute": "<that memory\'s value name>"}]}',
+  'Outputs: the facts the owner would want to keep from every run, as a record (an amount paid, a confirmation number, a date, a remaining balance) become outputs, each with a label and a type, only when a finished run in the conversation reported them. No output when nothing is worth keeping. Never propose a password, a code or a card number as an output.',
+  'Answer with JSON only, no prose and no code fence: {"name": "<a short name, at most 60 characters>", "goal": "<the instruction, at most 3000 characters>", "parameters": [{"name": "<the placeholder\'s name>", "type": "text|number|money|date|choice|phone|email", "default": "<a fixed value, optional>", "memory": "<a memory\'s label, optional>", "attribute": "<that memory\'s value name>"}], "outputs": [{"label": "<what it is, e.g. Confirmation number>", "type": "text|number|money|date|datetime|boolean|url", "help": "<where to find it, optional>"}]}',
 ].join('\n');
 
 /** A parameter as the model proposes it. */
@@ -66,16 +71,54 @@ function draftParameters(raw: unknown): DraftParameter[] {
   return out;
 }
 
-/** The `{ name, goal, parameters }` of a model answer, or null when it is not that. */
-export function parseDraft(text: string): { name: string; goal: string; parameters?: DraftParameter[] } | null {
+/** An output as the model proposes it. */
+export interface DraftOutput {
+  label: string;
+  type: TaskOutputType;
+  help?: string;
+}
+
+function draftOutputs(raw: unknown): DraftOutput[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DraftOutput[] = [];
+  for (const r of raw.slice(0, 12) as Record<string, unknown>[]) {
+    if (!r || typeof r !== 'object' || typeof r.label !== 'string' || !r.label.trim()) continue;
+    // A choice needs options the model is not asked for: a plain text output instead.
+    const type = (OUTPUT_TYPES as readonly string[]).includes(String(r.type)) && r.type !== 'choice' ? (r.type as TaskOutputType) : 'text';
+    const o: DraftOutput = { label: r.label.trim().slice(0, 80), type };
+    if (typeof r.help === 'string' && r.help.trim()) o.help = r.help.trim().slice(0, 200);
+    out.push(o);
+  }
+  return out;
+}
+
+/** The outputs a draft proposes, checked like a saved task's: keys derived, none that fail the checks; never sensitive (the owner decides that in the form). */
+export function draftOutputDefinitions(proposed: readonly DraftOutput[]): TaskOutput[] {
+  const seen = new Set<string>();
+  const unique = proposed.filter((p) => {
+    const k = outputKey(p.label);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  try {
+    return prepareOutputs(unique.map((p) => ({ label: p.label, type: p.type, required: true, ...(p.help ? { help: p.help } : {}) })));
+  } catch {
+    return [];
+  }
+}
+
+/** The `{ name, goal, parameters, outputs }` of a model answer, or null when it is not that. */
+export function parseDraft(text: string): { name: string; goal: string; parameters?: DraftParameter[]; outputs?: DraftOutput[] } | null {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end <= start) return null;
   try {
-    const value = JSON.parse(text.slice(start, end + 1)) as { name?: unknown; goal?: unknown; parameters?: unknown };
+    const value = JSON.parse(text.slice(start, end + 1)) as { name?: unknown; goal?: unknown; parameters?: unknown; outputs?: unknown };
     if (typeof value.goal !== 'string' || !value.goal.trim()) return null;
     const parameters = draftParameters(value.parameters);
-    return { name: typeof value.name === 'string' ? value.name.trim() : '', goal: value.goal.trim(), ...(parameters.length ? { parameters } : {}) };
+    const outputs = draftOutputs(value.outputs);
+    return { name: typeof value.name === 'string' ? value.name.trim() : '', goal: value.goal.trim(), ...(parameters.length ? { parameters } : {}), ...(outputs.length ? { outputs } : {}) };
   } catch {
     return null;
   }
@@ -158,7 +201,7 @@ export class ChatTaskDraftService {
     return rows.map((r) => ({ id: r.id, label: r.label, aliases: r.aliases, attributes: r.attributes && typeof r.attributes === 'object' ? Object.keys(r.attributes as object) : [] }));
   }
 
-  private async fallback(c: Conversation): Promise<{ name: string; goal: string; parameters?: DraftParameter[] }> {
+  private async fallback(c: Conversation): Promise<{ name: string; goal: string; parameters?: DraftParameter[]; outputs?: DraftOutput[] }> {
     const run = await this.prisma.forUser({ userId: c.userId }).run.findFirst({ where: { conversationId: c.id }, orderBy: { createdAt: 'desc' }, select: { goal: true } });
     const first = run ? null : await this.prisma.chatMessage.findFirst({ where: { conversationId: c.id, role: 'user' }, orderBy: { seq: 'asc' }, select: { text: true } });
     return { name: c.title, goal: run?.goal ?? first?.text ?? '' };
@@ -167,7 +210,7 @@ export class ChatTaskDraftService {
   async draft(userId: string, conversationId: string, orgId: string | null): Promise<ChatTaskDraft> {
     const c = await this.prisma.forUser({ userId }).conversation.findFirst({ where: { id: conversationId } });
     if (!c) throw new NotFoundException({ code: 'CHAT_NOT_FOUND', message: 'Chat not found' });
-    let written: { name: string; goal: string; parameters?: DraftParameter[] } | null = null;
+    let written: { name: string; goal: string; parameters?: DraftParameter[]; outputs?: DraftOutput[] } | null = null;
     const memories = await this.memories(userId);
     try {
       const response = await this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).respond({ instructions: TASK_DRAFT_INSTRUCTIONS, input: await this.buildInput(c.id, memories) });
@@ -191,6 +234,7 @@ export class ChatTaskDraftService {
       useSavedIdentity: c.useSavedIdentity,
       useSavedCards: c.useSavedCards,
       parameters: draftDefinitions(goal, base.parameters ?? [], memories),
+      outputs: draftOutputDefinitions(base.outputs ?? []),
     };
   }
 }
