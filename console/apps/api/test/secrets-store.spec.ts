@@ -2,6 +2,8 @@
 // no `@marinoscar/vault-*` code is loaded (every specifier below is mocked to throw if it is required); the key
 // configuration refuses anything but one clear error; and the envelope cipher fails closed.
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 for (const specifier of ['@marinoscar/vault-api/core', '@marinoscar/vault-api/agent', '@marinoscar/vault-api/secrets', '@marinoscar/vault-api/secret-types', '@marinoscar/vault-api/ports', '@marinoscar/vault-api', '@marinoscar/vault-contract/agent', '@marinoscar/vault-contract/secret-types', '@marinoscar/vault-contract/secrets']) {
   jest.mock(specifier, () => {
@@ -132,5 +134,15 @@ describe('the envelope', () => {
     expect(() => decryptValue(USER, dk, enc.ciphertext, enc.iv, Buffer.alloc(16).toString('base64'))).toThrow(SecretsStoreCryptoError);
     expect(ownerOfCiphertext('plain text')).toBeNull();
     expect(ownerOfCiphertext('ss1.not-a-uuid.abc')).toBeNull();
+  });
+});
+
+describe('the public proxy', () => {
+  it('answers 404 for the internal release route prefix, and does not log it', () => {
+    const conf = readFileSync(join(__dirname, '..', '..', '..', 'infra', 'nginx', 'app.d', 'locations', 'secrets-store-internal.conf'), 'utf8')
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('#'))
+      .join('\n');
+    expect(conf).toMatch(/location \^~ \/api\/internal\/ \{\s*return 404;\s*\}/);
   });
 });
