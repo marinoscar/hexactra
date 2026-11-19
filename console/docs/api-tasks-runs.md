@@ -24,6 +24,11 @@ The per-endpoint reference is the OpenAPI document the API serves (`/api/docs`, 
 | `PUT /tasks/:id/schedules` | Replace the task's schedules: update by `id`, create without, delete the unlisted | `tasks:write` | `200`, the task with its `summary` | the four schedule codes above, `400 SCHEDULE_NOT_IN_TASK`, `404 NOT_FOUND` |
 | `POST /tasks/:id/schedules/pause` | Disable every schedule of the task | `tasks:write` | `200`, the task with its `summary` and `skipped` | `404 NOT_FOUND`, `409 NO_SCHEDULES` |
 | `POST /tasks/:id/schedules/resume` | Enable every schedule of the task and compute the next firings | `tasks:write` | `200`, as above | `404 NOT_FOUND`, `409 NO_SCHEDULES` |
+| `GET /tasks/:id/mail-triggers` | The task's email triggers (E39.8, [connections.md](connections.md#start-a-task-from-an-email-e398)): rules, account, status, runs today | `runs:read` | `200` | `404 TASK_NOT_FOUND` |
+| `POST /tasks/:id/mail-triggers` | Start the task when a matching email arrives; `match.from` is required | `runs:write` | `201` | `400 MAIL_TRIGGER_CONNECTION_INVALID`, `MAIL_TRIGGER_INPUTS_INVALID`, `MAIL_TRIGGER_POLL_TOO_FAST`, `409 MAIL_TRIGGER_LIMIT` |
+| `PATCH /mail-triggers/:id`, `DELETE /mail-triggers/:id` | Change, switch on or off, delete | `runs:write` | `200`, `204` | `404 MAIL_TRIGGER_NOT_FOUND` |
+| `POST /mail-triggers/:id/test` | The last 5 matching messages (subjects cut to 60 characters) and whether each would start a run; starts nothing | `runs:write` | `200` | `409 MAIL_TRIGGER_CONNECTION_UNAVAILABLE` |
+| `GET /mail-triggers/:id/events` | What the trigger did with each message it saw | `runs:read` | `200` | `404 MAIL_TRIGGER_NOT_FOUND` |
 | `GET /tasks/:id/outputs` | What the task's finished runs returned, newest first, keyset paged (`limit` 1 to 100, default 20; `cursor`): `{ columns, items: [{ runId, status, createdAt, finishedAt, outputsComplete, values }], nextCursor }` ([Task outputs](#task-outputs)) | `runs:read` | `200` | `400 INVALID_CURSOR`, `404 TASK_NOT_FOUND` |
 | `GET /tasks/:id/stats` | The task's run statistics for `days` (7 to 90, default 30) | `runs:read` | `200 { days, timezone, totals, avgDurationSeconds, p95DurationSeconds, avgSteps, avgCostPerSuccessUsd, series, stopReasons }` | `400 BAD_REQUEST`, `404 NOT_FOUND` |
 | `POST /schedules/preview` | What `{ cron, timezone?, count? }` means and when it fires next. Saves nothing | `tasks:read` | always `200`: `{ valid: true, cron, timezone, description, next, intervalSeconds }` or `{ valid: false, code, message }` | inside the answer: `INVALID_CRON`, `INVALID_TIMEZONE`, `CRON_TOO_FREQUENT` |
@@ -204,6 +209,8 @@ Every switch is **off by default**, and none of these fields, in any request or 
 A run uses a saved secret only when **all** of its switches hold; otherwise the secret tools are not offered and the run asks the owner, as before. A provider that is down, revoked or without a match also ends in a question to the owner, never in a failed run. There is no MCP tool and no CLI command for any of this ([parity.md](parity.md#what-secrets-added-e37)).
 
 ## Runs
+
+A run an email started (E39.8) has `trigger: email`, origin `system` and `mailTriggerId`; `GET /runs` filters by `trigger=email`, and a run's inputs show the source `email` for each value a message gave. A task's `summary.mailTriggers` is the number of email triggers switched on.
 
 The list, its filters and cursor, the counts, deleting and retention are in [runs.md](runs.md). In short:
 

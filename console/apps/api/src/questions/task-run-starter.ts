@@ -29,8 +29,10 @@ export interface StartActor {
 export interface StartTaskRunOptions {
   /** Values the caller gave, by key or display name (`POST /tasks/:id/runs`, MCP `task_run`, chat `run_task`, the CLI). */
   inputs?: Record<string, string | number> | null;
-  /** A schedule's preset values, by key. */
+  /** A schedule's (or a mail trigger's) preset values, by key. */
   presets?: Record<string, string> | null;
+  /** Where the presets came from, as the run records it (default `schedule`). */
+  presetSource?: InputSource;
   /** The run's columns besides the task's (trigger, origin, client, policy, conversation). */
   data: Omit<Prisma.RunUncheckedCreateInput, 'userId' | 'taskId' | 'goal' | 'profile' | 'hostId' | 'hostFallback' | 'inputs' | 'status'>;
   /** Why the run job is queued. */
@@ -87,7 +89,7 @@ export class TaskRunStarter {
     const params = readParameters(task.parameters);
     const timeZone = await this.zone(userId, opts.timeZone);
     const given = checkValues(params, keyInputs(params, opts.inputs), { timeZone });
-    const resolved = await resolveInputs(userId, params, given, { presets: opts.presets, presetSource: 'schedule', resolver: this.memories ?? null, timeZone });
+    const resolved = await resolveInputs(userId, params, given, { presets: opts.presets, presetSource: opts.presetSource ?? 'schedule', resolver: this.memories ?? null, timeZone });
     const inputs: RunInputs | null = params.length ? { values: resolved.values, sensitive: resolved.sensitive, identity: resolved.identity } : null;
     // The task's outputs as they are now (E39.5, #600): a run keeps its own copy, so a later edit never relabels it, and no caller can redefine them.
     const outputsSpec = outputsSpecOf(task.outputs);

@@ -6200,7 +6200,7 @@ export interface paths {
         };
         /**
          * The provider redirects the browser here after the consent
-         * @description The redirect URI to register at the provider: `/api/connections/callback/google` or `/api/connections/callback/microsoft` under this console's address. Not called by API clients.
+         * @description The redirect URI to register at the provider: `/api/connections/callback/google`, `/api/connections/callback/microsoft` or (an MCP server that uses OAuth) `/api/connections/callback/mcp` under this console's address. Not called by API clients.
          */
         get: operations["connections_callback"];
         put?: never;
@@ -6359,7 +6359,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connected-apps": {
+    "/api/connections/mcp/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -6367,12 +6367,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Your connected AI apps
-         * @description Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).
+         * Whether MCP servers can be added here
+         * @description Whether the administrator has switched MCP servers on (off by default) and whether the hosts are restricted. Never the lists.
          *
-         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         *     **Requires:** authentication, plus permission `connections:read`.
          */
-        get: operations["connectedApps_list"];
+        get: operations["mcpConnections_status"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6381,7 +6381,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connected-apps/preflight": {
+    "/api/connections/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an MCP server as a connection
+         * @description Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/tools": {
         parameters: {
             query?: never;
             header?: never;
@@ -6389,12 +6411,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Can an AI app connect?
-         * @description For the "Connect an AI app" guide: is the OAuth server on, is the console on a public HTTPS URL that answers the discovery documents (the platform Doctor checks `oauth.public_url` and `oauth.well_known`), and are the hosts of ChatGPT and Claude allowed. Each failing row says who can fix it.
+         * The tools of an MCP server
+         * @description The stored snapshot (no request is made to the server): each tool's title, description as plain text, parameters, the server's hints, what they suggest, your decision (`off`, `read`, `write`) and whether it awaits your review.
          *
-         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         *     **Requires:** authentication, plus permission `connections:read`.
          */
-        get: operations["connectedApps_preflight"];
+        get: operations["mcpConnections_tools"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6403,7 +6425,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connected-apps/{clientId}": {
+    "/api/connections/{id}/tools/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh the tools of an MCP server
+         * @description Lists the server's tools again. A tool you enabled whose description, schema or hints changed is switched OFF and flagged `changed`; a tool that is new arrives `off` and flagged `new`; a tool the server stopped offering disappears. You are notified once. Only your own decision switches a tool on.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/tools/{toolId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Decide what a tool may do
+         * @description `off` (default), `read` (called without asking; choose it only for a tool that only reads) or `write` (it changes something: it asks you each time unless you chose "Don't ask again"). The server's hints only suggest a default; you decide. Deciding clears the review flag.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        patch: operations["mcpConnections_setMode"];
+        trace?: never;
+    };
+    "/api/connections/{id}/mcp-auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give an MCP server a new sign-in
+         * @description A new bearer token or header value (tested before it is kept), or a new OAuth consent (`consent.authorizeUrl`). This is how a connection that needs reconnecting comes back. The secret is write-only.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_reauth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/mcp": {
         parameters: {
             query?: never;
             header?: never;
@@ -6411,13 +6499,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One connected AI app
-         * @description An app you connected, or one known from its runs or settings after it was disconnected (`grantId` null).
+         * The deployment's MCP switch and host lists
+         * @description Whether owners may add and use MCP servers (off by default), and the allow-list and block-list of hosts. No access to any owner's connection or tool.
          *
-         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         *     **Requires:** authentication, plus permission `system_settings:read`.
          */
-        get: operations["connectedApps_get"];
-        put?: never;
+        get: operations["mcpAdmin_get"];
+        /**
+         * Set the MCP switch and host lists
+         * @description Switching it off stops every MCP connection from being used within seconds (no call is made); the connections and tool choices are kept. Entries are host names or `*.example.test`. An empty allow-list admits any public host; the block-list wins.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        put: operations["mcpAdmin_save"];
         post?: never;
         delete?: never;
         options?: never;
@@ -6425,7 +6519,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connected-apps/{clientId}/settings": {
+    "/api/tasks/{id}/mail-triggers": {
         parameters: {
             query?: never;
             header?: never;
@@ -6433,24 +6527,96 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * An app's limits
-         * @description The defaults until you change one; clamped to the deployment ceilings.
+         * A task's email triggers
+         * @description The rules, the account, the status and how many runs each started today. Never a message.
          *
-         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         *     **Requires:** authentication, plus permission `runs:read`.
          */
-        get: operations["connectedApps_settings"];
+        get: operations["mailTriggers_list"];
+        put?: never;
+        /**
+         * Start this task when a matching email arrives
+         * @description The trigger watches one of your connected accounts (`mail_read` on) and starts one run per matching message that arrives after the trigger was created. `match.from` is required: an exact address or one domain (a domain anybody can have an address at is refused). A message that fails the provider's sender check starts nothing. The run has the task's own settings; the message text is never part of its goal. 400 `MAIL_TRIGGER_CONNECTION_INVALID`, `MAIL_TRIGGER_INPUTS_INVALID`, `MAIL_TRIGGER_POLL_TOO_FAST`; 409 `MAIL_TRIGGER_LIMIT`.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["mailTriggers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail-triggers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an email trigger
+         * @description Its event history goes with it; runs it started are kept.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        delete: operations["mailTriggers_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Change or switch an email trigger on or off
+         * @description A field left out is unchanged. Enabling again starts from now: mail that arrived while it was off never fires. Changing the account starts from now too.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        patch: operations["mailTriggers_update"];
+        trace?: never;
+    };
+    "/api/mail-triggers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show what would match, without starting anything
+         * @description Reads the last 5 messages of the account that match the rules and says for each whether it would start a run. Subjects are cut to 60 characters. 409 `MAIL_TRIGGER_CONNECTION_UNAVAILABLE` (with `details.reason`) when the mailbox cannot be read.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["mailTriggers_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mail-triggers/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a trigger did with the messages it saw
+         * @description Newest first: `started` (with the run), or skipped (`skipped_unverified`, `skipped_limit`, `skipped_loop`) or `failed`, each with a reason code. No subject or sender is stored.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["mailTriggers_events"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Change an app's limits
-         * @description Any subset of the limits. A limit only narrows what the app may do: it never widens a task's own allowed sites or confirmation. `maxConcurrentRuns` and `dailyRunLimit` may not exceed the deployment ceilings (`mcp.maxConcurrentRunsPerApp`, `mcp.maxDailyRunsPerApp`). `paused: true` refuses new runs and sessions from the app; live ones keep running.
-         *
-         *     **Requires:** authentication, plus permission `connected_apps:write`.
-         */
-        patch: operations["connectedApps_patch"];
+        patch?: never;
         trace?: never;
     };
     "/api/tasks": {
@@ -6932,6 +7098,100 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your connected AI apps
+         * @description Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Can an AI app connect?
+         * @description For the "Connect an AI app" guide: is the OAuth server on, is the console on a public HTTPS URL that answers the discovery documents (the platform Doctor checks `oauth.public_url` and `oauth.well_known`), and are the hosts of ChatGPT and Claude allowed. Each failing row says who can fix it.
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_preflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps/{clientId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One connected AI app
+         * @description An app you connected, or one known from its runs or settings after it was disconnected (`grantId` null).
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps/{clientId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An app's limits
+         * @description The defaults until you change one; clamped to the deployment ceilings.
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an app's limits
+         * @description Any subset of the limits. A limit only narrows what the app may do: it never widens a task's own allowed sites or confirmation. `maxConcurrentRuns` and `dailyRunLimit` may not exceed the deployment ceilings (`mcp.maxConcurrentRunsPerApp`, `mcp.maxDailyRunsPerApp`). `paused: true` refuses new runs and sessions from the app; live ones keep running.
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:write`.
+         */
+        patch: operations["connectedApps_patch"];
         trace?: never;
     };
     "/api/browser/sessions": {
@@ -8421,6 +8681,10 @@ export interface components {
              * @example CONNECTION_NONE
              * @example CONNECTION_UNAVAILABLE
              * @example CONNECTION_DEFAULT_NEEDS_CAPABILITY
+             * @example CONNECTION_MCP_URL_REFUSED
+             * @example CONNECTION_MCP_EXISTS
+             * @example CONNECTION_MCP_AUTH_REQUIRED
+             * @example CONNECTION_MCP_PROTOCOL
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
@@ -8431,6 +8695,12 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example MAIL_TRIGGER_NOT_FOUND
+             * @example MAIL_TRIGGER_LIMIT
+             * @example MAIL_TRIGGER_CONNECTION_INVALID
+             * @example MAIL_TRIGGER_POLL_TOO_FAST
+             * @example MAIL_TRIGGER_INPUTS_INVALID
+             * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
              * @example ERROR
              */
             code: string;
@@ -9724,6 +9994,11 @@ export interface components {
                 maxCostUsd: number | null;
             };
             connections: {
+                mcp?: {
+                    enabled?: boolean;
+                    allowedHosts?: string[];
+                    blockedHosts?: string[];
+                };
                 providers?: {
                     google?: {
                         enabled?: boolean;
@@ -9735,6 +10010,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            mailTriggers: {
+                minPollSeconds?: number;
+                maxTriggersPerUser?: number;
+                maxRunsPerUserPerDay?: number;
             };
             storage: {
                 provider: string;
@@ -9983,6 +10263,11 @@ export interface components {
                 maxCostUsd: number | null;
             };
             connections?: {
+                mcp?: {
+                    enabled?: boolean;
+                    allowedHosts?: string[];
+                    blockedHosts?: string[];
+                };
                 providers?: {
                     google?: {
                         enabled?: boolean;
@@ -9994,6 +10279,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            mailTriggers?: {
+                minPollSeconds?: number;
+                maxTriggersPerUser?: number;
+                maxRunsPerUserPerDay?: number;
             };
             storage?: {
                 provider: string;
@@ -10247,6 +10537,11 @@ export interface components {
                 maxCostUsd?: number | null;
             };
             connections?: {
+                mcp?: {
+                    enabled?: boolean;
+                    allowedHosts?: string[];
+                    blockedHosts?: string[];
+                };
                 providers?: {
                     google?: {
                         enabled?: boolean;
@@ -10258,6 +10553,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            mailTriggers?: {
+                minPollSeconds?: number;
+                maxTriggersPerUser?: number;
+                maxRunsPerUserPerDay?: number;
             };
             storage?: {
                 provider?: string;
@@ -15589,6 +15889,20 @@ export interface components {
             connectedAt: string;
             lastUsedAt: string | null;
             lastRefreshAt: string | null;
+            /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+            mcp?: {
+                url: string;
+                /** @enum {string} */
+                auth: "none" | "bearer" | "header" | "oauth";
+                serverName: string | null;
+                tools: {
+                    total: number;
+                    enabled: number;
+                    /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                    needsReview: number;
+                };
+                toolsFetchedAt: string | null;
+            };
         };
         ProviderAvailabilityResponseDto: {
             /** @enum {string} */
@@ -15648,6 +15962,20 @@ export interface components {
             connectedAt: string;
             lastUsedAt: string | null;
             lastRefreshAt: string | null;
+            /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+            mcp?: {
+                url: string;
+                /** @enum {string} */
+                auth: "none" | "bearer" | "header" | "oauth";
+                serverName: string | null;
+                tools: {
+                    total: number;
+                    enabled: number;
+                    /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                    needsReview: number;
+                };
+                toolsFetchedAt: string | null;
+            };
             /** @description What uses this connection (tasks, deliveries): removing it clears these and they show "connection removed". */
             usedBy: {
                 kind: string;
@@ -15677,6 +16005,20 @@ export interface components {
                 connectedAt: string;
                 lastUsedAt: string | null;
                 lastRefreshAt: string | null;
+                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+                mcp?: {
+                    url: string;
+                    /** @enum {string} */
+                    auth: "none" | "bearer" | "header" | "oauth";
+                    serverName: string | null;
+                    tools: {
+                        total: number;
+                        enabled: number;
+                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                        needsReview: number;
+                    };
+                    toolsFetchedAt: string | null;
+                };
             };
             consent: {
                 /** @description Send the browser here: the provider's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
@@ -15740,215 +16082,444 @@ export interface components {
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
         };
-        ConnectedAppListResponseDto: {
-            /** @description `oauth_clients.id` */
-            clientId: string;
-            /** @description The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected */
-            grantId: string | null;
-            /** @description The display name: the client's host ("chatgpt.com"), or its own name for a local app */
-            name: string;
-            /** @description "ChatGPT", "Claude", or the name */
-            displayName: string;
-            /** @description The name the client gives itself (self-asserted; secondary) */
-            selfName: string | null;
-            host: string | null;
-            logoUri: string | null;
-            /** @description True: an OAuth client known to the server */
-            verified: boolean;
-            /** @description The client row was deleted by an administrator: its runs keep their name */
-            removed: boolean;
-            connectedAt: string | null;
-            lastUsedAt: string | null;
-            scopes: {
-                id: string;
-                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
-                label: string;
-                /** @description What the consent page said */
-                consent: string;
-                /** @enum {string} */
-                risk: "low" | "elevated" | "high";
-            }[];
-            limits: {
-                /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
-                policyId: string | null;
-                /** @description The only policies this app may choose; empty: any. */
-                allowedPolicyIds: string[];
-                /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
-                allowedDomains: string[];
-                /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
-                maxConcurrentRuns: number;
-                /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
-                dailyRunLimit: number;
-                /** @description USD per day over this app's runs; null: no cost limit. */
-                dailyCostLimitUsd: number | null;
-                /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
-                confirmPurchases: boolean;
-                /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
-                confirmSensitiveActions: boolean;
-                /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
-                allowSavedLogins: boolean;
-                /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
-                allowSavedIdentity: boolean;
-                /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
-                allowSavedCards: boolean;
-                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
-                allowConnections: boolean;
-                /** @description Refuse new runs and sessions from this app without disconnecting it. */
-                paused: boolean;
-            };
-            usage: {
-                runs30d: number;
-                costUsd30d: number;
-                costKnown: boolean;
-                lastRunAt: string | null;
-                liveRuns: number;
-                runsToday: number;
-                costTodayUsd: number;
-            };
-        }[];
-        AppPreflightResponseDto: {
-            /** @description The URL to paste into the AI app: `<APP_URL>/api/mcp` */
+        McpStatusResponseDto: {
+            /** @description The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`) */
+            externalAppsEnabled: boolean;
+            /** @description The switch of personal access tokens over MCP (`mcp.patMcpEnabled`) */
+            patMcpEnabled: boolean;
+            /** @description Whether the OAuth server is on (Administration → OAuth clients) */
+            oauthEnabled: boolean;
+            /** @description `<APP_URL>/api/mcp` */
             mcpUrl: string;
-            /** @description Whether the caller may change the OAuth settings (`oauth_clients:write`) */
-            admin: boolean;
-            /** @description True when no check failed or warned */
-            ready: boolean;
-            checks: {
+            /** @description Whether APP_URL is an https:// address on a public host name (not loopback, not a private address) */
+            publicHttps: boolean;
+            /** @description Active OAuth grants to the MCP endpoint, every user */
+            connectedApps: number;
+            connectedUsers: number;
+            /** @description Active grants holding browser:evaluate, desktop:control or policies:write */
+            highRiskGrants: number;
+        };
+        AddMcpResponseDto: {
+            /** @description Null while an OAuth consent is pending: the connection exists once the consent returns. */
+            connection: {
+                /** Format: uuid */
+                id: string;
                 /** @enum {string} */
-                id: "oauth_enabled" | "public_url" | "well_known";
+                provider: "google" | "microsoft" | "mcp";
+                label: string;
+                accountEmail: string;
+                accountName: string | null;
+                /** @description The switches that are on. */
+                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                defaultFor: ("mail" | "calendar" | "docs")[];
                 /** @enum {string} */
-                status: "pass" | "warn" | "fail" | "skip";
-                title: string;
-                detail: string;
-                fix: {
+                status: "active" | "paused" | "needs_reconnect" | "revoked";
+                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+                statusReason: string | null;
+                /** @description ISO 8601 timestamp */
+                connectedAt: string;
+                lastUsedAt: string | null;
+                lastRefreshAt: string | null;
+                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+                mcp?: {
+                    url: string;
+                    /** @enum {string} */
+                    auth: "none" | "bearer" | "header" | "oauth";
+                    serverName: string | null;
+                    tools: {
+                        total: number;
+                        enabled: number;
+                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                        needsReview: number;
+                    };
+                    toolsFetchedAt: string | null;
+                };
+            } | null;
+            catalog: {
+                tools: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @description The server's own name for the tool. */
+                    name: string;
+                    title: string | null;
+                    /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
+                    description: string;
+                    parameters: {
+                        name: string;
+                        type: string | null;
+                        required: boolean;
+                    }[];
+                    /** @description What the server claims about the tool. A hint is not a guarantee. */
+                    hints: {
+                        readOnly: boolean | null;
+                        destructive: boolean | null;
+                        idempotent: boolean | null;
+                        openWorld: boolean | null;
+                    };
                     /**
-                     * @description `admin`: the caller can fix it (they hold the permission); `you` never appears here today
+                     * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
                      * @enum {string}
                      */
-                    who: "admin" | "you";
-                    /** @description The console page that fixes it, for an administrator */
-                    path: string | null;
-                    /** @description What to do, in a sentence; "Ask your administrator to …" for anyone else */
-                    text: string;
-                } | null;
-            }[];
-            clients: {
-                /** @enum {string} */
-                id: "chatgpt" | "claude" | "claude-code" | "other";
-                /** @description Whether the OAuth settings let this app connect; null when it cannot be told in advance (any other client) */
-                allowed: boolean | null;
-                hosts: string[];
-                detail: string;
-            }[];
+                    suggested: "read" | "write";
+                    /**
+                     * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
+                     * @enum {string}
+                     */
+                    mode: "off" | "read" | "write";
+                    /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
+                    review: ("new" | "changed") | null;
+                }[];
+                needsReview: number;
+                fetchedAt: string | null;
+            } | null;
+            /** @description OAuth: send the browser here. The flow is bound to this browser by an HttpOnly cookie set on this response. */
+            consent: {
+                authorizeUrl: string;
+                /** @description ISO 8601 timestamp */
+                expiresAt: string;
+            } | null;
         };
-        ConnectedAppResponseDto: {
-            /** @description `oauth_clients.id` */
-            clientId: string;
-            /** @description The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected */
-            grantId: string | null;
-            /** @description The display name: the client's host ("chatgpt.com"), or its own name for a local app */
-            name: string;
-            /** @description "ChatGPT", "Claude", or the name */
-            displayName: string;
-            /** @description The name the client gives itself (self-asserted; secondary) */
-            selfName: string | null;
-            host: string | null;
-            logoUri: string | null;
-            /** @description True: an OAuth client known to the server */
-            verified: boolean;
-            /** @description The client row was deleted by an administrator: its runs keep their name */
-            removed: boolean;
-            connectedAt: string | null;
-            lastUsedAt: string | null;
-            scopes: {
+        AddMcpDto: {
+            /** @description The server's Streamable HTTP endpoint. `https` only; no user name, password, query or fragment. */
+            url: string;
+            /** @description What you call it. Defaults to the server's host name. */
+            label?: string;
+            /** @description How the server signs you in: nothing, a bearer token, a header, or OAuth (a consent at the server's own sign-in page). Secrets are stored encrypted and never returned. */
+            auth: {
+                /** @constant */
+                kind: "none";
+            } | {
+                /** @constant */
+                kind: "bearer";
+                token: string;
+            } | {
+                /** @constant */
+                kind: "header";
+                header: string;
+                value: string;
+            } | {
+                /** @constant */
+                kind: "oauth";
+                /** @description The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration). */
+                clientId?: string | null;
+                /** @description Write-only. Only for a confidential client you registered. */
+                clientSecret?: string | null;
+            };
+            /** @description For OAuth: a path on this console to return to (default `/settings/connections`). */
+            returnTo?: string;
+        };
+        McpCatalogResponseDto: {
+            tools: {
+                /** Format: uuid */
                 id: string;
-                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
-                label: string;
-                /** @description What the consent page said */
-                consent: string;
-                /** @enum {string} */
-                risk: "low" | "elevated" | "high";
+                /** @description The server's own name for the tool. */
+                name: string;
+                title: string | null;
+                /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
+                description: string;
+                parameters: {
+                    name: string;
+                    type: string | null;
+                    required: boolean;
+                }[];
+                /** @description What the server claims about the tool. A hint is not a guarantee. */
+                hints: {
+                    readOnly: boolean | null;
+                    destructive: boolean | null;
+                    idempotent: boolean | null;
+                    openWorld: boolean | null;
+                };
+                /**
+                 * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
+                 * @enum {string}
+                 */
+                suggested: "read" | "write";
+                /**
+                 * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
+                 * @enum {string}
+                 */
+                mode: "off" | "read" | "write";
+                /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
+                review: ("new" | "changed") | null;
             }[];
-            limits: {
-                /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
-                policyId: string | null;
-                /** @description The only policies this app may choose; empty: any. */
-                allowedPolicyIds: string[];
-                /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
-                allowedDomains: string[];
-                /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
-                maxConcurrentRuns: number;
-                /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
-                dailyRunLimit: number;
-                /** @description USD per day over this app's runs; null: no cost limit. */
-                dailyCostLimitUsd: number | null;
-                /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
-                confirmPurchases: boolean;
-                /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
-                confirmSensitiveActions: boolean;
-                /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
-                allowSavedLogins: boolean;
-                /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
-                allowSavedIdentity: boolean;
-                /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
-                allowSavedCards: boolean;
-                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
-                allowConnections: boolean;
-                /** @description Refuse new runs and sessions from this app without disconnecting it. */
-                paused: boolean;
-            };
-            usage: {
-                runs30d: number;
-                costUsd30d: number;
-                costKnown: boolean;
-                lastRunAt: string | null;
-                liveRuns: number;
-                runsToday: number;
-                costTodayUsd: number;
-            };
+            needsReview: number;
+            fetchedAt: string | null;
         };
-        AppLimitsResponseDto: {
-            /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
-            policyId: string | null;
-            /** @description The only policies this app may choose; empty: any. */
-            allowedPolicyIds: string[];
-            /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
-            allowedDomains: string[];
-            /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
-            maxConcurrentRuns: number;
-            /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
-            dailyRunLimit: number;
-            /** @description USD per day over this app's runs; null: no cost limit. */
-            dailyCostLimitUsd: number | null;
-            /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
-            confirmPurchases: boolean;
-            /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
-            confirmSensitiveActions: boolean;
-            /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
-            allowSavedLogins: boolean;
-            /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
-            allowSavedIdentity: boolean;
-            /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
-            allowSavedCards: boolean;
-            /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
-            allowConnections: boolean;
-            /** @description Refuse new runs and sessions from this app without disconnecting it. */
-            paused: boolean;
+        McpToolResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description The server's own name for the tool. */
+            name: string;
+            title: string | null;
+            /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
+            description: string;
+            parameters: {
+                name: string;
+                type: string | null;
+                required: boolean;
+            }[];
+            /** @description What the server claims about the tool. A hint is not a guarantee. */
+            hints: {
+                readOnly: boolean | null;
+                destructive: boolean | null;
+                idempotent: boolean | null;
+                openWorld: boolean | null;
+            };
+            /**
+             * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
+             * @enum {string}
+             */
+            suggested: "read" | "write";
+            /**
+             * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
+             * @enum {string}
+             */
+            mode: "off" | "read" | "write";
+            /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
+            review: ("new" | "changed") | null;
         };
-        PatchAppSettingsDto: {
-            policyId?: string | null;
-            allowedPolicyIds?: string[];
-            allowedDomains?: string[];
-            maxConcurrentRuns?: number;
-            dailyRunLimit?: number;
-            dailyCostLimitUsd?: number | null;
-            confirmPurchases?: boolean;
-            confirmSensitiveActions?: boolean;
-            allowSavedLogins?: boolean;
-            allowSavedIdentity?: boolean;
-            allowSavedCards?: boolean;
-            allowConnections?: boolean;
-            paused?: boolean;
+        SetToolModeDto: {
+            /**
+             * @description `off`, `read` (the tool only reads: it is called without asking) or `write` (it changes something: it asks you first).
+             * @enum {string}
+             */
+            mode: "off" | "read" | "write";
+        };
+        McpAuthResponseDto: {
+            connection: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                provider: "google" | "microsoft" | "mcp";
+                label: string;
+                accountEmail: string;
+                accountName: string | null;
+                /** @description The switches that are on. */
+                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                defaultFor: ("mail" | "calendar" | "docs")[];
+                /** @enum {string} */
+                status: "active" | "paused" | "needs_reconnect" | "revoked";
+                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+                statusReason: string | null;
+                /** @description ISO 8601 timestamp */
+                connectedAt: string;
+                lastUsedAt: string | null;
+                lastRefreshAt: string | null;
+                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+                mcp?: {
+                    url: string;
+                    /** @enum {string} */
+                    auth: "none" | "bearer" | "header" | "oauth";
+                    serverName: string | null;
+                    tools: {
+                        total: number;
+                        enabled: number;
+                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                        needsReview: number;
+                    };
+                    toolsFetchedAt: string | null;
+                };
+            };
+            consent: {
+                authorizeUrl: string;
+                /** @description ISO 8601 timestamp */
+                expiresAt: string;
+            } | null;
+        };
+        McpAuthDto: {
+            auth: {
+                /** @constant */
+                kind: "none";
+            } | {
+                /** @constant */
+                kind: "bearer";
+                token: string;
+            } | {
+                /** @constant */
+                kind: "header";
+                header: string;
+                value: string;
+            } | {
+                /** @constant */
+                kind: "oauth";
+                /** @description The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration). */
+                clientId?: string | null;
+                /** @description Write-only. Only for a confidential client you registered. */
+                clientSecret?: string | null;
+            };
+            returnTo?: string;
+        };
+        McpAdminResponseDto: {
+            enabled: boolean;
+            allowedHosts: string[];
+            blockedHosts: string[];
+        };
+        SaveMcpAdminDto: {
+            /** @description Whether owners may add and use MCP servers. Off by default. */
+            enabled?: boolean;
+            /** @description Exact host names or `*.example.test`. Empty: any public host. Replaces the stored list. */
+            allowedHosts?: string[];
+            /** @description Hosts that are never allowed, whatever the allow-list says. Replaces the stored list. */
+            blockedHosts?: string[];
+        };
+        MailTriggerResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** Format: uuid */
+            connectionId: string;
+            /** @description Null when the connection was removed. */
+            connectionLabel: string | null;
+            name: string;
+            enabled: boolean;
+            match: {
+                from: string[];
+                to?: string;
+                subjectContains?: string;
+                textContains?: string;
+                hasAttachment?: boolean;
+                label?: string;
+            };
+            inputs: {
+                [key: string]: unknown;
+            } | null;
+            afterStart: string;
+            pollSeconds: number;
+            maxRunsPerDay: number;
+            acceptUnverified: boolean;
+            /** @enum {string} */
+            status: "ok" | "needs_reconnect" | "failing" | "rate_limited" | "connection_paused" | "connection_removed";
+            statusReason: string | null;
+            lastCheckedAt: string | null;
+            lastMatchedAt: string | null;
+            /** @description Runs this trigger started since 00:00 UTC. */
+            runsToday: number;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+        };
+        CreateMailTriggerDto: {
+            /** @description Defaults to the first sender. */
+            name?: string;
+            /**
+             * Format: uuid
+             * @description The connected account whose mailbox is watched (needs `mail_read`).
+             */
+            connectionId: string;
+            match: {
+                /** @description Required: at least one exact address (`person-a@example.test`) or one domain (`@example.test`, exactly that domain). A domain anybody can have an address at is refused. */
+                from: string[];
+                /** @description The message was sent to this address (To). */
+                to?: string;
+                subjectContains?: string;
+                /** @description Words that must appear in the text body. */
+                textContains?: string;
+                hasAttachment?: boolean;
+                /** @description A label or folder id from the connection; default is the inbox. */
+                label?: string;
+            };
+            /** @description How the task's parameters get values from the message: `{ [key]: { fixed } | { header: 'subject'|'from'|'date' } | { capture: { source: 'subject'|'text', pattern } } }`. The message text is never pasted into the goal. */
+            inputs?: {
+                [key: string]: {
+                    fixed: string;
+                } | {
+                    /** @enum {string} */
+                    header: "subject" | "from" | "date";
+                } | {
+                    capture: {
+                        /** @enum {string} */
+                        source: "subject" | "text";
+                        /** @description A regular expression with exactly one group; the group is the value. No back-references or nested quantifiers. */
+                        pattern: string;
+                        ignoreCase?: boolean;
+                    };
+                };
+            } | null;
+            /** @description What happens to the message after a run was queued: `none`, `mark_read` or `add_label:<label id>`. The last two need the connection's `mail_modify` switch. */
+            afterStart?: string;
+            /** @description How often to look for mail, in seconds: 300 by default, never under the deployment minimum (60 unless the administrator raised it). */
+            pollSeconds?: number;
+            /** @description The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies. */
+            maxRunsPerDay?: number;
+            /** @description Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does. */
+            acceptUnverified?: boolean;
+            enabled?: boolean;
+        };
+        UpdateMailTriggerDto: {
+            name?: string;
+            /** Format: uuid */
+            connectionId?: string;
+            match?: {
+                /** @description Required: at least one exact address (`person-a@example.test`) or one domain (`@example.test`, exactly that domain). A domain anybody can have an address at is refused. */
+                from: string[];
+                /** @description The message was sent to this address (To). */
+                to?: string;
+                subjectContains?: string;
+                /** @description Words that must appear in the text body. */
+                textContains?: string;
+                hasAttachment?: boolean;
+                /** @description A label or folder id from the connection; default is the inbox. */
+                label?: string;
+            };
+            inputs?: {
+                [key: string]: {
+                    fixed: string;
+                } | {
+                    /** @enum {string} */
+                    header: "subject" | "from" | "date";
+                } | {
+                    capture: {
+                        /** @enum {string} */
+                        source: "subject" | "text";
+                        /** @description A regular expression with exactly one group; the group is the value. No back-references or nested quantifiers. */
+                        pattern: string;
+                        ignoreCase?: boolean;
+                    };
+                };
+            } | null;
+            /** @description What happens to the message after a run was queued: `none`, `mark_read` or `add_label:<label id>`. The last two need the connection's `mail_modify` switch. */
+            afterStart?: string;
+            /** @description How often to look for mail, in seconds: 300 by default, never under the deployment minimum (60 unless the administrator raised it). */
+            pollSeconds?: number;
+            /** @description The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies. */
+            maxRunsPerDay?: number;
+            /** @description Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does. */
+            acceptUnverified?: boolean;
+            /** @description Enabling again starts from now: mail that arrived while it was off never fires. */
+            enabled?: boolean;
+        };
+        MailTriggerTestResponseDto: {
+            /** @description Up to the last 5 messages that match the rules. Nothing is started. */
+            messages: {
+                date: string | null;
+                /** @description The first 60 characters of the subject. */
+                subject: string;
+                from: string | null;
+                /** @description False when it arrived before the trigger was enabled, came from the account itself, failed the sender check, or could not be checked while the trigger does not accept unverified senders. */
+                wouldStart: boolean;
+                reason: ("before_enabled" | "own_message" | "sender_not_verified" | "sender_not_checked") | null;
+                /** @enum {string} */
+                senderVerified: "pass" | "fail" | "unknown";
+            }[];
+            note: string | null;
+        };
+        MailTriggerEventResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            outcome: "started" | "skipped_limit" | "skipped_unverified" | "skipped_loop" | "failed";
+            /** @description `SENDER_NOT_VERIFIED`, `SENDER_NOT_CHECKED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`. */
+            reason: string | null;
+            runId: string | null;
+            messageAt: string | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
         };
         TaskDetailResponseDto: {
             /** Format: uuid */
@@ -16116,7 +16687,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -16142,6 +16713,8 @@ export interface components {
                     /** @description True when it is the policy the user's default resolves to */
                     isDefault: boolean;
                 } | null;
+                /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
+                mailTriggers: number;
             };
         };
         TaskPageResponseDto: {
@@ -16311,7 +16884,7 @@ export interface components {
                         /** @enum {string} */
                         status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                         /** @enum {string} */
-                        trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                        trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                         /** @description ISO 8601 timestamp */
                         createdAt: string;
                         finishedAt: string | null;
@@ -16337,6 +16910,8 @@ export interface components {
                         /** @description True when it is the policy the user's default resolves to */
                         isDefault: boolean;
                     } | null;
+                    /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
+                    mailTriggers: number;
                 };
             }[];
             /** @description Pass as `cursor` for the next page; null on the last page. Opaque. */
@@ -16561,7 +17136,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -16587,6 +17162,8 @@ export interface components {
                     /** @description True when it is the policy the user's default resolves to */
                     isDefault: boolean;
                 } | null;
+                /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
+                mailTriggers: number;
             };
         };
         CreateTaskDto: {
@@ -17178,7 +17755,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -17204,6 +17781,8 @@ export interface components {
                     /** @description True when it is the policy the user's default resolves to */
                     isDefault: boolean;
                 } | null;
+                /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
+                mailTriggers: number;
             };
             /** @description Resume only: schedules left as they were because their stored expression is no longer valid. Normally empty. */
             skipped: string[];
@@ -17283,7 +17862,7 @@ export interface components {
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /**
                  * Format: date-time
@@ -17360,7 +17939,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
             /**
              * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
              * @enum {string}
@@ -17559,7 +18138,7 @@ export interface components {
                 /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                 value: string;
                 /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
+                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details" | "email";
             }[] | null;
             /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
             outputsComplete: boolean | null;
@@ -17603,7 +18182,7 @@ export interface components {
                 /** @enum {string} */
                 status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                 /** @enum {string} */
-                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                 /**
                  * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
                  * @enum {string}
@@ -17802,7 +18381,7 @@ export interface components {
                     /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                     value: string;
                     /** @enum {string} */
-                    source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
+                    source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details" | "email";
                 }[] | null;
                 /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
                 outputsComplete: boolean | null;
@@ -17896,7 +18475,7 @@ export interface components {
                 result: string | null;
                 error: string | null;
                 /** @enum {string} */
-                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                 /**
                  * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
                  * @enum {string}
@@ -18176,7 +18755,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
             /**
              * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
              * @enum {string}
@@ -18383,7 +18962,7 @@ export interface components {
                 /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                 value: string;
                 /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
+                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details" | "email";
             }[] | null;
             /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
             outputsComplete: boolean | null;
@@ -18486,7 +19065,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
             /**
              * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
              * @enum {string}
@@ -18693,7 +19272,7 @@ export interface components {
                 /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                 value: string;
                 /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
+                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details" | "email";
             }[] | null;
             /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
             outputsComplete: boolean | null;
@@ -19022,6 +19601,216 @@ export interface components {
             /** @constant */
             neverForSite?: true;
         };
+        ConnectedAppListResponseDto: {
+            /** @description `oauth_clients.id` */
+            clientId: string;
+            /** @description The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected */
+            grantId: string | null;
+            /** @description The display name: the client's host ("chatgpt.com"), or its own name for a local app */
+            name: string;
+            /** @description "ChatGPT", "Claude", or the name */
+            displayName: string;
+            /** @description The name the client gives itself (self-asserted; secondary) */
+            selfName: string | null;
+            host: string | null;
+            logoUri: string | null;
+            /** @description True: an OAuth client known to the server */
+            verified: boolean;
+            /** @description The client row was deleted by an administrator: its runs keep their name */
+            removed: boolean;
+            connectedAt: string | null;
+            lastUsedAt: string | null;
+            scopes: {
+                id: string;
+                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
+                label: string;
+                /** @description What the consent page said */
+                consent: string;
+                /** @enum {string} */
+                risk: "low" | "elevated" | "high";
+            }[];
+            limits: {
+                /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
+                policyId: string | null;
+                /** @description The only policies this app may choose; empty: any. */
+                allowedPolicyIds: string[];
+                /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
+                allowedDomains: string[];
+                /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
+                maxConcurrentRuns: number;
+                /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
+                dailyRunLimit: number;
+                /** @description USD per day over this app's runs; null: no cost limit. */
+                dailyCostLimitUsd: number | null;
+                /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
+                confirmPurchases: boolean;
+                /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
+                confirmSensitiveActions: boolean;
+                /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
+                allowSavedLogins: boolean;
+                /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
+                allowSavedIdentity: boolean;
+                /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
+                allowSavedCards: boolean;
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                allowConnections: boolean;
+                /** @description Refuse new runs and sessions from this app without disconnecting it. */
+                paused: boolean;
+            };
+            usage: {
+                runs30d: number;
+                costUsd30d: number;
+                costKnown: boolean;
+                lastRunAt: string | null;
+                liveRuns: number;
+                runsToday: number;
+                costTodayUsd: number;
+            };
+        }[];
+        AppPreflightResponseDto: {
+            /** @description The URL to paste into the AI app: `<APP_URL>/api/mcp` */
+            mcpUrl: string;
+            /** @description Whether the caller may change the OAuth settings (`oauth_clients:write`) */
+            admin: boolean;
+            /** @description True when no check failed or warned */
+            ready: boolean;
+            checks: {
+                /** @enum {string} */
+                id: "oauth_enabled" | "public_url" | "well_known";
+                /** @enum {string} */
+                status: "pass" | "warn" | "fail" | "skip";
+                title: string;
+                detail: string;
+                fix: {
+                    /**
+                     * @description `admin`: the caller can fix it (they hold the permission); `you` never appears here today
+                     * @enum {string}
+                     */
+                    who: "admin" | "you";
+                    /** @description The console page that fixes it, for an administrator */
+                    path: string | null;
+                    /** @description What to do, in a sentence; "Ask your administrator to …" for anyone else */
+                    text: string;
+                } | null;
+            }[];
+            clients: {
+                /** @enum {string} */
+                id: "chatgpt" | "claude" | "claude-code" | "other";
+                /** @description Whether the OAuth settings let this app connect; null when it cannot be told in advance (any other client) */
+                allowed: boolean | null;
+                hosts: string[];
+                detail: string;
+            }[];
+        };
+        ConnectedAppResponseDto: {
+            /** @description `oauth_clients.id` */
+            clientId: string;
+            /** @description The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected */
+            grantId: string | null;
+            /** @description The display name: the client's host ("chatgpt.com"), or its own name for a local app */
+            name: string;
+            /** @description "ChatGPT", "Claude", or the name */
+            displayName: string;
+            /** @description The name the client gives itself (self-asserted; secondary) */
+            selfName: string | null;
+            host: string | null;
+            logoUri: string | null;
+            /** @description True: an OAuth client known to the server */
+            verified: boolean;
+            /** @description The client row was deleted by an administrator: its runs keep their name */
+            removed: boolean;
+            connectedAt: string | null;
+            lastUsedAt: string | null;
+            scopes: {
+                id: string;
+                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
+                label: string;
+                /** @description What the consent page said */
+                consent: string;
+                /** @enum {string} */
+                risk: "low" | "elevated" | "high";
+            }[];
+            limits: {
+                /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
+                policyId: string | null;
+                /** @description The only policies this app may choose; empty: any. */
+                allowedPolicyIds: string[];
+                /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
+                allowedDomains: string[];
+                /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
+                maxConcurrentRuns: number;
+                /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
+                dailyRunLimit: number;
+                /** @description USD per day over this app's runs; null: no cost limit. */
+                dailyCostLimitUsd: number | null;
+                /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
+                confirmPurchases: boolean;
+                /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
+                confirmSensitiveActions: boolean;
+                /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
+                allowSavedLogins: boolean;
+                /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
+                allowSavedIdentity: boolean;
+                /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
+                allowSavedCards: boolean;
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                allowConnections: boolean;
+                /** @description Refuse new runs and sessions from this app without disconnecting it. */
+                paused: boolean;
+            };
+            usage: {
+                runs30d: number;
+                costUsd30d: number;
+                costKnown: boolean;
+                lastRunAt: string | null;
+                liveRuns: number;
+                runsToday: number;
+                costTodayUsd: number;
+            };
+        };
+        AppLimitsResponseDto: {
+            /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
+            policyId: string | null;
+            /** @description The only policies this app may choose; empty: any. */
+            allowedPolicyIds: string[];
+            /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
+            allowedDomains: string[];
+            /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
+            maxConcurrentRuns: number;
+            /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
+            dailyRunLimit: number;
+            /** @description USD per day over this app's runs; null: no cost limit. */
+            dailyCostLimitUsd: number | null;
+            /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
+            confirmPurchases: boolean;
+            /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
+            confirmSensitiveActions: boolean;
+            /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
+            allowSavedLogins: boolean;
+            /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
+            allowSavedIdentity: boolean;
+            /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
+            allowSavedCards: boolean;
+            /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+            allowConnections: boolean;
+            /** @description Refuse new runs and sessions from this app without disconnecting it. */
+            paused: boolean;
+        };
+        PatchAppSettingsDto: {
+            policyId?: string | null;
+            allowedPolicyIds?: string[];
+            allowedDomains?: string[];
+            maxConcurrentRuns?: number;
+            dailyRunLimit?: number;
+            dailyCostLimitUsd?: number | null;
+            confirmPurchases?: boolean;
+            confirmSensitiveActions?: boolean;
+            allowSavedLogins?: boolean;
+            allowSavedIdentity?: boolean;
+            allowSavedCards?: boolean;
+            allowConnections?: boolean;
+            paused?: boolean;
+        };
         OpenDto: {
             /** @default default */
             profile?: string;
@@ -19241,23 +20030,6 @@ export interface components {
             }[];
             nextCursor: string | null;
         };
-        McpStatusResponseDto: {
-            /** @description The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`) */
-            externalAppsEnabled: boolean;
-            /** @description The switch of personal access tokens over MCP (`mcp.patMcpEnabled`) */
-            patMcpEnabled: boolean;
-            /** @description Whether the OAuth server is on (Administration → OAuth clients) */
-            oauthEnabled: boolean;
-            /** @description `<APP_URL>/api/mcp` */
-            mcpUrl: string;
-            /** @description Whether APP_URL is an https:// address on a public host name (not loopback, not a private address) */
-            publicHttps: boolean;
-            /** @description Active OAuth grants to the MCP endpoint, every user */
-            connectedApps: number;
-            connectedUsers: number;
-            /** @description Active grants holding browser:evaluate, desktop:control or policies:write */
-            highRiskGrants: number;
-        };
         AdminConnectedAppListResponseDto: {
             /**
              * Format: uuid
@@ -19394,7 +20166,7 @@ export interface components {
                     /** @enum {string} */
                     status: "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
                     /**
                      * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
                      * @enum {string}
@@ -40561,7 +41333,7 @@ export interface operations {
             };
         };
     };
-    connectedApps_list: {
+    mcpConnections_status: {
         parameters: {
             query?: never;
             header?: never;
@@ -40576,7 +41348,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["ConnectedAppListResponseDto"];
+                        data: components["schemas"]["McpStatusResponseDto"];
                     };
                 };
             };
@@ -40609,14 +41381,18 @@ export interface operations {
             };
         };
     };
-    connectedApps_preflight: {
+    mcpConnections_add: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMcpDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -40624,7 +41400,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["AppPreflightResponseDto"];
+                        data: components["schemas"]["AddMcpResponseDto"];
                     };
                 };
             };
@@ -40646,6 +41422,27 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
+            /** @description `CONNECTION_PROVIDER_UNAVAILABLE` (`details.reason: disabled`: the administrator has not switched MCP servers on), `CONNECTION_MCP_EXISTS`, `CONNECTION_LABEL_TAKEN`, `CONNECTION_LIMIT` or `CONNECTION_MCP_AUTH_REQUIRED` (`details.oauth`: the server advertises OAuth). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_MCP_URL_REFUSED` (`details.reason`: `scheme_not_allowed`, `private_target`, `host_not_allowed`, `host_blocked`, `query_not_allowed`, ...). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_MCP_PROTOCOL`: the server does not speak the MCP protocol (Streamable HTTP, 2025-03-26 and later). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
                 headers: {
@@ -40657,12 +41454,12 @@ export interface operations {
             };
         };
     };
-    connectedApps_get: {
+    mcpConnections_tools: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                clientId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -40674,7 +41471,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["ConnectedAppResponseDto"];
+                        data: components["schemas"]["McpCatalogResponseDto"];
                     };
                 };
             };
@@ -40707,12 +41504,12 @@ export interface operations {
             };
         };
     };
-    connectedApps_settings: {
+    mcpConnections_refresh: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                clientId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -40724,7 +41521,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["AppLimitsResponseDto"];
+                        data: components["schemas"]["McpCatalogResponseDto"];
                     };
                 };
             };
@@ -40746,6 +41543,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
+            /** @description `CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`, `CONNECTION_MCP_AUTH_REQUIRED` or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
                 headers: {
@@ -40757,18 +41561,19 @@ export interface operations {
             };
         };
     };
-    connectedApps_patch: {
+    mcpConnections_setMode: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                clientId: string;
+                id: string;
+                toolId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PatchAppSettingsDto"];
+                "application/json": components["schemas"]["SetToolModeDto"];
             };
         };
         responses: {
@@ -40778,7 +41583,463 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["AppLimitsResponseDto"];
+                        data: components["schemas"]["McpToolResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_reauth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpAuthDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpAuthResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpAdminResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveMcpAdminDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpAdminResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mailTriggers_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MailTriggerResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mailTriggers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMailTriggerDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MailTriggerResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mailTriggers_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mailTriggers_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMailTriggerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MailTriggerResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mailTriggers_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MailTriggerTestResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mailTriggers_events: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description An ISO instant: only events before it (the previous page ends here). */
+                before?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MailTriggerEventResponseDto"][];
                     };
                 };
             };
@@ -41680,7 +42941,7 @@ export interface operations {
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
                 from?: string;
@@ -41808,7 +43069,7 @@ export interface operations {
             query?: {
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
                 from?: string;
@@ -42375,6 +43636,256 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["QuestionResponseDto"];
                     };
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectedAppListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_preflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AppPreflightResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectedAppResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AppLimitsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchAppSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AppLimitsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

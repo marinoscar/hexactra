@@ -288,7 +288,7 @@ describe('GET /tasks: summaries, search, filters, sorts and paging', () => {
 });
 
 describe('a page of tasks costs a fixed number of queries', () => {
-  it('pages 25 tasks created at the same instant by keyset, and reads a page of 20 in at most 8 queries', async () => {
+  it('pages 25 tasks created at the same instant by keyset, and reads a page of 20 in at most 9 queries', async () => {
     const carol = await login(`sum-carol-${stamp}@example.test`);
     const userId = carol.userId;
     const createdAt = new Date(Date.now() - HOUR);
@@ -328,7 +328,7 @@ describe('a page of tasks costs a fixed number of queries', () => {
     };
     const twenty = await count(20);
     expect(twenty).toBeGreaterThan(0); // the spy does see the driver
-    expect(twenty).toBeLessThanOrEqual(8); // the issue's six, plus one for the policies and one for the connections a task may use (E39.7)
+    expect(twenty).toBeLessThanOrEqual(9); // the issue's six, plus one each for the policies, the email triggers (E39.8) and the connections a task may use (E39.7)
     expect(await count(3)).toBe(twenty); // the same whatever the page size
   });
 });
