@@ -69,6 +69,20 @@ impl fmt::Display for OwnerId {
     }
 }
 
+/// The purchase a card release is for (E37.7): the amount and currency the
+/// owner's grant is checked against, and the embedded payment frame's origin
+/// when the field is typed into one. The fabric reads the frame's origin
+/// itself; a caller never supplies it.
+#[derive(Debug, Clone)]
+pub struct PurchaseContext {
+    /// A decimal with at most two places (`"42.50"`).
+    pub amount: String,
+    /// ISO 4217, upper case.
+    pub currency: String,
+    /// The payment frame's origin, when the target is inside one.
+    pub frame_origin: Option<Origin>,
+}
+
 /// One field of one item, for one purpose, bound to the page's origin.
 #[derive(Debug, Clone)]
 pub struct ReleaseRequest {
@@ -82,6 +96,8 @@ pub struct ReleaseRequest {
     pub run_id: Option<String>,
     /// What the owner sees as the app (audit).
     pub client_label: Option<String>,
+    /// Set for a card field (purpose `purchase`, E37.7); `None` otherwise.
+    pub purchase: Option<PurchaseContext>,
 }
 
 /// A one-time code for one item, bound to the page's origin.
@@ -134,7 +150,17 @@ impl ProviderError {
             ProviderError::RateLimited { .. } => c::RATE_LIMITED,
             ProviderError::Unavailable => c::UNAVAILABLE,
             ProviderError::Unauthorized => c::UNAUTHORIZED,
-            ProviderError::Refused(_) => c::REFUSED,
+            // A card refusal keeps its own code, so the console can say why
+            // (Vault's `CARD_*` codes, lower-cased by the provider).
+            ProviderError::Refused(r) => match r.as_str() {
+                "card_amount_exceeded" => c::AMOUNT_EXCEEDED,
+                "card_currency_mismatch" => c::CURRENCY_MISMATCH,
+                "security_code_not_granted" => c::SECURITY_CODE_NOT_GRANTED,
+                "card_grant_expired" => c::GRANT_EXPIRED,
+                "card_period_limit_reached" | "card_daily_cap_reached" => c::LIMIT_REACHED,
+                "card_access_disabled" => c::CARDS_DISABLED,
+                _ => c::REFUSED,
+            },
         }
     }
 }

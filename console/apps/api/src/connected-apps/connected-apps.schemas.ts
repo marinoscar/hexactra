@@ -19,6 +19,7 @@ export const APP_LIMIT_DEFAULTS = {
   confirmSensitiveActions: true,
   allowSavedLogins: false,
   allowSavedIdentity: false,
+  allowSavedCards: false,
   paused: false,
 } as const;
 
@@ -45,6 +46,9 @@ export const appLimitsSchema = z.object({
   allowSavedIdentity: z
     .boolean()
     .describe("Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."),
+  allowSavedCards: z
+    .boolean()
+    .describe("Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."),
   paused: z.boolean().describe('Refuse new runs and sessions from this app without disconnecting it.'),
 });
 export type AppLimits = z.infer<typeof appLimitsSchema>;
@@ -64,6 +68,7 @@ export const patchAppSettingsSchema = z
     confirmSensitiveActions: z.boolean(),
     allowSavedLogins: z.boolean(),
     allowSavedIdentity: z.boolean(),
+    allowSavedCards: z.boolean(),
     paused: z.boolean(),
   })
   .partial()

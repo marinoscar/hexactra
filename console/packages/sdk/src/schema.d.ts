@@ -5928,7 +5928,7 @@ export interface paths {
         put?: never;
         /**
          * Start connecting your Vault (OAuth 2.1 authorization code with PKCE)
-         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
+         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
          *
          *     **Requires:** authentication, plus permission `secrets:write`.
          */
@@ -6029,6 +6029,28 @@ export interface paths {
          *     **Requires:** authentication, plus permission `secrets:read`.
          */
         get: operations["secretsActivity_identityDetails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The cards you granted for a merchant
+         * @description The cards you opened to the agent that hold a live permission for ONE merchant (`merchant`: a host or an https address), by name, with brand, last four digits, expiry and the permission's limit, currency and whether the security code is included. Read-only: the provider lists a card only for a merchant it is granted for, so there is no list of every card; permissions are made in the provider (`manageUrl`). Never a number, never a code. `available` is false, with a `reason`, until Vault is connected with the card permissions and its card release is switched on.
+         *
+         *     **Requires:** authentication, plus permission `secrets:read`.
+         */
+        get: operations["secretsActivity_cardList"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8022,6 +8044,7 @@ export interface components {
              * @example APPROVAL_RULE_NOT_FOUND
              * @example RULE_CANNOT_WIDEN
              * @example APPROVAL_RULE_INVALID
+             * @example CARD_RULE_NEEDS_AMOUNT_LIMIT
              * @example APPROVAL_RULE_DUPLICATE
              * @example MEMORY_NOT_FOUND
              * @example MEMORY_LABEL_TAKEN
@@ -14773,8 +14796,10 @@ export interface components {
                 taskName: string | null;
                 /** @description When set, only runs of this chat. */
                 conversationId: string | null;
-                /** @description When set, only steps whose amount is known and not larger. */
+                /** @description When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7). */
                 maxAmount: number | null;
+                /** @description A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule. */
+                cardRef: string | null;
                 expiresAt: string | null;
                 enabled: boolean;
                 /** @description The question whose answer made the rule. */
@@ -14816,8 +14841,10 @@ export interface components {
             taskName: string | null;
             /** @description When set, only runs of this chat. */
             conversationId: string | null;
-            /** @description When set, only steps whose amount is known and not larger. */
+            /** @description When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7). */
             maxAmount: number | null;
+            /** @description A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule. */
+            cardRef: string | null;
             expiresAt: string | null;
             enabled: boolean;
             /** @description The question whose answer made the rule. */
@@ -14858,8 +14885,10 @@ export interface components {
             taskName: string | null;
             /** @description When set, only runs of this chat. */
             conversationId: string | null;
-            /** @description When set, only steps whose amount is known and not larger. */
+            /** @description When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7). */
             maxAmount: number | null;
+            /** @description A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule. */
+            cardRef: string | null;
             expiresAt: string | null;
             enabled: boolean;
             /** @description The question whose answer made the rule. */
@@ -14950,6 +14979,8 @@ export interface components {
         ConnectVaultDto: {
             /** @description Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default. */
             allowWrite?: boolean;
+            /** @description Also ask for `vault:cards_read` and `vault:cards_fill` (the agent may pay with a saved card under your per-merchant permission in the provider and your approval here, without ever seeing a number, an expiry or a code). A new consent. Off by default. */
+            allowCards?: boolean;
             /** @description Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default. */
             allowIdentity?: boolean;
             /** @description A path on this console to return to after the consent (default `/settings/secrets`). */
@@ -15051,6 +15082,39 @@ export interface components {
             /** @description The provider's address, where each item's allowed sites are managed. */
             manageUrl: string | null;
         };
+        CardListingResponseDto: {
+            /** @description Cards can be read and used: connected, the switches on and the card permissions granted. */
+            available: boolean;
+            /**
+             * @description Why not, when `available` is false. `needs_scope`: connect again and allow cards. `provider_off`: the provider has card release switched off. `bad_merchant`: not an https address of a site.
+             * @enum {string}
+             */
+            reason: "ok" | "not_connected" | "needs_reconnect" | "needs_scope" | "switched_off" | "provider_off" | "unavailable" | "bad_merchant";
+            /** @description The merchant asked about, as `https://<host>`; null when it was not a usable address. */
+            merchant: string | null;
+            /** @description The cards you opened to the agent that hold a live permission for this merchant. Never a number or a code. */
+            cards: {
+                /** @description The saved card's name */
+                name: string;
+                /** @description The card network (`visa`) */
+                brand: string | null;
+                /** @description The last four digits: never more */
+                last4: string | null;
+                /** @description The card's expiry as MM/YYYY */
+                expires: string | null;
+                limit: {
+                    /** @description The most one purchase may be at this merchant, a decimal with two places */
+                    maxAmount: string;
+                    currency: string;
+                    /** @description The owner allowed the security code for this card at this merchant */
+                    includesSecurityCode: boolean;
+                    /** @description When the permission ends, or null */
+                    expiresAt: string | null;
+                };
+            }[];
+            /** @description The provider's address, where each card's merchant permissions are made. */
+            manageUrl: string | null;
+        };
         ActivityListResponseDto: {
             items: {
                 /** Format: uuid */
@@ -15069,13 +15133,19 @@ export interface components {
                 /** @description The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username. */
                 loginName: string | null;
                 /** @description Which field was typed. Never its value. */
-                field: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email") | null;
+                field: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email" | "number" | "expiry" | "exp_month" | "exp_year" | "holder_name" | "security_code") | null;
                 /** @description A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...). */
                 outcome: string;
                 /** @description Nothing was typed: the fabric or the provider refused or failed. */
                 refused: boolean;
                 /** @description For a lookup: how many logins matched the page. */
                 matches: number | null;
+                /** @description A card field (E37.7): the amount the agent declared for the purchase, a decimal with two places. Null for anything else. */
+                amount: string | null;
+                /** @description A card field: the currency of the declared amount (ISO 4217). */
+                currency: string | null;
+                /** @description A card field typed into an embedded payment frame: the frame's host. */
+                frameSite: string | null;
             }[];
             providerActivityUrl: string | null;
         };
@@ -15085,7 +15155,7 @@ export interface components {
             items: {
                 site: string | null;
                 /** @description The fields typed so far for this login. */
-                fields: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email")[];
+                fields: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email" | "number" | "expiry" | "exp_month" | "exp_year" | "holder_name" | "security_code")[];
                 uses: number;
                 lastUsedAt: string;
                 lastRunId: string | null;
@@ -15149,6 +15219,8 @@ export interface components {
                 allowSavedLogins: boolean;
                 /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
                 allowSavedIdentity: boolean;
+                /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
+                allowSavedCards: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -15246,6 +15318,8 @@ export interface components {
                 allowSavedLogins: boolean;
                 /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
                 allowSavedIdentity: boolean;
+                /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
+                allowSavedCards: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -15280,6 +15354,8 @@ export interface components {
             allowSavedLogins: boolean;
             /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
             allowSavedIdentity: boolean;
+            /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
+            allowSavedCards: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -15294,6 +15370,7 @@ export interface components {
             confirmSensitiveActions?: boolean;
             allowSavedLogins?: boolean;
             allowSavedIdentity?: boolean;
+            allowSavedCards?: boolean;
             paused?: boolean;
         };
         TaskDetailResponseDto: {
@@ -15323,6 +15400,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
             useSavedIdentity: boolean;
+            /** @description Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value */
+            useSavedCards: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -15478,6 +15557,8 @@ export interface components {
                 useSavedLogins: boolean;
                 /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
                 useSavedIdentity: boolean;
+                /** @description Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value */
+                useSavedCards: boolean;
                 /**
                  * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
                  * @enum {string}
@@ -15637,6 +15718,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
             useSavedIdentity: boolean;
+            /** @description Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value */
+            useSavedCards: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -15840,6 +15923,8 @@ export interface components {
             useSavedLogins?: boolean;
             /** @description Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details. */
             useSavedIdentity?: boolean;
+            /** @description Let the agent pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: it names the card and the fields, the fabric types them, so the model never reads a number, an expiry or a code. The owner approves each merchant and amount (and may remember it with a required limit); an unattended run types a card only with `unattendedPayments: allow` and a matching remembered approval. Off by default, and it works only with `useSavedLogins` on and a provider that has a merchant grant for the card. */
+            useSavedCards?: boolean;
             /**
              * @description What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.
              * @default ask
@@ -15894,6 +15979,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
             useSavedIdentity: boolean;
+            /** @description Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value */
+            useSavedCards: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -16026,6 +16113,8 @@ export interface components {
             useSavedLogins?: boolean;
             /** @description Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details. */
             useSavedIdentity?: boolean;
+            /** @description Let the agent pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: it names the card and the fields, the fabric types them, so the model never reads a number, an expiry or a code. The owner approves each merchant and amount (and may remember it with a required limit); an unattended run types a card only with `unattendedPayments: allow` and a matching remembered approval. Off by default, and it works only with `useSavedLogins` on and a provider that has a merchant grant for the card. */
+            useSavedCards?: boolean;
             /**
              * @description What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.
              * @enum {string}
@@ -16085,6 +16174,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
             useSavedIdentity: boolean;
+            /** @description Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value */
+            useSavedCards: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -16525,6 +16616,31 @@ export interface components {
                 /** @description When it was first filled in this run */
                 at: string;
             }[];
+            /** @description The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ. */
+            usedSavedCards: {
+                /** @description The secrets provider that held the card (`vault`) */
+                provider: string;
+                /** @description The saved card's name as the owner gave it */
+                itemName: string;
+                /** @description The card network (`visa`), or null */
+                brand: string | null;
+                /** @description The last four digits, or null: never more */
+                last4: string | null;
+                /** @description The merchant's host as the page reported it */
+                merchant: string;
+                /** @description The merchant's origin the card was typed on */
+                origin: string;
+                /** @description ISO 4217 */
+                currency: string;
+                /** @description The amount the agent declared before paying, a decimal with two places */
+                declaredAmount: string;
+                /** @description The amount the agent read on the confirmation page, or null while unknown */
+                confirmedAmount: string | null;
+                /** @description The confirmed amount differs from the declared one by more than the tolerance */
+                mismatch: boolean;
+                /** @description When the card was typed */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -16712,6 +16828,31 @@ export interface components {
                     /** @description The site it was filled on */
                     origin: string;
                     /** @description When it was first filled in this run */
+                    at: string;
+                }[];
+                /** @description The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ. */
+                usedSavedCards: {
+                    /** @description The secrets provider that held the card (`vault`) */
+                    provider: string;
+                    /** @description The saved card's name as the owner gave it */
+                    itemName: string;
+                    /** @description The card network (`visa`), or null */
+                    brand: string | null;
+                    /** @description The last four digits, or null: never more */
+                    last4: string | null;
+                    /** @description The merchant's host as the page reported it */
+                    merchant: string;
+                    /** @description The merchant's origin the card was typed on */
+                    origin: string;
+                    /** @description ISO 4217 */
+                    currency: string;
+                    /** @description The amount the agent declared before paying, a decimal with two places */
+                    declaredAmount: string;
+                    /** @description The amount the agent read on the confirmation page, or null while unknown */
+                    confirmedAmount: string | null;
+                    /** @description The confirmed amount differs from the declared one by more than the tolerance */
+                    mismatch: boolean;
+                    /** @description When the card was typed */
                     at: string;
                 }[];
                 /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
@@ -17213,6 +17354,31 @@ export interface components {
                 /** @description When it was first filled in this run */
                 at: string;
             }[];
+            /** @description The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ. */
+            usedSavedCards: {
+                /** @description The secrets provider that held the card (`vault`) */
+                provider: string;
+                /** @description The saved card's name as the owner gave it */
+                itemName: string;
+                /** @description The card network (`visa`), or null */
+                brand: string | null;
+                /** @description The last four digits, or null: never more */
+                last4: string | null;
+                /** @description The merchant's host as the page reported it */
+                merchant: string;
+                /** @description The merchant's origin the card was typed on */
+                origin: string;
+                /** @description ISO 4217 */
+                currency: string;
+                /** @description The amount the agent declared before paying, a decimal with two places */
+                declaredAmount: string;
+                /** @description The amount the agent read on the confirmation page, or null while unknown */
+                confirmedAmount: string | null;
+                /** @description The confirmed amount differs from the declared one by more than the tolerance */
+                mismatch: boolean;
+                /** @description When the card was typed */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -17469,6 +17635,31 @@ export interface components {
                 /** @description When it was first filled in this run */
                 at: string;
             }[];
+            /** @description The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ. */
+            usedSavedCards: {
+                /** @description The secrets provider that held the card (`vault`) */
+                provider: string;
+                /** @description The saved card's name as the owner gave it */
+                itemName: string;
+                /** @description The card network (`visa`), or null */
+                brand: string | null;
+                /** @description The last four digits, or null: never more */
+                last4: string | null;
+                /** @description The merchant's host as the page reported it */
+                merchant: string;
+                /** @description The merchant's origin the card was typed on */
+                origin: string;
+                /** @description ISO 4217 */
+                currency: string;
+                /** @description The amount the agent declared before paying, a decimal with two places */
+                declaredAmount: string;
+                /** @description The amount the agent read on the confirmation page, or null while unknown */
+                confirmedAmount: string | null;
+                /** @description The confirmed amount differs from the declared one by more than the tolerance */
+                mismatch: boolean;
+                /** @description When the card was typed */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -17557,6 +17748,12 @@ export interface components {
                 summary: string;
                 /** @description Where a rule may be limited to: this task or this chat when the run has one */
                 scopes?: ("everywhere" | "this_task" | "this_chat")[];
+                /** @description A saved card (E37.7): the owner's amount limit is required for "Don't ask again"; the answer is refused without it */
+                requiresLimit?: boolean;
+                /** @description A saved card: the currency of the limit and of the purchase */
+                currency?: string;
+                /** @description A saved card: the purchase this approval is for, a decimal with two places */
+                amount?: string;
             } | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
@@ -17629,7 +17826,7 @@ export interface components {
              * @default other
              * @enum {string}
              */
-            kind?: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
+            kind?: "captcha" | "code" | "passkey" | "login" | "confirmation" | "verification" | "other";
             prompt: string;
             options?: (string | {
                 id: string;
@@ -17754,7 +17951,7 @@ export interface components {
              */
             input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /** @enum {string} */
-            kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
+            kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "verification" | "other";
             prompt: string;
             options?: (string | {
                 id: string;
@@ -17841,6 +18038,12 @@ export interface components {
                 summary: string;
                 /** @description Where a rule may be limited to: this task or this chat when the run has one */
                 scopes?: ("everywhere" | "this_task" | "this_chat")[];
+                /** @description A saved card (E37.7): the owner's amount limit is required for "Don't ask again"; the answer is refused without it */
+                requiresLimit?: boolean;
+                /** @description A saved card: the currency of the limit and of the purchase */
+                currency?: string;
+                /** @description A saved card: the purchase this approval is for, a decimal with two places */
+                amount?: string;
             } | null;
             /** @description form (#552): the fields to fill */
             fields?: {
@@ -18301,6 +18504,8 @@ export interface components {
                 useSavedLogins: boolean;
                 /** @description Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default */
                 useSavedIdentity: boolean;
+                /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
+                useSavedCards: boolean;
                 /** @description ISO 8601 timestamp */
                 lastMessageAt: string;
                 /** @description ISO 8601 timestamp */
@@ -18355,6 +18560,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default */
             useSavedIdentity: boolean;
+            /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
+            useSavedCards: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -18380,6 +18587,8 @@ export interface components {
             useSavedLogins?: boolean;
             /** @description Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`. */
             useSavedIdentity?: boolean;
+            /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
+            useSavedCards?: boolean;
         };
         ChatDetailResponseDto: {
             /** Format: uuid */
@@ -18406,6 +18615,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default */
             useSavedIdentity: boolean;
+            /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
+            useSavedCards: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -18465,6 +18676,8 @@ export interface components {
             useSavedLogins?: boolean;
             /** @description Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`. */
             useSavedIdentity?: boolean;
+            /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
+            useSavedCards?: boolean;
         };
         ChatMessageResponseDto: {
             /** Format: uuid */
@@ -18506,6 +18719,8 @@ export interface components {
             useSavedLogins: boolean;
             /** @description The chat's saved-details switch (E37.6), carried over to the task */
             useSavedIdentity: boolean;
+            /** @description The chat's saved-cards switch (E37.7), carried over to the task */
+            useSavedCards: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */
@@ -38232,6 +38447,57 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["IdentityListingResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secretsActivity_cardList: {
+        parameters: {
+            query: {
+                /** @description A merchant: a host (`shop.example.test`) or an https address. */
+                merchant: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CardListingResponseDto"];
                     };
                 };
             };

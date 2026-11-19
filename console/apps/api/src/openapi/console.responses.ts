@@ -65,6 +65,7 @@ export const taskResponseSchema = z.object({
   confirmRiskyActions: z.boolean(),
   useSavedLogins: z.boolean().describe("Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"),
   useSavedIdentity: z.boolean().describe("Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"),
+  useSavedCards: z.boolean().describe("Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"),
   unattendedPayments: z.enum(['ask', 'allow']).describe('`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`'),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
@@ -209,6 +210,23 @@ export const runResponseSchema = z.object({
       }),
     )
     .describe('The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page.'),
+  usedSavedCards: z
+    .array(
+      z.object({
+        provider: z.string().describe('The secrets provider that held the card (`vault`)'),
+        itemName: z.string().describe("The saved card's name as the owner gave it"),
+        brand: z.string().nullable().describe('The card network (`visa`), or null'),
+        last4: z.string().nullable().describe('The last four digits, or null: never more'),
+        merchant: z.string().describe("The merchant's host as the page reported it"),
+        origin: z.string().describe("The merchant's origin the card was typed on"),
+        currency: z.string().describe('ISO 4217'),
+        declaredAmount: z.string().describe('The amount the agent declared before paying, a decimal with two places'),
+        confirmedAmount: z.string().nullable().describe('The amount the agent read on the confirmation page, or null while unknown'),
+        mismatch: z.boolean().describe('The confirmed amount differs from the declared one by more than the tolerance'),
+        at: iso.describe('When the card was typed'),
+      }),
+    )
+    .describe('The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ.'),
   inputs: z.array(runInputResponseSchema).nullable().optional().describe("The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters"),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,
@@ -330,6 +348,9 @@ const questionRememberable = z.object({
   matchKey: z.string().describe('gate: the element\'s label; ask: the topic'),
   summary: z.string().describe("What the owner reads: \"Press 'Pay' on bankofamerica.com\""),
   scopes: z.array(z.enum(['everywhere', 'this_task', 'this_chat'])).optional().describe('Where a rule may be limited to: this task or this chat when the run has one'),
+  requiresLimit: z.boolean().optional().describe('A saved card (E37.7): the owner\'s amount limit is required for "Don\'t ask again"; the answer is refused without it'),
+  currency: z.string().optional().describe('A saved card: the currency of the limit and of the purchase'),
+  amount: z.string().optional().describe('A saved card: the purchase this approval is for, a decimal with two places'),
 });
 export const questionAnswerResponseSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),

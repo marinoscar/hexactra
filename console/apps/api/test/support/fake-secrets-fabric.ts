@@ -74,10 +74,52 @@ export const defaultItems = (): TestItem[] => [
   { id: FIXTURE.siteItemId, name: 'Example app login', username: FIXTURE.siteUsername, password: FIXTURE.sitePassword, code: null, origins: [FIXTURE.siteOrigin] },
 ];
 
+/** The cards of the fabric's `test` provider (E37.7, crates/hexactra-credential-resolver/src/test_provider.rs): published test numbers, granted for `CARD.merchant`. */
+export const CARD = {
+  id: 'test-card-1',
+  id2: 'test-card-2',
+  merchant: 'https://shop.example.com',
+  /** The page the checkout is on: a subdomain of the merchant (grants match by registrable domain). */
+  checkout: 'https://checkout.shop.example.com/pay',
+  frame: 'https://pay.processor.example.net',
+  number: '4242424242424242',
+  expMonth: '09',
+  expYear: '2031',
+  /** What a combined expiry input holds after the fabric composed it. */
+  expiry: '09/31',
+  holder: 'Person A',
+  postal: 'K1A 0B1',
+  cvv: 'CANARY-CVV-4401',
+  number2: '5555555555554444',
+  cvv2: 'CANARY-CVV-9902',
+} as const;
+
+export interface TestCard {
+  id: string;
+  name: string;
+  brand: string;
+  number: string;
+  expMonth: string;
+  expYear: string;
+  holder: string;
+  postal: string;
+  cvv: string;
+  merchant: string;
+  frames: string[];
+  maxAmount: number;
+  currency: string;
+  includeSecurityCode: boolean;
+}
+
+export const defaultCards = (): TestCard[] => [
+  { id: CARD.id, name: 'Everyday card', brand: 'visa', number: CARD.number, expMonth: CARD.expMonth, expYear: CARD.expYear, holder: CARD.holder, postal: CARD.postal, cvv: CARD.cvv, merchant: CARD.merchant, frames: [CARD.frame], maxAmount: 500, currency: 'USD', includeSecurityCode: true },
+  { id: CARD.id2, name: 'Virtual card', brand: 'mastercard', number: CARD.number2, expMonth: '03', expYear: '2030', holder: CARD.holder, postal: CARD.postal, cvv: CARD.cvv2, merchant: CARD.merchant, frames: [], maxAmount: 20, currency: 'USD', includeSecurityCode: false },
+];
+
 /** The registrable domain, as far as the fixture needs: the last two labels. */
 const site = (origin: string) => new URL(origin).hostname.split('.').slice(-2).join('.');
 
-export type FailMode = 'unavailable' | 'disabled' | 'unauthorized' | 'rate_limited' | 'origin_mismatch' | 'typing_failed';
+export type FailMode = 'unavailable' | 'disabled' | 'unauthorized' | 'rate_limited' | 'origin_mismatch' | 'typing_failed' | 'amount_exceeded' | 'limit_reached' | 'grant_expired' | 'cards_disabled';
 
 interface Handoff {
   id: string;
@@ -100,18 +142,26 @@ export function fakeSecretsFabric(url: string) {
     inputs: [] as { selector: string; tag: string }[],
     /** Whether the runner's cover is over the filled inputs right now (the picture is taken while it is). */
     covered: false,
+    /**
+     * What is at a viewport point (E37.7): an embedded frame's origin, or `null` for a frame whose origin cannot be determined.
+     * A point not listed is the page itself. Keys are `x,y`.
+     */
+    frames: {} as Record<string, string | null>,
   };
   /** Every screenshot taken, with whether the cover was drawn and what the marks said. */
-  const shots: { screen: string; covered: boolean; markTexts: string[] }[] = [];
+  const shots: { screen: string; covered: boolean; hasValues: boolean; markTexts: string[] }[] = [];
   const covers: string[][] = [];
+  /** The points covered (E37.7) in each cover drawn: a frame's field is covered by the element at its point. */
+  const coverPoints: { x: number; y: number }[][] = [];
   const targets = new Map<string, Record<string, unknown> | null>([['#pay', { tag: 'button', label: 'Pay' }]]);
   /** What the provider was asked (never a value). */
-  const providerCalls: { op: 'lookup' | 'release' | 'one_time_code'; origin: string; itemId?: string; field?: string; purpose?: string; clientLabel?: string; runId?: string; kind?: string; part?: string }[] = [];
+  const providerCalls: { op: 'lookup' | 'release' | 'one_time_code'; origin: string; itemId?: string; field?: string; purpose?: string; clientLabel?: string; runId?: string; kind?: string; part?: string; amount?: string; currency?: string; frameOrigin?: string | null }[] = [];
   const registrations: { owner: string; provider: string; kind: string }[] = [];
   const sessions: Record<string, unknown>[] = [];
   const state = {
     items: defaultItems(),
     identities: defaultIdentities(),
+    cards: defaultCards(),
     /** Whether the fake's screenshots work (the default fabric answers none). */
     screenshots: false,
     /** Runs after an identity lookup answered (a test moves the page here). */
@@ -168,6 +218,7 @@ export function fakeSecretsFabric(url: string) {
         }
         if (script.startsWith('/* hexactra:cover-filled */')) {
           covers.push(JSON.parse(/for \(const s of (\[.*?\])\)/.exec(script)![1]!) as string[]);
+          coverPoints.push(JSON.parse(/for \(const pt of (\[.*?\])\)/.exec(script)![1]!) as { x: number; y: number }[]);
           page.covered = true;
           return { id: 'op', state: 'succeeded', result: { type: 'boolean', value: true } };
         }
@@ -183,8 +234,50 @@ export function fakeSecretsFabric(url: string) {
       if (action.type === 'screenshot' || action.type === 'desktop_screenshot') {
         if (!state.screenshots) return { id: 'op', state: 'failed', error: 'no screenshots in this fake' };
         const marks = page.inputs.map((i, n) => ({ n: n + 1, selector: i.selector, tag: i.tag, text: page.fields[i.selector] ?? '', x: 10, y: 10 + n * 30, w: 100, h: 20 }));
-        shots.push({ screen: action.type === 'screenshot' ? 'page' : 'desktop', covered: page.covered, markTexts: marks.map((m) => m.text) });
+        shots.push({ screen: action.type === 'screenshot' ? 'page' : 'desktop', covered: page.covered, hasValues: Object.keys(page.fields).length > 0, markTexts: marks.map((m) => m.text) });
         return { id: 'op', state: 'succeeded', result: { mime: 'image/jpeg', data: 'AAAA', width: 800, height: 600, url: page.url, title: 'Form', marks, masked: action.mask === true ? 0 : undefined } };
+      }
+      if (action.type === 'secrets_lookup' && action.kind === 'card') {
+        providerCalls.push({ op: 'lookup', origin, kind: 'card', ...meta });
+        if (state.failAll && state.failAll !== 'origin_mismatch' && state.failAll !== 'typing_failed') return failure(state.failAll, 'lookup');
+        const items = state.cards
+          .filter((c) => site(c.merchant) === site(origin))
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            origins: [],
+            match_kind: 'exact',
+            has_code: false,
+            card: { brand: c.brand, last4: c.number.slice(-4), exp_month: c.expMonth, exp_year: c.expYear, grant: { max_amount: c.maxAmount.toFixed(2), currency: c.currency, includes_security_code: c.includeSecurityCode, expires_at: null } },
+          }));
+        return { id: 'op', state: 'succeeded', result: { origin, provider: 'test', items } };
+      }
+      if (action.type === 'type_card_field') {
+        const field = String(action.field);
+        const point = action.point as { x: number; y: number } | undefined;
+        const frame = point ? page.frames[`${point.x},${point.y}`] : undefined;
+        providerCalls.push({ op: 'release', origin, itemId: String(action.item_id), field, purpose: 'purchase', amount: String(action.amount), currency: String(action.currency), frameOrigin: frame ?? null, ...meta });
+        if (state.crashOn === field) {
+          state.crashOn = null;
+          throw new Error('the process crashed');
+        }
+        if (new URL(page.url).protocol !== 'https:') return { id: 'op', state: 'failed', error: 'insecure_origin: a card is only typed into a page that uses https; nothing was typed' };
+        if (frame === null) return { id: 'op', state: 'failed', error: "frame_unknown: the frame's origin cannot be determined; nothing was typed" };
+        if (state.failAll) return failure(state.failAll, 'type');
+        const next = state.failTyping.shift();
+        if (next) return failure(next, 'type');
+        const card = state.cards.find((c) => c.id === action.item_id);
+        if (!card) return { id: 'op', state: 'failed', error: 'not_found: no such item' };
+        if (site(card.merchant) !== site(origin)) return failure('origin_mismatch', 'type');
+        if (frame && !card.frames.includes(frame)) return failure('origin_mismatch', 'type');
+        if (String(action.currency) !== card.currency) return { id: 'op', state: 'failed', error: 'currency_mismatch: the currency is not the grant\'s' };
+        if (Number(action.amount) > card.maxAmount) return failure('amount_exceeded', 'type');
+        if (field === 'security_code' && !card.includeSecurityCode) return { id: 'op', state: 'failed', error: 'security_code_not_granted: the grant does not include the security code' };
+        const value =
+          field === 'number' ? card.number : field === 'expiry' ? `${card.expMonth}/${card.expYear.slice(-2)}` : field === 'exp_month' ? card.expMonth : field === 'exp_year' ? card.expYear : field === 'holder_name' ? card.holder : field === 'postal_code' ? card.postal : card.cvv;
+        // The value goes into the page's own field (or the frame's) and nowhere else.
+        page.fields[action.selector ? String(action.selector) : `point:${point!.x},${point!.y}`] = value;
+        return { id: 'op', state: 'succeeded', result: frame ? { typed: true, frame_origin: frame } : { typed: true } };
       }
       if (action.type === 'secrets_lookup' && action.kind === 'identity') {
         providerCalls.push({ op: 'lookup', origin, kind: 'identity', ...meta });
@@ -262,6 +355,14 @@ export function fakeSecretsFabric(url: string) {
       handoffs.set(id, { id, status: 'pending', input: String(body.input), kind: String(body.kind), prompt: body.prompt as string, options: body.choices });
       return { handoff: { id } };
     }
+    // The broker answers a handoff through the fabric (`QuestionsService.answer`).
+    if (method === 'POST' && /\/v1\/handoffs\/[^/]+\/respond$/.test(path)) {
+      const h = handoffs.get(path.split('/')[3]!);
+      if (!h) return {};
+      Object.assign(h, { status: 'completed', response: { outcome: opts.body!.outcome, value: opts.body!.value, value_withheld: false } });
+      return {};
+    }
+    if (method === 'POST' && /\/v1\/handoffs\/[^/]+\/cancel$/.test(path)) return {};
     if (method === 'GET' && path.startsWith('/v1/handoffs/')) return handoffs.get(path.split('/')[3]!);
     throw new FabricError('api', 'unexpected', 500, `unexpected ${method} ${path}`);
   });
@@ -271,7 +372,7 @@ export function fakeSecretsFabric(url: string) {
   const typed = () => providerCalls.filter((c) => c.op !== 'lookup');
   /** Answer the handoff the way the fabric reports a finished one. */
   const answer = (h: Handoff, response: Record<string, unknown>) => Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false, ...response } });
-  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer, shots, covers };
+  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer, shots, covers, coverPoints };
 }
 
 export type SecretsFabric = ReturnType<typeof fakeSecretsFabric>;

@@ -9,6 +9,11 @@
 //!   of birth); the fabric lists the options, picks one itself and answers only
 //!   `{ selected: true }`.
 //!
+//! * `type_card_field` (E37.7): one field of a saved card, typed under the
+//!   owner's merchant grant; the page must be `https`, the fabric reads the
+//!   merchant's top-level origin and, for a field inside an embedded payment
+//!   frame, that frame's origin, and refuses when it cannot tell.
+//!
 //! The control plane answers these itself. It reads the tab's top-level
 //! origin from the extension (a `tabs` operation) at that moment, so the model
 //! never names an origin, pins every later step to that tab, asks the provider
@@ -28,12 +33,14 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    provider_error_codes as code, ItemKind, OperationState, OperationView, ProviderSelectedResult,
-    ProviderTypedResult, RegisterSecretsProviderRequest, RemoteAction, SecretField, SecretPurpose,
-    SecretsLookupResult, SecretsProviderKind, SecretsProviderView, SelectPart, ViewportPoint,
+    provider_error_codes as code, CardField, CardTypedResult, ItemKind, OperationState,
+    OperationView, ProviderSelectedResult, ProviderTypedResult, RegisterSecretsProviderRequest,
+    RemoteAction, SecretField, SecretPurpose, SecretsLookupResult, SecretsProviderKind,
+    SecretsProviderView, SelectPart, ViewportPoint,
 };
 use hexactra_credential_resolver::{
-    CodeRequest, Origin, OwnerId, ProviderError, ReleaseRequest, SecretValue, SecretsProvider,
+    CodeRequest, Origin, OwnerId, ProviderError, PurchaseContext, ReleaseRequest, SecretValue,
+    SecretsProvider,
 };
 use serde_json::{json, Value};
 use tokio::time::Instant;
@@ -353,6 +360,11 @@ struct Audit {
     purpose: Option<&'static str>,
     kind: Option<ItemKind>,
     count: Option<usize>,
+    /// For a card field (E37.7): the purchase's amount and currency and the
+    /// payment frame's origin as the fabric found it. Never a value.
+    amount: Option<String>,
+    currency: Option<String>,
+    frame_origin: Option<String>,
     /// The provider handed a value over (it may still not have been typed).
     released: bool,
 }
@@ -374,6 +386,9 @@ impl Audit {
                 "purpose": self.purpose,
                 "kind": self.kind,
                 "count": self.count,
+                "amount": self.amount,
+                "currency": self.currency,
+                "frame_origin": self.frame_origin,
                 "released": self.released,
                 "outcome": outcome,
             }),
@@ -583,6 +598,93 @@ fn choose_option(options: &[SelectOption], value: &str, part: Option<SelectPart>
     None
 }
 
+/// `MM/YY` from a released month (`9`, `09`) and year (`2031`, `31`). The two
+/// parts and the intermediate text are wiped; `None` when either is not a
+/// plausible number.
+fn compose_expiry(month: &SecretValue, year: &SecretValue) -> Option<SecretValue> {
+    let text = |v: &SecretValue| secret_text(v);
+    let (mut m, mut y) = (text(month)?, text(year)?);
+    let digits = |t: &str| !t.is_empty() && t.len() <= 4 && t.bytes().all(|b| b.is_ascii_digit());
+    let ok = digits(m.trim()) && digits(y.trim());
+    let out = ok.then(|| {
+        let mm: u32 = m.trim().parse().unwrap_or(0);
+        let yy: u32 = y.trim().parse().unwrap_or(0);
+        ((1..=12).contains(&mm)).then(|| format!("{mm:02}/{:02}", yy % 100))
+    });
+    m.zeroize();
+    y.zeroize();
+    out.flatten().map(SecretValue::from_string)
+}
+
+/// What a probe of a card's target found.
+#[derive(Debug, PartialEq, Eq)]
+enum CardTarget {
+    /// In the top-level document (or a same-origin frame): the merchant.
+    TopLevel,
+    /// In an embedded frame of this origin.
+    Frame(Origin),
+}
+
+/// The script that says what is at a card's target: for a selector, whether it
+/// is a frame element; for a point, whether the element there is a frame, its
+/// declared source and whether it is the page's own origin. A frame's real
+/// document is not readable from the page, so the source is what the page
+/// declares (documented limit).
+fn card_target_script(selector: Option<&str>, point: Option<ViewportPoint>) -> String {
+    let find = match (selector, point) {
+        (Some(sel), _) => format!(
+            "document.querySelector({})",
+            serde_json::to_string(sel).unwrap_or_else(|_| "\"\"".into())
+        ),
+        // x and y are integers (validated): nothing page-controlled is spliced in.
+        (None, Some(p)) => format!("document.elementFromPoint({},{})", p.x, p.y),
+        (None, None) => "null".to_string(),
+    };
+    format!(
+        "/* hexactra:card-target */(()=>{{const e={find};if(!e)return {{found:false}};\
+         const t=e.tagName;const f=t==='IFRAME'||t==='FRAME'||t==='OBJECT'||t==='EMBED';\
+         let same=true,src='';if(f){{src=String(e.src||e.data||'');\
+         try{{same=!!e.contentDocument&&e.contentDocument.location.origin===location.origin}}catch(_){{same=false}}}}\
+         return {{found:true,frame:f,same_origin:same,src:src.slice(0,2000)}}}})()"
+    )
+}
+
+/// Read a card target probe's answer: top level, or a frame whose origin is
+/// known and `https`. Anything else is refused.
+fn card_target_of(v: &Value, selector: bool, top: &Origin) -> Result<CardTarget, Fail> {
+    if v.get("found").and_then(Value::as_bool) != Some(true) {
+        return Err(Fail::new(code::TYPING_FAILED, "there is no such element"));
+    }
+    if v.get("frame").and_then(Value::as_bool) != Some(true) {
+        return Ok(CardTarget::TopLevel);
+    }
+    if selector {
+        return Err(Fail::new(
+            code::TYPING_FAILED,
+            "the selector names a frame; point at the field inside it instead",
+        ));
+    }
+    if v.get("same_origin").and_then(Value::as_bool) == Some(true) {
+        return Ok(CardTarget::TopLevel);
+    }
+    let src = v.get("src").and_then(Value::as_str).unwrap_or_default();
+    let unknown = || {
+        Fail::new(
+            code::FRAME_UNKNOWN,
+            "the frame's origin cannot be determined; nothing was typed",
+        )
+    };
+    let frame = Origin::from_browser_url(src).map_err(|_| unknown())?;
+    if frame.scheme() != "https" {
+        return Err(unknown());
+    }
+    // A frame of the merchant's own exact origin is the merchant.
+    if frame == *top {
+        return Ok(CardTarget::TopLevel);
+    }
+    Ok(CardTarget::Frame(frame))
+}
+
 impl Run {
     fn remaining(&self) -> Result<Duration, Fail> {
         let left = self.deadline.saturating_duration_since(Instant::now());
@@ -768,6 +870,19 @@ impl Run {
         provider: Option<String>,
         tab_id: Option<i64>,
     ) -> Result<Value, Fail> {
+        // A card is never typed this way: it needs a declared purchase (E37.7).
+        if matches!(
+            &source,
+            Source::Field {
+                purpose: SecretPurpose::Purchase,
+                ..
+            }
+        ) {
+            return Err(Fail::new(
+                code::REFUSED,
+                "a card is typed with type_card_field, with the purchase's amount and currency",
+            ));
+        }
         let owner = self.owner.clone();
         let (pid, provider) = self
             .providers
@@ -801,6 +916,7 @@ impl Run {
                     purpose: *purpose,
                     run_id: self.audit.run_id.clone(),
                     client_label: self.audit.client_label.clone(),
+                    purchase: None,
                 };
                 let v = tokio::time::timeout(left, provider.release(req))
                     .await
@@ -843,6 +959,147 @@ impl Run {
         Ok(json!(ProviderTypedResult {
             typed: true,
             expires_at,
+        }))
+    }
+
+    /// What is at a card's target now: the merchant's own document, or an
+    /// embedded frame of a known `https` origin (see [`card_target_script`]).
+    async fn probe_card_target(
+        &self,
+        tab: i64,
+        target: &Target,
+        top: &Origin,
+    ) -> Result<CardTarget, Fail> {
+        let done = self
+            .op(
+                RemoteAction::Evaluate {
+                    script: card_target_script(target.selector.as_deref(), target.point),
+                    await_promise: false,
+                    tab_id: Some(tab),
+                },
+                code::TYPING_FAILED,
+            )
+            .await?;
+        let v = done
+            .result
+            .as_ref()
+            .and_then(|r| r.get("value"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        self.store.discard_result(done.id);
+        card_target_of(&v, target.selector.is_some(), top)
+    }
+
+    /// `type_card_field` (E37.7). Stricter than `type_value`: the page must be
+    /// `https`; what is at the target (the merchant's document, or an embedded
+    /// payment frame and its origin) is read before and again after the
+    /// provider answers, and a change in between refuses; the provider is
+    /// asked with the merchant's top-level origin, the frame's origin when
+    /// there is one, the amount and the currency; the value (or, for
+    /// `expiry`, the two parts) is dropped after typing.
+    #[allow(clippy::too_many_arguments)]
+    async fn type_card(
+        &mut self,
+        item_id: String,
+        field: CardField,
+        amount: String,
+        currency: String,
+        target: Target,
+        provider: Option<String>,
+        tab_id: Option<i64>,
+    ) -> Result<Value, Fail> {
+        let owner = self.owner.clone();
+        let (pid, provider) = self
+            .providers
+            .resolve(owner.as_deref(), provider.as_deref())?;
+        self.audit.provider = Some(pid);
+        let owner_id =
+            OwnerId::new(owner.unwrap_or_default()).map_err(|m| Fail::new(code::NO_PROVIDER, m))?;
+
+        // 1. Where are we, and what is at the target? A card goes only into an
+        //    `https` page, whatever the provider says.
+        let (origin, tab) = self.read_origin(tab_id).await?;
+        self.audit.origin = Some(origin.to_string());
+        if origin.scheme() != "https" {
+            return Err(Fail::new(
+                code::INSECURE_ORIGIN,
+                "a card is only typed into a page that uses https; nothing was typed",
+            ));
+        }
+        let found = self.probe_card_target(tab, &target, &origin).await?;
+        let frame_origin = match &found {
+            CardTarget::Frame(f) => Some(f.clone()),
+            CardTarget::TopLevel => None,
+        };
+        self.audit.frame_origin = frame_origin.as_ref().map(ToString::to_string);
+
+        // 2. From here until typing ends no picture may be taken.
+        let _no_pictures = self.store.secret_guard(self.session_id);
+
+        // 3. Ask the provider, bound to the merchant (and the frame), the
+        //    amount and the currency.
+        let parts: &[SecretField] = match field {
+            CardField::Number => &[SecretField::CardNumber],
+            CardField::Expiry => &[SecretField::ExpMonth, SecretField::ExpYear],
+            CardField::ExpMonth => &[SecretField::ExpMonth],
+            CardField::ExpYear => &[SecretField::ExpYear],
+            CardField::HolderName => &[SecretField::HolderName],
+            CardField::PostalCode => &[SecretField::PostalCode],
+            CardField::SecurityCode => &[SecretField::SecurityCode],
+        };
+        let mut values: Vec<SecretValue> = Vec::with_capacity(2);
+        for part in parts {
+            let left = self.remaining()?;
+            let req = ReleaseRequest {
+                owner: owner_id.clone(),
+                item_id: item_id.clone(),
+                field: *part,
+                origin: origin.clone(),
+                purpose: SecretPurpose::Purchase,
+                run_id: self.audit.run_id.clone(),
+                client_label: self.audit.client_label.clone(),
+                purchase: Some(PurchaseContext {
+                    amount: amount.clone(),
+                    currency: currency.clone(),
+                    frame_origin: frame_origin.clone(),
+                }),
+            };
+            let v = tokio::time::timeout(left, provider.release(req))
+                .await
+                .map_err(|_| provider_fail(ProviderError::Unavailable))?
+                .map_err(provider_fail)?;
+            self.audit.released = true;
+            values.push(v);
+        }
+        let value = match (field, values.as_slice()) {
+            (CardField::Expiry, [m, y]) => compose_expiry(m, y).ok_or_else(|| {
+                Fail::new(
+                    code::TYPING_FAILED,
+                    "the saved expiry is not a month and a year; nothing was typed",
+                )
+            })?,
+            (_, [one]) => SecretValue::new(one.expose(|b| b.to_vec())),
+            _ => return Err(Fail::new("internal", "no value")),
+        };
+        drop(values);
+
+        // 4. The page, or the thing at the target, may have changed while the
+        //    provider answered: read both again and type only into the same.
+        let (again, _) = self.read_origin(Some(tab)).await?;
+        if again != origin || self.probe_card_target(tab, &target, &again).await? != found {
+            return Err(Fail::new(
+                code::ORIGIN_MISMATCH,
+                "the page or the field's frame changed while the value was fetched; nothing was typed",
+            ));
+        }
+
+        // 5. Type it with trusted input; at a point inside a frame this is a
+        //    click and keystrokes at screen coordinates: no script runs there.
+        self.type_into(&value, &target, tab).await?;
+        drop(value);
+        Ok(json!(CardTypedResult {
+            typed: true,
+            frame_origin: self.audit.frame_origin.clone(),
         }))
     }
 
@@ -902,6 +1159,7 @@ impl Run {
             purpose: SecretPurpose::Form,
             run_id: self.audit.run_id.clone(),
             client_label: self.audit.client_label.clone(),
+            purchase: None,
         };
         let value = tokio::time::timeout(left, provider.release(req))
             .await
@@ -1094,6 +1352,39 @@ async fn execute(mut run: Run, action: RemoteAction) -> (Run, Result<Value, Fail
             )
             .await
         }
+        RemoteAction::TypeCardField {
+            item_id,
+            field,
+            selector,
+            point,
+            amount,
+            currency,
+            clear,
+            provider,
+            tab_id,
+            ..
+        } => {
+            run.audit.item_id = Some(item_id.clone());
+            run.audit.field = Some(field.as_str());
+            run.audit.purpose = Some(SecretPurpose::Purchase.as_str());
+            run.audit.amount = Some(amount.clone());
+            run.audit.currency = Some(currency.clone());
+            run.type_card(
+                item_id,
+                field,
+                amount,
+                currency,
+                Target {
+                    selector,
+                    point,
+                    clear,
+                    submit: false,
+                },
+                provider,
+                tab_id,
+            )
+            .await
+        }
         RemoteAction::SelectFromProvider {
             item_id,
             field,
@@ -1148,6 +1439,11 @@ pub(super) fn start(
             run_id,
             client_label,
             ..
+        }
+        | RemoteAction::TypeCardField {
+            run_id,
+            client_label,
+            ..
         } => (run_id.clone(), client_label.clone(), "secrets.release"),
         _ => (None, None, "secrets.release"),
     };
@@ -1175,6 +1471,9 @@ pub(super) fn start(
             purpose: None,
             kind,
             count: None,
+            amount: None,
+            currency: None,
+            frame_origin: None,
             released: false,
         },
     };

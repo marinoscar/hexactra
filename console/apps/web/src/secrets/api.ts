@@ -44,7 +44,14 @@ export type ActivityField =
   | 'postal_code'
   | 'country'
   | 'phone'
-  | 'email';
+  | 'email'
+  // Card fields (E37.7): the field kind, never a value.
+  | 'number'
+  | 'expiry'
+  | 'exp_month'
+  | 'exp_year'
+  | 'holder_name'
+  | 'security_code';
 
 export interface ActivityItem {
   id: string;
@@ -58,6 +65,10 @@ export interface ActivityItem {
   outcome: string;
   refused: boolean;
   matches: number | null;
+  /** A card field (E37.7): the amount the agent declared, its currency and the payment frame's host. */
+  amount?: string | null;
+  currency?: string | null;
+  frameSite?: string | null;
 }
 
 export interface ActivityList {
@@ -120,11 +131,22 @@ export interface IdentityListing {
 }
 
 export const getIdentity = (api: PlatformApiClient) => api.get<IdentityListing>('/secrets/identity');
+
+/** `GET /api/secrets/cards?merchant=` (E37.7): the cards the owner granted for ONE merchant. Never a number or a code. */
+export interface CardListing {
+  available: boolean;
+  reason: 'ok' | 'not_connected' | 'needs_reconnect' | 'needs_scope' | 'switched_off' | 'provider_off' | 'unavailable' | 'bad_merchant';
+  merchant: string | null;
+  cards: { name: string; brand: string | null; last4: string | null; expires: string | null; limit: { maxAmount: string; currency: string; includesSecurityCode: boolean; expiresAt: string | null } }[];
+  manageUrl: string | null;
+}
+
+export const getCards = (api: PlatformApiClient, merchant: string) => api.get<CardListing>(`/secrets/cards?merchant=${encodeURIComponent(merchant)}`);
 export const getAdminSummary = (api: PlatformApiClient) => api.get<AdminSummary>('/secrets/admin/summary');
 export const getDefaultClient = (api: PlatformApiClient) => api.get<DefaultClient>('/secrets/vault/default-client');
 
 export const saveClient = (api: PlatformApiClient, body: { baseUrl: string; clientId: string; clientSecret?: string }) => api.put<SecretsStatus>('/secrets/vault/client', body);
-export const connect = (api: PlatformApiClient, body: { allowWrite?: boolean; allowIdentity?: boolean; returnTo?: string }) => api.post<{ authorizeUrl: string; expiresAt: string }>('/secrets/vault/connect', body);
+export const connect = (api: PlatformApiClient, body: { allowWrite?: boolean; allowIdentity?: boolean; allowCards?: boolean; returnTo?: string }) => api.post<{ authorizeUrl: string; expiresAt: string }>('/secrets/vault/connect', body);
 export const disconnect = (api: PlatformApiClient, forgetClient = false) => api.post<{ revoked: boolean; status: SecretsStatus }>('/secrets/vault/disconnect', forgetClient ? { forgetClient } : {});
 
 /** The owner's own switch: the user setting `secrets.agentUse.enabled`. */

@@ -97,7 +97,7 @@ export interface ActionResult {
 // docs/remote-control-api.md#human-handoff and api/openapi.yaml.
 
 /** Why the agent needs a human. */
-export type HandoffKind = 'captcha' | 'code' | 'passkey' | 'login' | 'confirmation' | 'other';
+export type HandoffKind = 'captcha' | 'code' | 'passkey' | 'login' | 'confirmation' | 'verification' | 'other';
 
 /** What the human is asked to provide. */
 export type HandoffInput =

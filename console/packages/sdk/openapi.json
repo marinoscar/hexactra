@@ -29927,7 +29927,7 @@
     },
     "/api/secrets/vault/connect": {
       "post": {
-        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
         "operationId": "secrets_connect",
         "parameters": [],
         "requestBody": {
@@ -30479,6 +30479,94 @@
           }
         ],
         "summary": "The identity details you saved",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:read"
+          ]
+        }
+      }
+    },
+    "/api/secrets/cards": {
+      "get": {
+        "description": "The cards you opened to the agent that hold a live permission for ONE merchant (`merchant`: a host or an https address), by name, with brand, last four digits, expiry and the permission's limit, currency and whether the security code is included. Read-only: the provider lists a card only for a merchant it is granted for, so there is no list of every card; permissions are made in the provider (`manageUrl`). Never a number, never a code. `available` is false, with a `reason`, until Vault is connected with the card permissions and its card release is switched on.\n\n**Requires:** authentication, plus permission `secrets:read`.",
+        "operationId": "secretsActivity_cardList",
+        "parameters": [
+          {
+            "name": "merchant",
+            "required": true,
+            "in": "query",
+            "description": "A merchant: a host (`shop.example.test`) or an https address.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 300,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CardListingResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The cards you granted for a merchant",
         "tags": [
           "Secrets"
         ],
@@ -41315,6 +41403,7 @@
               "APPROVAL_RULE_NOT_FOUND",
               "RULE_CANNOT_WIDEN",
               "APPROVAL_RULE_INVALID",
+              "CARD_RULE_NEEDS_AMOUNT_LIMIT",
               "APPROVAL_RULE_DUPLICATE",
               "MEMORY_NOT_FOUND",
               "MEMORY_LABEL_TAKEN",
@@ -71218,9 +71307,16 @@
                   "description": "When set, only runs of this chat."
                 },
                 "maxAmount": {
-                  "description": "When set, only steps whose amount is known and not larger.",
+                  "description": "When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7).",
                   "type": [
                     "number",
+                    "null"
+                  ]
+                },
+                "cardRef": {
+                  "description": "A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule.",
+                  "type": [
+                    "string",
                     "null"
                   ]
                 },
@@ -71288,6 +71384,7 @@
                 "taskName",
                 "conversationId",
                 "maxAmount",
+                "cardRef",
                 "expiresAt",
                 "enabled",
                 "createdFromQuestionId",
@@ -71398,9 +71495,16 @@
             "description": "When set, only runs of this chat."
           },
           "maxAmount": {
-            "description": "When set, only steps whose amount is known and not larger.",
+            "description": "When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7).",
             "type": [
               "number",
+              "null"
+            ]
+          },
+          "cardRef": {
+            "description": "A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule.",
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -71510,6 +71614,7 @@
           "taskName",
           "conversationId",
           "maxAmount",
+          "cardRef",
           "expiresAt",
           "enabled",
           "createdFromQuestionId",
@@ -71590,9 +71695,16 @@
             "description": "When set, only runs of this chat."
           },
           "maxAmount": {
-            "description": "When set, only steps whose amount is known and not larger.",
+            "description": "When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7).",
             "type": [
               "number",
+              "null"
+            ]
+          },
+          "cardRef": {
+            "description": "A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule.",
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -71660,6 +71772,7 @@
           "taskName",
           "conversationId",
           "maxAmount",
+          "cardRef",
           "expiresAt",
           "enabled",
           "createdFromQuestionId",
@@ -71958,6 +72071,10 @@
         "properties": {
           "allowWrite": {
             "description": "Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default.",
+            "type": "boolean"
+          },
+          "allowCards": {
+            "description": "Also ask for `vault:cards_read` and `vault:cards_fill` (the agent may pay with a saved card under your per-merchant permission in the provider and your approval here, without ever seeing a number, an expiry or a code). A new consent. Off by default.",
             "type": "boolean"
           },
           "allowIdentity": {
@@ -72319,6 +72436,120 @@
           "manageUrl"
         ]
       },
+      "CardListingResponseDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Cards can be read and used: connected, the switches on and the card permissions granted."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "not_connected",
+              "needs_reconnect",
+              "needs_scope",
+              "switched_off",
+              "provider_off",
+              "unavailable",
+              "bad_merchant"
+            ],
+            "description": "Why not, when `available` is false. `needs_scope`: connect again and allow cards. `provider_off`: the provider has card release switched off. `bad_merchant`: not an https address of a site."
+          },
+          "merchant": {
+            "description": "The merchant asked about, as `https://<host>`; null when it was not a usable address.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The saved card's name"
+                },
+                "brand": {
+                  "description": "The card network (`visa`)",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last4": {
+                  "description": "The last four digits: never more",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "expires": {
+                  "description": "The card's expiry as MM/YYYY",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "limit": {
+                  "type": "object",
+                  "properties": {
+                    "maxAmount": {
+                      "type": "string",
+                      "description": "The most one purchase may be at this merchant, a decimal with two places"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "includesSecurityCode": {
+                      "type": "boolean",
+                      "description": "The owner allowed the security code for this card at this merchant"
+                    },
+                    "expiresAt": {
+                      "description": "When the permission ends, or null",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "maxAmount",
+                    "currency",
+                    "includesSecurityCode",
+                    "expiresAt"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "brand",
+                "last4",
+                "expires",
+                "limit"
+              ]
+            },
+            "description": "The cards you opened to the agent that hold a live permission for this merchant. Never a number or a code."
+          },
+          "manageUrl": {
+            "description": "The provider's address, where each card's merchant permissions are made.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "merchant",
+          "cards",
+          "manageUrl"
+        ]
+      },
       "ActivityListResponseDto": {
         "type": "object",
         "properties": {
@@ -72391,7 +72622,13 @@
                         "postal_code",
                         "country",
                         "phone",
-                        "email"
+                        "email",
+                        "number",
+                        "expiry",
+                        "exp_month",
+                        "exp_year",
+                        "holder_name",
+                        "security_code"
                       ]
                     },
                     {
@@ -72420,6 +72657,27 @@
                     }
                   ],
                   "description": "For a lookup: how many logins matched the page."
+                },
+                "amount": {
+                  "description": "A card field (E37.7): the amount the agent declared for the purchase, a decimal with two places. Null for anything else.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "description": "A card field: the currency of the declared amount (ISO 4217).",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "frameSite": {
+                  "description": "A card field typed into an embedded payment frame: the frame's host.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -72432,7 +72690,10 @@
                 "field",
                 "outcome",
                 "refused",
-                "matches"
+                "matches",
+                "amount",
+                "currency",
+                "frameSite"
               ]
             }
           },
@@ -72488,7 +72749,13 @@
                       "postal_code",
                       "country",
                       "phone",
-                      "email"
+                      "email",
+                      "number",
+                      "expiry",
+                      "exp_month",
+                      "exp_year",
+                      "holder_name",
+                      "security_code"
                     ]
                   },
                   "description": "The fields typed so far for this login."
@@ -72721,6 +72988,10 @@
                   "type": "boolean",
                   "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
                 },
+                "allowSavedCards": {
+                  "type": "boolean",
+                  "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -72737,6 +73008,7 @@
                 "confirmSensitiveActions",
                 "allowSavedLogins",
                 "allowSavedIdentity",
+                "allowSavedCards",
                 "paused"
               ]
             },
@@ -73093,6 +73365,10 @@
                 "type": "boolean",
                 "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
               },
+              "allowSavedCards": {
+                "type": "boolean",
+                "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -73109,6 +73385,7 @@
               "confirmSensitiveActions",
               "allowSavedLogins",
               "allowSavedIdentity",
+              "allowSavedCards",
               "paused"
             ]
           },
@@ -73233,6 +73510,10 @@
             "type": "boolean",
             "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
           },
+          "allowSavedCards": {
+            "type": "boolean",
+            "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -73249,6 +73530,7 @@
           "confirmSensitiveActions",
           "allowSavedLogins",
           "allowSavedIdentity",
+          "allowSavedCards",
           "paused"
         ]
       },
@@ -73317,6 +73599,9 @@
             "type": "boolean"
           },
           "allowSavedIdentity": {
+            "type": "boolean"
+          },
+          "allowSavedCards": {
             "type": "boolean"
           },
           "paused": {
@@ -73393,6 +73678,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -73889,6 +74178,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "unattendedPayments",
           "model",
           "policyId",
@@ -73971,6 +74261,10 @@
                 "useSavedIdentity": {
                   "type": "boolean",
                   "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
+                },
+                "useSavedCards": {
+                  "type": "boolean",
+                  "description": "Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"
                 },
                 "unattendedPayments": {
                   "type": "string",
@@ -74467,6 +74761,7 @@
                 "confirmRiskyActions",
                 "useSavedLogins",
                 "useSavedIdentity",
+                "useSavedCards",
                 "unattendedPayments",
                 "model",
                 "policyId",
@@ -74565,6 +74860,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -75061,6 +75360,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "unattendedPayments",
           "model",
           "policyId",
@@ -75337,6 +75637,10 @@
             "type": "boolean",
             "description": "Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details."
           },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Let the agent pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: it names the card and the fields, the fabric types them, so the model never reads a number, an expiry or a code. The owner approves each merchant and amount (and may remember it with a required limit); an unattended run types a card only with `unattendedPayments: allow` and a matching remembered approval. Off by default, and it works only with `useSavedLogins` on and a provider that has a merchant grant for the card."
+          },
           "unattendedPayments": {
             "default": "ask",
             "type": "string",
@@ -75498,6 +75802,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -75710,6 +76018,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "unattendedPayments",
           "model",
           "policyId",
@@ -75979,6 +76288,10 @@
             "type": "boolean",
             "description": "Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details."
           },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Let the agent pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: it names the card and the fields, the fabric types them, so the model never reads a number, an expiry or a code. The owner approves each merchant and amount (and may remember it with a required limit); an unattended run types a card only with `unattendedPayments: allow` and a matching remembered approval. Off by default, and it works only with `useSavedLogins` on and a provider that has a merchant grant for the card."
+          },
           "unattendedPayments": {
             "type": "string",
             "enum": [
@@ -76148,6 +76461,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -76653,6 +76970,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "unattendedPayments",
           "model",
           "policyId",
@@ -77929,6 +78247,81 @@
             },
             "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
           },
+          "usedSavedCards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the card (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved card's name as the owner gave it"
+                },
+                "brand": {
+                  "description": "The card network (`visa`), or null",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last4": {
+                  "description": "The last four digits, or null: never more",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "merchant": {
+                  "type": "string",
+                  "description": "The merchant's host as the page reported it"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The merchant's origin the card was typed on"
+                },
+                "currency": {
+                  "type": "string",
+                  "description": "ISO 4217"
+                },
+                "declaredAmount": {
+                  "type": "string",
+                  "description": "The amount the agent declared before paying, a decimal with two places"
+                },
+                "confirmedAmount": {
+                  "description": "The amount the agent read on the confirmation page, or null while unknown",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mismatch": {
+                  "type": "boolean",
+                  "description": "The confirmed amount differs from the declared one by more than the tolerance"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When the card was typed"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "brand",
+                "last4",
+                "merchant",
+                "origin",
+                "currency",
+                "declaredAmount",
+                "confirmedAmount",
+                "mismatch",
+                "at"
+              ]
+            },
+            "description": "The saved cards the run paid with (E37.7), oldest first; empty when it used none. \"Paid with Visa ending 4242 at shop.example.test: 42.50 USD\" on the run page; a warning when the declared and the confirmed amounts differ."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -78051,6 +78444,7 @@
           "confirmedActions",
           "usedSavedLogins",
           "usedSavedIdentity",
+          "usedSavedCards",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -78774,6 +79168,81 @@
                   },
                   "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
                 },
+                "usedSavedCards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "description": "The secrets provider that held the card (`vault`)"
+                      },
+                      "itemName": {
+                        "type": "string",
+                        "description": "The saved card's name as the owner gave it"
+                      },
+                      "brand": {
+                        "description": "The card network (`visa`), or null",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "last4": {
+                        "description": "The last four digits, or null: never more",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "merchant": {
+                        "type": "string",
+                        "description": "The merchant's host as the page reported it"
+                      },
+                      "origin": {
+                        "type": "string",
+                        "description": "The merchant's origin the card was typed on"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "description": "ISO 4217"
+                      },
+                      "declaredAmount": {
+                        "type": "string",
+                        "description": "The amount the agent declared before paying, a decimal with two places"
+                      },
+                      "confirmedAmount": {
+                        "description": "The amount the agent read on the confirmation page, or null while unknown",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "mismatch": {
+                        "type": "boolean",
+                        "description": "The confirmed amount differs from the declared one by more than the tolerance"
+                      },
+                      "at": {
+                        "type": "string",
+                        "description": "When the card was typed"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "itemName",
+                      "brand",
+                      "last4",
+                      "merchant",
+                      "origin",
+                      "currency",
+                      "declaredAmount",
+                      "confirmedAmount",
+                      "mismatch",
+                      "at"
+                    ]
+                  },
+                  "description": "The saved cards the run paid with (E37.7), oldest first; empty when it used none. \"Paid with Visa ending 4242 at shop.example.test: 42.50 USD\" on the run page; a warning when the declared and the confirmed amounts differ."
+                },
                 "inputs": {
                   "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
                   "anyOf": [
@@ -78896,6 +79365,7 @@
                 "confirmedActions",
                 "usedSavedLogins",
                 "usedSavedIdentity",
+                "usedSavedCards",
                 "memoryIds",
                 "createdAt",
                 "startedAt",
@@ -81027,6 +81497,81 @@
             },
             "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
           },
+          "usedSavedCards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the card (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved card's name as the owner gave it"
+                },
+                "brand": {
+                  "description": "The card network (`visa`), or null",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last4": {
+                  "description": "The last four digits, or null: never more",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "merchant": {
+                  "type": "string",
+                  "description": "The merchant's host as the page reported it"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The merchant's origin the card was typed on"
+                },
+                "currency": {
+                  "type": "string",
+                  "description": "ISO 4217"
+                },
+                "declaredAmount": {
+                  "type": "string",
+                  "description": "The amount the agent declared before paying, a decimal with two places"
+                },
+                "confirmedAmount": {
+                  "description": "The amount the agent read on the confirmation page, or null while unknown",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mismatch": {
+                  "type": "boolean",
+                  "description": "The confirmed amount differs from the declared one by more than the tolerance"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When the card was typed"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "brand",
+                "last4",
+                "merchant",
+                "origin",
+                "currency",
+                "declaredAmount",
+                "confirmedAmount",
+                "mismatch",
+                "at"
+              ]
+            },
+            "description": "The saved cards the run paid with (E37.7), oldest first; empty when it used none. \"Paid with Visa ending 4242 at shop.example.test: 42.50 USD\" on the run page; a warning when the declared and the confirmed amounts differ."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -81445,6 +81990,7 @@
           "confirmedActions",
           "usedSavedLogins",
           "usedSavedIdentity",
+          "usedSavedCards",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -82190,6 +82736,81 @@
             },
             "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
           },
+          "usedSavedCards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the card (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved card's name as the owner gave it"
+                },
+                "brand": {
+                  "description": "The card network (`visa`), or null",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last4": {
+                  "description": "The last four digits, or null: never more",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "merchant": {
+                  "type": "string",
+                  "description": "The merchant's host as the page reported it"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The merchant's origin the card was typed on"
+                },
+                "currency": {
+                  "type": "string",
+                  "description": "ISO 4217"
+                },
+                "declaredAmount": {
+                  "type": "string",
+                  "description": "The amount the agent declared before paying, a decimal with two places"
+                },
+                "confirmedAmount": {
+                  "description": "The amount the agent read on the confirmation page, or null while unknown",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mismatch": {
+                  "type": "boolean",
+                  "description": "The confirmed amount differs from the declared one by more than the tolerance"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When the card was typed"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "brand",
+                "last4",
+                "merchant",
+                "origin",
+                "currency",
+                "declaredAmount",
+                "confirmedAmount",
+                "mismatch",
+                "at"
+              ]
+            },
+            "description": "The saved cards the run paid with (E37.7), oldest first; empty when it used none. \"Paid with Visa ending 4242 at shop.example.test: 42.50 USD\" on the run page; a warning when the declared and the confirmed amounts differ."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -82305,6 +82926,7 @@
           "confirmedActions",
           "usedSavedLogins",
           "usedSavedIdentity",
+          "usedSavedCards",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -82625,6 +83247,18 @@
                         "this_chat"
                       ]
                     }
+                  },
+                  "requiresLimit": {
+                    "description": "A saved card (E37.7): the owner's amount limit is required for \"Don't ask again\"; the answer is refused without it",
+                    "type": "boolean"
+                  },
+                  "currency": {
+                    "description": "A saved card: the currency of the limit and of the purchase",
+                    "type": "string"
+                  },
+                  "amount": {
+                    "description": "A saved card: the purchase this approval is for, a decimal with two places",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -82928,6 +83562,7 @@
               "passkey",
               "login",
               "confirmation",
+              "verification",
               "other"
             ]
           },
@@ -83502,6 +84137,7 @@
               "passkey",
               "login",
               "confirmation",
+              "verification",
               "other"
             ]
           },
@@ -83898,6 +84534,18 @@
                         "this_chat"
                       ]
                     }
+                  },
+                  "requiresLimit": {
+                    "description": "A saved card (E37.7): the owner's amount limit is required for \"Don't ask again\"; the answer is refused without it",
+                    "type": "boolean"
+                  },
+                  "currency": {
+                    "description": "A saved card: the currency of the limit and of the purchase",
+                    "type": "string"
+                  },
+                  "amount": {
+                    "description": "A saved card: the purchase this approval is for, a decimal with two places",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -85903,6 +86551,10 @@
                   "type": "boolean",
                   "description": "Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"
                 },
+                "useSavedCards": {
+                  "type": "boolean",
+                  "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
+                },
                 "lastMessageAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -85999,6 +86651,7 @@
                 "confirmRiskyActions",
                 "useSavedLogins",
                 "useSavedIdentity",
+                "useSavedCards",
                 "lastMessageAt",
                 "createdAt",
                 "updatedAt",
@@ -86086,6 +86739,10 @@
             "type": "boolean",
             "description": "Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"
           },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
+          },
           "lastMessageAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -86111,6 +86768,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "lastMessageAt",
           "createdAt",
           "updatedAt"
@@ -86179,6 +86837,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`."
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."
           }
         }
       },
@@ -86247,6 +86909,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
           },
           "lastMessageAt": {
             "type": "string",
@@ -86389,6 +87055,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "lastMessageAt",
           "createdAt",
           "updatedAt",
@@ -86469,6 +87136,10 @@
           "useSavedIdentity": {
             "type": "boolean",
             "description": "Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`."
+          },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."
           }
         }
       },
@@ -86613,6 +87284,10 @@
             "type": "boolean",
             "description": "The chat's saved-details switch (E37.6), carried over to the task"
           },
+          "useSavedCards": {
+            "type": "boolean",
+            "description": "The chat's saved-cards switch (E37.7), carried over to the task"
+          },
           "parameters": {
             "type": "array",
             "items": {
@@ -86736,6 +87411,7 @@
           "confirmRiskyActions",
           "useSavedLogins",
           "useSavedIdentity",
+          "useSavedCards",
           "parameters"
         ]
       },

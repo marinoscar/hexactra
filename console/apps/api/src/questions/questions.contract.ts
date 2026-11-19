@@ -30,7 +30,7 @@ export function holdsSecret(input: string): boolean {
 export const REMEMBER_LABEL_MAX = 80;
 
 /** Why a question is asked. */
-export const QUESTION_KINDS = ['captcha', 'code', 'passkey', 'login', 'confirmation', 'other'] as const;
+export const QUESTION_KINDS = ['captcha', 'code', 'passkey', 'login', 'confirmation', 'verification', 'other'] as const;
 export type QuestionKind = (typeof QUESTION_KINDS)[number];
 
 export const QUESTION_STATUSES = ['pending', 'answered', 'cancelled', 'expired'] as const;
@@ -160,6 +160,15 @@ export interface QuestionRememberable {
   summary: string;
   /** Where a rule may be limited to: `everywhere` always; `this_task` and `this_chat` when the run has one. */
   scopes?: (typeof REMEMBER_RULE_SCOPES)[number][];
+  /**
+   * A saved card (E37.7): `<provider>:<item id>`, set by the runner from its own record of the card. The rule is then for paying
+   * with that card on `host`, and the owner's amount limit is REQUIRED (the answer is refused without it). `currency` is the
+   * limit's currency and `amount` the purchase this approval is for.
+   */
+  cardRef?: string;
+  requiresLimit?: boolean;
+  currency?: string;
+  amount?: string;
 }
 
 /** The scopes a "Don't ask again" rule may be limited to (#555). */

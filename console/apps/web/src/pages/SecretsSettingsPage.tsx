@@ -9,6 +9,7 @@ import {
   connect,
   disconnect,
   getActivity,
+  getCards,
   getDefaultUseSavedLogins,
   getIdentity,
   getReach,
@@ -20,13 +21,15 @@ import {
   setProvider,
   type ActivityItem,
   type ActivityList,
+  type CardListing,
   type IdentityListing,
   type Reach,
   type SecretsStatus,
   type StoreStatus,
   type VaultStatus,
 } from '../secrets/api';
-import { CONNECT_RESULT_WORDS, fieldsWords, hasIdentityScope, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
+import { CONNECT_RESULT_WORDS, fieldsWords, hasCardsScope, hasIdentityScope, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
+import { limitsText, type ApprovalRule, type ApprovalRulesList } from '../approvals/types';
 import { CardSkeleton, EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, useApiAction, useConfirm, type Column } from '../ui';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -399,6 +402,119 @@ function ReachSection({ reach, manageUrl, store }: { reach: Reach; manageUrl: st
 }
 
 /**
+ * The payment cards (E37.7): how paying works and what protects the owner, a check of ONE merchant (Vault lists a card only for a
+ * merchant the owner granted it for, so there is no list of every card) and the merchants Hexactra itself remembers. Read-only:
+ * the grants are made in the provider. Never a number, an expiry beyond MM/YYYY or a code.
+ */
+function CardsSection({ connected, hasScope, manageUrl, remembered }: { connected: boolean; hasScope: boolean; manageUrl: string | null; remembered: ApprovalRule[] }) {
+  const { api } = usePlatformHost();
+  const [merchant, setMerchant] = useState('');
+  const [listing, setListing] = useState<CardListing | null>(null);
+  const [busy, setBusy] = useState(false);
+  const reasons: Record<string, string> = {
+    switched_off: 'Turn on “Let the agent use saved logins” first.',
+    not_connected: 'Connect your provider first.',
+    needs_reconnect: 'Connect your provider again first.',
+    needs_scope: 'Turn on “Let the agent pay with a saved card” above, then check again.',
+    provider_off: 'Card payments are switched off in your provider.',
+    unavailable: 'Your provider could not be reached. Try again later.',
+    bad_merchant: 'Enter a shop, like shop.example.com.',
+  };
+  const check = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!merchant.trim()) return;
+    setBusy(true);
+    try {
+      setListing(await getCards(api, merchant.trim()));
+    } catch {
+      setListing({ available: false, reason: 'unavailable', merchant: null, cards: [], manageUrl });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Box component="section" aria-labelledby="cards-title" data-testid="cards-section">
+      <Typography id="cards-title" variant="h6" component="h2" sx={{ mb: 0.5 }}>
+        Payment cards
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <strong>The safest way is no stored card at all:</strong> the browser profile the agent uses keeps the shops you are signed in to, so a shop where your card is already saved in your account there needs nothing here. Where it does, a card with its own spending limit from your bank or card issuer (a virtual card) is better than your main card.
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        A card works on any site, so a site binding cannot protect it. Instead you decide per shop: in your provider you allow a card at a shop with a maximum amount (and you may allow the security code), and Hexactra asks you the first time at each shop, with the amount. You can remember that with a required limit (Saved approvals). The agent never sees the number, the expiry or the code, and every use notifies you. This is for your own card on your own deployment; it is not a payment service.
+      </Typography>
+      {!connected || !hasScope ? (
+        <Typography color="text.secondary">{!connected ? 'Connect your provider first.' : 'Turn on “Let the agent pay with a saved card” above to see which cards you allowed at a shop.'}</Typography>
+      ) : (
+        <Stack spacing={1.5}>
+          <Box component="form" onSubmit={(e) => void check(e)} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <TextField size="small" label="Check a shop" value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="shop.example.com" slotProps={{ htmlInput: { 'aria-label': 'Shop to check', maxLength: 300 } }} sx={{ flexGrow: 1, minWidth: 220, maxWidth: 420 }} />
+            <Button type="submit" variant="outlined" disabled={busy || !merchant.trim()} sx={{ ...TOUCH }}>
+              Check
+            </Button>
+          </Box>
+          {listing && (
+            <Box aria-live="polite" data-testid="cards-result">
+              {!listing.available ? (
+                <Typography color="text.secondary">{reasons[listing.reason] ?? 'Cards are not available.'}</Typography>
+              ) : listing.cards.length === 0 ? (
+                <Typography color="text.secondary">No card is allowed at {listing.merchant?.replace(/^https:\/\//, '')}. Allow one for this shop in your provider; the agent cannot pay there until you do.</Typography>
+              ) : (
+                <Stack spacing={1} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }} aria-label="Cards allowed at this shop">
+                  {listing.cards.map((c, i) => (
+                    <Paper key={`${c.name}-${i}`} component="li" variant="outlined" sx={{ p: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, gap: 1 }}>
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{c.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                          {[c.brand ? c.brand.charAt(0).toUpperCase() + c.brand.slice(1) : 'Card', c.last4 ? `ending ${c.last4}` : null, c.expires ? `expires ${c.expires}` : null].filter(Boolean).join(' · ')}
+                        </Typography>
+                        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                          <Chip size="small" variant="outlined" label={`Up to ${c.limit.maxAmount} ${c.limit.currency}`} />
+                          <Chip size="small" variant="outlined" color={c.limit.includesSecurityCode ? 'warning' : 'default'} label={c.limit.includesSecurityCode ? 'Security code allowed' : 'No security code'} />
+                          {c.limit.expiresAt && <Chip size="small" variant="outlined" label={`Until ${new Date(c.limit.expiresAt).toLocaleDateString()}`} />}
+                        </Stack>
+                      </Box>
+                      {(listing.manageUrl ?? manageUrl) && (
+                        <Link href={listing.manageUrl ?? manageUrl ?? undefined} target="_blank" rel="noopener noreferrer" sx={{ ...TOUCH, display: 'inline-flex', alignItems: 'center' }} aria-label={`Manage ${c.name} and its shops in Vault`}>
+                          Manage in Vault
+                        </Link>
+                      )}
+                    </Paper>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
+        </Stack>
+      )}
+      <Typography variant="subtitle1" component="h3" sx={{ mt: 2.5, mb: 0.5 }}>
+        Shops Hexactra remembers
+      </Typography>
+      {remembered.length === 0 ? (
+        <Typography color="text.secondary">None. The agent asks you the first time at each shop. You can choose “Don’t ask again” on that question, with a limit.</Typography>
+      ) : (
+        <Stack spacing={1} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }} aria-label="Remembered card approvals">
+          {remembered.map((r) => (
+            <Paper key={r.id} component="li" variant="outlined" sx={{ p: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, gap: 1, opacity: r.enabled ? 1 : 0.7 }}>
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{r.summary}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {limitsText(r)}
+                  {!r.enabled ? ' · off' : ''}
+                </Typography>
+              </Box>
+              <Link component={RouterLink} to={`/settings/approvals#rule-${r.id}`} sx={{ ...TOUCH, display: 'inline-flex', alignItems: 'center' }}>
+                Open in Saved approvals
+              </Link>
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+/**
  * The identity details the owner saved (E37.6): item names, field labels and which fields are sensitive, read-only, with a
  * link to the provider where the items and their allowed sites are managed. Never a value.
  */
@@ -462,6 +578,8 @@ export function SecretsSettingsPage() {
   const [activity, setActivity] = useState<ActivityList | null>(null);
   const [reach, setReach] = useState<Reach | null>(null);
   const [identity, setIdentity] = useState<IdentityListing | null>(null);
+  // The card approvals Hexactra remembers (E37.7): the saved approvals that are bound to a card.
+  const [cardRules, setCardRules] = useState<ApprovalRule[]>([]);
   const [defaultOn, setDefaultOn] = useState(false);
   // The built-in store (E37.5): null when this deployment does not offer it.
   const [store, setStore] = useState<StoreStatus | null>(null);
@@ -477,6 +595,7 @@ export function SecretsSettingsPage() {
       getActivity(api).then(setActivity, () => setActivity({ items: [], providerActivityUrl: null }));
       getReach(api).then(setReach, () => setReach({ listing: 'per_origin', items: [] }));
       getIdentity(api).then(setIdentity, () => setIdentity({ available: false, reason: 'unavailable', items: [], manageUrl: null }));
+      api.get<ApprovalRulesList>('/approval-rules').then((l) => setCardRules(l.rules.filter((r) => Boolean(r.cardRef))), () => setCardRules([]));
       getDefaultUseSavedLogins(api).then(setDefaultOn, () => setDefaultOn(false));
       getStoreStatus(api).then(setStore);
     } catch (e) {
@@ -503,16 +622,16 @@ export function SecretsSettingsPage() {
 
   const vault = status?.providers.vault ?? null;
 
-  const startConnect = (allowWrite: boolean, allowIdentity = false) =>
+  const startConnect = (allowWrite: boolean, allowIdentity = false, allowCards = false) =>
     action.run('connect', async () => {
-      const r = await connect(api, { allowWrite, ...(allowIdentity ? { allowIdentity } : {}), returnTo: '/settings/secrets' });
+      const r = await connect(api, { allowWrite, ...(allowIdentity ? { allowIdentity } : {}), ...(allowCards ? { allowCards } : {}), returnTo: '/settings/secrets' });
       window.location.assign(r.authorizeUrl);
     });
 
   const saveAndConnect = (v: { baseUrl: string; clientId: string; clientSecret?: string }) =>
     action.run('connect', async () => {
       await saveClient(api, v);
-      const r = await connect(api, { allowWrite: vault ? hasWriteScope(vault.scopes) : false, ...(vault && hasIdentityScope(vault.scopes) ? { allowIdentity: true } : {}), returnTo: '/settings/secrets' });
+      const r = await connect(api, { allowWrite: vault ? hasWriteScope(vault.scopes) : false, ...(vault && hasIdentityScope(vault.scopes) ? { allowIdentity: true } : {}), ...(vault && hasCardsScope(vault.scopes) ? { allowCards: true } : {}), returnTo: '/settings/secrets' });
       window.location.assign(r.authorizeUrl);
     });
 
@@ -554,7 +673,7 @@ export function SecretsSettingsPage() {
       if (!ok) return;
     }
     // A new consent keeps what the owner already allowed: only the write permission changes.
-    await startConnect(on, vault ? hasIdentityScope(vault.scopes) : false);
+    await startConnect(on, vault ? hasIdentityScope(vault.scopes) : false, vault ? hasCardsScope(vault.scopes) : false);
   };
 
   const toggleIdentity = async (on: boolean) => {
@@ -562,7 +681,15 @@ export function SecretsSettingsPage() {
       const ok = await confirm({ title: 'Stop letting the agent fill identity details?', body: 'You will go to Vault to approve a connection without that permission.', confirmLabel: 'Continue' });
       if (!ok) return;
     }
-    await startConnect(vault ? hasWriteScope(vault.scopes) : false, on);
+    await startConnect(vault ? hasWriteScope(vault.scopes) : false, on, vault ? hasCardsScope(vault.scopes) : false);
+  };
+
+  const toggleCards = async (on: boolean) => {
+    if (!on) {
+      const ok = await confirm({ title: 'Stop letting the agent pay with a saved card?', body: 'You will go to Vault to approve a connection without that permission. Your merchant permissions in Vault are untouched.', confirmLabel: 'Continue' });
+      if (!ok) return;
+    }
+    await startConnect(vault ? hasWriteScope(vault.scopes) : false, vault ? hasIdentityScope(vault.scopes) : false, on);
   };
 
   const deploymentOff = status !== null && !status.agentUse.deployment;
@@ -595,7 +722,7 @@ export function SecretsSettingsPage() {
       {status && vault && (
         <Stack spacing={4}>
           {store && <StoreChoice store={store} vault={vault} canWrite={canWrite} busy={action.busy === 'provider'} onChoose={(p) => void chooseProvider(p)} />}
-          {store?.provider === 'builtin' ? <StoreCard store={store} /> : <ProviderCard vault={vault} canWrite={canWrite} busy={action.busy} onConnect={() => void startConnect(hasWriteScope(vault.scopes), hasIdentityScope(vault.scopes))} onSaveAndConnect={(v) => void saveAndConnect(v)} onDisconnect={() => void doDisconnect()} />}
+          {store?.provider === 'builtin' ? <StoreCard store={store} /> : <ProviderCard vault={vault} canWrite={canWrite} busy={action.busy} onConnect={() => void startConnect(hasWriteScope(vault.scopes), hasIdentityScope(vault.scopes), hasCardsScope(vault.scopes))} onSaveAndConnect={(v) => void saveAndConnect(v)} onDisconnect={() => void doDisconnect()} />}
 
           <Paper variant="outlined" component="section" aria-labelledby="switches-title" sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography id="switches-title" variant="h6" component="h2" sx={{ mb: 1 }}>
@@ -646,10 +773,25 @@ export function SecretsSettingsPage() {
                   onChange={(on) => void toggleIdentity(on)}
                 />
               )}
+              {store?.provider !== 'builtin' && (
+                <SwitchRow
+                  label="Let the agent pay with a saved card"
+                  help={
+                    !connected
+                      ? 'Connect your provider first.'
+                      : 'Asks Vault for permission to pay with a card you saved. A card works on any site, so in Vault you also allow each shop and set a limit, and Hexactra asks you the first time at each shop. The agent never sees the number, the expiry or the code. You approve it in Vault. Each task and chat has its own switch too. Off by default.'
+                  }
+                  checked={connected && hasCardsScope(vault.scopes)}
+                  disabled={!canWrite || !connected}
+                  busy={action.busy === 'connect'}
+                  onChange={(on) => void toggleCards(on)}
+                />
+              )}
             </Stack>
           </Paper>
 
           {reach && <ReachSection reach={reach} manageUrl={manageUrl} store={store} />}
+          {store?.provider !== 'builtin' && <CardsSection connected={vault.status === 'connected'} hasScope={hasCardsScope(vault.scopes)} manageUrl={manageUrl} remembered={cardRules} />}
           {identity && store?.provider !== 'builtin' && <IdentitySection identity={identity} manageUrl={identity.manageUrl ?? manageUrl} />}
           {activity ? <ActivitySection activity={activity} /> : <ListSkeleton rows={3} />}
         </Stack>

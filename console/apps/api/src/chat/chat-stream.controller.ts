@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toQuestionView, type QuestionView } from '../questions/questions.service';
 import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import type { RunBudgetView } from '../runner/budget';
+import { readUsedSavedCards } from '../runner/saved-cards';
 import { readUsedSavedLogins } from '../runner/saved-logins';
 import { withCost } from '../tasks/run-cost';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
@@ -44,6 +45,8 @@ export interface ChatRunView {
   budget: RunBudgetView | null;
   /** The saved logins the run signed in with (E37.3, E37.4): the login's name and the site, never a username, password or code. */
   usedSavedLogins: { itemName: string; origin: string }[];
+  /** The saved cards the run paid with (E37.7): brand, last four, the merchant and the amounts, never a number, an expiry or a code. */
+  usedSavedCards: { brand: string | null; last4: string | null; merchant: string; currency: string; declaredAmount: string; confirmedAmount: string | null; mismatch: boolean }[];
 }
 
 /**
@@ -120,10 +123,16 @@ function chatRunView(row: {
   activeSince: Date | null;
   policySnapshot: unknown;
   usedSavedLogins: unknown;
+  usedSavedCards: unknown;
 }): ChatRunView {
-  const { modelCalls: _m, inputTokens: _i, outputTokens: _o, activeMs: _a, activeSince: _s, policySnapshot, usedSavedLogins, ...live } = row;
+  const { modelCalls: _m, inputTokens: _i, outputTokens: _o, activeMs: _a, activeSince: _s, policySnapshot, usedSavedLogins, usedSavedCards, ...live } = row;
   const budget = snapshotBudgetView(readSnapshot(policySnapshot), { ...row, costUsd: Number(row.costUsd) });
-  return { ...withCost(live), budget, usedSavedLogins: readUsedSavedLogins(usedSavedLogins).map((u) => ({ itemName: u.itemName, origin: u.origin })) };
+  return {
+    ...withCost(live),
+    budget,
+    usedSavedLogins: readUsedSavedLogins(usedSavedLogins).map((u) => ({ itemName: u.itemName, origin: u.origin })),
+    usedSavedCards: readUsedSavedCards(usedSavedCards).map((c) => ({ brand: c.brand, last4: c.last4, merchant: c.merchant, currency: c.currency, declaredAmount: c.declaredAmount, confirmedAmount: c.confirmedAmount, mismatch: c.mismatch })),
+  };
 }
 
 /** Reads what the stream sends. Apart from the controller so it can be read without holding a stream open. */
@@ -165,6 +174,7 @@ export class ChatStreamService {
           activeSince: true,
           policySnapshot: true,
           usedSavedLogins: true,
+          usedSavedCards: true,
         },
       }),
     ]);

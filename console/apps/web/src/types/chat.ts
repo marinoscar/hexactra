@@ -26,6 +26,8 @@ export interface Chat {
   useSavedLogins?: boolean;
   /** Let the chat's runs fill identity details from the owner's saved details (E37.6); absent from an older console: off. */
   useSavedIdentity?: boolean;
+  /** Let the chat's runs pay with a saved card (E37.7); absent from an older console: off. */
+  useSavedCards?: boolean;
   lastMessageAt: string;
   createdAt: string;
   updatedAt: string;
@@ -86,6 +88,8 @@ export interface ChatRun {
   budget?: RunBudget | null;
   /** The saved logins the run signed in with (E37.4): the login's name and the site. Absent from an older console. */
   usedSavedLogins?: { itemName: string; origin: string }[];
+  /** The saved cards the run paid with (E37.7): brand, last four, the merchant and the amounts. */
+  usedSavedCards?: { brand: string | null; last4: string | null; merchant: string; currency: string; declaredAmount: string; confirmedAmount: string | null; mismatch: boolean }[];
 }
 
 /** A task drafted from a chat (`POST /chats/:id/task-draft`, and the `meta` of a `task_draft` message). */
@@ -102,6 +106,8 @@ export interface ChatTaskDraft {
   useSavedLogins?: boolean;
   /** The chat's saved-details switch (E37.6), carried over to the task. */
   useSavedIdentity?: boolean;
+  /** The chat's saved-cards switch (E37.7), carried over to the task. */
+  useSavedCards?: boolean;
   /** The goal's parameters the draft proposes (#556); absent in drafts from before. */
   parameters?: TaskParameter[];
 }
@@ -113,7 +119,7 @@ export interface ChatDraftState {
 }
 
 /** What a chat's run settings dialog edits. */
-export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean };
+export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean; useSavedCards: boolean };
 
 /** What became of an owner message passed to a run as guidance (#490): waiting for the agent's next step, read by it, or the run ended first. */
 export type ChatGuidanceState = 'queued' | 'delivered' | 'missed';

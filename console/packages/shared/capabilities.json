@@ -1141,6 +1141,23 @@
       "web": "/settings/secrets"
     },
     {
+      "id": "secrets.cards",
+      "description": "The payment cards the owner granted for one merchant: names, brand, last four digits, the grant's limit and currency, read-only. Never a number, an expiry beyond MM/YYYY or a code (E37.7)",
+      "rest": [
+        "GET /api/secrets/cards"
+      ],
+      "cli": {
+        "none": "Deliberate: the owner reads it on the Secrets page; the grants are managed in the provider"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must never read which cards the owner saved, or pay with one (decision of E37.7, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/secrets"
+    },
+    {
       "id": "secrets.admin",
       "description": "Administrator: counts of connected owners, fields typed and refusals this week. No owner, site or login (E37.4)",
       "rest": [

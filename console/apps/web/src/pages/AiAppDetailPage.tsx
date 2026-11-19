@@ -274,6 +274,15 @@ export function AiAppDetailPage() {
               Off by default, and it needs the switch above. When on, its runs may fill a form with details you saved (a date of birth, an ID number, an address) if the task or chat also allows it. The app never sees them: it only gets the run&apos;s answer.
             </Typography>
           </Box>
+          <Box>
+            <FormControlLabel
+              control={<Switch checked={draft.allowSavedCards} disabled={disabled || !draft.allowSavedLogins} onChange={(e) => set({ allowSavedCards: e.target.checked })} />}
+              label="Let it pay with my saved cards"
+            />
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }}>
+              Off by default, and it needs the first switch above. When on, its runs may pay with a card you saved if the task or chat also allows it, at a shop and an amount you approved. The app never sees the card. With &quot;ask me before purchases&quot; on, every card use still asks you.
+            </Typography>
+          </Box>
         </Stack>
         {canWrite && (
           <Box sx={{ position: { xs: 'sticky', sm: 'static' }, bottom: aboveBottomBar(0), bgcolor: 'background.paper', pt: 2, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>

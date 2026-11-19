@@ -95,6 +95,7 @@ describe('request bodies', () => {
       confirmRiskyActions: true,
       useSavedLogins: false,
       useSavedIdentity: false,
+      useSavedCards: false,
       unattendedPayments: 'ask',
       policyId: 'builtin:economy',
       schedules: [{ id: 's1', cron: '0 9 * * 1-5', timezone: 'UTC', enabled: true, concurrency: 'queue', policyId: 'builtin:thorough' }],

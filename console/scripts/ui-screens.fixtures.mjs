@@ -94,6 +94,11 @@ const finishedRun = run(IDS.finishedRun, 'failed', {
   // The memories its goal used (#553): the run page says "Used: …".
   memoryIds: ['aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
   memories: [{ id: 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'My partner', status: 'active' }, { id: 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Checking account', status: 'active' }],
+  // The cards it paid with (E37.7): brand, last four, the shop and the declared and the confirmed amount; the second one differs.
+  usedSavedCards: [
+    { provider: 'vault', itemName: 'Everyday card', brand: 'visa', last4: '4242', merchant: 'checkout.shop.example.com', origin: 'https://checkout.shop.example.com', currency: 'USD', declaredAmount: '42.50', confirmedAmount: '42.50', mismatch: false, at: iso(-3_000_000) },
+    { provider: 'vault', itemName: 'Virtual card', brand: 'mastercard', last4: '4444', merchant: 'a-very-long-shop-name-for-narrow-screens.example.co.uk', origin: 'https://a-very-long-shop-name-for-narrow-screens.example.co.uk', currency: 'USD', declaredAmount: '18.00', confirmedAmount: '24.99', mismatch: true, at: iso(-2_000_000) },
+  ],
 });
 /** A chat run over its soft action limit that still finished (#537). */
 const chatRun = run(IDS.chatRun, 'succeeded', {
@@ -160,6 +165,14 @@ const confirmation = {
   constraints: null, confirmLabel: 'Book it', denyLabel: 'Do not book', risk: 'high',
   // "Don't ask again" (#555): what the server says the approval would remember.
   rememberable: { kind: 'gate', host: 'example.com', category: 'purchase', matchKey: 'Book it', summary: "Press 'Book it' on example.com", scopes: ['everywhere', 'this_task'] },
+};
+
+/** A payment with a saved card (E37.7): the shop, the card by brand and last four, the amount and what is bought; "Don't ask again" needs a limit. */
+const cardConfirmation = {
+  ...question, questionId: '55555555-5555-4555-8555-555555555557', id: '55555555-5555-4555-8555-555555555557', runId: null, goal: '', handoffId: null,
+  askedBy: 'agent:packer', browserBound: false, pageTitle: null, kind: 'confirmation', input: 'confirm', constraints: null, confirmLabel: 'Allow this payment', denyLabel: 'Do not pay', risk: 'high',
+  prompt: 'The agent wants to pay with Visa ending 4242 at checkout.shop.example.com: 42.50 USD for Order #1001, two books. The card number, expiry and code are typed by the system and are never shown to the agent. Allow this payment?',
+  rememberable: { kind: 'gate', host: 'example.com', category: 'payment', matchKey: 'saved card usd', summary: 'Pay with Visa ending 4242 on example.com', scopes: ['everywhere', 'this_task'], requiresLimit: true, currency: 'USD', amount: '42.50' },
 };
 
 /** A memory the agent proposes (#553): a quiet, non-blocking request, in the chat and the Inbox. */
@@ -385,8 +398,11 @@ const approvalRules = [
   { id: '5a000000-0000-4000-8000-000000000003', kind: 'gate', host: 'a-very-long-shop-name-for-narrow-screens.example.co.uk', category: 'purchase', matchKey: 'place your order', summary: "Press 'Place your order and pay with the saved card ending 1111' on a-very-long-shop-name-for-narrow-screens.example.co.uk", taskId: IDS.task, taskName: 'Weekly groceries', conversationId: null, maxAmount: 50, expiresAt: iso(40 * 86_400_000), enabled: false, createdFromQuestionId: null, useCount: 1, lastUsedAt: iso(-30 * 86_400_000), lastUsedRunId: null, createdAt: iso(-60 * 86_400_000), updatedAt: iso(-5 * 86_400_000) },
 ];
 
+/** A saved card's approval (E37.7): bound to the shop and the card, with its required limit. */
+approvalRules.push({ id: '5a000000-0000-4000-8000-000000000004', kind: 'gate', host: 'shop.example.com', category: 'payment', matchKey: 'saved card usd', cardRef: 'vault:7f1c2e9a-0000-4000-8000-0000000000c1', summary: 'Pay with Visa ending 4242 on shop.example.com', taskId: null, taskName: null, conversationId: null, maxAmount: 100, expiresAt: iso(25 * 86_400_000), enabled: true, createdFromQuestionId: null, useCount: 3, lastUsedAt: iso(-86_400_000), lastUsedRunId: IDS.finishedRun, createdAt: iso(-6 * 86_400_000), updatedAt: iso(-6 * 86_400_000) });
+
 /** Secrets (#593): the provider card in each state; the page's own address says which (`?state=`). */
-const vaultBase = { provider: 'vault', status: 'connected', configured: true, source: 'user', baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, redirectUri: 'https://console.example.test/api/secrets/vault/callback', scopes: ['vault:items_read', 'vault:items_fill', 'vault:identity_read', 'vault:identity_fill', 'offline_access'], vaultUserId: 'abcdef12-0000-4000-8000-000000000000', agentAccess: 'on', connectedAt: iso(-5 * 86_400_000), lastUsedAt: iso(-3_600_000), lastSuccessAt: iso(-3_600_000), lastErrorCode: null, connecting: false };
+const vaultBase = { provider: 'vault', status: 'connected', configured: true, source: 'user', baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, redirectUri: 'https://console.example.test/api/secrets/vault/callback', scopes: ['vault:items_read', 'vault:items_fill', 'vault:identity_read', 'vault:identity_fill', 'vault:cards_read', 'vault:cards_fill', 'offline_access'], vaultUserId: 'abcdef12-0000-4000-8000-000000000000', agentAccess: 'on', connectedAt: iso(-5 * 86_400_000), lastUsedAt: iso(-3_600_000), lastSuccessAt: iso(-3_600_000), lastErrorCode: null, connecting: false };
 const stateOf = (referer) => (referer ? (new URL(referer).searchParams.get('state') ?? 'connected') : 'connected');
 const secretsStatus = (_url, _body, referer) => {
   const st = stateOf(referer);
@@ -425,6 +441,24 @@ const secretsIdentity = (_url, _body, referer) => {
     items: [
       { name: 'Passport', fields: [{ label: 'Full name', sensitive: false }, { label: 'Date of birth', sensitive: true }, { label: 'ID number', sensitive: true }, { label: 'Country', sensitive: false }] },
       { name: 'Home address and a long name that has to wrap on a narrow phone screen', fields: [{ label: 'Address line 1', sensitive: false }, { label: 'City', sensitive: false }, { label: 'Postal code', sensitive: false }, { label: 'Phone', sensitive: false }] },
+    ],
+  };
+};
+
+/** The cards granted for one shop (E37.7): brand, last four, expiry and the limit; never a number or a code. */
+const secretsCards = (url, _body, referer) => {
+  const st = stateOf(referer);
+  const merchant = url.searchParams.get('merchant') ?? '';
+  if (st === 'not_connected') return { available: false, reason: 'not_connected', merchant: null, cards: [], manageUrl: null };
+  if (st === 'empty' || /nowhere/.test(merchant)) return { available: true, reason: 'ok', merchant: `https://${merchant}`, cards: [], manageUrl: 'https://vault.example.test' };
+  return {
+    available: true,
+    reason: 'ok',
+    merchant: 'https://shop.example.com',
+    manageUrl: 'https://vault.example.test',
+    cards: [
+      { name: 'Everyday card', brand: 'visa', last4: '4242', expires: '09/2031', limit: { maxAmount: '500.00', currency: 'USD', includesSecurityCode: false, expiresAt: null } },
+      { name: 'Virtual card with a long name that has to wrap on a narrow phone screen', brand: 'mastercard', last4: '4444', expires: '03/2030', limit: { maxAmount: '20.00', currency: 'USD', includesSecurityCode: true, expiresAt: iso(30 * 86_400_000) } },
     ],
   };
 };
@@ -478,7 +512,7 @@ export const RESPONSES = {
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
   'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
   [`GET /chats/${IDS.chat}`]: { ...chatBase, id: IDS.chat, title: chatRows[0].title, lastMessageAt: iso(-120_000), messages: chatMessages, hasMore: false, liveRun: { id: IDS.liveRun, status: 'running' }, thinking: false },
-  'GET /inbox': [question, confirmation, memoryProposal],
+  'GET /inbox': [question, confirmation, cardConfirmation, memoryProposal],
   [`GET /questions/${IDS.question}`]: question,
   [`GET /questions/${memoryProposal.id}`]: memoryProposal,
   'GET /agent-policies': policies,
@@ -496,6 +530,7 @@ export const RESPONSES = {
   'GET /secrets/activity': secretsActivity,
   'GET /secrets/reach': secretsReach,
   'GET /secrets/identity': secretsIdentity,
+  'GET /secrets/cards': secretsCards,
   'GET /secrets/admin/summary': { deploymentEnabled: true, usersConnected: 3, usersNeedingReconnect: 1, usesThisWeek: 41, refusalsThisWeek: 4 },
   'GET /secrets/vault/default-client': { baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, allowedHosts: [], redirectUri: 'https://console.example.test/api/secrets/vault/callback' },
   'GET /connected-apps/preflight': preflight,

@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "4d149fad0d2a3872"
+    "outputSchema": "b950765b1f48cdfa"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "a0d0c093dffdd7aa"
+    "outputSchema": "0882cfa0b4e886f7"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ba6a4bcb152ad3e3",
-    "outputSchema": "639b37164701e628"
+    "outputSchema": "de7f16ffa9cccd6c"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "4d149fad0d2a3872"
+    "outputSchema": "b950765b1f48cdfa"
   },
   {
     "name": "run_export",
@@ -117,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "323e8c40a2c0aee4",
-    "outputSchema": "7e89fe4658b04999"
+    "outputSchema": "3ad1a24e27c6b7df"
   },
   {
     "name": "task_update",
@@ -132,7 +132,7 @@
       "openWorldHint": false
     },
     "inputSchema": "002f97188a7f88b0",
-    "outputSchema": "d674042647558e3e"
+    "outputSchema": "d8b017d4037d7a43"
   },
   {
     "name": "task_run",
@@ -147,7 +147,7 @@
       "openWorldHint": true
     },
     "inputSchema": "c1aba3cd46e48851",
-    "outputSchema": "4d149fad0d2a3872"
+    "outputSchema": "b950765b1f48cdfa"
   },
   {
     "name": "schedule_create",
@@ -192,7 +192,7 @@
       "openWorldHint": false
     },
     "inputSchema": "f822a505f1af2ccd",
-    "outputSchema": "82c88197bc8c7236"
+    "outputSchema": "84d254dbf91a9483"
   },
   {
     "name": "task_resume",
@@ -207,7 +207,7 @@
       "openWorldHint": false
     },
     "inputSchema": "f822a505f1af2ccd",
-    "outputSchema": "82c88197bc8c7236"
+    "outputSchema": "84d254dbf91a9483"
   },
   {
     "name": "schedules_list",
@@ -237,7 +237,7 @@
       "openWorldHint": false
     },
     "inputSchema": "b5ceb7c3c697ea95",
-    "outputSchema": "43f1cfa90543feca"
+    "outputSchema": "d1b01fbff2ba0f88"
   },
   {
     "name": "inbox_answer",
@@ -266,7 +266,7 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "27344c871a1ccbec",
+    "inputSchema": "fa4a7b268154e9d1",
     "outputSchema": "73220c09353c8e52"
   },
   {
@@ -791,7 +791,7 @@
       "idempotentHint": false,
       "openWorldHint": true
     },
-    "inputSchema": "b8152ae3de6a3d68",
+    "inputSchema": "337b0847fd7eb41e",
     "outputSchema": null
   },
   {
@@ -852,7 +852,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "4d149fad0d2a3872"
+    "outputSchema": "b950765b1f48cdfa"
   },
   {
     "name": "question_card_answer",

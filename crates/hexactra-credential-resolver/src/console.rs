@@ -256,6 +256,10 @@ impl SecretsProvider for ConsoleProvider {
         origin: &Origin,
         kind: ItemKind,
     ) -> Result<Vec<ItemSummary>, ProviderError> {
+        // The built-in store holds logins only (E37.5, E37.6): it has no cards.
+        if kind == ItemKind::Card {
+            return Ok(Vec::new());
+        }
         let body = json!({ "owner_id": owner.as_str(), "origin": origin.to_string(), "kind": kind_name(kind) });
         let reply = self.post("lookup", body).await?;
         let wire: WireItems =
@@ -264,6 +268,9 @@ impl SecretsProvider for ConsoleProvider {
     }
 
     async fn release(&self, req: ReleaseRequest) -> Result<SecretValue, ProviderError> {
+        if req.purchase.is_some() {
+            return Err(ProviderError::Refused("unsupported".into()));
+        }
         let body = json!({
             "owner_id": req.owner.as_str(),
             "item_id": req.item_id,
@@ -409,6 +416,7 @@ mod tests {
             purpose: SecretPurpose::Login,
             run_id: Some("run-1".into()),
             client_label: None,
+            purchase: None,
         }
     }
 
