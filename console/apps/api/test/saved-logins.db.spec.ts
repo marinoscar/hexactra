@@ -380,6 +380,9 @@ describe('saved logins: the page is not the site (OriginMismatch)', () => {
     const q = await o.db.question.findFirstOrThrow({ where: { runId: run.id } });
     expect(q).toMatchObject({ kind: 'login', input: 'takeover' });
     expect(q.prompt).toMatch(/^Warning: .*not the site that login is saved for/);
+    // Both addresses, so the owner can tell a look-alike from the real site (E37.4).
+    expect(q.prompt).toContain('The page is login.example.test.');
+    expect(q.prompt).toContain('The login is saved for login.example.test.');
     expect(seam.outcome).toHaveBeenCalledWith(o.userId, { ok: false, code: 'ORIGIN_MISMATCH' });
 
     // The owner looks, and the next round's input carries the instruction; saved logins are off for the rest of the run.

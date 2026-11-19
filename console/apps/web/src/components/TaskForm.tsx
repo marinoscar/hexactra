@@ -7,12 +7,16 @@ import {
   CardContent,
   CircularProgress,
   Collapse,
+  FormControl,
   FormControlLabel,
   FormHelperText,
+  FormLabel,
   IconButton,
   Menu,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Stack,
   Switch,
   TextField,
@@ -27,6 +31,8 @@ import { MachinePicker } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { ScheduleEditor } from './ScheduleEditor';
 import { ScheduleSummary, type ScheduleSummaryData } from './ScheduleSummary';
+import { SavedLoginsSwitch } from '../secrets/SavedLoginsSwitch';
+import { useSavedLoginsAvailability } from '../secrets/useSavedLoginsAvailability';
 import { runTaskWith } from '../policies/api';
 import { NO_HARD_STOP_WARNING, budgetSummary, hasNoHardStop, startModel, tierRange } from '../policies/format';
 import { PolicySelect } from '../policies/PolicySelect';
@@ -73,6 +79,8 @@ export interface TaskFormProps {
   cancelTo: string;
   /** Called once a new task was created, before the form leaves (a chat is told its draft was saved). Its failure never fails the save. */
   onCreated?: (taskId: string) => void | Promise<void>;
+  /** A new task from nothing starts with the owner's default for "Use my saved logins" (E37.4); a copy or a chat's draft keeps its own. */
+  useOwnerSavedLoginsDefault?: boolean;
 }
 
 /** Where the form goes after a save (the task's page, #428). */
@@ -151,7 +159,7 @@ function DraftSummary({ draft, saved, catalog, profileTimezone }: { draft: Sched
  * `maxSteps`, `maxMinutes` or `model`; `policyId` goes only when the viewer
  * may read agent policies. Needs a `ConfirmProvider` and a router above it.
  */
-export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCreated }: TaskFormProps) {
+export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCreated, useOwnerSavedLoginsDefault }: TaskFormProps) {
   const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -166,6 +174,14 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
   const runInputs = useRunInputs();
 
   const [form, setForm] = useState<FormState>(() => initialState(initial));
+  const savedLogins = useSavedLoginsAvailability();
+  const savedLoginsDefaulted = useRef(false);
+  // A new task starts from the owner's default, once it is known; that is the form's starting point, not an edit.
+  useEffect(() => {
+    if (!useOwnerSavedLoginsDefault || savedLoginsDefaulted.current || !savedLogins.loaded) return;
+    savedLoginsDefaulted.current = true;
+    if (savedLogins.defaultOn && savedLogins.available) setForm((f) => (f.fields.useSavedLogins ? f : { ...f, fields: { ...f.fields, useSavedLogins: true }, initial: { ...f.initial, useSavedLogins: true } }));
+  }, [useOwnerSavedLoginsDefault, savedLogins.loaded, savedLogins.defaultOn, savedLogins.available]);
   const update = (change: Partial<FormState>) => setForm((f) => ({ ...f, ...change }));
   const { fields, rows, errors, saving } = form;
   /** Change task fields; a field's message goes when the field changes. */
@@ -550,6 +566,31 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             />
             <FormHelperText sx={{ mt: 0 }}>The agent pauses and asks in your Inbox.</FormHelperText>
           </Box>
+        </Section>
+
+        <Section title="Saved logins" id={`${uid}-saved-logins`}>
+          <SavedLoginsSwitch checked={fields.useSavedLogins} onChange={(useSavedLogins) => setFields({ useSavedLogins })} disabled={busy} availability={savedLogins} />
+          <FormControl component="fieldset" disabled={busy || !savedLogins.available || !fields.useSavedLogins} sx={{ ml: { xs: 0, sm: 6 } }}>
+            <FormLabel component="legend" id={`${uid}-unattended-label`}>
+              When it runs without me and reaches a payment
+            </FormLabel>
+            <RadioGroup
+              aria-labelledby={`${uid}-unattended-label`}
+              value={fields.unattendedPayments}
+              onChange={(e) => setFields({ unattendedPayments: e.target.value === 'allow' ? 'allow' : 'ask' })}
+            >
+              <FormControlLabel value="ask" control={<Radio />} label="Ask me" sx={MIN_TAP} />
+              <FormControlLabel value="allow" control={<Radio />} label="Go ahead" sx={MIN_TAP} />
+            </RadioGroup>
+            <FormHelperText sx={{ mt: 0 }} data-testid="unattended-help">
+              {fields.unattendedPayments === 'allow' ? 'The agent will pay without asking, while you are not there, after signing in with a saved login. Choose this only for a task you trust, on a site you listed above. Your saved approvals and the sites you allowed still apply.' : 'A run that signed in with a saved login still stops and asks in your Inbox before it pays, even if you switched the question off above.'}
+            </FormHelperText>
+            {fields.unattendedPayments === 'allow' && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                &ldquo;Go ahead&rdquo; lets this task spend money unattended.
+              </Alert>
+            )}
+          </FormControl>
         </Section>
 
         <Section title="Schedule" id={`${uid}-schedule`} anchor="schedule">

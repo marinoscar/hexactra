@@ -160,6 +160,8 @@ describe('creating a task', () => {
       policyId: 'builtin:thorough',
       allowedDomains: ['shop.example.test', 'a.example.test'],
       confirmRiskyActions: true,
+      useSavedLogins: false,
+      unattendedPayments: 'ask',
       schedules: [{ cron: '0 9 * * 1-5', timezone: expect.any(String), enabled: true, concurrency: 'skip', policyId: OWN_ID }],
     });
     // The API answers `Deprecation: true` exactly when a request body names one of these (tasks.controller.ts

@@ -330,17 +330,41 @@ describe('the chat menu', () => {
   });
 });
 
-describe('saved logins in the chat settings (E37.3)', () => {
-  it('has a switch, off by default, saved with the rest of the settings', async () => {
-    const host = mount();
+describe('saved logins in the chat settings (E37.3, E37.4)', () => {
+  const AVAILABLE = {
+    agentUse: { deployment: true, user: true, effective: true },
+    providers: { vault: { provider: 'vault', status: 'connected', baseUrl: 'https://vault.example.test' } },
+  };
+  const openSettings = async () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Chat actions' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Chat settings' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Chat settings' });
-    const sw = within(dialog).getByRole('switch', { name: 'Sign in with my saved logins' });
+    return screen.findByRole('dialog', { name: 'Chat settings' });
+  };
+
+  it('has a switch, off by default, saved with the rest of the settings', async () => {
+    const host = mount({ permissions: [...ALL, 'secrets:read'], responses: { 'GET /secrets/status': AVAILABLE, 'GET /user-settings': {} } });
+    const dialog = await openSettings();
+    const sw = within(dialog).getByRole('switch', { name: 'Use my saved logins' });
+    await waitFor(() => expect(sw).toBeEnabled());
     expect(sw).not.toBeChecked();
     fireEvent.click(sw);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toMatchObject({ useSavedLogins: true }));
+  });
+
+  it('is disabled with a reason while no provider is connected', async () => {
+    mount({ permissions: [...ALL, 'secrets:read'], responses: { 'GET /secrets/status': { ...AVAILABLE, providers: { vault: { provider: 'vault', status: 'not_configured', baseUrl: null } } }, 'GET /user-settings': {} } });
+    const dialog = await openSettings();
+    const sw = within(dialog).getByRole('switch', { name: 'Use my saved logins' });
+    await waitFor(() => expect(sw).toBeDisabled());
+    expect(sw).toHaveAccessibleDescription(expect.stringContaining('Connect a secrets provider first.'));
+  });
+
+  it('is disabled when an administrator has saved secrets off', async () => {
+    mount({ permissions: [...ALL, 'secrets:read'], responses: { 'GET /secrets/status': { ...AVAILABLE, agentUse: { deployment: false, user: true, effective: false } }, 'GET /user-settings': {} } });
+    const sw = within(await openSettings()).getByRole('switch', { name: 'Use my saved logins' });
+    await waitFor(() => expect(sw).toBeDisabled());
+    expect(sw).toHaveAccessibleDescription(expect.stringContaining('An administrator has turned off saved logins'));
   });
 });
 

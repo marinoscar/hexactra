@@ -91,6 +91,8 @@ describe('browser agent cards', () => {
   const group = (sections: typeof ADMIN_SECTIONS) => sections.find((s) => s.label === 'Browser agent');
   const policiesController = read('../../../api/src/policies/policies.controller.ts');
   const approvalsController = read('../../../api/src/approvals/approval-rules.controller.ts');
+  const secretsController = read('../../../api/src/secrets/secrets.controller.ts');
+  const secretsActivityController = read('../../../api/src/secrets/secrets-activity.controller.ts');
   // The platform's system settings routes (GET /api/system-settings) and their permission ids.
   const settingsPermissions = readFileSync(join(__dirname, '..', '..', '..', '..', 'node_modules', '@marinoscar', 'platform-api', 'dist', 'settings', 'settings.permissions.js'), 'utf8');
 
@@ -99,6 +101,8 @@ describe('browser agent cards', () => {
     expect(listRoute?.[1]).toBe('agent_policies:read');
     const approvalsList = /@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(approvalsController);
     expect(approvalsList?.[1]).toBe('approvals:read');
+    const secretsStatus = /@Get\('status'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsController);
+    expect(secretsStatus?.[1]).toBe('secrets:read');
     expect(group(USER_SETTINGS_SECTIONS)?.cards.map((c) => [c.path, c.permission, c.feature])).toEqual([
       ['/settings/agent-policies', listRoute![1], undefined],
       ['/settings/agent-model-tiers', 'agent_policies:read', 'ai'],
@@ -110,6 +114,8 @@ describe('browser agent cards', () => {
       ['/settings/memories', 'memories:read', undefined],
       // #554, appended: what GET /api/approval-rules enforces.
       ['/settings/approvals', approvalsList![1], undefined],
+      // #593, appended: what GET /api/secrets/status enforces.
+      ['/settings/secrets', secretsStatus![1], undefined],
     ]);
   });
 
@@ -123,7 +129,10 @@ describe('browser agent cards', () => {
       ['Run history limit', '/admin/settings/run-history', 'system_settings:read', undefined],
       // #464, appended; #465 made it "External AI apps" (same route, same permission).
       ['External AI apps', '/admin/settings/ai-app-limits', 'system_settings:read', undefined],
+      // #593, appended: what GET /api/secrets/admin/summary enforces.
+      ['Secrets', '/admin/settings/secrets', 'system_settings:read', undefined],
     ]);
+    expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');
   });
 
   it('are appended: the existing groups keep their order and cards, the new group comes after them', () => {
@@ -136,7 +145,7 @@ describe('browser agent cards', () => {
     expect(at).toBeGreaterThan(userLabels.indexOf('Notes'));
     if (userLabels.includes('Integrations')) expect(at).toBe(userLabels.indexOf('Integrations') + 1);
     // No existing group gained one of the new cards.
-    const newPaths = new Set(['/settings/agent-policies', '/settings/agent-model-tiers', '/settings/run-history', '/settings/ai-apps', '/admin/settings/agent-model-tiers', '/admin/settings/agent-ceilings', '/admin/settings/agent-pricing', '/admin/settings/run-history', '/admin/settings/ai-app-limits']);
+    const newPaths = new Set(['/settings/agent-policies', '/settings/agent-model-tiers', '/settings/run-history', '/settings/ai-apps', '/admin/settings/agent-model-tiers', '/admin/settings/agent-ceilings', '/admin/settings/agent-pricing', '/admin/settings/run-history', '/admin/settings/ai-app-limits', '/settings/secrets', '/admin/settings/secrets']);
     for (const s of [...ADMIN_SECTIONS, ...USER_SETTINGS_SECTIONS].filter((x) => x.label !== 'Browser agent')) {
       for (const c of s.cards) expect(newPaths.has(c.path!), `${s.label}: ${c.path}`).toBe(false);
     }
@@ -158,5 +167,7 @@ describe('browser agent cards', () => {
     expect(appSource).toMatch(/path="admin\/settings\/agent-model-tiers" element=\{<Gate permission="system_settings:read">/);
     expect(appSource).toMatch(/path="admin\/settings\/agent-ceilings" element=\{<Gate permission="system_settings:read">/);
     expect(appSource).toMatch(/path="admin\/settings\/agent-pricing" element=\{<Gate permission="system_settings:read">/);
+    expect(appSource).toMatch(/path="settings\/secrets" element=\{<Gate permission="secrets:read">/);
+    expect(appSource).toMatch(/path="admin\/settings\/secrets" element=\{<Gate permission="system_settings:read">/);
   });
 });

@@ -30415,6 +30415,234 @@
         }
       }
     },
+    "/api/secrets/activity": {
+      "get": {
+        "description": "Your newest 100 uses and refusals, from the fabric's own audit events: when, the run, the site, which field kind was typed (`username`, `password`, `one_time_code`) and the outcome (`typed`, or why nothing was typed: `origin_mismatch`, `not_found`, `disabled`, ...). Never a value, a username or a code. `providerActivityUrl` is your provider's own activity page.\n\n**Requires:** authentication, plus permission `secrets:read`.",
+        "operationId": "secretsActivity_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ActivityListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What the agent did with your saved secrets",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:read"
+          ]
+        }
+      }
+    },
+    "/api/secrets/reach": {
+      "get": {
+        "description": "Vault can look logins up only for a page (per origin), so there is no call that lists every login the agent may reach. This lists the logins used so far, by site, with the fields typed and when. Which logins are open to agents is decided in the provider.\n\n**Requires:** authentication, plus permission `secrets:read`.",
+        "operationId": "secretsActivity_reach",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReachResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The logins the agent has used so far",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:read"
+          ]
+        }
+      }
+    },
+    "/api/secrets/admin/summary": {
+      "get": {
+        "description": "The deployment switch, how many owners are connected (and how many need to reconnect), and how many fields were typed and how many actions were refused in the last 7 days. Counts only: no owner, no site, no login.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "secretsActivity_adminSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminSummaryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Secrets: counts for the administrator",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
     "/api/connected-apps": {
       "get": {
         "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
@@ -71907,6 +72135,227 @@
           }
         },
         "additionalProperties": false
+      },
+      "ActivityListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "ISO 8601: when the fabric recorded it."
+                },
+                "event": {
+                  "type": "string",
+                  "enum": [
+                    "lookup",
+                    "release"
+                  ],
+                  "description": "`lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed."
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run or chat browser it happened in, when it is yours and still exists."
+                },
+                "site": {
+                  "description": "The host of the page, never a path or query.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "loginName": {
+                  "description": "The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "field": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "username",
+                        "password",
+                        "one_time_code"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Which field was typed. Never its value."
+                },
+                "outcome": {
+                  "type": "string",
+                  "description": "A closed code: `typed`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...)."
+                },
+                "refused": {
+                  "type": "boolean",
+                  "description": "Nothing was typed: the fabric or the provider refused or failed."
+                },
+                "matches": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "For a lookup: how many logins matched the page."
+                }
+              },
+              "required": [
+                "id",
+                "at",
+                "event",
+                "runId",
+                "site",
+                "loginName",
+                "field",
+                "outcome",
+                "refused",
+                "matches"
+              ]
+            }
+          },
+          "providerActivityUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "providerActivityUrl"
+        ]
+      },
+      "ReachResponseDto": {
+        "type": "object",
+        "properties": {
+          "listing": {
+            "type": "string",
+            "enum": [
+              "per_origin"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "username",
+                      "password",
+                      "one_time_code"
+                    ]
+                  },
+                  "description": "The fields typed so far for this login."
+                },
+                "uses": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "lastUsedAt": {
+                  "type": "string"
+                },
+                "lastRunId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "site",
+                "fields",
+                "uses",
+                "lastUsedAt",
+                "lastRunId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "listing",
+          "items"
+        ]
+      },
+      "AdminSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "deploymentEnabled": {
+            "type": "boolean"
+          },
+          "usersConnected": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "usersNeedingReconnect": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "usesThisWeek": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Fields typed in the last 7 days, across every owner."
+          },
+          "refusalsThisWeek": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Lookups and releases that were refused or failed in the last 7 days."
+          }
+        },
+        "required": [
+          "deploymentEnabled",
+          "usersConnected",
+          "usersNeedingReconnect",
+          "usesThisWeek",
+          "refusalsThisWeek"
+        ]
       },
       "ConnectedAppListResponseDto": {
         "type": "array",

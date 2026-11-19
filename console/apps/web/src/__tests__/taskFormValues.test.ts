@@ -93,6 +93,8 @@ describe('request bodies', () => {
       hostFallback: true,
       allowedDomains: ['flights.example.test'],
       confirmRiskyActions: true,
+      useSavedLogins: false,
+      unattendedPayments: 'ask',
       policyId: 'builtin:economy',
       schedules: [{ id: 's1', cron: '0 9 * * 1-5', timezone: 'UTC', enabled: true, concurrency: 'queue', policyId: 'builtin:thorough' }],
     });

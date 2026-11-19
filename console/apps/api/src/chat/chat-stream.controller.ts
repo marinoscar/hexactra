@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toQuestionView, type QuestionView } from '../questions/questions.service';
 import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import type { RunBudgetView } from '../runner/budget';
+import { readUsedSavedLogins } from '../runner/saved-logins';
 import { withCost } from '../tasks/run-cost';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import './chat.errors';
@@ -41,6 +42,8 @@ export interface ChatRunView {
   finishedAt: Date | null;
   /** The run's budget (#404, #537): a chat run's limits are soft, shown and warned about, never enforced. Null before its first advance. */
   budget: RunBudgetView | null;
+  /** The saved logins the run signed in with (E37.3, E37.4): the login's name and the site, never a username, password or code. */
+  usedSavedLogins: { itemName: string; origin: string }[];
 }
 
 /**
@@ -116,10 +119,11 @@ function chatRunView(row: {
   activeMs: number;
   activeSince: Date | null;
   policySnapshot: unknown;
+  usedSavedLogins: unknown;
 }): ChatRunView {
-  const { modelCalls: _m, inputTokens: _i, outputTokens: _o, activeMs: _a, activeSince: _s, policySnapshot, ...live } = row;
+  const { modelCalls: _m, inputTokens: _i, outputTokens: _o, activeMs: _a, activeSince: _s, policySnapshot, usedSavedLogins, ...live } = row;
   const budget = snapshotBudgetView(readSnapshot(policySnapshot), { ...row, costUsd: Number(row.costUsd) });
-  return { ...withCost(live), budget };
+  return { ...withCost(live), budget, usedSavedLogins: readUsedSavedLogins(usedSavedLogins).map((u) => ({ itemName: u.itemName, origin: u.origin })) };
 }
 
 /** Reads what the stream sends. Apart from the controller so it can be read without holding a stream open. */
@@ -160,6 +164,7 @@ export class ChatStreamService {
           activeMs: true,
           activeSince: true,
           policySnapshot: true,
+          usedSavedLogins: true,
         },
       }),
     ]);

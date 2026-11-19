@@ -3,6 +3,7 @@ import { context, propagation } from '@opentelemetry/api';
 import { CredentialsService } from '@marinoscar/platform-api/credentials';
 
 import { FABRIC_CREDENTIAL_PURPOSE, FABRIC_TOKEN_NAME, FABRIC_URL_NAME } from './fabric.credentials';
+import { readSseEvents } from './sse';
 
 /** Why a fabric call failed. */
 export type FabricErrorKind = 'not_configured' | 'unreachable' | 'unauthorized' | 'api';
@@ -159,5 +160,18 @@ export class FabricClient {
       throw new FabricError('api', `The event stream answered with ${type || 'no content type'}`);
     }
     this.log.debug('fabric event stream reachable');
+  }
+
+  /**
+   * The `secrets.*` audit events still in the fabric's event log (it keeps the newest 2,000, in memory), oldest first,
+   * as the fabric sends them (`{ seq, type, at, data }`). Opens `GET /v1/events?after=0&types=secrets.*`, reads the
+   * replay and closes the stream once it goes quiet: a bounded read, never a held connection. Safe to repeat: the
+   * caller de-duplicates by operation id. Throws `FabricError` when the fabric is not configured or not answering.
+   */
+  async secretsEvents(limits: { idleMs?: number; maxMs?: number; maxEvents?: number } = {}): Promise<unknown[]> {
+    const maxMs = limits.maxMs ?? 6_000;
+    const res = await this.raw('GET', '/v1/events', { query: { after: 0, types: 'secrets.*' }, timeoutMs: maxMs + 2_000, retries: 0 });
+    const events = await readSseEvents(res.body, { idleMs: limits.idleMs ?? 800, maxMs, maxEvents: limits.maxEvents ?? 2_000 });
+    return events.filter((e) => e.event !== 'reset').map((e) => e.data);
   }
 }

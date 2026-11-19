@@ -5,6 +5,7 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
+import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -103,6 +104,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: VerifiedUserOutlinedIcon,
         path: '/settings/approvals',
         permission: 'approvals:read',
+      },
+      // Secrets (#593). `secrets:read` is what `GET /api/secrets/status`, `/activity` and `/reach` enforce
+      // (apps/api/src/secrets/); connecting, disconnecting and the switches need `secrets:write`, checked in the page.
+      {
+        title: 'Secrets',
+        description: 'Connect your secrets provider, choose whether the agent may sign in with your saved logins, and see what it used.',
+        Icon: KeyOutlinedIcon,
+        path: '/settings/secrets',
+        permission: 'secrets:read',
       },
     ],
   },

@@ -15,6 +15,7 @@ import { ActionOverlay, describeActivity, frameCaption, type RunActivity } from 
 import { RunExportButton } from './RunExport';
 import { RunTimeline } from './RunTimeline';
 import { softBudgetNotice } from './runBudget';
+import { UsedSavedLogins } from './UsedSavedLogins';
 import type { RunFrame } from './useRunFrame';
 
 const CARD_MAX = { xs: '100%', sm: 440 } as const;
@@ -190,6 +191,7 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
     return (
       <CardShell title="Browser" label="Browser run" status={run ? <StatusChip status={run.status} stopReason={run.stopReason} size="small" /> : undefined}>
         {goal}
+        <UsedSavedLogins logins={run?.usedSavedLogins} />
         {!message.runId && (
           <Typography variant="body2" color="text.secondary">
             This run was deleted.
@@ -215,6 +217,7 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
         {/* Open: the picture is in the browser pane, one fetch feeds both. */}
         {!paneOpen && <BrowserFrame frame={frame} activity={run.activity} hidden={frameHidden} now={now} />}
       </Box>
+      <UsedSavedLogins logins={run.usedSavedLogins} />
       <SoftBudgetLine run={run} />
       <Button fullWidth variant="outlined" onClick={onOpen} disabled={paneOpen} sx={{ mt: 1, minHeight: 44, borderRadius: 3 }}>
         {paneOpen ? 'Browser is open' : 'Open browser'}

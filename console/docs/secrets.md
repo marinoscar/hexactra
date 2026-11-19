@@ -15,7 +15,7 @@ Hexactra is a **confidential client** that runs OAuth 2.1 authorization code wit
    https://<your console>/api/secrets/vault/callback
    ```
 
-3. Grant types: authorization code and refresh token. Allowed scopes: `vault:items_read`, `vault:items_fill`, `offline_access`, and `vault:items_write` only if the owner will let the agent save and change logins (E37.4).
+3. Grant types: authorization code and refresh token. Allowed scopes: `vault:items_read`, `vault:items_fill`, `offline_access`, and `vault:items_write` only if the owner will let the agent save and change logins (the switch on the Secrets page asks for it with a new consent).
 4. Copy the client secret (shown once). The client authenticates with `client_secret_post`; a client registered for `client_secret_basic` also works (the console retries once with Basic and remembers it).
 5. If Vault refuses the console's host, add it to Vault's client host allowlist.
 
@@ -153,8 +153,45 @@ The address is checked when it is saved, when Connect starts and on **every** ca
 | `GET /api/secrets/vault/callback` | public (state + cookie) | Redirects to the return page |
 | `POST /api/secrets/vault/disconnect` | `secrets:write` | `{ forgetClient? }` → `{ revoked, status }` |
 | `GET\|PUT\|DELETE /api/secrets/vault/default-client` | `system_settings:read` / `:write` | The administrator's default address, client id and client secret |
+| `GET /api/secrets/activity` | `secrets:read` | The owner's newest 100 uses and refusals (below), and the provider's own activity page |
+| `GET /api/secrets/reach` | `secrets:read` | The logins the agent has used so far, by site |
+| `GET /api/secrets/admin/summary` | `system_settings:read` | Counts for the administrator: owners connected, fields typed and refusals this week |
 
-`secrets:read` goes to contributors, viewers and organization admins; `secrets:write` to contributors and organization admins. There is no MCP tool and no CLI command: a hosted AI app or a personal access token must not rewire the owner's secrets provider (`packages/shared/capabilities.json`, [parity.md](parity.md)). The Secrets page is E37.4.
+`secrets:read` goes to contributors, viewers and organization admins; `secrets:write` to contributors and organization admins. There is no MCP tool and no CLI command: a hosted AI app or a personal access token must not rewire the owner's secrets provider, and no MCP tool reads what the agent used (`packages/shared/capabilities.json`, [parity.md](parity.md#what-secrets-added-e37)).
+
+## The Secrets page (E37.4)
+
+`/settings/secrets` (Settings, Browser agent, **Secrets**, and the avatar menu; `secrets:read`; connecting and the switches need `secrets:write`, so a viewer sees the page and changes nothing):
+
+- **Provider card.** Not connected: what a provider is in two sentences and the Vault address, client id and client secret (**Save and connect**); when the administrator set a default, the address is shown and one press on **Connect Vault** starts the consent. Connected: the Vault address, the account, the permissions in plain words (*Find your logins*, *Type them for you*, *Save and change logins* when granted), last used, **Disconnect** (it asks, "Runs will ask you to sign in again."). `needs_reconnect`: a warning and **Reconnect**. Coming back from Vault's consent shows what happened once (`?vault=` of the callback) in one polite live region.
+- **Switches.** *Let the agent use saved logins* is the owner's switch `secrets.agentUse.enabled` (off by default; disabled with the reason when the administrator has the deployment switch off, with a notice). *Let the agent save and change logins* shows whether `vault:items_write` was granted; turning it on starts a **new consent** (`POST /api/secrets/vault/connect { allowWrite: true }`), turning it off asks first and connects again without it. Every switch is labelled, its help is its description, and each outcome is announced.
+- **What the agent can reach.** Vault looks logins up only for a page (`GET /credentials?origin=`): there is no call that lists every opened login. The page therefore shows the logins **used so far** (site, the fields typed, how often, when), each with **Manage in Vault**, and says that the full list, and which logins are open to agents, are in Vault. Hexactra does not edit them.
+- **Where the logins are kept (E37.5).** Shown only when the deployment offers the built-in store (`GET /api/secrets/store/status` answers): *Store in Hexactra* or *Connect Vault*, one active at a time (the user setting `secrets.provider`); switching moves no data. With the store chosen the page shows its own card with **My saved logins** (`/secrets`), the count open to the agent, and no Vault write switch.
+- **Activity.** The newest 100 uses from Hexactra's own audit events: when, the run (a link), the site, what was typed ("Typed the password", "Typed the code") and the outcome. A refusal is a row too ("Refused: the page was not the saved site", "Refused: no saved login for this page"). A link goes to the provider's own activity (`<Vault>/settings/agent-activity`). The login's name is the one the run recorded when it signed in (the fabric does not know it). Below 900 px the table is a stack of cards.
+
+![The Secrets page on a phone](images/secrets-phone.png) ![The Secrets page on a desktop](images/secrets-desktop.png) ![The task form's Saved logins section, with no provider connected](images/secrets-task-form-phone.png)
+
+The administrator's page, `/admin/settings/secrets` (`system_settings:read`; writes `:write`): the deployment kill switch `secrets.agentUse.enabled`, the default Vault (address, client id, write-only client secret, the redirect URI to register) and **counts only**: owners connected, owners who must reconnect, fields typed and refusals in the last 7 days. It never shows a user, a site or a login.
+
+### On a task, a chat and a run
+
+- **Task form**, section *Saved logins*: **Use my saved logins**, with one line of help; disabled and off, with the reason as its description and a link to Secrets, while there is no connected provider ("Connect a secrets provider first."), the owner's own switch is off, an administrator has the deployment switch off, or the viewer may not read secrets. A new task starts from the owner's default (*Use saved logins in new tasks and chats*). Under it, **When it runs without me and reaches a payment**: *Ask me* (the default: a run that signed in with a saved login still stops and asks before a payment, even with the purchase question off) or *Go ahead* (the task pays unattended; a warning says so, and the saved approvals and allowed sites still apply). Only a task has the payment choice.
+- **Chat settings**: the same switch (disabled with a reason in the same cases).
+- **Run page and the chat's Browser card**: "Signed in with: Shop login (app.example.test)", from `Run.usedSavedLogins` (the chat's live run view carries `usedSavedLogins`: the name and the site, never a username).
+- **A refused site.** When the provider refuses a login because the page is not its site, the run asks with a **warning card** that names the page's host and the host the login is saved for, so the owner can tell a look-alike from the real site; nothing was typed and saved logins are off for the rest of the run.
+
+### Where the Activity comes from
+
+The fabric audits every provider action as `secrets.lookup` and `secrets.release` (who, run, provider, item, field, origin, purpose, outcome: never the value) but keeps them only in an in-memory event log of the newest 2,000. So that the list survives a restart and a busy hour, the queue job `secrets.activity.ingest` copies them into `secrets_activity`:
+
+- A per-minute `@Cron` only decides whether anything can have happened (the deployment switch is on, or an owner is connected) and enqueues the job. The job opens `GET /v1/events?after=0&types=secrets.*`, reads the replay until the stream goes quiet (a bounded read, never a held connection), and stores what is new. **Reading everything every time is deliberate:** rows are unique on the operation id and event, so a repeat changes nothing, a fabric restart (new sequence numbers) needs no cursor, and an event is lost only if more than 2,000 `secrets.*` events happen between two ticks.
+- **Value-free by construction.** `sanitizeSecretsEvent` (`src/secrets/secrets-activity.ts`) *copies a whitelist* of fields and checks each: a field kind and a purpose from a closed list, an outcome from the fabric's closed codes (anything else is stored as `other`), the host of the origin (never a path, query or user info), the provider's opaque item id, a UUID for the owner, the operation and the run. Everything else in an event is dropped before the database. A test seeds a marker in unknown keys, the free-text columns, the origin's path, query and user info, scans every column of the table and every response, and fails if it appears. The login's *name* and username are not in the row: the fabric does not know them.
+- A run is linked only when it exists and is the owner's. Rows are kept 180 days, deleted with the user and part of their data export (category *credentials*). The job is server-only.
+- Not the audit trail of Vault (see Vault's **Agent activity**, linked from the page) and not telemetry.
+
+### Saving a login the owner typed by hand: not shipped
+
+The issue (#593, item 4) asks that after the owner signs in by hand through a card, the agent offers to save that login, the fabric sending the value it still holds for that handoff to the provider. Vault's create route (`POST /api/agent/v1/credentials`, scope `vault:items_write`) needs a `purpose`, and the documented ones are `login` (signing in), `signup` (creating an account), `password_change` and `mfa`: none says "saving an account the owner already has", and `signup` or `login` would put a wrong line in the owner's Vault trail. As the issue says, this ships **without** the card and the Save action until Vault answers [marinoscar/vault#233](https://github.com/marinoscar/vault/issues/233) (an additive purpose). What is missing, so the follow-up is small: the `save_login` question kind and its channel rules (signed-in web and Android app only, like a secret), the `propose_saving_login` runner tool, "Never for this site" per user and registrable domain, and a fabric action that forwards the held handoff value to the provider (the value must never touch the console). The write switch above already requests the scope.
 
 ## Testing: the fake Vault
 
