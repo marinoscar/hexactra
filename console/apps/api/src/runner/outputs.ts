@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { MASKED_OUTPUT, MAX_OUTPUT_ATTEMPTS, parseOutputs, type StoredOutput, type TaskOutput } from '@app/shared/task-fields';
 
-import type { OutputsHandle } from './browser/context';
+import type { OutputsHandle } from '@marinoscar/hexactra-browser-agent/context';
 
 /** The argument schema of `finish` for a task without outputs: exactly what it always was. */
 const plainFinish = z.object({ success: z.boolean(), result: z.string().min(1).max(4000) });
