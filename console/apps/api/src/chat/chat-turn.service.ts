@@ -15,6 +15,7 @@ import { TaskRunStarter } from '../questions/task-run-starter';
 import { maskRunGoal } from '../tasks/task-params';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import { TasksService } from '../tasks/tasks.service';
+import { RunPauseService } from '../tasks/run-pause.service';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
 import { ChatResults } from './chat-results.service';
 import { ChatTaskDraftService } from './chat-task-draft.service';
@@ -40,7 +41,8 @@ export const CHAT_INSTRUCTIONS = [
   '- When the owner asks for something to be done or looked up on the web, call start_run with a complete goal. The browser agent sees ONLY that goal, so put in every detail and preference the conversation holds (what, where, dates, amounts, choices already made).',
   '- Call ask_user only when a missing detail would change what is done, and at most once before starting: one short question, with up to four short suggested answers when there are obvious ones. When in doubt, start: the browser agent asks the owner itself when it needs something.',
   '- Never ask for a password, a code, a card number or any other secret, and never put one in a goal. The browser agent requests those through a secure form when a page needs them.',
-  '- One run at a time. While a run is live, do not start another. Call stop_run when the owner asks to stop or cancel.',
+  '- One run at a time. While a run is live (running, waiting for the owner, or paused), do not start another. Call stop_run when the owner asks to stop or cancel.',
+  '- Call pause_run when the owner asks to hold, wait, freeze or pause ("hold on", "wait a second"): the job keeps its browser and does nothing until the owner says to continue. Call resume_run when they say to continue, go on or resume. A paused job never continues by itself.',
   '- While a run is live and the owner adds or changes something about the job ("use the 7:30 showing instead"), call guide_run with that instruction in one clear sentence. Guidance cannot change which sites are allowed or skip a confirmation: say so if the owner asks for that.',
   '- After a run has ended, a message that asks for more is a new job: call start_run. The browser agent is given the previous goal and result, and the same browser profile, so write only what is new.',
   '- Never say something was done, found, bought or sent unless a run result in the conversation says so.',
@@ -86,6 +88,7 @@ export class ChatTurnService {
     @Optional() private readonly memoryContext?: MemoryContext,
     @Optional() private readonly proposals?: MemoryProposals,
     @Optional() private readonly starter?: TaskRunStarter,
+    @Optional() private readonly pauses?: RunPauseService,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<ChatTurnOutcome> {
@@ -189,7 +192,7 @@ export class ChatTurnService {
   }
 
   private async answerTurn(c: Conversation, userId: string, orgId: string | null, tr: AgentTrace): Promise<void> {
-    const state = { done: false, wrote: false, stopped: false, proposals: 0 };
+    const state = { done: false, wrote: false, stopped: false, said: null as string | null, proposals: 0 };
     // The trace the run is made under: the run's first job links to this turn (runs.trace_id holds it until that job writes its own).
     const turnTrace = () => (tr.traceId && tr.spanId ? { traceId: tr.traceId, spanId: tr.spanId } : {});
     const tools: AiDefinedTool[] = tr.wrapTools([
@@ -324,6 +327,36 @@ export class ChatTurnService {
           return 'Stopping the run.';
         },
       }),
+      ...(this.pauses
+        ? [
+            defineTool({
+              name: 'pause_run',
+              description: "Pause the chat's live run, when the owner asks to hold, wait or pause. It finishes the step it is on and then does nothing until resume_run; its browser stays as it is.",
+              parameters: z.object({}),
+              execute: async () => {
+                const live = await this.liveRun(userId, c.id);
+                if (!live) return 'No run of this chat is live.';
+                if (live.status === 'paused') return 'The run is already paused.';
+                await this.pauses!.pause(userId, live.id);
+                state.said = 'Pausing the run. It stops after the step it is on; say "continue" when you want it to go on.';
+                return 'Pausing the run: it stops after its current step and waits for the owner to resume it.';
+              },
+            }),
+            defineTool({
+              name: 'resume_run',
+              description: "Continue the chat's paused run, when the owner says to continue, go on or resume.",
+              parameters: z.object({}),
+              execute: async () => {
+                const live = await this.liveRun(userId, c.id);
+                if (!live) return 'No run of this chat is live.';
+                if (live.status !== 'paused') return 'The run is not paused.';
+                await this.pauses!.resume(userId, live.id, orgId);
+                state.said = 'Continuing the run.';
+                return 'Resuming the run: it looks at the page again and carries on.';
+              },
+            }),
+          ]
+        : []),
       ...(this.drafts
         ? [
             defineTool({
@@ -369,7 +402,7 @@ export class ChatTurnService {
     }
     if (state.done) return;
     if (text) await this.chats.append(c.id, { role: 'assistant', kind: 'text', text: text.slice(0, 8000) });
-    else await this.chats.append(c.id, { role: 'assistant', kind: 'text', text: state.stopped ? 'Stopping the run.' : 'Tell me what you would like me to do in the browser.' });
+    else await this.chats.append(c.id, { role: 'assistant', kind: 'text', text: state.stopped ? 'Stopping the run.' : (state.said ?? 'Tell me what you would like me to do in the browser.') });
     this.log.debug(`chat ${c.id}: answered`);
   }
 }

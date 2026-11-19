@@ -13,6 +13,7 @@ import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { GOAL_RUN_JOB } from '../src/runner/goal-run.enqueue';
 import { RunEndHooks } from '../src/tasks/run-end-hooks';
+import { RunPauseService } from '../src/tasks/run-pause.service';
 import { TasksService } from '../src/tasks/tasks.service';
 import { TaskSchedulesService } from '../src/tasks/task-schedules.service';
 import { QuestionEvents } from '../src/questions/question-events';
@@ -431,6 +432,54 @@ describe('when the model fails', () => {
 
   it('words a failure without the provider message', () => {
     expect(failureText(new Error('boom'))).toBe('Something went wrong while answering. Send your message again.');
+  });
+});
+
+describe('pause and continue in words (E38.2)', () => {
+  const enqueued: { type: string; reason: string }[] = [];
+  const withPause = (ai: AiService) => {
+    const pauses = new RunPauseService(prisma, tasks, { enqueue: async (j: { type: string; reason: string }) => void enqueued.push(j) } as never);
+    return new ChatTurnService(prisma, chats, results, tasks, app.get(JobsService, { strict: false }), ai, undefined, undefined, undefined, undefined, pauses);
+  };
+
+  it('"hold on" calls pause_run and "continue" calls resume_run; a paused run still counts as the chat\'s live run, so no second run starts', async () => {
+    const alice = await login('pause');
+    const id = await chatWith(alice, 'Order groceries');
+    const model = scriptedAi([[['start_run', { goal: 'Order the usual groceries.' }]], [['pause_run', {}]], [['start_run', { goal: 'Something else.' }]], [['resume_run', {}]]]);
+    const turns = withPause(model.ai);
+    await turns.run(id, alice.userId, null);
+    const [run] = await runsOf(id);
+
+    await chats.postUserMessage(alice.userId, id, 'Hold on');
+    await turns.run(id, alice.userId, null);
+    expect(model.outputs[1]).toMatch(/^Pausing the run/);
+    expect(await prisma.run.findUniqueOrThrow({ where: { id: run!.id } })).toMatchObject({ pauseRequested: true });
+    expect((await thread(id)).at(-1)).toMatchObject({ role: 'assistant', kind: 'text', text: expect.stringMatching(/^Pausing the run/) });
+
+    // The runner pauses it (here: the state the runner leaves).
+    await prisma.run.update({ where: { id: run!.id }, data: { status: 'paused', pausedAt: new Date() } });
+    await chats.postUserMessage(alice.userId, id, 'Actually order something else');
+    await turns.run(id, alice.userId, null);
+    expect(model.outputs[2]).toMatch(/^Refused: a run of this chat is still live/);
+    expect(model.inputs[2]).toContain('State: a run of this chat is live (paused).');
+    expect(await runsOf(id)).toHaveLength(1);
+
+    await chats.postUserMessage(alice.userId, id, 'Ok continue');
+    await turns.run(id, alice.userId, 'org-x');
+    expect(model.outputs[3]).toMatch(/^Resuming the run/);
+    expect(await prisma.run.findUniqueOrThrow({ where: { id: run!.id } })).toMatchObject({ status: 'queued', pauseRequested: false });
+    expect(enqueued).toContainEqual(expect.objectContaining({ type: 'browser.goal.run', reason: 'resumed' }));
+    expect((await thread(id)).at(-1)).toMatchObject({ text: 'Continuing the run.' });
+  });
+
+  it('answers sensibly when nothing is live or the run is not paused, and offers the tools only with the pause service', async () => {
+    const alice = await login('pause-none');
+    const id = await chatWith(alice, 'Pause it');
+    const model = scriptedAi([[['pause_run', {}], ['resume_run', {}]]]);
+    await withPause(model.ai).run(id, alice.userId, null);
+    expect(model.outputs).toEqual(['No run of this chat is live.', 'No run of this chat is live.']);
+    const names = model.runTools.mock.calls[0]![0].tools.map((t) => t.tool.name).sort();
+    expect(names).toEqual(['ask_user', 'guide_run', 'pause_run', 'resume_run', 'start_run', 'stop_run']);
   });
 });
 

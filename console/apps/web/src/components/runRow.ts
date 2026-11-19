@@ -16,6 +16,7 @@ export function shortDuration(ms: number): string {
 
 /** How long the run took (`finishedAt − startedAt`), "running 2 min" while it is live, null before it starts. */
 export function runDuration(run: Pick<Run, 'status' | 'startedAt' | 'createdAt' | 'finishedAt'>, now: number): string | null {
+  if (run.status === 'paused') return 'paused';
   if (isLive(run.status)) {
     if (!run.startedAt) return null;
     const since = shortDuration(now - Date.parse(run.startedAt));

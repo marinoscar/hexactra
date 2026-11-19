@@ -7,6 +7,8 @@ import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
+import PauseCircleOutlinedIcon from '@mui/icons-material/PauseCircleOutlined';
+import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
@@ -20,6 +22,7 @@ import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/Run
 import { runCost } from '../components/runBudget';
 import { runAgain, runAgainQuestionFor } from '../components/runRow';
 import { RunExportButton, RunExportMenu, useRunExport } from '../components/RunExport';
+import { PausedBanner, canPauseRun, isPausing } from '../components/RunPause';
 import { UsedSavedLogins } from '../components/UsedSavedLogins';
 import { UsedSavedIdentity } from '../components/UsedSavedIdentity';
 import { UsedSavedCards } from '../components/UsedSavedCards';
@@ -115,6 +118,9 @@ export function RunDetailPage() {
   const [watch, setWatch] = useState(true);
   // Stop was pressed here (E38.1): shown at once, before the server says so.
   const [stopRequested, setStopRequested] = useState(false);
+  // Pause and Resume were pressed here (E38.2): "Pausing…" and "Resuming…" at once, before the server says so.
+  const [pauseSent, setPauseSent] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [where, setWhere] = useState<RunViewer | null>(null);
   useProfileTimeZone();
   /** Export (#544): the header's menu from `md` up, the sticky bar's below. */
@@ -188,6 +194,11 @@ export function RunDetailPage() {
   }, [load]);
 
   const isLive = run ? isLiveStatus(run.status) : false;
+  // The pause took effect: the page's own "Pausing…" is over (a later pause from elsewhere shows through the run's own flag).
+  const runStatus = run?.status ?? null;
+  useEffect(() => {
+    if (runStatus === 'paused') setPauseSent(false);
+  }, [runStatus]);
   const now = useNow(isLive);
 
   // Live updates over SSE: a reconnect refetches, a step appends, a run event merges.
@@ -275,6 +286,29 @@ export function RunDetailPage() {
         setActionError(e instanceof Error ? e.message : 'Could not stop the run');
       });
   };
+  const paused = run.status === 'paused';
+  const pausing = isPausing(run, pauseSent);
+  const pause = () => {
+    if (pausing) return;
+    setPauseSent(true);
+    api
+      .post(`/runs/${run.id}/pause`, {})
+      .then(load)
+      .catch((e: unknown) => {
+        setPauseSent(false);
+        setActionError(e instanceof Error ? e.message : 'Could not pause the run');
+      });
+  };
+  const resume = () => {
+    if (resuming) return;
+    setResuming(true);
+    setPauseSent(false);
+    api
+      .post(`/runs/${run.id}/resume`, {})
+      .then(load)
+      .catch((e: unknown) => setActionError(e instanceof Error ? e.message : 'Could not resume the run'))
+      .finally(() => setResuming(false));
+  };
   const takeOverHost = where?.desktop && where.hostId && viewer.hasPermission('fleet:desktop') ? where.hostId : null;
   const takeOver = () => navigate(`/fleet/hosts/${takeOverHost}/desktop`);
   const takeOverLabel = `Take over${where?.hostName ? ` on ${where.hostName}` : ''}`;
@@ -344,13 +378,20 @@ export function RunDetailPage() {
         {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
       </>
     );
+  // Paused: nothing happens until the owner resumes or stops. The browser stays in view, and takeover stays available.
+  const pausedBanner = paused && <PausedBanner onResume={canCancel ? resume : undefined} onStop={canCancel ? cancel : undefined} resuming={resuming} stopping={stopping} />;
   const waiting = run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>;
   // Below `md` these live in the sticky bar at the bottom instead.
   const actions = isLive && !compact && (
     <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-      {canCancel && (
+      {canCancel && !paused && (
         <Button color="error" variant="outlined" disabled={stopping} onClick={cancel}>
           {stopping ? 'Stopping…' : 'Cancel run'}
+        </Button>
+      )}
+      {canCancel && canPauseRun(run) && !stopping && (
+        <Button variant="outlined" disabled={pausing} onClick={pause}>
+          {pausing ? 'Pausing…' : 'Pause'}
         </Button>
       )}
       <Button variant="outlined" onClick={() => setWatch((w) => !w)}>
@@ -436,7 +477,9 @@ export function RunDetailPage() {
       // Sticks above the phone's bottom bar (and the safe area) while the page scrolls; it is the page's last element, so at the end it rests in place.
       sx={{ position: 'sticky', bottom: aboveBottomBar(8), zIndex: 'speedDial', mt: 2, p: 0.5, display: 'flex', gap: 0.5, borderRadius: 2 }}
     >
-      {isLive && canCancel && <BarAction label={stopping ? 'Stopping…' : 'Cancel run'} short={stopping ? 'Stopping…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={stopping} onClick={cancel} />}
+      {isLive && canCancel && !paused && <BarAction label={stopping ? 'Stopping…' : 'Cancel run'} short={stopping ? 'Stopping…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={stopping} onClick={cancel} />}
+      {canCancel && canPauseRun(run) && !stopping && <BarAction label={pausing ? 'Pausing…' : 'Pause'} short={pausing ? 'Pausing…' : 'Pause'} Icon={PauseCircleOutlinedIcon} disabled={pausing} onClick={pause} />}
+      {paused && canCancel && <BarAction label={resuming ? 'Resuming…' : 'Resume'} short={resuming ? 'Resuming…' : 'Resume'} Icon={PlayCircleOutlinedIcon} disabled={resuming} onClick={resume} />}
       {isLive && <BarAction label={watch ? 'Stop watching' : 'Watch the browser'} short={watch ? 'Stop watching' : 'Watch'} Icon={watch ? VisibilityOffOutlinedIcon : VisibilityOutlinedIcon} onClick={() => setWatch((w) => !w)} />}
       {isLive && takeOverHost && <BarAction label={takeOverLabel} short="Take over" Icon={PanToolOutlinedIcon} onClick={takeOver} />}
       {exporter.canExport && (
@@ -471,6 +514,7 @@ export function RunDetailPage() {
             <Box sx={{ flexShrink: 0 }}>
               {chips}
               {waiting}
+              {pausedBanner}
               {activity}
               {meter}
               {outcome}
@@ -490,6 +534,7 @@ export function RunDetailPage() {
       {chips}
       {outcome}
       {waiting}
+      {pausedBanner}
       {compact ? (
         <>
           {activity}

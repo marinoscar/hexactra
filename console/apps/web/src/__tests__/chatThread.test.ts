@@ -55,6 +55,7 @@ describe('the words of the header and the list', () => {
   it('says what is happening: archived first, then the run, then thinking', () => {
     expect(chatSubtitle({ chat: { status: 'archived' }, thinking: true, run: { status: 'running' } })).toBe('Archived');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: true, run: { status: 'running' } })).toBe('Working in the browser…');
+    expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'paused' } })).toBe('Paused');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'waiting_human' } })).toBe('Waiting for you');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'queued' } })).toBe('Starting the browser…');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: true, run: { status: 'succeeded' } })).toBe('Thinking…');

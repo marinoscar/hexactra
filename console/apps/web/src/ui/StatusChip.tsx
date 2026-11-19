@@ -3,6 +3,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import PauseCircleOutlinedIcon from '@mui/icons-material/PauseCircleOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import { Chip } from '@mui/material';
 import type { ElementType } from 'react';
@@ -16,6 +17,7 @@ export const STATUS_COLOR: Record<RunStatus, StatusColor> = {
   queued: 'default',
   running: 'info',
   waiting_human: 'warning',
+  paused: 'warning',
   succeeded: 'success',
   failed: 'error',
   cancelled: 'default',
@@ -26,6 +28,7 @@ export const STATUS_ICON: Record<RunStatus, ElementType> = {
   queued: HourglassEmptyIcon,
   running: AutorenewIcon,
   waiting_human: PersonOutlineIcon,
+  paused: PauseCircleOutlinedIcon,
   succeeded: CheckCircleOutlineIcon,
   failed: ErrorOutlineIcon,
   cancelled: BlockIcon,
@@ -36,9 +39,9 @@ export function statusLabel(status: RunStatus | string): string {
   return status === 'waiting_human' ? 'needs you' : status;
 }
 
-/** The run still needs a host or a person: queued, running or waiting for an answer. */
+/** The run is not over: queued, running, waiting for an answer, or paused by its owner. */
 export function isLive(status: RunStatus | string): boolean {
-  return status === 'queued' || status === 'running' || status === 'waiting_human';
+  return status === 'queued' || status === 'running' || status === 'waiting_human' || status === 'paused';
 }
 
 /** The run is over: succeeded, failed or cancelled. */

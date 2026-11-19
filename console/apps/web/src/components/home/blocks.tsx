@@ -157,8 +157,8 @@ function LiveRunCard({ run, now }: { run: HomeLiveRun; now: number }) {
             </Typography>
           )}
           <Box sx={{ flexGrow: 1 }} />
-          <Button component={RouterLink} to={`/runs/${run.id}`} size="small" sx={TOUCH} aria-label={`Watch: ${run.taskName ?? run.goal.slice(0, 80)}`}>
-            Watch
+          <Button component={RouterLink} to={`/runs/${run.id}`} size="small" sx={TOUCH} aria-label={`${run.status === 'paused' ? 'Resume' : 'Watch'}: ${run.taskName ?? run.goal.slice(0, 80)}`}>
+            {run.status === 'paused' ? 'Resume' : 'Watch'}
           </Button>
         </Stack>
         <Typography variant="subtitle1" component="h3" sx={ONE_LINE} title={run.taskName ?? run.goal}>

@@ -5,10 +5,10 @@ import type { RunClient, RunOrigin } from '../aiApps/types';
 import type { RunActivity } from '../components/RunActivity';
 import { STOP_REASONS, type BudgetKey, type RunBudget, type RunPolicy, type RunTier, type StopReason, type Tier } from '../components/runBudget';
 
-export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | 'failed' | 'cancelled';
+export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'paused' | 'succeeded' | 'failed' | 'cancelled';
 
 /** Every run status, in the order a run moves through them. */
-export const RUN_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled'];
+export const RUN_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled'];
 
 /** Why a run stopped (`runs.stop_reason`): the values #408 declared (`RUN_STOP_REASONS` in apps/api/src/runner/budget.ts). */
 export const RUN_STOP_REASONS: readonly StopReason[] = STOP_REASONS;
@@ -93,6 +93,10 @@ export interface Run {
   result: string | null;
   error: string | null;
   cancelRequested: boolean;
+  /** The owner pressed Pause (E38.2): it stays true while the run is `paused`. Absent from an older console. */
+  pauseRequested?: boolean;
+  /** When the run was paused; null otherwise. */
+  pausedAt?: string | null;
   stepCount: number;
   /** What a running run is doing right now (#379). */
   activity?: RunActivity | null;

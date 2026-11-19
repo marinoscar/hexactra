@@ -92,6 +92,8 @@ function mount({ chat = LIVE, responses = {}, permissions = ALL, width = 1440 }:
       [`GET /chats/${CHAT_ID}`]: chat,
       [`POST /chats/${CHAT_ID}/messages`]: (req: TestApiRequest) => message(++seq, { role: 'user', text: (req.body as { text: string }).text }),
       [`POST /runs/${RUN_ID}/cancel`]: {},
+      [`POST /runs/${RUN_ID}/pause`]: {},
+      [`POST /runs/${RUN_ID}/resume`]: {},
       [`GET /runs/${RUN_ID}/viewer`]: { hostId: HOST_ID, hostName: 'mini-pc', desktop: true },
       ...responses,
     },
@@ -246,6 +248,70 @@ describe('Open browser', () => {
     expect(within(sheet).getByRole('heading', { name: 'Browser' })).toBeInTheDocument();
     fireEvent.click(within(sheet).getByRole('button', { name: 'Close the browser' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Browser' })).not.toBeInTheDocument());
+  });
+});
+
+describe('Pause and Resume (E38.2)', () => {
+  it('words the status line: Pausing… until the status changes, then Paused', () => {
+    expect(browserStatusLine({ status: 'running', activity: null, cancelRequested: false, pauseRequested: true })).toBe('Pausing…');
+    expect(browserStatusLine({ status: 'paused', activity: null, cancelRequested: false, pauseRequested: true })).toBe('Paused');
+    expect(browserStatusLine({ status: 'running', activity: null, cancelRequested: true, pauseRequested: true })).toBe('Stopping…');
+  });
+
+  it('Pause sits beside Stop, says Pausing… at once and cannot be pressed twice; the banner then offers Resume and Stop, the browser and Take over stay', async () => {
+    const host = mount();
+    await openBrowser();
+    const p = await pane();
+    expect(within(p).getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    fireEvent.click(within(p).getByRole('button', { name: 'Pause' }));
+    await waitFor(() => expect(sent(host, 'POST', `/runs/${RUN_ID}/pause`)).toHaveLength(1));
+    const pausing = await within(p).findByRole('button', { name: 'Pausing…' });
+    expect(pausing).toBeDisabled();
+    runEvent({ pauseRequested: true });
+    expect(within(p).getByText('Pausing…', { selector: 'p' })).toBeInTheDocument();
+
+    // The run says it is paused: the banner, Resume and Stop; no Pause; the picture and Take over are still there.
+    runEvent({ status: 'paused', activity: null, pauseRequested: true });
+    const banner = await within(p).findByTestId('paused-banner');
+    expect(banner).toHaveTextContent('Paused. Nothing happens until you resume.');
+    expect(within(banner).getByRole('button', { name: 'Resume' })).toBeEnabled();
+    expect(within(banner).getByRole('button', { name: 'Stop' })).toBeEnabled();
+    expect(within(p).queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+    expect(within(p).queryByRole('button', { name: 'Pausing…' })).not.toBeInTheDocument();
+    expect(await within(p).findByRole('img', { name: 'The browser right now' })).toBeInTheDocument();
+    expect(await within(p).findByRole('link', { name: 'Take over on mini-pc' })).toBeInTheDocument();
+    expect(within(p).getAllByRole('status').some((e) => e.textContent === 'Paused')).toBe(true);
+    // The card in the thread says so too.
+    expect(within(await card()).getByTestId('paused-banner')).toBeInTheDocument();
+
+    fireEvent.click(within(banner).getByRole('button', { name: 'Resume' }));
+    await waitFor(() => expect(sent(host, 'POST', `/runs/${RUN_ID}/resume`)).toHaveLength(1));
+    runEvent({ status: 'queued', activity: null, pauseRequested: false });
+    await waitFor(() => expect(within(p).queryByTestId('paused-banner')).not.toBeInTheDocument());
+    // Running again: Pause is offered again, and not as "Pausing…".
+    runEvent({ pauseRequested: false });
+    expect(await within(p).findByRole('button', { name: 'Pause' })).toBeEnabled();
+  });
+
+  it('Stop on the paused banner asks first, then cancels', async () => {
+    const host = mount({ chat: detail([message(1, { role: 'user', text: 'Book' }), runMessage()], { liveRun: { id: RUN_ID, status: 'paused' } }), responses: { [`GET /runs/${RUN_ID}/viewer`]: { hostId: null, hostName: null, desktop: false } } });
+    await openBrowser();
+    runEvent({ status: 'paused', activity: null, pauseRequested: true });
+    const banner = await within(await pane()).findByTestId('paused-banner');
+    fireEvent.click(within(banner).getByRole('button', { name: 'Stop' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Stop this run?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
+    await waitFor(() => expect(sent(host, 'POST', `/runs/${RUN_ID}/cancel`)).toHaveLength(1));
+  });
+
+  it('has no Pause, Resume or Stop without runs:write', async () => {
+    mount({ permissions: ALL.filter((x) => x !== 'runs:write') });
+    await openBrowser();
+    const p = await pane();
+    expect(within(p).queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+    runEvent({ status: 'paused', activity: null, pauseRequested: true });
+    const banner = await within(p).findByTestId('paused-banner');
+    expect(within(banner).queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
