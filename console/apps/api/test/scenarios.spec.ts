@@ -16,7 +16,7 @@ import {
   ScenarioInvalid,
   scenarioJsonSchema,
   type Scenario,
-} from '../src/runner/testing';
+} from './replay';
 
 const DIR = join(__dirname, 'scenarios');
 const loaded = loadScenarios(DIR);

@@ -28,7 +28,7 @@ import { lastValueFrom, toArray } from 'rxjs';
 import { RunLiveController } from '../src/runner/run-live.controller';
 import { z } from 'zod';
 import type { TaskOutput } from '@app/shared/task-fields';
-import { fakeFabric as kitFakeFabric, scriptedAi as kitScriptedAi, type ScriptedCall } from '../src/runner/testing/fake-fabric';
+import { fakeFabric as kitFakeFabric, scriptedAi as kitScriptedAi, type ScriptedCall } from './replay/fake-fabric';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -51,7 +51,7 @@ async function login(email: string): Promise<string> {
   return me.json<{ data: { id: string } }>().data.id;
 }
 
-// The fakes are the replay suite's test kit (src/runner/testing/fake-fabric.ts); the spec hands in its own jest.fn.
+// The fakes are the replay suite's test kit (test/replay/fake-fabric.ts); the spec hands in its own jest.fn.
 const fakeFabric = () => kitFakeFabric((impl) => jest.fn(impl));
 type Call = ScriptedCall;
 const scriptedAi = (scripts: Call[][], served?: { provider: string; model: string; cachedInputTokens?: number } | null, usage?: { inputTokens: number; outputTokens: number }) => kitScriptedAi((impl) => jest.fn(impl), scripts, served, usage);

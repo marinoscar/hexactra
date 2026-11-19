@@ -72,6 +72,8 @@ jobs:
             exit 1
           fi
       - run: npm ci
+      # The API imports the agent packages' built output.
+      - run: npm run build:packages
       - run: npm run prisma:generate --workspace=api
       - name: Run the scenarios against the live model
         env:

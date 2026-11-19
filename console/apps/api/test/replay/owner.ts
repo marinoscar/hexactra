@@ -2,8 +2,8 @@
 // into the run's memory the way the host does on a resumed job (`runner/host/start.ts`): the answer line the model reads, the approved
 // target the risk gate lets through once, the secret handoff `type_handoff_secret` types. The host's database round trip is not here: a
 // scenario checks the harness and the browser layer, not the question broker.
-import { answerLine } from '../browser/request-human-spec';
-import { clearUnknown, type HarnessMemory, type OpenedQuestion, type QuestionPort, type QuestionSpec } from '../harness';
+import { answerLine } from '@marinoscar/hexactra-browser-agent/request-human-spec';
+import { clearUnknown, type HarnessMemory, type OpenedQuestion, type QuestionPort, type QuestionSpec } from '@marinoscar/hexactra-agent';
 import type { OwnerRule } from './scenario.schema';
 import type { OwnerSecrets } from './site';
 

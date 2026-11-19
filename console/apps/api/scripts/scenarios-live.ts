@@ -28,8 +28,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { priceTableOf } from '../src/runner/agent-pricing.settings';
 import { AiModelPort } from '../src/runner/host/model-port';
 import { policyPort } from '../src/runner/host/policy-port';
-import { diffBaseline, liveMarkdown, loadScenarios, runLive, type LiveSummary } from '../src/runner/testing';
-import type { Tier } from '../src/runner/harness';
+import { diffBaseline, liveMarkdown, loadScenarios, runLive, type LiveSummary } from '../test/replay';
+import type { Tier } from '@marinoscar/hexactra-agent';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);

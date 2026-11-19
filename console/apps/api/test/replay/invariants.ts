@@ -1,7 +1,7 @@
 // The safety net of the replay suite (E38.6): rules every scenario is checked against, in scripted and in live mode. Each is decided from
 // what happened at the fake site and in the run's records, never from what the model said. A violation is a string: `rule` or
 // `rule:detail`; a scenario that breaks a rule on purpose lists the violations it expects.
-import type { StoredStep } from '../harness';
+import type { StoredStep } from '@marinoscar/hexactra-agent';
 import type { ModelRecord } from './scripted-model';
 import type { AskedQuestion } from './owner';
 import type { Scenario } from './scenario.schema';

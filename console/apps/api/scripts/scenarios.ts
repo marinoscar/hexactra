@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
-import { junitXml, loadScenarios, resultsTable, runScenario, ScenarioInvalid, scenarioJsonSchema, type ScenarioResult } from '../src/runner/testing';
+import { junitXml, loadScenarios, resultsTable, runScenario, ScenarioInvalid, scenarioJsonSchema, type ScenarioResult } from '../test/replay';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);

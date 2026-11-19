@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { scenarioFromTrace } from '@app/shared/scenario-from-trace';
 
 import { runTraceSchema } from '../src/tasks/run-trace.schemas';
-import { parseScenario, runScenario } from '../src/runner/testing';
+import { parseScenario, runScenario } from './replay';
 
 const trace = JSON.parse(readFileSync(join(__dirname, 'fixtures/run-trace-transfer.json'), 'utf8')) as Record<string, any>;
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));

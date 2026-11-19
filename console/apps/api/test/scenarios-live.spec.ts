@@ -3,7 +3,7 @@
 // scenario's script and reports a provider, a model and token counts, so the price table and the cap apply to it as they would to a real one.
 import { join } from 'node:path';
 
-import type { ModelPort } from '../src/runner/harness';
+import type { ModelPort } from '@marinoscar/hexactra-agent';
 import {
   diffBaseline,
   liveMarkdown,
@@ -15,7 +15,7 @@ import {
   SpendGuard,
   type LiveSummary,
   type Scenario,
-} from '../src/runner/testing';
+} from './replay';
 
 const all = loadScenarios(join(__dirname, 'scenarios')).map((l) => l.scenario);
 const get = (name: string): Scenario => all.find((s) => s.name === name)!;

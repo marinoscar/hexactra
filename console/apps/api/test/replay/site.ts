@@ -2,8 +2,8 @@
 // (`navigate`, `elements`, `text`, `click`, `type`, ...) from the scenario's pages, keeps the site's state, and records everything the
 // invariants need: which actions reached the browser, which pages were opened, which commit-class elements were activated and whether
 // the owner had pressed Stop or Pause at the time. It is deterministic and never touches a network.
-import type { ActionOp, BrowserPort } from '../browser/browser-port';
-import type { Screen, ScreenMark, ScreenView, TraceShot } from '../browser/vision';
+import type { ActionOp, BrowserPort } from '@marinoscar/hexactra-browser-agent/browser-port';
+import type { Screen, ScreenMark, ScreenView, TraceShot } from '@marinoscar/hexactra-browser-agent/vision';
 import type { Scenario, SiteElement, SitePage } from './scenario.schema';
 
 export interface SiteAction {

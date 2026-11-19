@@ -4,7 +4,7 @@
 //
 // This module is the mechanism and takes the model as a port: the script (`scripts/scenarios-live.ts`) binds it to the console's AI
 // service. The specs run it with a fake provider.
-import { priceCall, type ModelPort, type PolicyPort, type PriceTable, type Tier } from '../harness';
+import { priceCall, type ModelPort, type PolicyPort, type PriceTable, type Tier } from '@marinoscar/hexactra-agent';
 import { runScenario, type ScenarioResult } from './run-scenario';
 import type { Scenario } from './scenario.schema';
 

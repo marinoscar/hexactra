@@ -1,7 +1,7 @@
 // The model of a scripted scenario (E38.6): it plays back the tool calls the scenario lists, one list per model call. It validates each
 // call's arguments against the tool's schema as a provider would, keeps every request and every tool result it read (what the model saw),
 // and counts synthetic tokens. `recording` wraps any other model (a live one) to keep the same record.
-import type { ModelPort, ModelRequest, ModelResult, ModelStep } from '../harness';
+import type { ModelPort, ModelRequest, ModelResult, ModelStep } from '@marinoscar/hexactra-agent';
 import type { ScenarioCall } from './scenario.schema';
 
 /** The script has no more model calls: the scenario forgot a `finish`, or the agent asked more than the script expected. */

@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { AiService } from '@marinoscar/platform-api/ai';
 
-import { FabricError, type FabricClient } from '../../fabric/fabric.client';
+import { FabricError, type FabricClient } from '../../src/fabric/fabric.client';
 
 export type FabricRequest = (method: string, path: string, opts?: { body?: Record<string, unknown> }) => Promise<unknown>;
 

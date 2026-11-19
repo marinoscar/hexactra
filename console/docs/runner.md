@@ -128,7 +128,7 @@ Changing the instructions, a tool description, a gate or a model is otherwise a 
 
 ### The test kit
 
-`apps/api/src/runner/testing/` (exported by its `index.ts` for the specs, the scripts and the CLI). It sits on the harness ports and the browser layer's own fakes (`harness/testing`, `browser/testing`) and imports the harness only through its index and engine, so extracting the harness (#614) moves it with the code.
+`apps/api/test/replay/` (exported by its `index.ts` for the specs and the scripts). It is test tooling, so it lives in `test/`, not in the app's `src/` (the agent packages' rules keep loop code, gates and test kits out of production code: `test/architecture/no-agent-logic.spec.ts`). It sits on the public entry points of the agent packages only (`@marinoscar/hexactra-agent`, `/engine` and `/testing` for the harness and its fakes, the browser toolset's subpaths), so the packages can change or be published without it noticing. Run `npm run build:packages` first: like every app spec, it imports the packages' built output.
 
 | File | What |
 |---|---|
@@ -139,7 +139,7 @@ Changing the instructions, a tool description, a gate or a model is otherwise a 
 | `invariants.ts` | the rules every scenario is checked against |
 | `run-scenario.ts`, `expectations.ts` | `runScenario(scenario, options)`: the real chunk loop to the end, a new job at each question, crash, pause and hop; and what `expect` compares |
 | `live.ts`, `report.ts` | the live mode (N runs, the spend cap, the summary), and the table, JUnit XML, Markdown and baseline diff |
-| `fake-fabric.ts` | `fakeFabric(mockFn)` and `scriptedAi(mockFn, ...)`: the in-memory fabric client and scripted AI service the database specs share (a spec hands in its own `jest.fn`: the kit is compiled without jest's types) |
+| `fake-fabric.ts` | `fakeFabric(mockFn)` and `scriptedAi(mockFn, ...)`: the in-memory fabric client and scripted AI service the database specs share (a spec hands in its own `jest.fn`, so the kit has no dependency on jest's types) |
 
 A scenario checks the harness and the browser layer. It does not go through the host's database round trip (the question broker, the policy snapshot): the database specs above do.
 

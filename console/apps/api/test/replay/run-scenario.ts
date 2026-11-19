@@ -2,16 +2,15 @@
 // site, to the end, and returns what happened. Each job is built the way the host builds one (a fresh context over the saved memory), so
 // a question, a crash, a pause and a hop to a new job are the same steps they are in production. The model is the scenario's script, or
 // any `ModelPort` (the live mode gives a real one).
-import { ASK_TOPICS } from '../../approvals/approval-match';
-import { builtinPolicy } from '../../policies/builtin-policies';
-import { NO_MASKING, type BrowserExt, type BrowserMemory } from '../browser/context';
-import { ScreenshotWindow } from '../browser/context-settings';
-import { riskGate } from '../browser/gates/risk-gate';
-import { siteGate } from '../browser/gates/site-gate';
-import { browserInstructions } from '../browser/instructions';
-import { domainAllowed } from '../browser/policy';
-import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '../browser/round';
-import { browserTools } from '../browser/tools';
+import { ASK_TOPICS } from '../../src/approvals/approval-match';
+import { builtinPolicy } from '../../src/policies/builtin-policies';
+import { NO_MASKING, type BrowserExt, type BrowserMemory } from '@marinoscar/hexactra-browser-agent/context';
+import { ScreenshotWindow } from '@marinoscar/hexactra-browser-agent/context-settings';
+import { riskGate, siteGate } from '@marinoscar/hexactra-browser-agent/gates';
+import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
+import { domainAllowed } from '@marinoscar/hexactra-browser-agent/policy';
+import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
+import { browserTools } from '@marinoscar/hexactra-browser-agent/tools';
 import {
   BudgetTracker,
   type BudgetSpec,
@@ -31,9 +30,9 @@ import {
   type RunnerTool,
   type StoredStep,
   type Tier,
-} from '../harness';
-import { createRunContext, runLoop } from '../harness/engine';
-import { FakeApprovals, FakeRunStore, FakeTelemetry } from '../harness/testing';
+} from '@marinoscar/hexactra-agent';
+import { createRunContext, runLoop } from '@marinoscar/hexactra-agent/engine';
+import { FakeApprovals, FakeRunStore, FakeTelemetry } from '@marinoscar/hexactra-agent/testing';
 import { checkInvariants } from './invariants';
 import { OwnerQuestions, OwnerScript, type AskedQuestion } from './owner';
 import type { Scenario } from './scenario.schema';
