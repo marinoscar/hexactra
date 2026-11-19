@@ -4,8 +4,10 @@
 //   * `GET /api/connections/providers`, so the Connect dialog and the task UI never offer an unsupported choice;
 //   * the docs: the table in docs/connections.md is generated from this and a test fails when they differ
 //     (`UPDATE_CAPABILITY_MATRIX_DOC=1 npx jest capability-matrix` rewrites it; review the diff).
-// The Google column follows the decision record (docs/decisions/connections-auth.md): with the narrow `drive.file` permission
-// the app reaches only the files it created or the owner picked. PROVISIONAL like the record: nothing here was tried on a real account.
+// The Google column follows the decision record (docs/decisions/connections-auth.md) and the Google chapter of docs/connections.md:
+// with the narrow `drive.file` permission the app finds and opens only the files it created or the owner picked (search, metadata,
+// folders), while a document or spreadsheet given by id or link is read and changed through the Docs and Sheets permissions without
+// a pick. PROVISIONAL like the record: nothing here was tried on a real account.
 import { CAPABILITY_METHODS, type CapabilityService, type Effect } from './capabilities';
 import type { Capability } from './connections.constants';
 
@@ -34,6 +36,7 @@ const no = (note: string): MatrixCell => ({ support: 'unsupported', note });
 const row = (google: MatrixCell, work: MatrixCell, personal: MatrixCell = work): Record<MatrixColumn, MatrixCell> => ({ google, microsoft_work: work, microsoft_personal: personal });
 
 const PICKED = 'Only files the app created or you picked (the narrow Drive permission).';
+const PICKED_FOLDER = 'Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root.';
 const NOTIFY = 'Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed.';
 const WORKBOOK_PERSONAL = 'Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do.';
 
@@ -54,14 +57,14 @@ export const CAPABILITY_MATRIX: Record<MatrixMethod, Record<MatrixColumn, Matrix
   'documents.searchFiles': row(limited(PICKED), ok),
   'documents.getFile': row(limited(PICKED), ok),
   'documents.registerPickedFile': row(ok, ok),
-  'documents.readDocument': row(limited(PICKED), limited('Word (.docx) and plain-text files; a PDF or an older .doc is not read.')),
-  'documents.createDocument': row(ok, limited('Creates a plain Word (.docx) file of paragraphs.')),
-  'documents.appendToDocument': row(limited(PICKED), limited('Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict).')),
-  'documents.readSheet': row(limited(PICKED), ok, no(WORKBOOK_PERSONAL)),
-  'documents.appendRows': row(limited(PICKED), limited('Rows go into the first table of the sheet, or below the used range when there is none. A failure that leaves it unknown is reported, not retried.'), no(WORKBOOK_PERSONAL)),
-  'documents.createSpreadsheet': row(ok, limited('Creates an Excel (.xlsx) file with the header row as text.')),
-  'documents.uploadFile': row(ok, ok),
-  'documents.createFolder': row(ok, ok),
+  'documents.readDocument': row(ok, limited('Word (.docx) and plain-text files; a PDF or an older .doc is not read.')),
+  'documents.createDocument': row(limited(PICKED_FOLDER), limited('Creates a plain Word (.docx) file of paragraphs.')),
+  'documents.appendToDocument': row(ok, limited('Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict).')),
+  'documents.readSheet': row(ok, ok, no(WORKBOOK_PERSONAL)),
+  'documents.appendRows': row(ok, limited('Rows go into the first table of the sheet, or below the used range when there is none. A failure that leaves it unknown is reported, not retried.'), no(WORKBOOK_PERSONAL)),
+  'documents.createSpreadsheet': row(limited(PICKED_FOLDER), limited('Creates an Excel (.xlsx) file with the header row as text.')),
+  'documents.uploadFile': row(limited(PICKED_FOLDER), ok),
+  'documents.createFolder': row(limited(PICKED_FOLDER), ok),
 };
 
 export interface MatrixRow {

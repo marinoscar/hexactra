@@ -135,7 +135,7 @@ describe('uploads', () => {
     const { h, docs } = setup();
     h.fake.failAfter((r) => r.method === 'PUT', 504);
     const e = await fail(docs().uploadFile({ name: 'a.txt', contentType: 'text/plain', bytes: Buffer.from('x') }));
-    expect(e.details.reason).toBe('AMBIGUOUS');
+    expect(e.details.outcomeUnknown).toBe(true);
     expect(h.fake.calls((r) => r.method === 'PUT')).toHaveLength(1);
   });
 });

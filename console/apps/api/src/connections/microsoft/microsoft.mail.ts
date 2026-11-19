@@ -360,7 +360,7 @@ export class MicrosoftMail implements MailCapability {
       if (key) this.shared.dedupe.set(key, { state: 'sent', messageId: r.messageId });
       return r;
     } catch (e) {
-      const ambiguous = e instanceof CapabilityError && e.details.reason === 'AMBIGUOUS';
+      const ambiguous = e instanceof CapabilityError && e.details.outcomeUnknown === true;
       if (key && !ambiguous) this.shared.dedupe.delete(key);
       if (!ambiguous) await this.g.request(this.ctx, { op: 'mail.discard_draft', method: 'DELETE', path: `/me/messages/${seg(draftId)}`, accept: 'none', okStatuses: [404] }).catch(() => undefined);
       throw e;
@@ -375,7 +375,7 @@ export class MicrosoftMail implements MailCapability {
       await send();
       return { messageId: draftId };
     } catch (e) {
-      if (!(e instanceof CapabilityError && e.details.reason === 'AMBIGUOUS')) throw e;
+      if (!(e instanceof CapabilityError && e.details.outcomeUnknown === true)) throw e;
       const now = await this.g.request(this.ctx, { op: 'mail.check_draft', method: 'GET', path, query: { $select: 'id,isDraft' }, accept: 'json', okStatuses: [404], capability: 'mail_read' }).catch(() => null);
       if (!now) throw e;
       const still = now.status === 200 && (now.json as G | null)?.isDraft === true;
@@ -394,7 +394,7 @@ export class MicrosoftMail implements MailCapability {
       if (m.inReplyTo) await this.g.request(this.ctx, { op: 'mail.reply', method: 'POST', path: `/me/messages/${seg(m.inReplyTo)}/reply`, json: { message: { toRecipients: message.toRecipients, ccRecipients: message.ccRecipients, bccRecipients: message.bccRecipients, body: message.body, attachments: message.attachments } }, accept: 'none', headers: { 'client-request-id': randomUUID() }, capability: 'mail_send' });
       else await this.g.request(this.ctx, { op: 'mail.send_mail', method: 'POST', path: '/me/sendMail', json: { message, saveToSentItems: true }, accept: 'none', headers: { 'client-request-id': randomUUID() }, capability: 'mail_send' });
     } catch (e) {
-      if (key && e instanceof CapabilityError && e.details.reason === 'AMBIGUOUS') this.shared.dedupe.set(key, { state: 'ambiguous' });
+      if (key && e instanceof CapabilityError && e.details.outcomeUnknown === true) this.shared.dedupe.set(key, { state: 'ambiguous' });
       throw e;
     }
     const messageId = `sendmail:${randomUUID()}`;

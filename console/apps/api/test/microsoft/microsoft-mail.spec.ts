@@ -361,7 +361,8 @@ describe('a send retried after an ambiguous failure does not send twice', () => 
     h.fake.failAfter((r) => r.path.endsWith('/send'), 504);
     h.fake.drop((r) => r.method === 'GET' && r.path.startsWith('/me/messages/') && r.query.$select === 'id,isDraft', 3);
     const first = await fail(mail().send({ to, subject: 'Once', text: 't', idempotencyKey: key }));
-    expect(first.details.reason).toBe('AMBIGUOUS');
+    expect(first.details.outcomeUnknown).toBe(true);
+    expect(first.retryable).toBe(false);
     expect(a.sent).toHaveLength(1);
     const again = await mail().send({ to, subject: 'Once', text: 't', idempotencyKey: key });
     expect(again.messageId).toEqual(expect.any(String));
@@ -375,7 +376,8 @@ describe('a send retried after an ambiguous failure does not send twice', () => 
     h.fake.failAfter((r) => r.path === '/me/sendMail', 504);
     const first = await fail(mail().send({ to, subject: 'Once', text: 't', idempotencyKey: key }));
     expect(first.code).toBe('PROVIDER_ERROR');
-    expect(first.details.reason).toBe('AMBIGUOUS');
+    expect(first.details.outcomeUnknown).toBe(true);
+    expect(first.retryable).toBe(false);
     expect(a.sent).toHaveLength(1);
     const again = await fail(mail().send({ to, subject: 'Once', text: 't', idempotencyKey: key }));
     expect(again.code).toBe('CONFLICT');
@@ -508,7 +510,8 @@ describe('errors, throttling and abort', () => {
     const { h, mail } = setup();
     h.fake.fail((r) => r.method === 'POST' && r.path === '/me/messages', 503);
     const e = await fail(mail().createDraft({ to: [{ address: 'person-b@example.test' }], subject: 's', text: 't' }));
-    expect(e.details).toMatchObject({ status: 503, reason: 'AMBIGUOUS' });
+    expect(e.details).toMatchObject({ status: 503, outcomeUnknown: true });
+    expect(e.retryable).toBe(false);
     expect(h.fake.calls((r) => r.method === 'POST' && r.path === '/me/messages')).toHaveLength(1);
   });
 

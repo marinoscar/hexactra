@@ -240,7 +240,7 @@ export class MicrosoftDocuments implements DocumentsCapability {
     const ws = `${this.item(id)}/workbook/worksheets/${seg(sheetName)}`;
     const tables = (await this.g.json<G>(this.ctx, { op: 'sheet.tables', method: 'GET', path: `${ws}/tables`, query: { $select: 'id,name', $top: '50' }, capability: 'docs_write' })) ?? {};
     const table = ((Array.isArray(tables.value) ? tables.value : []) as G[])[0];
-    const ambiguous = (e: unknown): boolean => e instanceof CapabilityError && e.code === 'PROVIDER_ERROR' && (e.details.status === 0 || (e.details.status ?? 0) >= 500);
+    const ambiguous = (e: unknown): boolean => e instanceof CapabilityError && e.code === 'PROVIDER_ERROR' && (e.details.outcomeUnknown === true || e.details.status === 0 || (e.details.status ?? 0) >= 500);
 
     if (table) {
       const tableId = str(table.id);

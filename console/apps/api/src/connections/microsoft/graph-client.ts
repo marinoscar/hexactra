@@ -7,7 +7,7 @@
 //   * at most {@link GRAPH_CONCURRENCY} requests per connection at a time (Graph allows 4 per mailbox);
 //   * 429 is retried after `Retry-After` (never more than {@link MAX_TRIES} tries; a wait beyond {@link MAX_WAIT_MS} is returned to the caller
 //     as RATE_LIMITED with `retryAfterMs`); 502/503/504, a timeout and a dropped connection are retried only for a request that is safe
-//     to repeat, so a failed POST is never sent blindly twice (the error says `reason: 'AMBIGUOUS'` instead);
+//     to repeat, so a failed POST is never sent blindly twice (the error says `outcomeUnknown: true` instead, as the Google adapter's does);
 //   * a per-attempt timeout and the caller's AbortSignal (Stop, #582);
 //   * errors are mapped to `CapabilityError` with a closed code and the HTTP status; Graph's message text is NEVER copied or logged
 //     because it can carry a subject, an address or a file name (its `error.code` is a stable identifier and is kept);
@@ -305,8 +305,8 @@ export class GraphClient {
     if (status === 409 || status === 412 || code === 'ErrorIrresolvableConflict') return new CapabilityError('CONFLICT', { status, ...(code ? { reason: code } : {}) });
     if (status === 413) return new CapabilityError('TOO_LARGE', { reason: 'PROVIDER_LIMIT' });
     if (status === 507 || code === 'ErrorQuotaExceeded' || code === 'quotaLimitReached') return new CapabilityError('QUOTA_EXCEEDED', { status });
-    if (status === 0) return new CapabilityError('PROVIDER_ERROR', { status: 0, reason: ambiguous ? 'AMBIGUOUS' : 'UNREACHABLE' });
-    return new CapabilityError('PROVIDER_ERROR', { status, ...(ambiguous ? { reason: 'AMBIGUOUS' } : code ? { reason: code } : {}) });
+    if (status === 0) return new CapabilityError('PROVIDER_ERROR', { status: 0, ...(ambiguous ? { outcomeUnknown: true } : { reason: 'UNREACHABLE' }) });
+    return new CapabilityError('PROVIDER_ERROR', { status, ...(ambiguous ? { outcomeUnknown: true } : code ? { reason: code } : {}) });
   }
 }
 
