@@ -1,12 +1,10 @@
 //! Client for Hexactra control plane API
 
 import {
-  Goal,
   Session,
   Operation,
   BrowserAction,
   ActionResult,
-  CreateGoalRequest,
   CreateHandoffRequest,
   CreateHandoffResponse,
   HandoffView,
@@ -29,16 +27,6 @@ export class ControlPlaneClient {
 
   constructor(config: ControlPlaneClientConfig) {
     this.httpClient = new HttpClient(config);
-  }
-
-  /**
-   * Create a new goal (task) for a session
-   */
-  async createGoal(sessionId: string, actions: BrowserAction[]): Promise<Goal> {
-    const request: CreateGoalRequest = { sessionId, actions };
-    return this.httpClient
-      .post<CreateGoalRequest, Goal>(`/goals`, request)
-      .then((response) => response.body);
   }
 
   /**

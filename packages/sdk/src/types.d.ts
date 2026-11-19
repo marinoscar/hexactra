@@ -1,10 +1,3 @@
-export interface Goal {
-    id: string;
-    sessionId: string;
-    actions: BrowserAction[];
-    createdAt: string;
-    status: RunStatus;
-}
 export interface Session {
     id: string;
     profileId: string;
@@ -50,13 +43,6 @@ export declare enum OperationStatus {
 export interface BrowserAction {
     type: string;
     payload?: Record<string, unknown>;
-}
-export interface CreateGoalRequest {
-    sessionId: string;
-    actions: BrowserAction[];
-}
-export interface CreateGoalResponse {
-    goalId: string;
 }
 export interface ActionResult {
     success: boolean;

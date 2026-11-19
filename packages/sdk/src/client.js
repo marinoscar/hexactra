@@ -9,10 +9,6 @@ class ControlPlaneClient {
         this.baseUrl = baseUrl;
         this.httpClient = httpClient;
     }
-    async createGoal(sessionId, actions) {
-        const request = { sessionId, actions };
-        return this.httpClient.post(`${this.baseUrl}/goals`, request);
-    }
     async getSession(sessionId) {
         return this.httpClient.get(`${this.baseUrl}/sessions/${sessionId}`);
     }
