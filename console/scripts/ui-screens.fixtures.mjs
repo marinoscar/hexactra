@@ -27,6 +27,9 @@ export const IDS = {
   paramRun: '33333339-3333-4333-8333-333333333333',
   outputsTask: '11111111-1111-4111-8111-11111111111a',
   outputsRun: '3333333a-3333-4333-8333-333333333333',
+  // Connections in the console (E39.10, #607): a task with accounts and four deliveries, a run an email started, an approval card per kind.
+  carTask: '11111111-1111-4111-8111-11111111111b',
+  carRun: '3333333c-3333-4333-8333-333333333333',
   // The memory `GET /memories` lists as "My wife".
   memory: 'a1000000-0000-4000-8000-000000000001',
 };
@@ -434,7 +437,7 @@ const connectionsList = (_url, _body, referer) => {
   if (stateOf(referer) === 'empty') return [];
   return [
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000003', provider: 'microsoft', label: 'Outlook', accountEmail: 'person.m@example.test', accountName: 'Person M', capabilities: ['calendar_read', 'calendar_write'], granted: ['calendar_read', 'calendar_write'], status: 'needs_reconnect', statusReason: 'GRANT_REVOKED', lastUsedAt: iso(-9 * 86_400_000) },
-    { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000001', provider: 'google', label: 'Work', accountEmail: 'person.a@example.test', accountName: 'Person A', capabilities: ['mail_read', 'mail_send', 'calendar_read', 'docs_read'], granted: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], defaultFor: ['mail', 'calendar'], status: 'active', lastUsedAt: iso(-3_600_000) },
+    { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000001', provider: 'google', label: 'Work', accountEmail: 'person.a@example.test', accountName: 'Person A', capabilities: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], granted: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], defaultFor: ['mail', 'calendar'], status: 'active', lastUsedAt: iso(-3_600_000) },
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000002', provider: 'google', label: 'Personal', accountEmail: 'person.b@example.test', capabilities: ['mail_read'], granted: ['mail_read'], status: 'paused', lastUsedAt: null },
   ];
 };
@@ -667,5 +670,96 @@ RESPONSES[`GET /tasks/${IDS.outputsTask}/stats`] = RESPONSES[`GET /tasks/${IDS.t
 RESPONSES[`GET /tasks/${IDS.outputsTask}/outputs`] = outputsPage;
 RESPONSES[`GET /runs/${IDS.outputsRun}`] = outputsRun;
 
+
+// ---- Connections in the console (E39.10, #607): accounts on a task, its deliveries, a run an email started, approval cards for accounts ----
+
+const WORK = 'c0000000-0000-4000-8000-000000000001';
+const PERSONAL = 'c0000000-0000-4000-8000-000000000002';
+const view = (id, label, access, status = 'active') => ({ connectionId: id, access, label, provider: 'google', accountEmail: label === 'Work' ? 'person.a@example.test' : 'person.b@example.test', status });
+const carOutputs = [
+  { key: 'confirmation_number', label: 'Confirmation number', type: 'text', required: true },
+  { key: 'amount_paid', label: 'Amount paid', type: 'money', required: true },
+  { key: 'paid_on', label: 'Paid on', type: 'date', required: true },
+];
+const carTask = task(IDS.carTask, 'Pay the car loan', {
+  goal: 'Pay this month\'s car loan payment from the checking account, then read the confirmation number', hostId: null, hostFallback: true, allowedDomains: ['loans.example.test'], policyId: null,
+  parameters: [], outputs: carOutputs, connections: [view(WORK, 'Work', 'read_write'), view(PERSONAL, 'Personal', 'read')], needsBrowser: 'auto', createdAt: iso(-20 * 86_400_000), updatedAt: iso(-86_400_000),
+  summary: { ...taskSummary, schedules: [taskSchedule('33333333-3333-4333-8333-33333333333b', 'On day 1 of every month at 09:00')], mailTriggers: 1, deliveries: 4 },
+});
+const cfg = (kind) => ({
+  email: { via: 'console', to: ['person.a@example.test', 'person.f@example.test'], subject: '{{task}}: {{status}} on {{date}}', attach: { pdf: true, json: false, screenshots: 'none' }, includeOutputs: true, includeSensitive: false },
+  sheet_row: { connectionId: WORK, fileId: 'sheet-1', columns: [{ header: 'Run date', value: { kind: 'field', field: 'run_date' } }, { header: 'Confirmation number', value: { kind: 'output', key: 'confirmation_number' } }, { header: 'Amount paid', value: { kind: 'output', key: 'amount_paid' } }], createIfMissing: false, includeSensitive: false },
+  folder: { target: { connectionId: WORK, folderId: 'folder-1' }, files: { pdf: true, json: true, screenshots: 'final' }, nameTemplate: '{{task}} {{date}}' },
+  webhook: { url: 'https://hooks.example.test/loan', includeOutputs: true, includeReportLink: true, includeSensitive: false },
+})[kind];
+const delivery = (id, kind, position, extra = {}) => ({
+  id, taskId: IDS.carTask, kind, enabled: true, when: 'succeeded', position, config: cfg(kind), recipients: kind === 'email' ? [{ address: 'person.a@example.test', state: 'own' }, { address: 'person.f@example.test', state: 'confirmed' }] : [],
+  connection: kind === 'sheet_row' || kind === 'folder' ? { id: WORK, label: 'Work' } : null, disabledReason: null, webhookSecretConfigured: kind === 'webhook' ? true : null, createdAt: iso(-10 * 86_400_000), updatedAt: iso(-86_400_000), ...extra,
+});
+const carDeliveries = [delivery('d0000000-0000-4000-8000-000000000001', 'email', 0), delivery('d0000000-0000-4000-8000-000000000002', 'sheet_row', 1), delivery('d0000000-0000-4000-8000-000000000003', 'folder', 2), delivery('d0000000-0000-4000-8000-000000000004', 'webhook', 3, { enabled: false })];
+const carTrigger = { id: 'e0000000-0000-4000-8000-000000000001', taskId: IDS.carTask, connectionId: WORK, connectionLabel: 'Work', name: 'Loan statement', enabled: true, match: { from: ['billing@example.test'], subjectContains: 'statement' }, inputs: null, afterStart: 'none', pollSeconds: 300, maxRunsPerDay: 10, acceptUnverified: false, status: 'ok', statusReason: null, lastCheckedAt: iso(-120_000), lastMatchedAt: iso(-86_400_000), runsToday: 0, createdAt: iso(-10 * 86_400_000), updatedAt: iso(-86_400_000) };
+const carSteps = [
+  step(1, 'action', 'mail_search', 'found 1 message', { args: { connection: 'Work', from: 'billing@example.test' } }),
+  step(2, 'action', 'mail_read', 'read a message (1200 characters)', { args: { connection: 'Work', message_id: 'm1' } }),
+  step(3, 'action', 'navigate', 'Opened https://loans.example.test/pay'),
+  step(4, 'action', 'click', 'Clicked "Pay now"', { args: { selector: 'button.pay' } }),
+  step(5, 'action', 'mail_send', 'sent a message to 1 recipient', { args: { connection: 'Work', to: ['person.f@example.test'], subject: 'Loan paid', body_hash: 'ab12cd34' } }),
+  step(6, 'action', 'sheet_append_rows', 'added 1 row', { args: { connection: 'Work', file_id: 'sheet-1', rows: 1 } }),
+  step(7, 'action', 'calendar_create_event', 'failed: the connection needs reconnecting', { ok: false, args: { connection: 'Personal', title: 'Loan review', attendees: [], notify_attendees: false } }),
+];
+const carRun = run(IDS.carRun, 'succeeded', {
+  taskId: IDS.carTask, trigger: 'email', mailTriggerId: carTrigger.id, goal: carTask.goal, result: 'Paid the car loan: 412.50 USD. Confirmation C-8841.', finishedAt: iso(-60_000), stopReason: 'finished', steps: carSteps, stepCount: carSteps.length,
+  outputs: [
+    { key: 'confirmation_number', label: 'Confirmation number', type: 'text', required: true, sensitive: false, value: 'C-8841', ok: true, note: null },
+    { key: 'amount_paid', label: 'Amount paid', type: 'money', required: true, sensitive: false, value: { amount: 412.5, currency: 'USD' }, ok: true, note: null },
+    { key: 'paid_on', label: 'Paid on', type: 'date', required: true, sensitive: false, value: '2026-11-01', ok: true, note: null },
+  ],
+  outputsComplete: true,
+});
+const rd = (id, deliveryId, kind, status, extra = {}) => ({ id, runId: IDS.carRun, deliveryId, kind, status, attempts: 1, errorCode: null, errorText: null, detail: {}, sentAt: iso(-50_000), nextAttemptAt: null, createdAt: iso(-55_000), ...extra });
+const carRunDeliveries = [
+  rd('f0000000-0000-4000-8000-000000000001', carDeliveries[0].id, 'email', 'sent', { detail: { messages: 2 } }),
+  rd('f0000000-0000-4000-8000-000000000002', carDeliveries[1].id, 'sheet_row', 'failed', { errorCode: 'CONNECTION_NEEDS_RECONNECT', errorText: 'the connection needs reconnecting', sentAt: null }),
+  rd('f0000000-0000-4000-8000-000000000003', carDeliveries[2].id, 'folder', 'sent', { detail: { files: 3 } }),
+  rd('f0000000-0000-4000-8000-000000000004', carDeliveries[3].id, 'webhook', 'skipped', { errorText: 'switched off', sentAt: null }),
+  rd('f0000000-0000-4000-8000-000000000005', null, 'email', 'pending', { sentAt: null }),
+];
+const file = (id, name, kind, extra = {}) => ({ id, name, kind, mimeType: 'application/octet-stream', size: null, modifiedAt: iso(-86_400_000), webUrl: `https://docs.example.test/${id}`, parentId: null, ...extra });
+const carFiles = (url) => {
+  const type = url.searchParams.get('type');
+  const all = [file('sheet-1', 'Car loan payments', 'spreadsheet'), file('sheet-2', 'Household budget', 'spreadsheet'), file('folder-1', 'Loan receipts', 'folder'), file('folder-2', 'Statements', 'folder')];
+  return { items: type && type !== 'any' ? all.filter((f) => f.kind === type) : all, nextPageToken: null };
+};
+RESPONSES[`GET /tasks/${IDS.carTask}`] = carTask;
+RESPONSES[`GET /tasks/${IDS.carTask}/stats`] = RESPONSES[`GET /tasks/${IDS.task}/stats`];
+RESPONSES[`GET /tasks/${IDS.carTask}/outputs`] = outputsPage;
+RESPONSES[`GET /tasks/${IDS.carTask}/deliveries`] = carDeliveries;
+RESPONSES[`GET /tasks/${IDS.carTask}/mail-triggers`] = [carTrigger];
+RESPONSES[`GET /mail-triggers/${carTrigger.id}/events`] = [{ id: 'ev1', outcome: 'started', reason: null, runId: IDS.carRun, messageAt: iso(-90_000), createdAt: iso(-80_000) }];
+RESPONSES[`GET /runs/${IDS.carRun}`] = carRun;
+RESPONSES[`GET /runs/${IDS.carRun}/deliveries`] = carRunDeliveries;
+RESPONSES['GET /delivery-recipients'] = [{ address: 'person.f@example.test', confirmedAt: iso(-10 * 86_400_000), unsubscribedAt: null }];
+for (const id of [WORK, PERSONAL]) {
+  RESPONSES[`GET /connections/${id}/files`] = carFiles;
+  RESPONSES[`GET /connections/${id}/files/sheet-1`] = file('sheet-1', 'Car loan payments', 'spreadsheet');
+  RESPONSES[`GET /connections/${id}/files/folder-1`] = file('folder-1', 'Loan receipts', 'folder');
+  RESPONSES[`GET /connections/${id}`] = { ...connectionsList(null, null, '').find((c) => c.id === id), usedBy: [{ kind: 'task', id: IDS.carTask, name: 'Pay the car loan' }, { kind: 'delivery', id: carDeliveries[1].id, name: 'Pay the car loan: spreadsheet row delivery' }, { kind: 'trigger', id: carTrigger.id, name: 'Loan statement' }] };
+  RESPONSES[`GET /connections/${id}/activity`] = { items: [{ kind: 'tool', operation: 'mail_send', ok: true, at: iso(-70_000), runId: IDS.carRun }, { kind: 'delivery', operation: 'sheet_row', ok: false, at: iso(-50_000), runId: IDS.carRun }, { kind: 'tool', operation: 'mail_read', ok: true, at: iso(-86_000), runId: IDS.carRun }] };
+}
+approvalRules.push({ id: '5a000000-0000-4000-8000-000000000005', kind: 'connection', host: WORK, category: null, matchKey: 'mail_send', recipients: ['person.f@example.test'], summary: 'Send mail with Work', taskId: null, taskName: null, conversationId: null, maxAmount: null, expiresAt: null, enabled: true, createdFromQuestionId: null, useCount: 2, lastUsedAt: iso(-86_400_000), lastUsedRunId: IDS.carRun, createdAt: iso(-8 * 86_400_000), updatedAt: iso(-8 * 86_400_000) });
+
+const accountApproval = (n, tool, lines, extra = {}) => ({
+  ...confirmation, questionId: `5555555c-5555-4555-8555-55555555555${n}`, id: `5555555c-5555-4555-8555-55555555555${n}`, runId: IDS.carRun, goal: carTask.goal, askedBy: `run:${IDS.carRun}`, prompt: `Allow the agent to ${tool}?`, confirmLabel: 'Allow', denyLabel: 'Do not allow',
+  action: { connectionId: WORK, connectionLabel: 'Work', tool, lines, summary: `${tool} with Work`, ...(extra.body ? { body: extra.body } : {}) },
+  rememberable: extra.rememberable ?? null,
+});
+const mailApproval = accountApproval(1, 'mail_send', [{ label: 'From', value: 'person.a@example.test' }, { label: 'To', value: 'person.f@example.test' }, { label: 'Subject', value: 'Loan paid' }, { label: 'Message', value: 'Hello Person F, the loan payment went through today… (120 more characters: show all)' }], {
+  body: 'Hello Person F, the loan payment went through today.\nThe confirmation number is C-8841.\n\nPerson A',
+  rememberable: { kind: 'connection', host: WORK, category: null, matchKey: 'mail_send', summary: 'Send mail with Work', scopes: ['everywhere', 'this_task'], recipients: ['person.f@example.test'] },
+});
+const eventApproval = accountApproval(2, 'calendar_create_event', [{ label: 'Title', value: 'Loan review' }, { label: 'When', value: '2026-12-01T10:00:00Z to 2026-12-01T10:30:00Z' }, { label: 'Attendees', value: 'person.f@example.test (they will be emailed)' }]);
+const rowApproval = accountApproval(3, 'sheet_append_rows', [{ label: 'File', value: 'Car loan payments' }, { label: 'Cells', value: '2026-11-01 | C-8841 | 412.50' }]);
+RESPONSES['GET /inbox'] = [mailApproval, eventApproval, rowApproval, ...RESPONSES['GET /inbox']];
+
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, saveLoginQuestion: saveLogin.id };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id };

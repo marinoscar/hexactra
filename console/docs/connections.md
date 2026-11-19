@@ -229,7 +229,7 @@ With the narrow `drive.file` permission, Google lets the app see **only files it
 - `searchFiles`, `getFile`, putting a file into a folder and `registerPickedFile` work on those files only. A file you did not pick looks like "not found" to the app.
 - Reading and changing a **document or spreadsheet by its id or link** goes through the Docs and Sheets permissions, which accept any file the account can itself open: paste the link and it works, without a pick.
 - A folder the app did not create is not reachable until you pick it. The app creates and keeps one folder of its own for what it saves.
-- Picking a file needs Google's picker in the web app; that button is E39.10. Until then `registerPickedFile(id)` is what the server calls after a pick: it checks that the account can reach the file and returns its details. Nothing is stored on our side: Google remembers the pick, and `searchFiles` shows it.
+- Picking a file is **Choose from Google Drive** in the delivery editor's chooser (E39.10; [below](#choosing-files-the-picker-e3910)). `registerPickedFile(id)` is what the server calls after a pick: it checks that the account can reach the file and returns its details. Nothing is stored on our side: Google remembers the pick, and `searchFiles` shows it.
 
 ### What is not supported, and why
 
@@ -328,6 +328,27 @@ Everything above was tested against the in-memory capability double and, for the
 - **Microsoft (#602, E39.4): done.** The Microsoft adapter fills `senderAuth` on every `MailSummary` and `MailMessage` from `internetMessageHeaders` (requested with `$select`), passing the topmost `Authentication-Results` to `senderAuthFrom(value, fromAddress, { trusted })`. `trusted` accepts only Microsoft's own authserv-id (`*.protection.outlook.com`, `outlook.com`, `hotmail.com`, `live.com`, `office365.com`, `exchangelabs.com`); a header with another server's name, a look-alike name, or one the sender wrote below Microsoft's is ignored (`unknown`, or the fail above it). **Limit:** Exchange Online often writes its own header with no server name at all (`spf=pass ...; dkim=pass ...; dmarc=pass ...`); a header in that form is read as Microsoft's. That is safe because Microsoft stamps every message it receives and prepends its own, so a copy the sender wrote is always below it, and only the topmost counts. A message Microsoft did not stamp (no header) is `unknown`, so a trigger on a Microsoft account starts nothing for it unless the owner turns `acceptUnverified` on. Tests: `test/microsoft/microsoft-mail.spec.ts` (pass, fail, missing, spoofed From, forged header, foreign and look-alike server) and `test/mail-triggers.db.spec.ts` (a Microsoft message that passed starts one run).
 
 With the owner, on the deployed stack: a trigger on mail from the owner's own second address with a subject keyword; send a matching mail and a non-matching one; the task runs once within the poll interval; measure the lag; check the history list; check that a mail from a non-listed sender starts nothing.
+
+## Choosing files: the picker (E39.10)
+
+![An account's details on the Connections page: what uses it, recent activity and saved approvals](images/connections-details-desktop.png)
+
+The delivery editor's spreadsheet and folder choosers need to browse an account. The web app calls these routes (all the caller's own; another user's id is a 404; no MCP tool, no CLI):
+
+| Route | Permission | What it does |
+|---|---|---|
+| `GET /api/connections/{id}/files?type=&q=&folderId=&pageToken=` | `connections:read` | Spreadsheets, folders or documents by name and folder, 25 a page. With `drive.file`, only files the console created or the owner picked |
+| `GET /api/connections/{id}/files/{fileId}` | `connections:read` | One file with its `webUrl` (the run page's "Open the spreadsheet") |
+| `POST /api/connections/{id}/files/picked` | `connections:write` | After a pick or a pasted link: `registerPickedFile`; 409 `CONNECTION_PERMISSION_MISSING` for a file that was not picked, 404 `CONNECTION_FILE_NOT_FOUND` |
+| `POST /api/connections/{id}/folders` | `connections:write` | Creates a folder (`docs_write`) |
+| `POST /api/connections/{id}/picker` | `connections:write` | A short-lived access token, the project number and the picker key, for Google's picker |
+| `GET /api/connections/{id}/activity` | `connections:read` | The last 15 uses of the account: the agent's tool calls (run steps that name it) and the deliveries sent through it. The operation, the time, whether it worked and the run: **never a subject, an address, a body, a cell or a file name** |
+
+**The picker route is the one place a token leaves the server.** Google's picker runs in the browser and needs an OAuth token. The route answers only for a Google connection with the Documents switch on, with `Cache-Control: no-store`, writes a `connection.picker_opened` audit event that never carries the token, and the web app holds the token in memory for the one call. The token is the connection's access token (it lives under an hour), so it carries whatever the account was granted: an owner who does not want a browser to ever hold it uses the pasted-link route or Hexactra storage. The project number is the numeric prefix of the administrator's client id; the picker's browser API key is the optional system setting `connections.providers.google.pickerApiKey` (a public key restricted to the console's address in Google Cloud, set with `PATCH /api/system-settings`).
+
+**Loading Google's script.** `https://apis.google.com/js/api.js` is added to the page only when the owner presses **Choose from Google Drive** in a chooser dialog for a Google connection (never on another page; asserted in `apps/web/src/__tests__/Deliveries.test.tsx`). The content security policy is extended narrowly through the platform's include point `infra/nginx/app.d/csp/`: `frame-src https://docs.google.com` (the picker's dialog) and `style-src https://www.gstatic.com`. **The script host cannot be added that way:** the platform has no `script-src` include on purpose, and its policy is generated (`npm run platform:check` fails on an edit), so `script-src 'self'` still refuses `apis.google.com`. Until an upstream seam request adds one (a per-deployment `script-src` source, or a per-path policy for the task form), the picker reports "Google's picker could not be loaded" and the dialog offers the other ways in: search the account, **paste the spreadsheet's link** (a Docs/Sheets file the account can open needs no pick), have a spreadsheet created on the first send, create a folder, or use Hexactra storage. Not verified in a real browser with a real account: that is the owner's check.
+
+Suggested seam request (EnterpriseAppBase, `seam_request.yml`): "an `app.d/csp/script-src*.conf` include, or a per-path override, so an app can allow one named third-party script host (Google's file picker) on the pages that need it, with the same review rule as the other includes."
 
 ## For the next issues
 

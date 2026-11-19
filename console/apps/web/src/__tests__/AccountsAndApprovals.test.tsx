@@ -260,6 +260,23 @@ describe('the accounts section of the task form', () => {
 });
 
 describe('the deliveries section of the task form is hidden without runs:read and saved with the task', () => {
+  const SAVED = { id: 'd1', taskId: TASK_ID, kind: 'email', enabled: true, when: 'succeeded', position: 0, config: { via: 'console', to: ['person-a@example.test'], attach: { pdf: true, json: false, screenshots: 'none' }, includeOutputs: true, includeSensitive: false }, recipients: [], connection: null, disabledReason: null, webhookSecretConfigured: null, createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z' };
+
+  it('is hidden without runs:read, and read-only without runs:write', async () => {
+    mountForm(`/tasks/${TASK_ID}/edit`, ['tasks:read', 'tasks:write', 'agent_policies:read', 'fleet:read']);
+    await screen.findByRole('heading', { name: 'Outputs' });
+    expect(screen.queryByRole('button', { name: /Where the result goes/ })).toBeNull();
+  });
+
+  it('shows the saved deliveries read-only without runs:write', async () => {
+    mountForm(`/tasks/${TASK_ID}/edit`, ['tasks:read', 'tasks:write', 'runs:read', 'connections:read'], { [`GET /tasks/${TASK_ID}/deliveries`]: [SAVED], 'GET /delivery-recipients': [] });
+    expect(await screen.findByTestId('deliveries-summary')).toHaveTextContent('Email to 1 person with the PDF report, when it succeeds');
+    fireEvent.click(screen.getByRole('button', { name: /Where the result goes/ }));
+    expect(await screen.findByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Add a delivery' })).toBeNull();
+    expect(screen.getByText(/needs permission to run tasks/)).toBeInTheDocument();
+  });
+
   it('saves a new delivery after the task, with its position', async () => {
     const created = { id: 'd-new', taskId: NEW_ID, kind: 'webhook', enabled: true, when: 'succeeded', position: 0, config: { url: 'https://hooks.example.test/run', includeOutputs: true, includeReportLink: true, includeSensitive: false }, recipients: [], connection: null, disabledReason: null, webhookSecretConfigured: true, createdAt: '2026-11-19T00:00:00Z', updatedAt: '2026-11-19T00:00:00Z', signingSecret: 'whsec_example' };
     const { sent } = mountForm('/tasks/new', [...PERMS, 'runs:read'], { 'GET /delivery-recipients': [], [`POST /tasks/${NEW_ID}/deliveries`]: created });

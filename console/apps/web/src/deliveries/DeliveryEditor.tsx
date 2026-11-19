@@ -42,10 +42,10 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { Connection } from '../connections/api';
-import type { ConnectionFile } from '../connections/files';
+import { getFile, type ConnectionFile } from '../connections/files';
 import type { TaskOutput } from '../taskOutputs/model';
 import { effectiveKeys } from '../taskOutputs/model';
 import { FileChooserDialog } from './FileChooserDialog';
@@ -138,6 +138,23 @@ function PlaceholderMenu({ outputs, onPick, label }: { outputs: readonly TaskOut
       </Menu>
     </>
   );
+}
+
+
+/** A saved delivery names its file by id only: ask the account for the name once, so the editor can say which one is chosen. Silent on failure. */
+function useFileName(connectionId: string, fileId: string | undefined, known: string | undefined, onName: (name: string) => void) {
+  const { api } = usePlatformHost();
+  useEffect(() => {
+    if (!connectionId || !fileId || known) return;
+    let stale = false;
+    getFile(api, connectionId, fileId)
+      .then((f) => !stale && f.name && onName(f.name))
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, connectionId, fileId, known]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -300,6 +317,7 @@ function SheetBody({ config: c, set, problems, ctx, disabled, labels, setLabel }
   const accounts = ctx.connections.filter((x) => connectionFits(x, 'sheet_row') || x.id === c.connectionId);
   const account = ctx.connections.find((x) => x.id === c.connectionId) ?? null;
   const [choosing, setChoosing] = useState(false);
+  useFileName(c.connectionId, c.fileId, labels?.file, (file) => setLabel({ ...labels, file }));
   const [more, setMore] = useState(Boolean(c.sheet) || c.includeSensitive);
   const named = ctx.outputs.filter((o) => o.label.trim() !== '');
   const keys = effectiveKeys(named);
@@ -445,6 +463,7 @@ function FolderBody({ config: c, set, problems, ctx, disabled, labels, setLabel 
   const connectionId = inAccount ? (c.target as { connectionId: string }).connectionId : '';
   const account = ctx.connections.find((x) => x.id === connectionId) ?? null;
   const [choosing, setChoosing] = useState(false);
+  useFileName(connectionId, inAccount ? (c.target as { folderId: string }).folderId : undefined, labels?.folder, (folder) => setLabel({ ...labels, folder }));
   const sample = useMemo(() => {
     const outputs: Record<string, string> = {};
     const named = ctx.outputs.filter((o) => o.label.trim() !== '');

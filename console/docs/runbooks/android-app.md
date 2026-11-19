@@ -115,3 +115,15 @@ Signed release builds in CI are an owner step. See section 9 of the platform run
 | `The console's dependencies are not installed`, or Gradle's `platform-core not found` | `npm ci` was never run in `console/` of this clone | `cd console && npm ci`, then run the command again |
 | `EXDEV: cross-device link not permitted` during `android doctor --fix` | An older CLI staged the SDK download in `/tmp`, on another filesystem than the SDK | Update the CLI. It stages inside the SDK directory when the two differ, and says so |
 | `409 RELEASE_VERSION_EXISTS` | That `versionCode` is already published | `hexactra android version --bump patch`, then rebuild |
+
+## 7. Connections on a phone (E39.10)
+
+Checked by reading the app (`app/src/main/AndroidManifest.xml`) and the web code; **not run on a device or an emulator** (none in the build environment): the checks below are the owner's.
+
+What the code does:
+- **The consent return.** Connecting or adding a permission opens the provider's consent page (`accounts.google.com`, `login.microsoftonline.com`), which is outside the app's verified origin, so the Trusted Web Activity shows it in a Custom Tab. The provider redirects to `https://<console host>/api/connections/callback/<provider>`; the launcher activity has a verified (`autoVerify`) `https` filter for the console host, so that address opens the app, and the callback answers `302 /settings/connections?connect=...`, which the Connections page turns into its banner. The flow's HttpOnly binding cookie is set by `POST /api/connections/authorize` in the same Chrome cookie jar the Custom Tab uses. The same mechanism carries the OAuth consent of the hosted-clients feature (#516).
+- **The delivery editor's "Allow this account to ..."** goes through the same consent and returns to the task page it was started on (`returnTo`); a change not yet saved in the form is lost, and the dialog says so first.
+- **Google's file picker** draws its dialog in an iframe on the console's own page (no pop-up window, no new tab), so a Trusted Web Activity can show it. It needs the content security policy of `docs/connections.md` and the platform's `script-src` seam, so it is not expected to open until that lands; the paste-a-link route does not depend on it.
+- **File choosers and approval cards** are ordinary page content: no native file input, no new permission. Touch targets are 44 px below `sm`; dialogs are full screen on a phone.
+
+To check on a device (and record the result in the issue): connect a Google account from **Settings → Connections** and confirm the app, not the browser, is showing the page afterwards; start "Allow this account to send mail" from a delivery; open **Choose from Google Drive**; answer a connection approval card from the Inbox; confirm each dialog can be dismissed with the system Back gesture.

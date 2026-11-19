@@ -229,7 +229,7 @@ A run uses a saved secret only when **all** of its switches hold; otherwise the 
 
 ## Runs
 
-A run an email started (E39.8) has `trigger: email`, origin `system` and `mailTriggerId`; `GET /runs` filters by `trigger=email`, and a run's inputs show the source `email` for each value a message gave. A task's `summary.mailTriggers` is the number of email triggers switched on.
+A run an email started (E39.8) has `trigger: email`, origin `system` and `mailTriggerId`; `GET /runs` filters by `trigger=email`, and a run's inputs show the source `email` for each value a message gave. A task's `summary.mailTriggers` is the number of email triggers switched on, and `summary.deliveries` (E39.10) the number of deliveries switched on; `GET /runs/{id}` names the trigger that started a run in `mailTriggerId` (null otherwise; the run page links it).
 
 The list, its filters and cursor, the counts, deleting and retention are in [runs.md](runs.md). In short:
 

@@ -121,3 +121,29 @@ describe('Saved approvals for an account', () => {
     expect(screen.getByRole('heading', { name: 'shop.example.test' })).toBeInTheDocument();
   });
 });
+
+describe('Home needs you', () => {
+  it('says so when an account must be connected again, and is silent otherwise', async () => {
+    const { NeedsReconnectBlock } = await import('../connections/NeedsReconnectBlock');
+    const run = (list: Connection[], permissions = ['connections:read']) => {
+      const host = createTestPlatformHost({ permissions, responses: { 'GET /connections': list } });
+      return render(
+        <PlatformHostProvider host={host}>
+          <MemoryRouter>
+            <NeedsReconnectBlock />
+          </MemoryRouter>
+        </PlatformHostProvider>,
+      );
+    };
+    const first = run([WORK, { ...WORK, id: 'b', label: 'Old', status: 'needs_reconnect', statusReason: 'GRANT_REVOKED' }]);
+    const block = await screen.findByTestId('home-needs-reconnect');
+    expect(block).toHaveTextContent('Old needs to be connected again.');
+    expect(within(block).getByRole('link', { name: 'Reconnect' })).toHaveAttribute('href', '/settings/connections');
+    first.unmount();
+    const quiet = run([WORK]);
+    await waitFor(() => expect(quiet.container).toBeEmptyDOMElement());
+    quiet.unmount();
+    const none = run([{ ...WORK, status: 'needs_reconnect' }], []);
+    expect(none.container).toBeEmptyDOMElement();
+  });
+});
