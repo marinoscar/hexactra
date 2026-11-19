@@ -120,7 +120,7 @@ export const needsBody = (inputs: MailInputs | null | undefined): boolean => Obj
 const LINE_BREAKS = /[\u0000-\u001f\u007f\u0085\u2028\u2029]+/g;
 const oneLine = (s: string): string => s.replace(LINE_BREAKS, ' ').replace(/\s+/g, ' ').trim();
 
-/** The capture of a pattern in a text, as one clean line of at most {@link MAX_VALUE_LENGTH} characters; null when it does not match. */
+/** The capture of a pattern in a text, as one clean line; null when it does not match. Never cut: a value over the parameter's limit is refused by the parameter's rules and is then missing. */
 export function captureValue(c: { source: 'subject' | 'text'; pattern: string; ignoreCase?: boolean }, facts: MailFacts): string | null {
   if (capturePatternProblem(c.pattern)) return null;
   const source = c.source === 'subject' ? facts.subject : (facts.text ?? '');
@@ -132,7 +132,7 @@ export function captureValue(c: { source: 'subject' | 'text'; pattern: string; i
     return null;
   }
   const v = m?.[1] === undefined ? '' : oneLine(m[1]);
-  return v ? v.slice(0, MAX_VALUE_LENGTH) : null;
+  return v || null;
 }
 
 /** The values for the run: by parameter key, only the ones the message gave. They go in as presets: the parameter's rules are applied by the starter. */
@@ -146,7 +146,7 @@ export function mapInputs(inputs: MailInputs | null | undefined, facts: MailFact
       else if (src.header === 'from') v = facts.from;
       else v = facts.date ? new Date(facts.date).toISOString().slice(0, 10) : null;
     } else v = captureValue(src.capture, facts);
-    if (v) out[key] = v.slice(0, MAX_VALUE_LENGTH);
+    if (v) out[key] = v;
   }
   return out;
 }

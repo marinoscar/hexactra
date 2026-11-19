@@ -114,9 +114,9 @@ describe('input mapping', () => {
     expect(captureValue({ source: 'text', pattern: '(\\d+)' }, { ...facts, text: null })).toBeNull();
   });
 
-  it('turns a multi-line capture into one line and cuts it', () => {
+  it('turns a multi-line capture into one line, and never cuts a long one (the parameter\'s rules refuse it)', () => {
     expect(captureValue({ source: 'text', pattern: '(Total[\\s\\S]*?Friday)' }, { ...facts, text: 'Total\n due:\r\n 5 by Friday' })).toBe('Total due: 5 by Friday');
-    expect(captureValue({ source: 'text', pattern: '(a+)' }, { ...facts, text: 'a'.repeat(900) })!.length).toBe(500);
+    expect(captureValue({ source: 'text', pattern: '(a+)' }, { ...facts, text: 'a'.repeat(900) })!.length).toBe(900);
   });
 
   it('counts the groups of a pattern', () => {
