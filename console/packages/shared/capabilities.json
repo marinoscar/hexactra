@@ -1056,7 +1056,7 @@
         "GET /api/secrets/status"
       ],
       "cli": {
-        "none": "Deliberate for now: connecting a Vault is an owner act in the signed-in web app; the CLI gets a status command with the Secrets page (E37.4)"
+        "none": "Deliberate: connecting a Vault is an owner act in the signed-in web app; the Secrets page shows the status"
       },
       "mcp": {
         "none": "Deliberate: a hosted AI app must not read or change how the owner's secrets are connected (E37.2)"
@@ -1064,9 +1064,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; use the web app"
       },
-      "web": {
-        "none": "The Secrets page is E37.4; until it ships, connect from the API (the status route carries the redirect URI)"
-      }
+      "web": "/settings/secrets"
     },
     {
       "id": "secrets.vault.connect",
@@ -1086,9 +1084,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; use the web app"
       },
-      "web": {
-        "none": "The Secrets page is E37.4; until it ships, connect from the API (the status route carries the redirect URI)"
-      }
+      "web": "/settings/secrets"
     },
     {
       "id": "secrets.vault.default",
@@ -1107,9 +1103,42 @@
       "tui": {
         "none": "The TUI is for watching and answering; use the web app"
       },
-      "web": {
-        "none": "The Secrets administration card is E37.4; until it ships, use the API"
-      }
+      "web": "/admin/settings/secrets"
+    },
+    {
+      "id": "secrets.activity",
+      "description": "What the agent did with the owner's saved secrets: the newest 100 uses and refusals (when, run, site, which field kind, outcome) and the logins used so far. Never a value, a username or a code (E37.4)",
+      "rest": [
+        "GET /api/secrets/activity",
+        "GET /api/secrets/reach"
+      ],
+      "cli": {
+        "none": "Deliberate: the owner reads it on the Secrets page; no command yet"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must never read what the agent did with the owner's saved secrets, or which logins it reached (decision of E37.4, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/secrets"
+    },
+    {
+      "id": "secrets.admin",
+      "description": "Administrator: counts of connected owners, fields typed and refusals this week. No owner, site or login (E37.4)",
+      "rest": [
+        "GET /api/secrets/admin/summary"
+      ],
+      "cli": {
+        "none": "Deliberate: an administrator reads it in Administration"
+      },
+      "mcp": {
+        "none": "Deliberate: no MCP tool reads secrets usage"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/admin/settings/secrets"
     }
   ]
 }

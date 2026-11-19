@@ -98,6 +98,17 @@ export async function setDeploymentSwitch(api: PlatformApiClient, enabled: boole
   return { enabled: doc.secrets?.agentUse?.enabled === true, version: doc.version };
 }
 
+/** The owner's default for the switch of a new task or chat: the user setting `secrets.defaultUseSavedLogins`. */
+export async function getDefaultUseSavedLogins(api: PlatformApiClient): Promise<boolean> {
+  const doc = await api.get<{ secrets?: { defaultUseSavedLogins?: boolean } | null }>('/user-settings');
+  return doc.secrets?.defaultUseSavedLogins === true;
+}
+
+export async function setDefaultUseSavedLogins(api: PlatformApiClient, on: boolean): Promise<boolean> {
+  const doc = await api.patch<{ secrets?: { defaultUseSavedLogins?: boolean } | null }>('/user-settings', { secrets: { defaultUseSavedLogins: on } });
+  return doc.secrets?.defaultUseSavedLogins === true;
+}
+
 export async function getDeploymentSwitch(api: PlatformApiClient): Promise<{ enabled: boolean; version: number }> {
   const doc = await api.get<{ version: number; secrets?: { agentUse?: { enabled?: boolean } } }>('/system-settings');
   return { enabled: doc.secrets?.agentUse?.enabled === true, version: doc.version };

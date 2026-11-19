@@ -6015,6 +6015,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/secrets/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the agent did with your saved secrets
+         * @description Your newest 100 uses and refusals, from the fabric's own audit events: when, the run, the site, which field kind was typed (`username`, `password`, `one_time_code`) and the outcome (`typed`, or why nothing was typed: `origin_mismatch`, `not_found`, `disabled`, ...). Never a value, a username or a code. `providerActivityUrl` is your provider's own activity page.
+         *
+         *     **Requires:** authentication, plus permission `secrets:read`.
+         */
+        get: operations["secretsActivity_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/reach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The logins the agent has used so far
+         * @description Vault can look logins up only for a page (per origin), so there is no call that lists every login the agent may reach. This lists the logins used so far, by site, with the fields typed and when. Which logins are open to agents is decided in the provider.
+         *
+         *     **Requires:** authentication, plus permission `secrets:read`.
+         */
+        get: operations["secretsActivity_reach"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/admin/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Secrets: counts for the administrator
+         * @description The deployment switch, how many owners are connected (and how many need to reconnect), and how many fields were typed and how many actions were refused in the last 7 days. Counts only: no owner, no site, no login.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["secretsActivity_adminSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -14914,6 +14980,53 @@ export interface components {
             clientId?: string | null;
             /** @description The default client secret. Write-only; omit it to keep the stored one. */
             clientSecret?: string;
+        };
+        ActivityListResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** @description ISO 8601: when the fabric recorded it. */
+                at: string;
+                /**
+                 * @description `lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed.
+                 * @enum {string}
+                 */
+                event: "lookup" | "release";
+                /** @description The run or chat browser it happened in, when it is yours and still exists. */
+                runId: string | null;
+                /** @description The host of the page, never a path or query. */
+                site: string | null;
+                /** @description Which field was typed. Never its value. */
+                field: ("username" | "password" | "one_time_code") | null;
+                /** @description A closed code: `typed`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...). */
+                outcome: string;
+                /** @description Nothing was typed: the fabric or the provider refused or failed. */
+                refused: boolean;
+                /** @description For a lookup: how many logins matched the page. */
+                matches: number | null;
+            }[];
+            providerActivityUrl: string | null;
+        };
+        ReachResponseDto: {
+            /** @enum {string} */
+            listing: "per_origin";
+            items: {
+                site: string | null;
+                /** @description The fields typed so far for this login. */
+                fields: ("username" | "password" | "one_time_code")[];
+                uses: number;
+                lastUsedAt: string;
+                lastRunId: string | null;
+            }[];
+        };
+        AdminSummaryResponseDto: {
+            deploymentEnabled: boolean;
+            usersConnected: number;
+            usersNeedingReconnect: number;
+            /** @description Fields typed in the last 7 days, across every owner. */
+            usesThisWeek: number;
+            /** @description Lookups and releases that were refused or failed in the last 7 days. */
+            refusalsThisWeek: number;
         };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
@@ -37791,6 +37904,150 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["DefaultVaultClientViewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secretsActivity_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ActivityListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secretsActivity_reach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReachResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secretsActivity_adminSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminSummaryResponseDto"];
                     };
                 };
             };

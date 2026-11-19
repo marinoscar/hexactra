@@ -207,6 +207,22 @@ describe('the switches', () => {
     expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toContain('The agent may use your saved logins.');
   });
 
+  it('"Use saved logins in new tasks and chats" shows the owner’s default and patches it', async () => {
+    const host = renderPage({ 'GET /secrets/status': status(CONNECTED), 'GET /user-settings': { secrets: { defaultUseSavedLogins: false } }, 'PATCH /user-settings': (r: TestApiRequest) => r.body });
+    const sw = await screen.findByRole('switch', { name: 'Use saved logins in new tasks and chats' });
+    expect(sw).not.toBeChecked();
+    expect(sw).toHaveAccessibleDescription(/This sets where a new one starts/);
+    fireEvent.click(sw);
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Use saved logins in new tasks and chats' })).toBeChecked());
+    expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { secrets: { defaultUseSavedLogins: true } } });
+    expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toContain('New tasks and chats will start with saved logins on.');
+  });
+
+  it('starts on when the owner already chose it', async () => {
+    renderPage({ 'GET /secrets/status': status(CONNECTED), 'GET /user-settings': { secrets: { defaultUseSavedLogins: true } } });
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Use saved logins in new tasks and chats' })).toBeChecked());
+  });
+
   it('when the administrator has the deployment switch off: a notice, and the switch is disabled with the reason', async () => {
     renderPage({ 'GET /secrets/status': status(CONNECTED, { deployment: false, user: true }) });
     expect(await screen.findByTestId('deployment-off')).toHaveTextContent(/An administrator has turned off saved secrets/);

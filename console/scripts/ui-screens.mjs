@@ -131,6 +131,15 @@ export const ROUTES = [
       await page.waitForTimeout(400);
     },
   }],
+  // Secrets (#593): the page in each state of the provider card (the mock reads `?state=` from the page's own address), the administrator's page.
+  ['settings-secrets', '/settings/secrets'],
+  ['settings-secrets-not-connected', '/settings/secrets?state=not_connected'],
+  ['settings-secrets-reconnect', '/settings/secrets?state=needs_reconnect'],
+  ['settings-secrets-deployment-off', '/settings/secrets?state=deployment_off'],
+  ['settings-secrets-empty', '/settings/secrets?state=empty'],
+  ['admin-secrets', '/admin/settings/secrets'],
+  // The task form's "Saved logins" section while no provider is connected (the switch disabled with its reason; `task-new` shows it available).
+  ['task-new-saved-logins-unavailable', '/tasks/new?state=not_connected'],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],
@@ -351,7 +360,7 @@ async function main() {
     if (key in fixtures.RESPONSES) {
       // A function answers by the request (its query, its JSON body): a list that is an array or a page, a preview of what was sent.
       const answer = fixtures.RESPONSES[key];
-      return route.fulfill({ json: { data: typeof answer === 'function' ? answer(url, request.postDataJSON?.() ?? null) : answer } });
+      return route.fulfill({ json: { data: typeof answer === 'function' ? answer(url, request.postDataJSON?.() ?? null, request.headers().referer ?? '') : answer } });
     }
     unmocked.add(key);
     return route.fulfill({ status: 404, json: { message: 'Not mocked (ui-screens)' } });

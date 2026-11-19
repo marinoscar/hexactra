@@ -66,7 +66,7 @@ export function TaskCreatePage() {
     <PageContainer width="default">
       <PageHeader title="New task" subtitle={fromChat ? 'Drafted from your chat. Check it, change what you like, then save.' : undefined} back={fromChat ? { to: `/chat/${fromChat.chatId}`, label: 'Chat' } : { to: '/tasks', label: 'Tasks' }} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
-      {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} cancelTo={fromChat ? `/chat/${fromChat.chatId}` : '/tasks'} onCreated={fromChat ? (taskId) => api.post(`/chats/${fromChat.chatId}/task-link`, { taskId }).then(() => undefined) : undefined} />}
+      {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} useOwnerSavedLoginsDefault={!fromChat && !from} cancelTo={fromChat ? `/chat/${fromChat.chatId}` : '/tasks'} onCreated={fromChat ? (taskId) => api.post(`/chats/${fromChat.chatId}/task-link`, { taskId }).then(() => undefined) : undefined} />}
     </PageContainer>
   );
 }

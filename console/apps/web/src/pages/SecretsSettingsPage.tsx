@@ -9,10 +9,12 @@ import {
   connect,
   disconnect,
   getActivity,
+  getDefaultUseSavedLogins,
   getReach,
   getStatus,
   saveClient,
   setAgentUse,
+  setDefaultUseSavedLogins,
   type ActivityItem,
   type ActivityList,
   type Reach,
@@ -189,7 +191,7 @@ function ProviderCard({ vault, canWrite, busy, onConnect, onSaveAndConnect, onDi
 }
 
 const ACTIVITY_COLUMNS = (links: { runHref: (id: string) => string }): Column<ActivityItem>[] => [
-  { key: 'at', header: 'When', width: 150, render: (i) => <RelativeTime iso={i.at} /> },
+  { key: 'at', header: 'When', width: 170, render: (i) => <RelativeTime iso={i.at} /> },
   { key: 'site', header: 'Site', render: (i) => i.site ?? 'Unknown site' },
   { key: 'what', header: 'What', hideBelow: 'lg', render: (i) => whatWords(i) },
   {
@@ -205,7 +207,7 @@ const ACTIVITY_COLUMNS = (links: { runHref: (id: string) => string }): Column<Ac
         'n/a'
       ),
   },
-  { key: 'outcome', header: 'Outcome', render: (i) => <OutcomeChip item={i} /> },
+  { key: 'outcome', header: 'Outcome', width: 270, render: (i) => <OutcomeChip item={i} /> },
 ];
 
 function OutcomeChip({ item }: { item: ActivityItem }) {
@@ -311,6 +313,7 @@ export function SecretsSettingsPage() {
   const [status, setStatus] = useState<SecretsStatus | null>(null);
   const [activity, setActivity] = useState<ActivityList | null>(null);
   const [reach, setReach] = useState<Reach | null>(null);
+  const [defaultOn, setDefaultOn] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ severity: 'success' | 'info' | 'warning' | 'error'; text: string } | null>(null);
   const action = useApiAction('Could not change this');
@@ -322,6 +325,7 @@ export function SecretsSettingsPage() {
       // The lists are secondary: a failure of one does not hide the provider card.
       getActivity(api).then(setActivity, () => setActivity({ items: [], providerActivityUrl: null }));
       getReach(api).then(setReach, () => setReach({ listing: 'per_origin', items: [] }));
+      getDefaultUseSavedLogins(api).then(setDefaultOn, () => setDefaultOn(false));
     } catch (e) {
       setLoadError(e instanceof Error && e.message ? e.message : 'Could not load your secrets settings');
     }
@@ -375,6 +379,13 @@ export function SecretsSettingsPage() {
     setMessage({ severity: 'info', text: saved ? 'The agent may use your saved logins.' : 'The agent will not use your saved logins.' });
   };
 
+  const toggleDefault = async (on: boolean) => {
+    const saved = await action.run('default', () => setDefaultUseSavedLogins(api, on));
+    if (saved === undefined) return;
+    setDefaultOn(saved);
+    setMessage({ severity: 'info', text: saved ? 'New tasks and chats will start with saved logins on.' : 'New tasks and chats will start with saved logins off.' });
+  };
+
   const toggleWrite = async (on: boolean) => {
     if (!on) {
       const ok = await confirm({ title: 'Stop letting the agent save and change logins?', body: 'You will go to Vault to approve a connection without that permission.', confirmLabel: 'Continue' });
@@ -388,7 +399,7 @@ export function SecretsSettingsPage() {
   const manageUrl = vault?.status === 'connected' && vault.baseUrl ? vault.baseUrl : null;
 
   return (
-    <PageContainer width="narrow">
+    <PageContainer>
       <PageHeader title="Secrets" subtitle="Let the agent sign in with the logins in your own provider, without it ever seeing them." back={{ to: '/settings', label: 'Settings' }} />
       <ErrorBanner error={loadError ?? action.error} onRetry={loadError ? () => void load() : undefined} onClose={loadError ? undefined : action.clearError} />
       {/* One polite live region: every outcome of a switch, connect or disconnect is announced here. */}
@@ -426,6 +437,14 @@ export function SecretsSettingsPage() {
                 disabled={!canWrite || deploymentOff}
                 busy={action.busy === 'use'}
                 onChange={(on) => void toggleUse(on)}
+              />
+              <SwitchRow
+                label="Use saved logins in new tasks and chats"
+                help="Each task and chat has its own switch, “Use my saved logins”. This sets where a new one starts and changes nothing that already exists. Off by default."
+                checked={defaultOn}
+                disabled={!canWrite}
+                busy={action.busy === 'default'}
+                onChange={(on) => void toggleDefault(on)}
               />
               <SwitchRow
                 label="Let the agent save and change logins"

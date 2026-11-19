@@ -29,6 +29,8 @@ export const DOMAIN_RE = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9](
 /** A new schedule of this form: Monday to Friday at 09:00. */
 export const NEW_SCHEDULE_CRON = '0 9 * * 1-5';
 
+export type UnattendedPayments = 'ask' | 'allow';
+
 export interface TaskFormValues {
   name: string;
   goal: string;
@@ -39,6 +41,10 @@ export interface TaskFormValues {
   policyId: string | null;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  /** Let the agent sign in from the owner's saved logins (E37.3, #593). */
+  useSavedLogins: boolean;
+  /** What an unattended run that used a saved login does at a payment: `ask` (the default) or `allow` ("Go ahead"). */
+  unattendedPayments: UnattendedPayments;
   /**
    * The definitions of the goal's `{{Name}}` parameters (#556). It may hold
    * definitions whose placeholder left the goal (so an undo restores them);
@@ -60,7 +66,7 @@ export interface TaskWithSchedules extends Task {
 }
 
 export function emptyValues(): TaskFormValues {
-  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, parameters: [], schedules: [] };
+  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, unattendedPayments: 'ask', parameters: [], schedules: [] };
 }
 
 /** The form values of a saved task. */
@@ -74,6 +80,8 @@ export function valuesFromTask(task: TaskWithSchedules): TaskFormValues {
     policyId: task.policyId ?? null,
     allowedDomains: [...task.allowedDomains],
     confirmRiskyActions: task.confirmRiskyActions,
+    useSavedLogins: task.useSavedLogins === true,
+    unattendedPayments: task.unattendedPayments === 'allow' ? 'allow' : 'ask',
     parameters: (task.parameters ?? []).map((p) => ({ ...p })),
     schedules: (task.summary?.schedules ?? []).map(draftFromSchedule),
   };
@@ -165,6 +173,8 @@ export interface CreateTaskBody {
   hostFallback: boolean;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  useSavedLogins: boolean;
+  unattendedPayments: UnattendedPayments;
   /** Present only when the viewer may pick a policy (`agent_policies:read`) and the policies loaded. */
   policyId?: string | null;
   /** The goal's parameters (#556): present only when the goal has a placeholder. */
@@ -187,6 +197,8 @@ function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | '
     hostFallback: values.hostFallback,
     allowedDomains: [...values.allowedDomains],
     confirmRiskyActions: values.confirmRiskyActions,
+    useSavedLogins: values.useSavedLogins,
+    unattendedPayments: values.unattendedPayments,
     parameters: savedParameters(values),
   };
 }
@@ -240,7 +252,7 @@ export interface MappedError {
   banner: string | null;
 }
 
-const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'parameters'];
+const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'unattendedPayments', 'parameters'];
 
 /** `allowedDomains.2` (zod) and `schedules[1].cron` (the schedule checks) in one spelling: `a[2]`, `schedules[1].cron`. */
 export function normalizePath(path: unknown): string {
