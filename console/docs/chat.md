@@ -72,6 +72,7 @@ The Inbox still lists a chat run's request, with **Answer in chat**. Scheduled, 
 - The assistant's input is built from chat messages only, never from a question or its answer. It has no tool that takes a secret and is told never to ask for one.
 - While a run waits for a secret, the browser's picture is hidden in the card and in the pane, and none is fetched.
 - After submit the card collapses to "Provided"; the value is not rendered again.
+- **Saved secrets** (epic E37, [secrets.md](secrets.md), threat model [security-secrets.md](security-secrets.md)): a chat's browser runs can sign in from a saved login, fill saved identity details and pay with a saved card from the owner's provider, each behind its own chat switch in **Chat settings** (all off by default) and the deployment's and the owner's switches. The assistant that talks to you has **no tool that reads or takes a secret**: it can only start a run, and a run's model sees item names and field labels, never a value. A value is never in a message, a card, the thread or a stream event; the run card says what was used ("Signed in with: Shop login", "Filled from your saved details: Date of birth", "Paid with Visa ending 4242"). **When the provider cannot answer, the agent asks you in the thread** with the sign-in card and carries on after your answer; a run does not fail because a vault is down. A look-alike address stops the attempt and shows a warning card naming both sites.
 
 ## Limits
 
