@@ -65,7 +65,8 @@ describe('Deliveries on the run page', () => {
     ]);
     const section = await screen.findByRole('region', { name: 'Deliveries' });
     const items = within(section).getAllByTestId('run-delivery');
-    expect(items.map((i) => i.textContent)).toEqual(['EmailSent1 sent', 'Spreadsheet rowSentRow added', 'Files in a folderSent2 files saved', 'WebhookSkippedEvery recipient stopped these emails']);
+    // Each line: where it went, its status, what it did, and when (the time reads relative to now).
+    expect(items.map((i) => i.textContent?.replace(/(yesterday|today|just now|\d+ \w+ ago|[A-Z][a-z]{2} \d+)[^]*$/, '').trim())).toEqual(['EmailSent1 sent', 'Spreadsheet rowSentRow added', 'Files in a folderSent2 files saved', 'WebhookSkippedEvery recipient stopped these emails']);
     expect(within(section).queryByRole('alert')).toBeNull();
     expect(within(section).queryByRole('button', { name: 'Retry' })).toBeNull();
   });
