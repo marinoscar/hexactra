@@ -34,6 +34,18 @@ export interface McpToolDescriptor {
   hash: string;
 }
 
+// Postgres refuses a NUL in text and in JSONB: a server that sends one must not be able to stop its tools being stored.
+const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+const clean = (v: string): string => v.replace(CONTROL, '');
+/** `value` with every string (and key) free of control characters: what is kept of a server's schema. */
+function cleanDeep(value: unknown, depth = 0): unknown {
+  if (depth > 40) return null;
+  if (typeof value === 'string') return clean(value);
+  if (Array.isArray(value)) return value.slice(0, 1_000).map((x) => cleanDeep(x, depth + 1));
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 1_000).map(([k, x]) => [clean(k), cleanDeep(x, depth + 1)]));
+  return value;
+}
+
 const canon = (v: unknown): unknown => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, x]) => [k, canon(x)])) : v);
 
 /** The hash of everything about a tool that decides what it means: name, title, description, input schema and the four hints. */
@@ -46,6 +58,7 @@ export function toDescriptor(raw: unknown): McpToolDescriptor | null {
   const parsed = rawToolSchema.safeParse(raw);
   if (!parsed.success) return null;
   const t = parsed.data;
+  if (clean(t.name) !== t.name) return null;
   if (t.inputSchema.type !== undefined && t.inputSchema.type !== 'object') return null;
   const a = t.annotations ?? {};
   const annotations: McpToolDescriptor['annotations'] = {
@@ -54,7 +67,13 @@ export function toDescriptor(raw: unknown): McpToolDescriptor | null {
     ...(typeof a.idempotentHint === 'boolean' ? { idempotentHint: a.idempotentHint } : {}),
     ...(typeof a.openWorldHint === 'boolean' ? { openWorldHint: a.openWorldHint } : {}),
   };
-  const base = { name: t.name, title: (t.title ?? a.title ?? null)?.slice(0, 200) || null, description: (t.description ?? '').slice(0, MCP_STORED_DESCRIPTION_CHARS), inputSchema: { ...t.inputSchema, type: 'object' }, annotations };
+  const base = {
+    name: t.name,
+    title: clean((t.title ?? a.title ?? '').slice(0, 200)) || null,
+    description: clean((t.description ?? '').slice(0, MCP_STORED_DESCRIPTION_CHARS)),
+    inputSchema: { ...(cleanDeep(t.inputSchema) as Record<string, unknown>), type: 'object' },
+    annotations,
+  };
   return { ...base, hash: toolHash(base) };
 }
 

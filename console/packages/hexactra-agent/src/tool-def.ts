@@ -37,6 +37,11 @@ export interface RunnerTool<C extends AnyContext = AnyContext, P extends z.ZodTy
   description: string;
   parameters: P;
   /**
+   * `false` offers the schema to the provider without strict function calling: a tool whose schema is a third party's (an MCP server's)
+   * has optional fields and open objects that strict mode refuses. Absent: strict, as every built-in tool is.
+   */
+  strict?: boolean;
+  /**
    * The parameters this run's model is given, when they depend on the run (the `finish` tool takes the task's outputs). Must be a pure
    * function of the run's own facts, so the offered schema is identical in every round. Without it `parameters` is offered.
    */

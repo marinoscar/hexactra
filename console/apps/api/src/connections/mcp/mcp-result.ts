@@ -1,8 +1,8 @@
 // What a tool's result becomes before a model reads it (E39.9, #606): text and structured content only, size-capped and marked truncated.
 // Images, audio and binary resources are dropped with a note; resource links are NOT followed (a link is a request to fetch something
 // the owner did not ask for). Console tokens and the owner's other connections' tokens are redacted on the way in as they are on the way out.
-import { redactTokens } from '../../mcp/mcp.redact';
 import type { McpCallResult } from './mcp-client';
+import { redactSecrets } from './mcp-redact';
 import { sanitizeServerMessage } from './mcp-text';
 
 export interface NormalizedResult {
@@ -43,7 +43,7 @@ export function normalizeResult(r: McpCallResult, maxChars: number, secrets: rea
       text = '';
     }
   }
-  text = redactTokens(text, secrets);
+  text = redactSecrets(text, secrets);
   const truncated = text.length > maxChars;
   if (truncated) text = text.slice(0, maxChars);
   const parts = [

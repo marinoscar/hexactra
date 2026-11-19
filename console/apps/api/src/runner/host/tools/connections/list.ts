@@ -49,7 +49,7 @@ export const connectionsList = defineRunnerTool({
         account: row?.accountEmail ?? null,
         access: c.access === 'read_write' ? 'read and write' : 'read only',
         status: row ? (row.status === 'active' ? 'ready' : row.status === 'paused' ? 'paused by the owner' : 'must be connected again by the owner') : 'removed',
-        can: row?.status === 'active' ? abilities(caps, c.access === 'read_write') : [],
+        can: row?.status === 'active' ? (c.provider === 'mcp' ? [c.access === 'read_write' ? 'use the tools of this server the owner enabled' : 'use the read tools of this server the owner enabled'] : abilities(caps, c.access === 'read_write')) : [],
         defaultFor: row?.defaultFor ?? [],
       };
     });

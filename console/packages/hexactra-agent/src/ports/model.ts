@@ -5,6 +5,8 @@ export interface ModelTool {
   name: string;
   description: string;
   parameters: z.ZodType;
+  /** `false`: the provider is not asked for strict function calling (see `RunnerTool.strict`). Absent: strict. */
+  strict?: boolean;
   execute(args: never): Promise<string>;
 }
 

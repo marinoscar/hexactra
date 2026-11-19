@@ -28,7 +28,7 @@ export async function runConnections(
       ? []
       : await d.prisma.conversationConnection.findMany({ where: { conversationId: run.conversationId, conversation: { userId: run.userId } }, include, orderBy: [{ connection: { label: 'asc' } }, { id: 'asc' }] });
   return rows
-    .filter((r) => r.connection.userId === run.userId && r.connection.provider !== 'mcp')
+    .filter((r) => r.connection.userId === run.userId)
     .map((r) => ({
       connectionId: r.connectionId,
       access: isConnectionAccess(r.access) ? r.access : 'read',

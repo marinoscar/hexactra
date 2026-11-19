@@ -17,7 +17,7 @@ export class AiModelPort implements ModelPort {
 
   async runTools(req: ModelRequest): Promise<ModelResult> {
     const provider = this.ai.forUser(this.userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(this.orgId ? { orgId: this.orgId } : {}) });
-    const tools = req.tools.map((t) => defineTool({ name: t.name, description: t.description, parameters: t.parameters, execute: (args: never) => t.execute(args) }));
+    const tools = req.tools.map((t) => defineTool({ name: t.name, description: t.description, parameters: t.parameters, ...(t.strict === false ? { strict: false } : {}), execute: (args: never) => t.execute(args) }));
     try {
       const result = await provider.runTools(
         {

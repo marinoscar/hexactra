@@ -14,7 +14,7 @@ export function sanitizeText(raw: unknown, max: number): string {
   let t = raw.normalize('NFKC');
   t = t.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<\/?[A-Za-z!][^>]*>/g, ' ');
   t = t.replace(/```[\s\S]*?```/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
-  t = t.replace(/[*_`#>~|]+/g, ' ');
+  t = t.replace(/[*`~|]+/g, ' ');
   t = t.replace(INVISIBLE, ' ').replace(/\s+/g, ' ').trim();
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
 }
