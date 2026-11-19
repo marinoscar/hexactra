@@ -108,6 +108,16 @@ When the agent asks you to confirm an irreversible step (a payment, an order, a 
 - **API.** `GET /api/runs/{id}` carries `confirmedActions` (the list); a list row carries the count. The run page marks the step "Confirmed by you".
 - **Keep or share it.** The result card has **Export** beside **Open run**: the run's masked JSON trace or its PDF report ([docs/runs.md](runs.md#exporting-a-run)). Turn screenshots off before sharing it outside.
 
+## Stop and Pause in a chat (E38.1, E38.2)
+
+The browser card and the full-size browser view show **Pause** beside **Stop** while the run works; the same two work in words, through the orchestrator's `stop_run`, `pause_run` and `resume_run` tools ("stop", "hold on", "ok, continue"). They are the run's own routes (`POST /api/runs/{id}/cancel`, `/pause`, `/resume`), so a chat has no special case: what happens is in [runs.md](runs.md#stop-e381) and [runs.md](runs.md#pause-and-resume-e382).
+
+- **Stop** ends the run: the agent does not carry out an action it had chosen but not started, a model call in flight is aborted, and the run ends `cancelled` within about two seconds ("Stopping…" shows at once and the button cannot be pressed twice). The thread gets one result message ("Stopped by the owner. The last completed step was: …"); an action already sent to the browser is finished by the browser and its step says its effect is not known, so check the page before asking for the same thing again.
+- **Pause** holds the run: it finishes the step it is on, then nothing happens (no actions, no model calls, no budget time) and the browser stays where it is, so you can look at it or take over. The card shows "Paused. Nothing happens until you resume." with **Resume** and **Stop**; the thread says "Pausing the run. It stops after the step it is on; say "continue" when you want it to go on." **Resume** (or "continue") starts a job that looks at the page again before it acts and tells the agent how long it was paused.
+- **A paused run is live.** No second run starts in the chat while one is paused, and guidance you type while it is paused waits and is read at the first chunk after resume. It never resumes by itself: one "Still paused" notification after an hour, and a cancel after 72 hours.
+- **A run waiting for you** pauses once you answer its question, before it acts on the answer; **Stop** on it withdraws the question in the same request.
+- **Interrupted is not paused.** If the API restarts during a run, the run carries on by itself and its log says it was interrupted ([runs.md, Crash safety](runs.md#crash-safety-e383)); you do not need to press Resume.
+
 ## Steering and follow-ups
 
 - **While a run is live**, what you type is passed to the working agent (`guide_run` → `run_guidance`). The runner reads pending lines between chunks, each once. Your message shows **Queued for the agent**, then **Seen by the agent**, or **Not seen: the job had ended**. It can take a few actions to land, because a chunk is not interrupted.

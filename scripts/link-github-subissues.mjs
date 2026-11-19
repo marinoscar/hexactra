@@ -42,6 +42,11 @@ const epicChildren = new Map([
   // and the follow-ups filed by the close-out: #624 acceptance run, #625 hardening, #626 migration, #627 built-in identity,
   // #628 other password managers, #629 rotation, #630 contract package and conformance kit.
   [579, [590, 591, 592, 593, 594, 595, 596, 597, 621, 624, 625, 626, 627, 628, 629, 630]],
+  // E38 a harness you can stop, pause and trust. Sequence order (E38.1 to E38.8), then #614 (E38.9, the agent packages),
+  // the fabric idempotency key #633, the follow-up #643 (E38.10, packages) and those filed by the close-out: #650 the
+  // acceptance run on the deployed stack, #651 nightly live replay, #652 the flaky VPS stack job, #653 tidy after the
+  // split, #654 further console packages.
+  [580, [582, 583, 584, 585, 586, 587, 588, 589, 614, 633, 643, 650, 651, 652, 653, 654]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
