@@ -283,6 +283,8 @@ export class RunDeleteService {
         await tx.approvalRuleUse.updateMany({ where: { runId: { in: goneIds }, rule: { userId } }, data: { runId: null } });
         // What the agent did with saved secrets (E37.4) outlives the run: the row forgets which run it was.
         await tx.secretsActivity.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
+        // What a mail trigger did with a message (E39.8) outlives the run it started: the row forgets which run it was.
+        await tx.mailTriggerEvent.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
       }
       return {
         ids: goneIds,

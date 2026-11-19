@@ -30,7 +30,7 @@ export const taskSummarySchema = z
     scheduleState: z.enum(['none', 'active', 'paused', 'partial']).describe('`none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.'),
     nextRunAt: iso.nullable().describe('The earliest next firing among the enabled schedules'),
     lastRun: z
-      .object({ id: z.uuid(), status: runStatus, trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat']), createdAt: iso, finishedAt: iso.nullable() })
+      .object({ id: z.uuid(), status: runStatus, trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email']), createdAt: iso, finishedAt: iso.nullable() })
       .nullable()
       .describe('The newest run of the task'),
     liveRunId: z.uuid().nullable().describe('The newest run that is queued, running or waiting for a person'),
@@ -47,6 +47,7 @@ export const taskSummarySchema = z
       })
       .nullable()
       .describe("The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."),
+    mailTriggers: z.number().int().describe('Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`.'),
   })
   .describe('Schedule and run facts of the task, present with `include=summary`');
 

@@ -27,7 +27,7 @@ export type StopFilter = (typeof STOP_FILTERS)[number];
 
 export const STOP_FILTER_LABEL: Record<StopFilter, string> = { budget: 'Budget', stalled: 'Stalled', error: 'Error', no_model: 'No model' };
 
-export const TRIGGER_LABEL: Record<RunTrigger, string> = { manual: 'Manual', schedule: 'Schedule', api: 'API', mcp: 'MCP', external: 'External agent', chat: 'Chat' };
+export const TRIGGER_LABEL: Record<RunTrigger, string> = { manual: 'Manual', schedule: 'Schedule', api: 'API', mcp: 'MCP', external: 'External agent', chat: 'Chat', email: 'Email' };
 
 /** The date presets: a number of days back from today (0: today). */
 export const DATE_PRESETS = [

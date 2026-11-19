@@ -5,7 +5,7 @@ export interface RunInput {
   key: string;
   label: string;
   value: string;
-  source: 'provided' | 'default' | 'memory' | 'asked' | 'schedule' | 'saved_details';
+  source: 'provided' | 'default' | 'memory' | 'asked' | 'schedule' | 'saved_details' | 'email';
 }
 
 /** Where a value came from, in words. */
@@ -16,6 +16,7 @@ export const SOURCE_TEXT: Record<RunInput['source'], string> = {
   memory: 'from a memory',
   schedule: 'schedule',
   saved_details: 'your saved details',
+  email: 'the email that started the run',
 };
 
 /**

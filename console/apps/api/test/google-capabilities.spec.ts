@@ -131,6 +131,32 @@ describe('Gmail', () => {
     expect(w.fake.requestsTo('GET gmail.googleapis.com/gmail/v1/users/me/messages/[^/]+$').at(-1)!.query.format).toEqual(['full']);
   });
 
+  it('reports the receiving server\'s sender check: pass, fail, none, a spoofed From, and a forged header below Gmail\'s own (E39.8)', async () => {
+    const w = world();
+    const c = w.connect();
+    const GMAIL = 'mx.google.com;';
+    const pass = c.account.addMessage({ from: 'Billing <billing@example.test>', authenticationResults: `${GMAIL} dkim=pass header.i=@example.test header.s=s1; spf=pass smtp.mailfrom=billing@example.test; dmarc=pass (p=NONE) header.from=example.test` });
+    const fail = c.account.addMessage({ from: 'Billing <billing@example.test>', authenticationResults: `${GMAIL} spf=fail smtp.mailfrom=billing@example.test; dkim=none; dmarc=fail header.from=example.test` });
+    const none = c.account.addMessage({ from: 'Billing <billing@example.test>' });
+    // The From says billing@example.test, but the signature and the envelope are the attacker's own domain.
+    const spoof = c.account.addMessage({ from: 'Billing <billing@example.test>', authenticationResults: `${GMAIL} dkim=pass header.d=evil.test; spf=pass smtp.mailfrom=x@evil.test; dmarc=none` });
+    // The sender wrote a passing header of their own: it sits below Gmail's, which says fail.
+    const forged = c.account.addMessage({ from: 'Billing <billing@example.test>', authenticationResults: [`${GMAIL} dmarc=fail header.from=example.test`, 'attacker.test; dmarc=pass header.from=example.test'] });
+    // A header only the sender wrote, with another server's name on top, is not Gmail's word.
+    const foreign = c.account.addMessage({ from: 'Billing <billing@example.test>', authenticationResults: 'attacker.test; dmarc=pass header.from=example.test' });
+    const mail = w.hub.mail(c.ctx());
+    const auth = async (id: string) => (await mail.get(id, { body: 'none' })).senderAuth;
+    expect(await auth(pass.id)).toBe('pass');
+    expect(await auth(fail.id)).toBe('fail');
+    expect(await auth(none.id)).toBe('unknown');
+    expect(await auth(spoof.id)).toBe('unknown');
+    expect(await auth(forged.id)).toBe('fail');
+    expect(await auth(foreign.id)).toBe('unknown');
+    // A search carries it on every summary too.
+    const found = await mail.search({ from: 'billing@example.test' });
+    expect(Object.fromEntries(found.items.map((m) => [m.id, m.senderAuth]))).toEqual({ [pass.id]: 'pass', [fail.id]: 'fail', [none.id]: 'unknown', [spoof.id]: 'unknown', [forged.id]: 'fail', [foreign.id]: 'unknown' });
+  });
+
   it('downloads an attachment and refuses one over the cap before fetching it', async () => {
     const w = world({ attachmentBytes: 1000 });
     const c = w.connect();

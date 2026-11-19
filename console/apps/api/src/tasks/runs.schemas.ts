@@ -12,7 +12,7 @@ import { RUN_ORIGINS } from '../connected-apps/request-client';
 import { TERMINAL_RUN_STATUSES, type RunStatus } from './run-status';
 
 export const RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled'] as const satisfies readonly RunStatus[];
-export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat'] as const;
+export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 /** A run that is not finished: it can still change, and is never deleted (#418). */
