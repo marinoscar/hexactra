@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 
 import { FabricModule } from '../fabric/fabric.module';
+import { MemoriesModule } from '../memories/memories.module';
+import { MemoryProposals } from '../memories/memory-proposals.service';
 import { TasksModule } from '../tasks/tasks.module';
 import { AnswerByTokenController } from './channels/answer-by-token.controller';
 import { InboxQuestionChannel } from './channels/inbox.channel';
@@ -24,13 +26,14 @@ import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
  * `QuestionChannelRegistry`) hear `QuestionEvents` through the dispatcher.
  */
 @Module({
-  imports: [FabricModule, TasksModule],
+  imports: [FabricModule, TasksModule, MemoriesModule],
   controllers: [QuestionsController, AnswerByTokenController],
   providers: [
     QuestionsService,
     TaskRunStarter,
     // A task parameter's memory-backed default resolves from the owner's memories (#552, #551).
     { provide: MEMORY_VALUE_RESOLVER, useClass: MemoryValueResolverService },
+    MemoryProposals,
     QuestionEvents,
     QuestionsExpireHandler,
     QuestionsExpireTask,
@@ -41,6 +44,6 @@ import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
     NotificationsQuestionChannel,
     WebhookQuestionChannel,
   ],
-  exports: [QuestionsService, TaskRunStarter, QuestionEvents, QuestionChannelRegistry],
+  exports: [QuestionsService, TaskRunStarter, QuestionEvents, QuestionChannelRegistry, MemoryProposals],
 })
 export class QuestionsModule {}

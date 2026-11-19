@@ -4,8 +4,18 @@
 // src/runner/fabric-session.ts.
 import { z } from 'zod';
 
-export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'form'] as const;
-export type QuestionInputType = (typeof QUESTION_INPUTS)[number];
+/** The inputs an agent (or a person's own automation) may ask with. */
+export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
+/**
+ * The inputs only the server creates: `memory` (#553), a memory the agent
+ * proposes and the owner saves or declines on its card; `form` (#552), the
+ * missing parameter values of a task run, asked at once before it starts.
+ * Never accepted from a question spec (`POST /api/questions`, `request_human`,
+ * an external agent).
+ */
+export const SERVER_QUESTION_INPUTS = ['memory', 'form'] as const;
+export type AskableInputType = (typeof QUESTION_INPUTS)[number];
+export type QuestionInputType = AskableInputType | (typeof SERVER_QUESTION_INPUTS)[number];
 
 /**
  * Inputs whose answer holds a secret the fabric keeps and types, never
@@ -74,6 +84,7 @@ export type QuestionConstraints = z.infer<typeof questionConstraintsSchema>;
 
 const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstraints)[]> = {
   none: [],
+  memory: [],
   takeover: [],
   secret: [],
   credentials: [],
@@ -150,8 +161,6 @@ function compiles(pattern: string): boolean {
 /** The rules zod's shape cannot say: what each input type allows. */
 function refineSpec(q: z.infer<typeof questionSpecObject>, ctx: z.RefinementCtx): void {
   const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
-  // A form asks for a task run's missing parameters (#552): only the server creates one, never an agent.
-  if (q.input === 'form') issue('input', 'A form is created by the server when a task run is missing values; ask one question at a time');
   if (q.options && q.choices) issue('choices', 'Give options or choices, not both');
   const raw = q.options ?? q.choices;
   const withOptions = q.input === 'choice' || q.input === 'multi_choice';
@@ -203,6 +212,42 @@ export const questionSpecSchema = questionSpecObject.superRefine(refineSpec).tra
   },
 );
 
+// ---- Memory proposals (#553) ----
+
+export const MEMORY_PROPOSAL_KINDS = ['person', 'account', 'preference', 'fact'] as const;
+/** How long a memory proposal waits for the owner before it expires. */
+export const MEMORY_PROPOSAL_TTL_MS = 7 * 24 * 3600_000;
+
+const proposalLabel = z.string().trim().min(1).max(120);
+const proposalAliases = z.array(z.string().trim().min(1).max(60)).max(10);
+const proposalAttributes = z
+  .record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(500))
+  .refine((r) => Object.keys(r).length >= 1 && Object.keys(r).length <= 20, { message: 'Between 1 and 20 attributes' });
+
+/** A memory as the agent proposes it (stored on the question, shown on the card). */
+export const memoryProposalSchema = z
+  .object({
+    kind: z.enum(MEMORY_PROPOSAL_KINDS),
+    label: proposalLabel,
+    aliases: proposalAliases.default([]),
+    attributes: proposalAttributes,
+    /** The id of the active memory this one would replace (a changed value). */
+    supersedes: z.uuid().nullable().default(null),
+  })
+  .strict();
+export type MemoryProposal = z.infer<typeof memoryProposalSchema>;
+
+/** What the owner saves from a proposal's card: the proposal, edited. */
+export const memoryProposalAnswerSchema = z
+  .object({
+    kind: z.enum(MEMORY_PROPOSAL_KINDS).optional(),
+    label: proposalLabel,
+    aliases: proposalAliases.optional(),
+    attributes: proposalAttributes,
+  })
+  .strict();
+export type MemoryProposalAnswer = z.infer<typeof memoryProposalAnswerSchema>;
+
 /** An answer as a person (or a channel on their behalf) sends it. */
 export const questionAnswerSchema = z
   .object({
@@ -217,6 +262,8 @@ export const questionAnswerSchema = z
     remember: z.boolean().optional(),
     /** form (#552): the value of each field, by key. */
     fields: z.record(z.string().min(1).max(80), z.union([z.string().max(TEXT_MAX_LENGTH), z.number().finite()])).optional(),
+    /** memory (#553): the memory as the owner saves it, edited on the card; omitted, the proposal is saved as proposed. */
+    memory: memoryProposalAnswerSchema.optional(),
   })
   .strict();
 export type QuestionAnswerInput = z.infer<typeof questionAnswerSchema>;
@@ -231,6 +278,8 @@ export interface NormalizedAnswer {
   remember?: boolean;
   /** form (#552): the values by key, before the parameter checks (the run starter applies them). */
   fields?: Record<string, string>;
+  /** memory: what the owner saves. */
+  memory?: MemoryProposalAnswer;
 }
 
 /** The stored and returned response. Never carries a secret value. */
@@ -243,6 +292,8 @@ export interface QuestionResponse {
   remember?: boolean;
   /** form (#552): the values given, masked (#538). */
   fields?: Record<string, string>;
+  /** memory (#553): the memory the answer saved. */
+  memoryId?: string;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -273,6 +324,7 @@ function onStep(value: number, base: number, step: number): boolean {
  */
 export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'constraints'> & { rememberLabel?: string | null }, a: QuestionAnswerInput): NormalizedAnswer {
   if (a.outcome === 'cancelled') return { outcome: 'cancelled' };
+  if (a.memory !== undefined && q.input !== 'memory') throw new AnswerInvalidError('memory is only for a memory proposal');
   if (a.secret !== undefined && q.input !== 'credentials') throw new AnswerInvalidError('secret is only for a sign-in (credentials)');
   if (a.remember !== undefined && !q.rememberLabel) throw new AnswerInvalidError('This question offered no "remember me" option');
   const remember = a.remember !== undefined ? { remember: a.remember } : {};
@@ -288,6 +340,10 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
   if (q.input !== 'multi_choice' && a.values !== undefined) fail(`values is only for multi_choice answers`);
   if (q.input !== 'form' && a.fields !== undefined) fail('fields is only for a form');
   switch (q.input) {
+    case 'memory':
+      // The memory itself is checked where it is written (the secret check, the label rule, the limit).
+      if (a.value !== undefined) fail('A memory proposal is answered with memory, not value');
+      return { outcome: 'completed', ...(a.memory ? { memory: a.memory } : {}) };
     case 'none':
     case 'takeover':
       if (a.value !== undefined) fail(`A ${q.input} question takes no value`);

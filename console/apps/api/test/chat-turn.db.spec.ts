@@ -154,7 +154,7 @@ describe('a turn', () => {
       },
     });
     const starter = new TaskRunStarter(prisma, { enqueue: async () => undefined } as never, new QuestionEvents(), tasks, app.get(TaskSchedulesService, { strict: false }));
-    const withStarter = (ai: AiService) => new ChatTurnService(prisma, chats, results, tasks, app.get(JobsService, { strict: false }), ai, undefined, starter);
+    const withStarter = (ai: AiService) => new ChatTurnService(prisma, chats, results, tasks, app.get(JobsService, { strict: false }), ai, undefined, undefined, undefined, starter);
 
     const id = await chatWith(alice, 'Send 25 with my Zelle task');
     const model = scriptedAi([[['run_task', { task: 'zelle', inputs: [{ name: 'Amount', value: '25' }] }]]]);

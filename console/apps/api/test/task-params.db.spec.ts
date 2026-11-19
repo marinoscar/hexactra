@@ -109,7 +109,7 @@ async function startLocal(userId: string, taskId: string, inputs: Record<string,
   return localStarter().start({ id: userId }, task, { inputs, reason: 'run_started', data: { trigger: 'manual' } });
 }
 function localQuestions(fabric: FabricClient = fakeFabric().client) {
-  return new QuestionsService(app.get(PrismaService), fabric, noJobs, new QuestionEvents(), localStarter());
+  return new QuestionsService(app.get(PrismaService), fabric, noJobs, new QuestionEvents(), undefined, localStarter());
 }
 
 async function zelleTask(token: string, extra: Record<string, unknown> = {}) {

@@ -40350,6 +40350,18 @@
               "INTERNAL_ERROR",
               "ROLE_NOT_ASSIGNABLE",
               "INVALID_RETURN_URI",
+              "MEMORY_NOT_FOUND",
+              "MEMORY_LABEL_TAKEN",
+              "MEMORY_LIMIT",
+              "MEMORY_NOT_ACTIVE",
+              "MEMORY_HOLDS_SECRET",
+              "INVALID_CRON",
+              "INVALID_TIMEZONE",
+              "CRON_TOO_FREQUENT",
+              "SCHEDULE_NOT_IN_TASK",
+              "INVALID_TASK_CURSOR",
+              "SCHEDULE_LIMIT",
+              "NO_SCHEDULES",
               "POLICY_PIN_INVALID",
               "POLICY_REF_INVALID",
               "POLICY_BUILTIN_READONLY",
@@ -40381,13 +40393,6 @@
               "COUNT_CHANGED",
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
-              "INVALID_CRON",
-              "INVALID_TIMEZONE",
-              "CRON_TOO_FREQUENT",
-              "SCHEDULE_NOT_IN_TASK",
-              "INVALID_TASK_CURSOR",
-              "SCHEDULE_LIMIT",
-              "NO_SCHEDULES",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -40405,11 +40410,6 @@
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
-              "MEMORY_NOT_FOUND",
-              "MEMORY_LABEL_TAKEN",
-              "MEMORY_LIMIT",
-              "MEMORY_NOT_ACTIVE",
-              "MEMORY_HOLDS_SECRET",
               "ERROR"
             ]
           },
@@ -43290,6 +43290,18 @@
               "defaultPolicyRef"
             ]
           },
+          "memories": {
+            "type": "object",
+            "properties": {
+              "suggest": {
+                "type": "boolean",
+                "description": "Let the agent suggest memories for you to approve. On by default."
+              }
+            },
+            "required": [
+              "suggest"
+            ]
+          },
           "runs": {
             "type": "object",
             "properties": {
@@ -43685,6 +43697,18 @@
             },
             "required": [
               "defaultPolicyRef"
+            ]
+          },
+          "memories": {
+            "type": "object",
+            "properties": {
+              "suggest": {
+                "type": "boolean",
+                "description": "Let the agent suggest memories for you to approve. On by default."
+              }
+            },
+            "required": [
+              "suggest"
             ]
           },
           "runs": {
@@ -44110,6 +44134,22 @@
                         "type": "null"
                       }
                     ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memories": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "suggest": {
+                    "type": "boolean",
+                    "description": "Let the agent suggest memories for you to approve. On by default."
                   }
                 }
               },
@@ -49193,6 +49233,18 @@
                 },
                 "required": [
                   "defaultPolicyRef"
+                ]
+              },
+              "memories": {
+                "type": "object",
+                "properties": {
+                  "suggest": {
+                    "type": "boolean",
+                    "description": "Let the agent suggest memories for you to approve. On by default."
+                  }
+                },
+                "required": [
+                  "suggest"
                 ]
               },
               "runs": {
@@ -75510,6 +75562,15 @@
               }
             ]
           },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -75578,6 +75639,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "memoryIds",
           "createdAt",
           "startedAt",
           "finishedAt",
@@ -76275,6 +76337,15 @@
                     }
                   ]
                 },
+                "memoryIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+                },
                 "createdAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -76343,6 +76414,7 @@
                 "costUsd",
                 "costKnown",
                 "confirmedActions",
+                "memoryIds",
                 "createdAt",
                 "startedAt",
                 "finishedAt",
@@ -78448,6 +78520,15 @@
               }
             ]
           },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -78746,6 +78827,36 @@
                 "createdAt"
               ]
             }
+          },
+          "memories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "superseded",
+                    "archived"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "status"
+              ]
+            },
+            "description": "The memories of `memoryIds` that still exist, with their labels (#553): the run page says \"Used: …\""
           }
         },
         "required": [
@@ -78782,10 +78893,12 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "memoryIds",
           "createdAt",
           "startedAt",
           "finishedAt",
-          "steps"
+          "steps",
+          "memories"
         ]
       },
       "RunResponseDto": {
@@ -79500,6 +79613,15 @@
               }
             ]
           },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -79561,6 +79683,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "memoryIds",
           "createdAt",
           "startedAt",
           "finishedAt"
@@ -79617,8 +79740,10 @@
               "confirm",
               "takeover",
               "credentials",
+              "memory",
               "form"
-            ]
+            ],
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
           },
           "kind": {
             "type": "string"
@@ -79885,6 +80010,12 @@
                       "type": "string"
                     }
                   },
+                  "memoryId": {
+                    "description": "memory (#553): the memory the approved proposal saved",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
                   "channel": {
                     "type": "string"
                   },
@@ -79975,6 +80106,83 @@
               }
             ],
             "description": "The AI app that asked; null when no app did"
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "False for a question no run waits on: a memory proposal (#553)"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "account",
+                      "preference",
+                      "fact"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "supersedes": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The active memory whose values this would replace"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "label",
+                  "aliases",
+                  "attributes",
+                  "supersedes"
+                ],
+                "description": "memory (#553): the proposed memory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat a memory proposal came from (#553)"
           }
         },
         "required": [
@@ -80001,7 +80209,10 @@
           "createdAt",
           "expiresAt",
           "answeredAt",
-          "client"
+          "client",
+          "blocking",
+          "proposal",
+          "conversationId"
         ]
       },
       "CreateQuestionDto": {
@@ -80018,8 +80229,7 @@
               "number",
               "confirm",
               "takeover",
-              "credentials",
-              "form"
+              "credentials"
             ]
           },
           "kind": {
@@ -80247,6 +80457,52 @@
               ]
             }
           },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "account",
+                  "preference",
+                  "fact"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "aliases": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                }
+              },
+              "attributes": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            },
+            "required": [
+              "label",
+              "attributes"
+            ],
+            "additionalProperties": false
+          },
           "channel": {
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$"
@@ -80320,6 +80576,52 @@
                 }
               ]
             }
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "account",
+                  "preference",
+                  "fact"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "aliases": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                }
+              },
+              "attributes": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            },
+            "required": [
+              "label",
+              "attributes"
+            ],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -80440,8 +80742,7 @@
               "number",
               "confirm",
               "takeover",
-              "credentials",
-              "form"
+              "credentials"
             ]
           },
           "kind": {
@@ -80689,8 +80990,10 @@
               "confirm",
               "takeover",
               "credentials",
+              "memory",
               "form"
-            ]
+            ],
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
           },
           "choices": {
             "type": "array",
@@ -80894,6 +81197,70 @@
           "expiresAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "account",
+                      "preference",
+                      "fact"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "supersedes": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The active memory whose values this would replace"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "label",
+                  "aliases",
+                  "attributes",
+                  "supersedes"
+                ],
+                "description": "memory (#553): the proposed memory"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -80916,7 +81283,9 @@
           "pageTitle",
           "viewerUrl",
           "createdAt",
-          "expiresAt"
+          "expiresAt",
+          "blocking",
+          "proposal"
         ]
       },
       "OkResponseDto": {

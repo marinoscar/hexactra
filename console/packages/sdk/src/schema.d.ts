@@ -7789,6 +7789,18 @@ export interface components {
              * @example INTERNAL_ERROR
              * @example ROLE_NOT_ASSIGNABLE
              * @example INVALID_RETURN_URI
+             * @example MEMORY_NOT_FOUND
+             * @example MEMORY_LABEL_TAKEN
+             * @example MEMORY_LIMIT
+             * @example MEMORY_NOT_ACTIVE
+             * @example MEMORY_HOLDS_SECRET
+             * @example INVALID_CRON
+             * @example INVALID_TIMEZONE
+             * @example CRON_TOO_FREQUENT
+             * @example SCHEDULE_NOT_IN_TASK
+             * @example INVALID_TASK_CURSOR
+             * @example SCHEDULE_LIMIT
+             * @example NO_SCHEDULES
              * @example POLICY_PIN_INVALID
              * @example POLICY_REF_INVALID
              * @example POLICY_BUILTIN_READONLY
@@ -7820,13 +7832,6 @@ export interface components {
              * @example COUNT_CHANGED
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
-             * @example INVALID_CRON
-             * @example INVALID_TIMEZONE
-             * @example CRON_TOO_FREQUENT
-             * @example SCHEDULE_NOT_IN_TASK
-             * @example INVALID_TASK_CURSOR
-             * @example SCHEDULE_LIMIT
-             * @example NO_SCHEDULES
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -7844,11 +7849,6 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
-             * @example MEMORY_NOT_FOUND
-             * @example MEMORY_LABEL_TAKEN
-             * @example MEMORY_LIMIT
-             * @example MEMORY_NOT_ACTIVE
-             * @example MEMORY_HOLDS_SECRET
              * @example ERROR
              */
             code: string;
@@ -8798,6 +8798,10 @@ export interface components {
                     };
                 };
             };
+            memories?: {
+                /** @description Let the agent suggest memories for you to approve. On by default. */
+                suggest: boolean;
+            };
             runs?: {
                 /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
                 keepDays: number | null;
@@ -8876,6 +8880,10 @@ export interface components {
                         fallbackModel?: string | null;
                     };
                 };
+            };
+            memories?: {
+                /** @description Let the agent suggest memories for you to approve. On by default. */
+                suggest: boolean;
             };
             runs?: {
                 /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
@@ -8957,6 +8965,10 @@ export interface components {
                         fallbackModel?: string | null;
                     };
                 } | null;
+            } | null;
+            memories?: {
+                /** @description Let the agent suggest memories for you to approve. On by default. */
+                suggest?: boolean;
             } | null;
             runs?: {
                 /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
@@ -10029,6 +10041,10 @@ export interface components {
                             fallbackModel?: string | null;
                         };
                     };
+                };
+                memories?: {
+                    /** @description Let the agent suggest memories for you to approve. On by default. */
+                    suggest: boolean;
                 };
                 runs?: {
                     /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
@@ -15864,6 +15880,8 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule";
             }[] | null;
+            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+            memoryIds: string[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -16027,6 +16045,8 @@ export interface components {
                     /** @enum {string} */
                     source: "provided" | "default" | "memory" | "asked" | "schedule";
                 }[] | null;
+                /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+                memoryIds: string[];
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
                 startedAt: string | null;
@@ -16500,6 +16520,8 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule";
             }[] | null;
+            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+            memoryIds: string[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -16557,6 +16579,14 @@ export interface components {
                 durationMs: number | null;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
+            }[];
+            /** @description The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …" */
+            memories: {
+                /** Format: uuid */
+                id: string;
+                label: string;
+                /** @enum {string} */
+                status: "active" | "superseded" | "archived";
             }[];
         };
         RunResponseDto: {
@@ -16722,6 +16752,8 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule";
             }[] | null;
+            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+            memoryIds: string[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -16735,8 +16767,11 @@ export interface components {
             runId: string | null;
             handoffId: string | null;
             browserBound: boolean;
-            /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            /**
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one
+             * @enum {string}
+             */
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form";
             kind: string;
             prompt: string;
             options: {
@@ -16798,6 +16833,11 @@ export interface components {
                 fields?: {
                     [key: string]: string;
                 };
+                /**
+                 * Format: uuid
+                 * @description memory (#553): the memory the approved proposal saved
+                 */
+                memoryId?: string;
                 channel?: string;
                 /** @description Who answered, e.g. user:<id> */
                 by?: string;
@@ -16820,10 +16860,25 @@ export interface components {
                 /** @description False: a name an MCP client gave itself over a personal access token */
                 verified: boolean;
             } | null;
+            /** @description False for a question no run waits on: a memory proposal (#553) */
+            blocking: boolean;
+            proposal: {
+                /** @enum {string} */
+                kind: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+                /** @description The active memory whose values this would replace */
+                supersedes: string | null;
+            } | null;
+            /** @description The chat a memory proposal came from (#553) */
+            conversationId: string | null;
         };
         CreateQuestionDto: {
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /**
              * @default other
              * @enum {string}
@@ -16872,6 +16927,15 @@ export interface components {
             fields?: {
                 [key: string]: string | number;
             };
+            memory?: {
+                /** @enum {string} */
+                kind?: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases?: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+            };
             channel?: string;
         };
         /** @default {} */
@@ -16890,6 +16954,15 @@ export interface components {
             remember?: boolean;
             fields?: {
                 [key: string]: string | number;
+            };
+            memory?: {
+                /** @enum {string} */
+                kind?: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases?: string[];
+                attributes: {
+                    [key: string]: string;
+                };
             };
         };
         OpenDto: {
@@ -16917,7 +16990,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /** @enum {string} */
             kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
             prompt: string;
@@ -16965,8 +17038,11 @@ export interface components {
             askedBy: string;
             kind: string;
             prompt: string;
-            /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            /**
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one
+             * @enum {string}
+             */
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form";
             choices: string[];
             options: {
                 id: string;
@@ -17011,6 +17087,19 @@ export interface components {
             createdAt: string;
             /** @description ISO 8601 timestamp */
             expiresAt: string;
+            /** @description False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group */
+            blocking: boolean;
+            proposal: {
+                /** @enum {string} */
+                kind: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+                /** @description The active memory whose values this would replace */
+                supersedes: string | null;
+            } | null;
         };
         OkResponseDto: {
             /** @constant */
