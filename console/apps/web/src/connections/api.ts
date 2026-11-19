@@ -89,6 +89,11 @@ export interface ProviderAvailability {
   ready: boolean;
   reason: 'not_installed' | 'disabled' | 'not_configured' | null;
   accountTypes: AccountType[];
+  /** What each kind of account can do, per method (E39.4): `unsupported` is never offered. Optional for older servers. */
+  matrixColumns?: string[];
+  capabilityMatrix?: { method: string; service: 'mail' | 'calendar' | 'documents'; effect: 'read' | 'write'; capability: Capability; support: Record<string, { support: 'supported' | 'limited' | 'unsupported'; note?: string }> }[];
+  /** Microsoft: the address an administrator opens to approve the app for the organization. */
+  adminConsentUrl?: string | null;
 }
 
 export interface Consent {

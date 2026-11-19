@@ -12,3 +12,4 @@ export * from './capabilities';
 export * from './capability-hub';
 export * from './capability-provider.registry';
 export * from './connection-capabilities.service';
+export * from './capability-matrix';

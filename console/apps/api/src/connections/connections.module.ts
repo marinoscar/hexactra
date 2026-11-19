@@ -19,7 +19,6 @@ import { ConnectionEvents } from './connections.events';
 import { ConnectionsHealth, ConnectionsHealthHandler, ConnectionsHealthTask } from './connections.jobs';
 import { ConnectionsService } from './connections.service';
 import { McpCatalogService } from './mcp/mcp-catalog.service';
-import { McpConnectionsController, McpAdminController } from './mcp/mcp-connections.controller';
 import { McpConnectionsService } from './mcp/mcp-connections.service';
 import { McpConnector } from './mcp/mcp-connector.service';
 import { McpOAuthService } from './mcp/mcp-oauth.service';
@@ -38,7 +37,7 @@ import { McpSecretStore } from './mcp/mcp-secrets';
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule],
-  controllers: [ConnectionsController, ConnectionsAdminController, McpConnectionsController, McpAdminController],
+  controllers: [ConnectionsController, ConnectionsAdminController],
   providers: [
     ConnectionProviderRegistry,
     CapabilityProviderRegistry,
@@ -61,7 +60,7 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     McpConnectionsService,
     McpRunService,
   ],
-  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps, McpRunService],
+  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService],
 })
 export class ConnectionsModule implements OnModuleInit {
   constructor(

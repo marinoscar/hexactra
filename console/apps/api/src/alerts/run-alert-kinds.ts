@@ -6,4 +6,4 @@
  * (hexactra-alert-kinds.ts checks they match); kept apart from that file so
  * reading them registers nothing.
  */
-export const RUN_READING_ALERT_KINDS = ['hexactra_run_budget', 'hexactra_run_stalled', 'hexactra_run_cost', 'hexactra_run_recovered'] as const;
+export const RUN_READING_ALERT_KINDS = ['hexactra_run_budget', 'hexactra_run_stalled', 'hexactra_run_cost', 'hexactra_run_recovered', 'hexactra_delivery_failing'] as const;

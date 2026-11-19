@@ -121,6 +121,9 @@ model Task {
   runs Run[]
   connections TaskConnection[]
 
+  // composed from app:deliveries.prisma
+  deliveries TaskDelivery[]
+
   // composed from app:mail-triggers.prisma
   mailTriggers MailTrigger[]
 
@@ -279,6 +282,9 @@ model Run {
   steps        RunStep[]
   chatMessages ChatMessage[]
   guidance     RunGuidance[]
+
+  // composed from app:deliveries.prisma
+  deliveries RunDelivery[]
 
   // composed from app:questions.prisma
   questions Question[]

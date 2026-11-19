@@ -31,6 +31,12 @@ export const runWebhookSchema = run.extend({
    * run whose task has no outputs. A sensitive output is `[hidden]`: a webhook never carries it.
    */
   outputs: z.array(runOutputResponseSchema).optional(),
+  /** `runs.run.finished` (E39.6): whether every output was returned and valid; null when the run has no outputs. Present with `outputs`. */
+  outputsComplete: z.boolean().nullable().optional(),
+  /** `runs.run.finished` (E39.6): a signed link to the run's masked PDF report, valid 7 days, for this run only (`GET /api/reports/{token}`, no session). */
+  reportUrl: z.string().optional(),
+  /** `runs.run.finished` (E39.6): where the run is read in the console. */
+  runUrl: z.string().optional(),
 });
 export const scheduleFailingWebhookSchema = z.object({ scheduleId: z.uuid(), taskName: z.string(), failures: z.number().int() });
 

@@ -31170,7 +31170,7 @@
         ],
         "responses": {
           "302": {
-            "description": "Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...)."
+            "description": "Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `admin_consent_required`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...)."
           },
           "default": {
             "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
@@ -31976,712 +31976,6 @@
           }
         ],
         "summary": "Remove a provider's app",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "system_settings:write"
-          ]
-        }
-      }
-    },
-    "/api/connections/mcp/status": {
-      "get": {
-        "description": "Whether the administrator has switched MCP servers on (off by default) and whether the hosts are restricted. Never the lists.\n\n**Requires:** authentication, plus permission `connections:read`.",
-        "operationId": "mcpConnections_status",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpStatusResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Whether MCP servers can be added here",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:read"
-          ]
-        }
-      }
-    },
-    "/api/connections/mcp": {
-      "post": {
-        "description": "Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.\n\n**Requires:** authentication, plus permission `connections:write`.",
-        "operationId": "mcpConnections_add",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddMcpDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/AddMcpResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`CONNECTION_PROVIDER_UNAVAILABLE` (`details.reason: disabled`: the administrator has not switched MCP servers on), `CONNECTION_MCP_EXISTS`, `CONNECTION_LABEL_TAKEN`, `CONNECTION_LIMIT` or `CONNECTION_MCP_AUTH_REQUIRED` (`details.oauth`: the server advertises OAuth)."
-          },
-          "422": {
-            "description": "`CONNECTION_MCP_URL_REFUSED` (`details.reason`: `scheme_not_allowed`, `private_target`, `host_not_allowed`, `host_blocked`, `query_not_allowed`, ...)."
-          },
-          "502": {
-            "description": "`CONNECTION_MCP_PROTOCOL`: the server does not speak the MCP protocol (Streamable HTTP, 2025-03-26 and later)."
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Add an MCP server as a connection",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:write"
-          ]
-        }
-      }
-    },
-    "/api/connections/{id}/tools": {
-      "get": {
-        "description": "The stored snapshot (no request is made to the server): each tool's title, description as plain text, parameters, the server's hints, what they suggest, your decision (`off`, `read`, `write`) and whether it awaits your review.\n\n**Requires:** authentication, plus permission `connections:read`.",
-        "operationId": "mcpConnections_tools",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpCatalogResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "The tools of an MCP server",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:read"
-          ]
-        }
-      }
-    },
-    "/api/connections/{id}/tools/refresh": {
-      "post": {
-        "description": "Lists the server's tools again. A tool you enabled whose description, schema or hints changed is switched OFF and flagged `changed`; a tool that is new arrives `off` and flagged `new`; a tool the server stopped offering disappears. You are notified once. Only your own decision switches a tool on.\n\n**Requires:** authentication, plus permission `connections:write`.",
-        "operationId": "mcpConnections_refresh",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpCatalogResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`, `CONNECTION_MCP_AUTH_REQUIRED` or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled)."
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Refresh the tools of an MCP server",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:write"
-          ]
-        }
-      }
-    },
-    "/api/connections/{id}/tools/{toolId}": {
-      "patch": {
-        "description": "`off` (default), `read` (called without asking; choose it only for a tool that only reads) or `write` (it changes something: it asks you each time unless you chose \"Don't ask again\"). The server's hints only suggest a default; you decide. Deciding clears the review flag.\n\n**Requires:** authentication, plus permission `connections:write`.",
-        "operationId": "mcpConnections_setMode",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "toolId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetToolModeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpToolResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Decide what a tool may do",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:write"
-          ]
-        }
-      }
-    },
-    "/api/connections/{id}/mcp-auth": {
-      "post": {
-        "description": "A new bearer token or header value (tested before it is kept), or a new OAuth consent (`consent.authorizeUrl`). This is how a connection that needs reconnecting comes back. The secret is write-only.\n\n**Requires:** authentication, plus permission `connections:write`.",
-        "operationId": "mcpConnections_reauth",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/McpAuthDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpAuthResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Give an MCP server a new sign-in",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:write"
-          ]
-        }
-      }
-    },
-    "/api/connections/admin/mcp": {
-      "get": {
-        "description": "Whether owners may add and use MCP servers (off by default), and the allow-list and block-list of hosts. No access to any owner's connection or tool.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
-        "operationId": "mcpAdmin_get",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpAdminResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "The deployment's MCP switch and host lists",
-        "tags": [
-          "Connections"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "system_settings:read"
-          ]
-        }
-      },
-      "put": {
-        "description": "Switching it off stops every MCP connection from being used within seconds (no call is made); the connections and tool choices are kept. Entries are host names or `*.example.test`. An empty allow-list admits any public host; the block-list wins.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
-        "operationId": "mcpAdmin_save",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveMcpAdminDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/McpAdminResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Set the MCP switch and host lists",
         "tags": [
           "Connections"
         ],
@@ -34768,6 +34062,45 @@
             "runs:delete"
           ]
         }
+      }
+    },
+    "/api/reports/{token}": {
+      "get": {
+        "description": "No session: the signed token in the path is the authority. It names one run and expires 7 days after it was issued (deliveries and the `runs.run.finished` webhook carry it as `reportUrl`). It streams the masked PDF with `Cache-Control: private, no-store` and exposes nothing else. An expired, altered or unknown link, and a run that was deleted, are all `404`.",
+        "operationId": "runReportLink_get",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "The signed token from `reportUrl`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF report (masked)."
+          },
+          "404": {
+            "description": "`REPORT_LINK_INVALID`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A run's masked PDF report, by signed link",
+        "tags": [
+          "Runs"
+        ]
       }
     },
     "/api/runs": {
@@ -43875,6 +43208,1577 @@
           ]
         }
       }
+    },
+    "/api/tasks/{id}/deliveries": {
+      "get": {
+        "description": "What is sent when a run of the task ends (E39.6): an email with the PDF report, a signed webhook with the fields, a spreadsheet row, files saved to a folder. In the order they are sent. Each email delivery lists its addresses with where each stands (`own`, `confirmed`, `unconfirmed`, `unsubscribed`). Never a secret.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "taskDeliveries_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DeliveryResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's deliveries",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "At most 10 per task. Recipients, destinations and file names are fixed here: nothing in a run can add or change one. An email address that is not yours (or one of your connections') must first be confirmed with `POST /delivery-recipients`; a delivery with such an address can be saved with `enabled: false`. A webhook delivery answers its `signingSecret` once; it cannot be read again. 400 `INVALID_DELIVERY` lists the problems (`details.issues`); 409 `RECIPIENT_NOT_CONFIRMED` lists the addresses (`details.addresses`); 422 `RECIPIENT_LIMIT` or `TOO_MANY_DELIVERIES`.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeliveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryCreatedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add a delivery to a task",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/deliveries/{deliveryId}": {
+      "patch": {
+        "description": "The kind never changes. `config` is the whole new configuration. Switching a delivery on, or changing it, re-checks it (addresses confirmed, the connection still yours and allowed).\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeliveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change a delivery",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Its log entries stay with their runs, without the link to it. A webhook delivery's signing secret is deleted.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Remove a delivery",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/deliveries/{deliveryId}/test": {
+      "post": {
+        "description": "Sends a clearly marked TEST with sample values to the delivery's own destination (an email marked TEST, a webhook of type `deliveries.test`, a spreadsheet row whose Run ID reads `TEST-...` and whose location is returned, a small text file in the folder). It reads no run and writes no run's log. A failure is a `200` with `ok: false` and the `code`. At most 10 a minute.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_test",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryTestResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`DELIVERY_TEST_RATE_LIMITED`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Send a test",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}/deliveries": {
+      "get": {
+        "description": "The delivery log of one of your runs (E39.6): one entry per delivery with its `status` (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed `errorCode` with a fixed `errorText`, and safe `detail` (sizes, counts, the destination's kind). Never an address, a subject, a body, a cell or a file name.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "runDeliveries_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunDeliveryResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What was sent for a run",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}/deliveries/{runDeliveryId}/retry": {
+      "post": {
+        "description": "A delivery that failed, or one stuck pending or sending, gets a fresh set of attempts. The send checks for its own earlier work first (a spreadsheet row, an uploaded file), but an email whose outcome was unknown (`OUTCOME_UNKNOWN`) may arrive twice. 409 `DELIVERY_NOT_RETRYABLE` otherwise.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "runDeliveries_retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runDeliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunDeliveryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Retry a delivery",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/delivery-recipients": {
+      "get": {
+        "description": "Addresses that are not yours that you confirmed as recipients of your run reports, with the time, and whether the recipient stopped the emails.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "deliveryRecipients_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DeliveryRecipientResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The addresses you confirmed",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Your explicit \"yes, send my run reports to this address\": the web app asks with a dialog naming the address. Recorded with the time. The recipient gets a one-time notice on first use, with a link that stops the emails. Confirming again re-enables a recipient who had stopped them. Your own address and the addresses of your connections need no confirmation. No MCP tool does this.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "deliveryRecipients_confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRecipientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryRecipientResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Confirm an address",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/deliveries/unsubscribe/{token}": {
+      "get": {
+        "description": "A page with one button. Opening the link changes nothing (mail scanners open links); the button does.",
+        "operationId": "deliveryUnsubscribe_show",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop receiving run reports (page)",
+        "tags": [
+          "Deliveries"
+        ]
+      },
+      "post": {
+        "description": "Disables the address on every delivery of the person who set them up, until that person confirms it again. Idempotent.",
+        "operationId": "deliveryUnsubscribe_stop",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop receiving run reports",
+        "tags": [
+          "Deliveries"
+        ]
+      }
+    },
+    "/api/connections/mcp/status": {
+      "get": {
+        "description": "Whether the administrator has switched MCP servers on (off by default) and whether the hosts are restricted. Never the lists.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "mcpConnections_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionMcpStatusResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Whether MCP servers can be added here",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
+    "/api/connections/mcp": {
+      "post": {
+        "description": "Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "mcpConnections_add",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMcpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AddMcpResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`CONNECTION_PROVIDER_UNAVAILABLE` (`details.reason: disabled`: the administrator has not switched MCP servers on), `CONNECTION_MCP_EXISTS`, `CONNECTION_LABEL_TAKEN`, `CONNECTION_LIMIT` or `CONNECTION_MCP_AUTH_REQUIRED` (`details.oauth`: the server advertises OAuth)."
+          },
+          "422": {
+            "description": "`CONNECTION_MCP_URL_REFUSED` (`details.reason`: `scheme_not_allowed`, `private_target`, `host_not_allowed`, `host_blocked`, `query_not_allowed`, ...)."
+          },
+          "502": {
+            "description": "`CONNECTION_MCP_PROTOCOL`: the server does not speak the MCP protocol (Streamable HTTP, 2025-03-26 and later)."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add an MCP server as a connection",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/tools": {
+      "get": {
+        "description": "The stored snapshot (no request is made to the server): each tool's title, description as plain text, parameters, the server's hints, what they suggest, your decision (`off`, `read`, `write`) and whether it awaits your review.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "mcpConnections_tools",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpCatalogResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The tools of an MCP server",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/tools/refresh": {
+      "post": {
+        "description": "Lists the server's tools again. A tool you enabled whose description, schema or hints changed is switched OFF and flagged `changed`; a tool that is new arrives `off` and flagged `new`; a tool the server stopped offering disappears. You are notified once. Only your own decision switches a tool on.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "mcpConnections_refresh",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpCatalogResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`, `CONNECTION_MCP_AUTH_REQUIRED` or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled)."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Refresh the tools of an MCP server",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/tools/{toolId}": {
+      "patch": {
+        "description": "`off` (default), `read` (called without asking; choose it only for a tool that only reads) or `write` (it changes something: it asks you each time unless you chose \"Don't ask again\"). The server's hints only suggest a default; you decide. Deciding clears the review flag.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "mcpConnections_setMode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toolId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetToolModeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpToolResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Decide what a tool may do",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/mcp-auth": {
+      "post": {
+        "description": "A new bearer token or header value (tested before it is kept), or a new OAuth consent (`consent.authorizeUrl`). This is how a connection that needs reconnecting comes back. The secret is write-only.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "mcpConnections_reauth",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpAuthDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpAuthResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Give an MCP server a new sign-in",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/admin/mcp": {
+      "get": {
+        "description": "Whether owners may add and use MCP servers (off by default), and the allow-list and block-list of hosts. No access to any owner's connection or tool.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "mcpAdmin_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpAdminResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The deployment's MCP switch and host lists",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      },
+      "put": {
+        "description": "Switching it off stops every MCP connection from being used within seconds (no call is made); the connections and tool choices are kept. Entries are host names or `*.example.test`. An empty allow-list admits any public host; the block-list wins.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "mcpAdmin_save",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMcpAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpAdminResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set the MCP switch and host lists",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
     }
   },
   "info": {
@@ -44159,6 +45063,7 @@
               "RUN_NOT_PAUSABLE",
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
+              "REPORT_LINK_INVALID",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -44194,6 +45099,14 @@
               "SECRETS_VAULT_NEEDS_RECONNECT",
               "SECRETS_VAULT_UNAVAILABLE",
               "SECRETS_VAULT_CONNECT_FAILED",
+              "INVALID_DELIVERY",
+              "DELIVERY_NOT_FOUND",
+              "TOO_MANY_DELIVERIES",
+              "RUN_DELIVERY_NOT_FOUND",
+              "DELIVERY_NOT_RETRYABLE",
+              "DELIVERY_TEST_RATE_LIMITED",
+              "RECIPIENT_NOT_CONFIRMED",
+              "RECIPIENT_LIMIT",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -48922,6 +49835,26 @@
               }
             }
           },
+          "deliveries": {
+            "type": "object",
+            "properties": {
+              "maxRecipientsPerTask": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "maxEmailsPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "maxAttachmentMb": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 25
+              }
+            }
+          },
           "mailTriggers": {
             "type": "object",
             "properties": {
@@ -49550,6 +50483,7 @@
           "agentPricing",
           "browserAgentCeilings",
           "connections",
+          "deliveries",
           "mailTriggers",
           "storage",
           "notifications",
@@ -50173,6 +51107,26 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "deliveries": {
+            "type": "object",
+            "properties": {
+              "maxRecipientsPerTask": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "maxEmailsPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "maxAttachmentMb": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 25
               }
             }
           },
@@ -51453,6 +52407,26 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "deliveries": {
+            "type": "object",
+            "properties": {
+              "maxRecipientsPerTask": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "maxEmailsPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "maxAttachmentMb": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 25
               }
             }
           },
@@ -76314,6 +77288,99 @@
               ]
             },
             "description": "Which kinds of account work, and what to know before starting."
+          },
+          "matrixColumns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "google",
+                "microsoft_work",
+                "microsoft_personal"
+              ]
+            },
+            "description": "The kinds of account the capability matrix distinguishes at this provider."
+          },
+          "capabilityMatrix": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "description": "`mail.search`, `calendar.createEvent`, `documents.appendRows`, ..."
+                },
+                "service": {
+                  "type": "string",
+                  "enum": [
+                    "mail",
+                    "calendar",
+                    "documents"
+                  ]
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write"
+                  ]
+                },
+                "capability": {
+                  "type": "string",
+                  "enum": [
+                    "mail_read",
+                    "mail_send",
+                    "mail_modify",
+                    "calendar_read",
+                    "calendar_write",
+                    "docs_read",
+                    "docs_write"
+                  ],
+                  "description": "The switch the method needs."
+                },
+                "support": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "support": {
+                        "type": "string",
+                        "enum": [
+                          "supported",
+                          "limited",
+                          "unsupported"
+                        ]
+                      },
+                      "note": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "support"
+                    ]
+                  },
+                  "description": "Per matrix column: whether the method works, and how it is limited or why it is not supported."
+                }
+              },
+              "required": [
+                "method",
+                "service",
+                "effect",
+                "capability",
+                "support"
+              ]
+            },
+            "description": "What each kind of account can do, per method. A method marked `unsupported` fails with `NOT_SUPPORTED`; do not offer it."
+          },
+          "adminConsentUrl": {
+            "description": "Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone. Null elsewhere.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -76321,7 +77388,10 @@
           "displayName",
           "ready",
           "reason",
-          "accountTypes"
+          "accountTypes",
+          "matrixColumns",
+          "capabilityMatrix",
+          "adminConsentUrl"
         ]
       },
       "AuthorizeResponseDto": {
@@ -77075,1300 +78145,6 @@
             "minLength": 1,
             "maxLength": 100,
             "pattern": "^[A-Za-z0-9.-]+$"
-          }
-        },
-        "additionalProperties": false
-      },
-      "McpStatusResponseDto": {
-        "type": "object",
-        "properties": {
-          "externalAppsEnabled": {
-            "type": "boolean",
-            "description": "The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`)"
-          },
-          "patMcpEnabled": {
-            "type": "boolean",
-            "description": "The switch of personal access tokens over MCP (`mcp.patMcpEnabled`)"
-          },
-          "oauthEnabled": {
-            "type": "boolean",
-            "description": "Whether the OAuth server is on (Administration → OAuth clients)"
-          },
-          "mcpUrl": {
-            "type": "string",
-            "description": "`<APP_URL>/api/mcp`"
-          },
-          "publicHttps": {
-            "type": "boolean",
-            "description": "Whether APP_URL is an https:// address on a public host name (not loopback, not a private address)"
-          },
-          "connectedApps": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991,
-            "description": "Active OAuth grants to the MCP endpoint, every user"
-          },
-          "connectedUsers": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "highRiskGrants": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991,
-            "description": "Active grants holding browser:evaluate, desktop:control or policies:write"
-          }
-        },
-        "required": [
-          "externalAppsEnabled",
-          "patMcpEnabled",
-          "oauthEnabled",
-          "mcpUrl",
-          "publicHttps",
-          "connectedApps",
-          "connectedUsers",
-          "highRiskGrants"
-        ]
-      },
-      "AddMcpResponseDto": {
-        "type": "object",
-        "properties": {
-          "connection": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                  },
-                  "provider": {
-                    "type": "string",
-                    "enum": [
-                      "google",
-                      "microsoft",
-                      "mcp"
-                    ]
-                  },
-                  "label": {
-                    "type": "string"
-                  },
-                  "accountEmail": {
-                    "type": "string"
-                  },
-                  "accountName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "capabilities": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "mail_read",
-                        "mail_send",
-                        "mail_modify",
-                        "calendar_read",
-                        "calendar_write",
-                        "docs_read",
-                        "docs_write"
-                      ]
-                    },
-                    "description": "The switches that are on."
-                  },
-                  "granted": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "mail_read",
-                        "mail_send",
-                        "mail_modify",
-                        "calendar_read",
-                        "calendar_write",
-                        "docs_read",
-                        "docs_write"
-                      ]
-                    },
-                    "description": "What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected."
-                  },
-                  "defaultFor": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "enum": [
-                        "mail",
-                        "calendar",
-                        "docs"
-                      ]
-                    }
-                  },
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "active",
-                      "paused",
-                      "needs_reconnect",
-                      "revoked"
-                    ]
-                  },
-                  "statusReason": {
-                    "description": "A stable code (`GRANT_REVOKED`, ...), never a message.",
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "connectedAt": {
-                    "type": "string",
-                    "description": "ISO 8601 timestamp"
-                  },
-                  "lastUsedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "lastRefreshAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "mcp": {
-                    "description": "MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret.",
-                    "type": "object",
-                    "properties": {
-                      "url": {
-                        "type": "string"
-                      },
-                      "auth": {
-                        "type": "string",
-                        "enum": [
-                          "none",
-                          "bearer",
-                          "header",
-                          "oauth"
-                        ]
-                      },
-                      "serverName": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "tools": {
-                        "type": "object",
-                        "properties": {
-                          "total": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          },
-                          "enabled": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          },
-                          "needsReview": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991,
-                            "description": "Tools that are new or changed since you last decided: they are off until you review them."
-                          }
-                        },
-                        "required": [
-                          "total",
-                          "enabled",
-                          "needsReview"
-                        ]
-                      },
-                      "toolsFetchedAt": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "description": "ISO 8601 timestamp"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      }
-                    },
-                    "required": [
-                      "url",
-                      "auth",
-                      "serverName",
-                      "tools",
-                      "toolsFetchedAt"
-                    ]
-                  }
-                },
-                "required": [
-                  "id",
-                  "provider",
-                  "label",
-                  "accountEmail",
-                  "accountName",
-                  "capabilities",
-                  "granted",
-                  "defaultFor",
-                  "status",
-                  "statusReason",
-                  "connectedAt",
-                  "lastUsedAt",
-                  "lastRefreshAt"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Null while an OAuth consent is pending: the connection exists once the consent returns."
-          },
-          "catalog": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "tools": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                        },
-                        "name": {
-                          "type": "string",
-                          "description": "The server's own name for the tool."
-                        },
-                        "title": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "description": {
-                          "type": "string",
-                          "description": "The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's."
-                        },
-                        "parameters": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "name": {
-                                "type": "string"
-                              },
-                              "type": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "required": {
-                                "type": "boolean"
-                              }
-                            },
-                            "required": [
-                              "name",
-                              "type",
-                              "required"
-                            ]
-                          }
-                        },
-                        "hints": {
-                          "type": "object",
-                          "properties": {
-                            "readOnly": {
-                              "type": [
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            "destructive": {
-                              "type": [
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            "idempotent": {
-                              "type": [
-                                "boolean",
-                                "null"
-                              ]
-                            },
-                            "openWorld": {
-                              "type": [
-                                "boolean",
-                                "null"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "readOnly",
-                            "destructive",
-                            "idempotent",
-                            "openWorld"
-                          ],
-                          "description": "What the server claims about the tool. A hint is not a guarantee."
-                        },
-                        "suggested": {
-                          "type": "string",
-                          "enum": [
-                            "read",
-                            "write"
-                          ],
-                          "description": "What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on."
-                        },
-                        "mode": {
-                          "type": "string",
-                          "enum": [
-                            "off",
-                            "read",
-                            "write"
-                          ],
-                          "description": "Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose \"Don't ask again\")."
-                        },
-                        "review": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "enum": [
-                                "new",
-                                "changed"
-                              ]
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again."
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "name",
-                        "title",
-                        "description",
-                        "parameters",
-                        "hints",
-                        "suggested",
-                        "mode",
-                        "review"
-                      ]
-                    }
-                  },
-                  "needsReview": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "fetchedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "tools",
-                  "needsReview",
-                  "fetchedAt"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consent": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "authorizeUrl": {
-                    "type": "string"
-                  },
-                  "expiresAt": {
-                    "type": "string",
-                    "description": "ISO 8601 timestamp"
-                  }
-                },
-                "required": [
-                  "authorizeUrl",
-                  "expiresAt"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "OAuth: send the browser here. The flow is bound to this browser by an HttpOnly cookie set on this response."
-          }
-        },
-        "required": [
-          "connection",
-          "catalog",
-          "consent"
-        ]
-      },
-      "AddMcpDto": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "minLength": 8,
-            "maxLength": 2000,
-            "description": "The server's Streamable HTTP endpoint. `https` only; no user name, password, query or fragment."
-          },
-          "label": {
-            "description": "What you call it. Defaults to the server's host name.",
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 60,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
-          },
-          "auth": {
-            "oneOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "none"
-                  }
-                },
-                "required": [
-                  "kind"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "bearer"
-                  },
-                  "token": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000,
-                    "pattern": "^[\\x21-\\x7e]+$"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "token"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "header"
-                  },
-                  "header": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64,
-                    "pattern": "^[A-Za-z0-9-]+$"
-                  },
-                  "value": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000,
-                    "pattern": "^[\\x20-\\x7e]+$"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "header",
-                  "value"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "oauth"
-                  },
-                  "clientId": {
-                    "description": "The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration).",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "clientSecret": {
-                    "description": "Write-only. Only for a confidential client you registered.",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 2000
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "kind"
-                ],
-                "additionalProperties": false
-              }
-            ],
-            "description": "How the server signs you in: nothing, a bearer token, a header, or OAuth (a consent at the server's own sign-in page). Secrets are stored encrypted and never returned."
-          },
-          "returnTo": {
-            "description": "For OAuth: a path on this console to return to (default `/settings/connections`).",
-            "type": "string",
-            "maxLength": 200
-          }
-        },
-        "required": [
-          "url",
-          "auth"
-        ],
-        "additionalProperties": false
-      },
-      "McpCatalogResponseDto": {
-        "type": "object",
-        "properties": {
-          "tools": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-                },
-                "name": {
-                  "type": "string",
-                  "description": "The server's own name for the tool."
-                },
-                "title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "description": {
-                  "type": "string",
-                  "description": "The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's."
-                },
-                "parameters": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "name": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "required": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "name",
-                      "type",
-                      "required"
-                    ]
-                  }
-                },
-                "hints": {
-                  "type": "object",
-                  "properties": {
-                    "readOnly": {
-                      "type": [
-                        "boolean",
-                        "null"
-                      ]
-                    },
-                    "destructive": {
-                      "type": [
-                        "boolean",
-                        "null"
-                      ]
-                    },
-                    "idempotent": {
-                      "type": [
-                        "boolean",
-                        "null"
-                      ]
-                    },
-                    "openWorld": {
-                      "type": [
-                        "boolean",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "readOnly",
-                    "destructive",
-                    "idempotent",
-                    "openWorld"
-                  ],
-                  "description": "What the server claims about the tool. A hint is not a guarantee."
-                },
-                "suggested": {
-                  "type": "string",
-                  "enum": [
-                    "read",
-                    "write"
-                  ],
-                  "description": "What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on."
-                },
-                "mode": {
-                  "type": "string",
-                  "enum": [
-                    "off",
-                    "read",
-                    "write"
-                  ],
-                  "description": "Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose \"Don't ask again\")."
-                },
-                "review": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "enum": [
-                        "new",
-                        "changed"
-                      ]
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "description": "Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again."
-                }
-              },
-              "required": [
-                "id",
-                "name",
-                "title",
-                "description",
-                "parameters",
-                "hints",
-                "suggested",
-                "mode",
-                "review"
-              ]
-            }
-          },
-          "needsReview": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "fetchedAt": {
-            "anyOf": [
-              {
-                "type": "string",
-                "description": "ISO 8601 timestamp"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "tools",
-          "needsReview",
-          "fetchedAt"
-        ]
-      },
-      "McpToolResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "name": {
-            "type": "string",
-            "description": "The server's own name for the tool."
-          },
-          "title": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "description": {
-            "type": "string",
-            "description": "The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's."
-          },
-          "parameters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "required": {
-                  "type": "boolean"
-                }
-              },
-              "required": [
-                "name",
-                "type",
-                "required"
-              ]
-            }
-          },
-          "hints": {
-            "type": "object",
-            "properties": {
-              "readOnly": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "destructive": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "idempotent": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "openWorld": {
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "readOnly",
-              "destructive",
-              "idempotent",
-              "openWorld"
-            ],
-            "description": "What the server claims about the tool. A hint is not a guarantee."
-          },
-          "suggested": {
-            "type": "string",
-            "enum": [
-              "read",
-              "write"
-            ],
-            "description": "What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on."
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "off",
-              "read",
-              "write"
-            ],
-            "description": "Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose \"Don't ask again\")."
-          },
-          "review": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "new",
-                  "changed"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again."
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "title",
-          "description",
-          "parameters",
-          "hints",
-          "suggested",
-          "mode",
-          "review"
-        ]
-      },
-      "SetToolModeDto": {
-        "type": "object",
-        "properties": {
-          "mode": {
-            "type": "string",
-            "enum": [
-              "off",
-              "read",
-              "write"
-            ],
-            "description": "`off`, `read` (the tool only reads: it is called without asking) or `write` (it changes something: it asks you first)."
-          }
-        },
-        "required": [
-          "mode"
-        ],
-        "additionalProperties": false
-      },
-      "McpAuthResponseDto": {
-        "type": "object",
-        "properties": {
-          "connection": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              "provider": {
-                "type": "string",
-                "enum": [
-                  "google",
-                  "microsoft",
-                  "mcp"
-                ]
-              },
-              "label": {
-                "type": "string"
-              },
-              "accountEmail": {
-                "type": "string"
-              },
-              "accountName": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "capabilities": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "mail_read",
-                    "mail_send",
-                    "mail_modify",
-                    "calendar_read",
-                    "calendar_write",
-                    "docs_read",
-                    "docs_write"
-                  ]
-                },
-                "description": "The switches that are on."
-              },
-              "granted": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "mail_read",
-                    "mail_send",
-                    "mail_modify",
-                    "calendar_read",
-                    "calendar_write",
-                    "docs_read",
-                    "docs_write"
-                  ]
-                },
-                "description": "What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected."
-              },
-              "defaultFor": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "mail",
-                    "calendar",
-                    "docs"
-                  ]
-                }
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "active",
-                  "paused",
-                  "needs_reconnect",
-                  "revoked"
-                ]
-              },
-              "statusReason": {
-                "description": "A stable code (`GRANT_REVOKED`, ...), never a message.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "connectedAt": {
-                "type": "string",
-                "description": "ISO 8601 timestamp"
-              },
-              "lastUsedAt": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "description": "ISO 8601 timestamp"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "lastRefreshAt": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "description": "ISO 8601 timestamp"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "mcp": {
-                "description": "MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret.",
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string"
-                  },
-                  "auth": {
-                    "type": "string",
-                    "enum": [
-                      "none",
-                      "bearer",
-                      "header",
-                      "oauth"
-                    ]
-                  },
-                  "serverName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "tools": {
-                    "type": "object",
-                    "properties": {
-                      "total": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                      },
-                      "enabled": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991
-                      },
-                      "needsReview": {
-                        "type": "integer",
-                        "minimum": -9007199254740991,
-                        "maximum": 9007199254740991,
-                        "description": "Tools that are new or changed since you last decided: they are off until you review them."
-                      }
-                    },
-                    "required": [
-                      "total",
-                      "enabled",
-                      "needsReview"
-                    ]
-                  },
-                  "toolsFetchedAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "url",
-                  "auth",
-                  "serverName",
-                  "tools",
-                  "toolsFetchedAt"
-                ]
-              }
-            },
-            "required": [
-              "id",
-              "provider",
-              "label",
-              "accountEmail",
-              "accountName",
-              "capabilities",
-              "granted",
-              "defaultFor",
-              "status",
-              "statusReason",
-              "connectedAt",
-              "lastUsedAt",
-              "lastRefreshAt"
-            ]
-          },
-          "consent": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "authorizeUrl": {
-                    "type": "string"
-                  },
-                  "expiresAt": {
-                    "type": "string",
-                    "description": "ISO 8601 timestamp"
-                  }
-                },
-                "required": [
-                  "authorizeUrl",
-                  "expiresAt"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "connection",
-          "consent"
-        ]
-      },
-      "McpAuthDto": {
-        "type": "object",
-        "properties": {
-          "auth": {
-            "oneOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "none"
-                  }
-                },
-                "required": [
-                  "kind"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "bearer"
-                  },
-                  "token": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000,
-                    "pattern": "^[\\x21-\\x7e]+$"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "token"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "header"
-                  },
-                  "header": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64,
-                    "pattern": "^[A-Za-z0-9-]+$"
-                  },
-                  "value": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4000,
-                    "pattern": "^[\\x20-\\x7e]+$"
-                  }
-                },
-                "required": [
-                  "kind",
-                  "header",
-                  "value"
-                ],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "const": "oauth"
-                  },
-                  "clientId": {
-                    "description": "The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration).",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "clientSecret": {
-                    "description": "Write-only. Only for a confidential client you registered.",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 2000
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "kind"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          },
-          "returnTo": {
-            "type": "string",
-            "maxLength": 200
-          }
-        },
-        "required": [
-          "auth"
-        ],
-        "additionalProperties": false
-      },
-      "McpAdminResponseDto": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "allowedHosts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "blockedHosts": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "enabled",
-          "allowedHosts",
-          "blockedHosts"
-        ]
-      },
-      "SaveMcpAdminDto": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "description": "Whether owners may add and use MCP servers. Off by default.",
-            "type": "boolean"
-          },
-          "allowedHosts": {
-            "description": "Exact host names or `*.example.test`. Empty: any public host. Replaces the stored list.",
-            "maxItems": 200,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 253,
-              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
-            }
-          },
-          "blockedHosts": {
-            "description": "Hosts that are never allowed, whatever the allow-list says. Replaces the stored list.",
-            "maxItems": 200,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 253,
-              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
-            }
           }
         },
         "additionalProperties": false
@@ -93225,6 +93001,58 @@
           "nextCursor"
         ]
       },
+      "McpStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "externalAppsEnabled": {
+            "type": "boolean",
+            "description": "The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`)"
+          },
+          "patMcpEnabled": {
+            "type": "boolean",
+            "description": "The switch of personal access tokens over MCP (`mcp.patMcpEnabled`)"
+          },
+          "oauthEnabled": {
+            "type": "boolean",
+            "description": "Whether the OAuth server is on (Administration → OAuth clients)"
+          },
+          "mcpUrl": {
+            "type": "string",
+            "description": "`<APP_URL>/api/mcp`"
+          },
+          "publicHttps": {
+            "type": "boolean",
+            "description": "Whether APP_URL is an https:// address on a public host name (not loopback, not a private address)"
+          },
+          "connectedApps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Active OAuth grants to the MCP endpoint, every user"
+          },
+          "connectedUsers": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "highRiskGrants": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Active grants holding browser:evaluate, desktop:control or policies:write"
+          }
+        },
+        "required": [
+          "externalAppsEnabled",
+          "patMcpEnabled",
+          "oauthEnabled",
+          "mcpUrl",
+          "publicHttps",
+          "connectedApps",
+          "connectedUsers",
+          "highRiskGrants"
+        ]
+      },
       "AdminConnectedAppListResponseDto": {
         "type": "array",
         "items": {
@@ -94387,6 +94215,22 @@
               }
             ]
           },
+          "deliveryIds": {
+            "description": "Which of the task's deliveries this schedule's runs use (E39.6); null (the default) uses all of the task's enabled ones",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "type": "string",
             "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\""
@@ -94584,6 +94428,23 @@
                 }
               ]
             }
+          },
+          "deliveryIds": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`."
           }
         },
         "required": [
@@ -94654,6 +94515,23 @@
                 "type": "null"
               }
             ]
+          },
+          "deliveryIds": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`."
           }
         }
       },
@@ -97116,6 +96994,1907 @@
           "firing",
           "lastEvaluatedAt"
         ]
+      },
+      "DeliveryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The configuration as stored. Never a secret."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "own",
+                    "confirmed",
+                    "unconfirmed",
+                    "unsubscribed"
+                  ]
+                }
+              },
+              "required": [
+                "address",
+                "state"
+              ]
+            },
+            "description": "`email`: where each address stands. Empty for other kinds."
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The connection it uses; `label` is null once the connection was removed."
+          },
+          "disabledReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "connection_removed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the system switched it off."
+          },
+          "webhookSecretConfigured": {
+            "description": "`webhook`: a signing secret is stored. Null for other kinds.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "kind",
+          "enabled",
+          "when",
+          "position",
+          "config",
+          "recipients",
+          "connection",
+          "disabledReason",
+          "webhookSecretConfigured",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DeliveryCreatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The configuration as stored. Never a secret."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "own",
+                    "confirmed",
+                    "unconfirmed",
+                    "unsubscribed"
+                  ]
+                }
+              },
+              "required": [
+                "address",
+                "state"
+              ]
+            },
+            "description": "`email`: where each address stands. Empty for other kinds."
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The connection it uses; `label` is null once the connection was removed."
+          },
+          "disabledReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "connection_removed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the system switched it off."
+          },
+          "webhookSecretConfigured": {
+            "description": "`webhook`: a signing secret is stored. Null for other kinds.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "signingSecret": {
+            "description": "`webhook` only, only on creation: the secret to verify the signature with (`whsec_...`). It cannot be read again.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "kind",
+          "enabled",
+          "when",
+          "position",
+          "config",
+          "recipients",
+          "connection",
+          "disabledReason",
+          "webhookSecretConfigured",
+          "createdAt",
+          "updatedAt",
+          "signingSecret"
+        ]
+      },
+      "CreateDeliveryDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The configuration of the kind (see the description of this route)."
+          },
+          "enabled": {
+            "description": "Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on.",
+            "type": "boolean"
+          },
+          "when": {
+            "description": "`always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).",
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "kind",
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateDeliveryDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on.",
+            "type": "boolean"
+          },
+          "when": {
+            "description": "`always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).",
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "config": {
+            "description": "The whole new config for the delivery's kind.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeliveryTestResponseDto": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CONNECTION_NEEDS_RECONNECT",
+                  "CAPABILITY_OFF",
+                  "PERMISSION_MISSING",
+                  "NOT_FOUND",
+                  "RATE_LIMITED",
+                  "QUOTA_EXCEEDED",
+                  "TOO_LARGE",
+                  "PROVIDER_ERROR",
+                  "CONNECTION_PAUSED",
+                  "CONNECTION_NOT_FOUND",
+                  "INVALID_INPUT",
+                  "NOT_SUPPORTED",
+                  "ABORTED",
+                  "CONFLICT",
+                  "NOTIFY_REQUIRED",
+                  "ADMIN_CONSENT_REQUIRED",
+                  "OUTCOME_UNKNOWN",
+                  "NETWORK_ERROR",
+                  "TIMEOUT",
+                  "HTTP_4XX",
+                  "HTTP_5XX",
+                  "DESTINATION_BLOCKED",
+                  "SECRET_MISSING",
+                  "KIND_UNAVAILABLE",
+                  "EMAIL_NOT_CONFIGURED",
+                  "EMAIL_REFUSED",
+                  "DAILY_LIMIT",
+                  "RECIPIENT_UNSUBSCRIBED",
+                  "RECIPIENT_NOT_CONFIRMED",
+                  "CONFIG_INVALID",
+                  "INTERNAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "One fixed sentence."
+          },
+          "detail": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "Safe facts: sizes, counts, and for a sheet the `location` of the TEST row."
+          }
+        },
+        "required": [
+          "ok",
+          "code",
+          "message",
+          "detail"
+        ]
+      },
+      "RunDeliveryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "deliveryId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null once the delivery was deleted: the log stays."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sending",
+              "sent",
+              "failed",
+              "skipped"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CONNECTION_NEEDS_RECONNECT",
+                  "CAPABILITY_OFF",
+                  "PERMISSION_MISSING",
+                  "NOT_FOUND",
+                  "RATE_LIMITED",
+                  "QUOTA_EXCEEDED",
+                  "TOO_LARGE",
+                  "PROVIDER_ERROR",
+                  "CONNECTION_PAUSED",
+                  "CONNECTION_NOT_FOUND",
+                  "INVALID_INPUT",
+                  "NOT_SUPPORTED",
+                  "ABORTED",
+                  "CONFLICT",
+                  "NOTIFY_REQUIRED",
+                  "ADMIN_CONSENT_REQUIRED",
+                  "OUTCOME_UNKNOWN",
+                  "NETWORK_ERROR",
+                  "TIMEOUT",
+                  "HTTP_4XX",
+                  "HTTP_5XX",
+                  "DESTINATION_BLOCKED",
+                  "SECRET_MISSING",
+                  "KIND_UNAVAILABLE",
+                  "EMAIL_NOT_CONFIGURED",
+                  "EMAIL_REFUSED",
+                  "DAILY_LIMIT",
+                  "RECIPIENT_UNSUBSCRIBED",
+                  "RECIPIENT_NOT_CONFIRMED",
+                  "CONFIG_INVALID",
+                  "INTERNAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorText": {
+            "description": "A fixed sentence for the code.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "Safe facts only: the destination, sizes, counts. Never content."
+          },
+          "sentAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "An ISO 8601 instant."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextAttemptAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "An ISO 8601 instant."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "deliveryId",
+          "kind",
+          "status",
+          "attempts",
+          "errorCode",
+          "errorText",
+          "detail",
+          "sentAt",
+          "nextAttemptAt",
+          "createdAt"
+        ]
+      },
+      "DeliveryRecipientResponseDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "unsubscribedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "An ISO 8601 instant."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "address",
+          "confirmedAt",
+          "unsubscribedAt"
+        ]
+      },
+      "ConfirmRecipientDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "description": "An email address."
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "additionalProperties": false
+      },
+      "ConnectionMcpStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the administrator has switched MCP servers on for this deployment."
+          },
+          "restricted": {
+            "type": "boolean",
+            "description": "The administrator limits which hosts may be used."
+          }
+        },
+        "required": [
+          "enabled",
+          "restricted"
+        ]
+      },
+      "AddMcpResponseDto": {
+        "type": "object",
+        "properties": {
+          "connection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "google",
+                      "microsoft",
+                      "mcp"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "accountEmail": {
+                    "type": "string"
+                  },
+                  "accountName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "capabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "mail_read",
+                        "mail_send",
+                        "mail_modify",
+                        "calendar_read",
+                        "calendar_write",
+                        "docs_read",
+                        "docs_write"
+                      ]
+                    },
+                    "description": "The switches that are on."
+                  },
+                  "granted": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "mail_read",
+                        "mail_send",
+                        "mail_modify",
+                        "calendar_read",
+                        "calendar_write",
+                        "docs_read",
+                        "docs_write"
+                      ]
+                    },
+                    "description": "What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected."
+                  },
+                  "defaultFor": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "mail",
+                        "calendar",
+                        "docs"
+                      ]
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "needs_reconnect",
+                      "revoked"
+                    ]
+                  },
+                  "statusReason": {
+                    "description": "A stable code (`GRANT_REVOKED`, ...), never a message.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "connectedAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  "lastUsedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastRefreshAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "mcp": {
+                    "description": "MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret.",
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string"
+                      },
+                      "auth": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "bearer",
+                          "header",
+                          "oauth"
+                        ]
+                      },
+                      "serverName": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "tools": {
+                        "type": "object",
+                        "properties": {
+                          "total": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "enabled": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "needsReview": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Tools that are new or changed since you last decided: they are off until you review them."
+                          }
+                        },
+                        "required": [
+                          "total",
+                          "enabled",
+                          "needsReview"
+                        ]
+                      },
+                      "toolsFetchedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "url",
+                      "auth",
+                      "serverName",
+                      "tools",
+                      "toolsFetchedAt"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "provider",
+                  "label",
+                  "accountEmail",
+                  "accountName",
+                  "capabilities",
+                  "granted",
+                  "defaultFor",
+                  "status",
+                  "statusReason",
+                  "connectedAt",
+                  "lastUsedAt",
+                  "lastRefreshAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while an OAuth consent is pending: the connection exists once the consent returns."
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "The server's own name for the tool."
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's."
+                        },
+                        "parameters": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "required": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type",
+                              "required"
+                            ]
+                          }
+                        },
+                        "hints": {
+                          "type": "object",
+                          "properties": {
+                            "readOnly": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "destructive": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "idempotent": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            },
+                            "openWorld": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "readOnly",
+                            "destructive",
+                            "idempotent",
+                            "openWorld"
+                          ],
+                          "description": "What the server claims about the tool. A hint is not a guarantee."
+                        },
+                        "suggested": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write"
+                          ],
+                          "description": "What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on."
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "off",
+                            "read",
+                            "write"
+                          ],
+                          "description": "Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose \"Don't ask again\")."
+                        },
+                        "review": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "new",
+                                "changed"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "title",
+                        "description",
+                        "parameters",
+                        "hints",
+                        "suggested",
+                        "mode",
+                        "review"
+                      ]
+                    }
+                  },
+                  "needsReview": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "fetchedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "tools",
+                  "needsReview",
+                  "fetchedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "authorizeUrl": {
+                    "type": "string"
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  }
+                },
+                "required": [
+                  "authorizeUrl",
+                  "expiresAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "OAuth: send the browser here. The flow is bound to this browser by an HttpOnly cookie set on this response."
+          }
+        },
+        "required": [
+          "connection",
+          "catalog",
+          "consent"
+        ]
+      },
+      "AddMcpDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 2000,
+            "description": "The server's Streamable HTTP endpoint. `https` only; no user name, password, query or fragment."
+          },
+          "label": {
+            "description": "What you call it. Defaults to the server's host name.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          },
+          "auth": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "none"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "bearer"
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000,
+                    "pattern": "^[\\x21-\\x7e]+$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "token"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "header"
+                  },
+                  "header": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9-]+$"
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000,
+                    "pattern": "^[\\x20-\\x7e]+$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "header",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "oauth"
+                  },
+                  "clientId": {
+                    "description": "The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientSecret": {
+                    "description": "Write-only. Only for a confidential client you registered.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "description": "How the server signs you in: nothing, a bearer token, a header, or OAuth (a consent at the server's own sign-in page). Secrets are stored encrypted and never returned."
+          },
+          "returnTo": {
+            "description": "For OAuth: a path on this console to return to (default `/settings/connections`).",
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "url",
+          "auth"
+        ],
+        "additionalProperties": false
+      },
+      "McpCatalogResponseDto": {
+        "type": "object",
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The server's own name for the tool."
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "description": "The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's."
+                },
+                "parameters": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "required": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                      "required"
+                    ]
+                  }
+                },
+                "hints": {
+                  "type": "object",
+                  "properties": {
+                    "readOnly": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "destructive": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "idempotent": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "openWorld": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "readOnly",
+                    "destructive",
+                    "idempotent",
+                    "openWorld"
+                  ],
+                  "description": "What the server claims about the tool. A hint is not a guarantee."
+                },
+                "suggested": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write"
+                  ],
+                  "description": "What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on."
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "off",
+                    "read",
+                    "write"
+                  ],
+                  "description": "Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose \"Don't ask again\")."
+                },
+                "review": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "new",
+                        "changed"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again."
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "title",
+                "description",
+                "parameters",
+                "hints",
+                "suggested",
+                "mode",
+                "review"
+              ]
+            }
+          },
+          "needsReview": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "fetchedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "tools",
+          "needsReview",
+          "fetchedAt"
+        ]
+      },
+      "McpToolResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string",
+            "description": "The server's own name for the tool."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's."
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "required"
+              ]
+            }
+          },
+          "hints": {
+            "type": "object",
+            "properties": {
+              "readOnly": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "destructive": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "idempotent": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "openWorld": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "readOnly",
+              "destructive",
+              "idempotent",
+              "openWorld"
+            ],
+            "description": "What the server claims about the tool. A hint is not a guarantee."
+          },
+          "suggested": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "description": "What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "read",
+              "write"
+            ],
+            "description": "Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose \"Don't ask again\")."
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "new",
+                  "changed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title",
+          "description",
+          "parameters",
+          "hints",
+          "suggested",
+          "mode",
+          "review"
+        ]
+      },
+      "SetToolModeDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "read",
+              "write"
+            ],
+            "description": "`off`, `read` (the tool only reads: it is called without asking) or `write` (it changes something: it asks you first)."
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "McpAuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "connection": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "google",
+                  "microsoft",
+                  "mcp"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "accountEmail": {
+                "type": "string"
+              },
+              "accountName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "mail_read",
+                    "mail_send",
+                    "mail_modify",
+                    "calendar_read",
+                    "calendar_write",
+                    "docs_read",
+                    "docs_write"
+                  ]
+                },
+                "description": "The switches that are on."
+              },
+              "granted": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "mail_read",
+                    "mail_send",
+                    "mail_modify",
+                    "calendar_read",
+                    "calendar_write",
+                    "docs_read",
+                    "docs_write"
+                  ]
+                },
+                "description": "What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected."
+              },
+              "defaultFor": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "mail",
+                    "calendar",
+                    "docs"
+                  ]
+                }
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused",
+                  "needs_reconnect",
+                  "revoked"
+                ]
+              },
+              "statusReason": {
+                "description": "A stable code (`GRANT_REVOKED`, ...), never a message.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "connectedAt": {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              "lastUsedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lastRefreshAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "mcp": {
+                "description": "MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret.",
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "auth": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "bearer",
+                      "header",
+                      "oauth"
+                    ]
+                  },
+                  "serverName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tools": {
+                    "type": "object",
+                    "properties": {
+                      "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "enabled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "needsReview": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Tools that are new or changed since you last decided: they are off until you review them."
+                      }
+                    },
+                    "required": [
+                      "total",
+                      "enabled",
+                      "needsReview"
+                    ]
+                  },
+                  "toolsFetchedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "url",
+                  "auth",
+                  "serverName",
+                  "tools",
+                  "toolsFetchedAt"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "provider",
+              "label",
+              "accountEmail",
+              "accountName",
+              "capabilities",
+              "granted",
+              "defaultFor",
+              "status",
+              "statusReason",
+              "connectedAt",
+              "lastUsedAt",
+              "lastRefreshAt"
+            ]
+          },
+          "consent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "authorizeUrl": {
+                    "type": "string"
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  }
+                },
+                "required": [
+                  "authorizeUrl",
+                  "expiresAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "connection",
+          "consent"
+        ]
+      },
+      "McpAuthDto": {
+        "type": "object",
+        "properties": {
+          "auth": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "none"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "bearer"
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000,
+                    "pattern": "^[\\x21-\\x7e]+$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "token"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "header"
+                  },
+                  "header": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9-]+$"
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000,
+                    "pattern": "^[\\x20-\\x7e]+$"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "header",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "oauth"
+                  },
+                  "clientId": {
+                    "description": "The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientSecret": {
+                    "description": "Write-only. Only for a confidential client you registered.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "returnTo": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "auth"
+        ],
+        "additionalProperties": false
+      },
+      "McpAdminResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "enabled",
+          "allowedHosts",
+          "blockedHosts"
+        ]
+      },
+      "SaveMcpAdminDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Whether owners may add and use MCP servers. Off by default.",
+            "type": "boolean"
+          },
+          "allowedHosts": {
+            "description": "Exact host names or `*.example.test`. Empty: any public host. Replaces the stored list.",
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+            }
+          },
+          "blockedHosts": {
+            "description": "Hosts that are never allowed, whatever the allow-list says. Replaces the stored list.",
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+            }
+          }
+        },
+        "additionalProperties": false
       }
     }
   },

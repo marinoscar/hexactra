@@ -15,3 +15,5 @@ registerErrorCode({ code: 'RUN_NOT_PAUSABLE', status: 409, description: 'An exte
 // Exporting a run (#542).
 registerErrorCode({ code: 'EXPORT_TOO_LARGE', status: 413, description: 'The run file would be over 50 MB with its screenshots embedded. Export it with `screenshots=none`.' });
 registerErrorCode({ code: 'EXPORT_RATE_LIMITED', status: 429, description: 'More than 10 run exports in a minute; `details.retryAfterS` says when to try again.' });
+// The signed report link (E39.6, #603).
+registerErrorCode({ code: 'REPORT_LINK_INVALID', status: 404, description: 'The report link is not valid: expired, altered, for a run that no longer exists, or for another user\'s run. All look the same on purpose.' });

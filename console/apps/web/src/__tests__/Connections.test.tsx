@@ -105,6 +105,9 @@ describe('the words', () => {
     expect(outcomeBanner('denied', null, []).severity).toBe('info');
     expect(outcomeBanner('state_invalid', null, []).text).toMatch(/could not be completed/);
     expect(outcomeBanner('account_mismatch', null, []).text).toMatch(/different account/);
+    // Told apart from a decline: an administrator's approval is needed (E39.4).
+    expect(outcomeBanner('admin_consent_required', null, [])).toMatchObject({ severity: 'warning' });
+    expect(outcomeBanner('admin_consent_required', null, []).text).toMatch(/administrator to approve/);
   });
 });
 

@@ -31,6 +31,8 @@ export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 export const CONNECTION_NEEDS_RECONNECT_EVENT = 'connections.needs_reconnect';
 /** An MCP server changed a tool the owner had enabled, or offered a new one (E39.9): those tools are off until the owner reviews them. */
 export const CONNECTION_MCP_TOOLS_CHANGED_EVENT = 'connections.mcp_tools_changed';
+/** A delivery after a run failed for good (E39.6): once per task per day. Names the kind and the reason, never an address, a subject or a file name. */
+export const DELIVERY_FAILED_EVENT = 'deliveries.failed';
 /** A mail trigger needs the owner (E39.8): its account must be connected again, it keeps failing, it skipped unverified senders or hit its daily limit. Once per episode or day. */
 export const MAIL_TRIGGER_ATTENTION_EVENT = 'mail_triggers.attention';
 
@@ -134,6 +136,11 @@ const connectionMcpToolsChanged: BrowserNotificationTemplate = (d) => {
     link: '/settings/connections',
   };
 };
+const deliveryFailed: BrowserNotificationTemplate = (d) => ({
+  title: 'A delivery after a run failed',
+  body: trim(str(d, 'line') || 'A result could not be sent. Open the run to see why.', 180),
+  link: str(d, 'runId') ? `/runs/${encodeURIComponent(str(d, 'runId'))}` : '/tasks',
+});
 const MAIL_TRIGGER_TEXT: Record<string, { title: string; body: (task: string) => string }> = {
   needs_reconnect: { title: 'An email trigger stopped', body: (t) => `The account behind the email trigger on "${t}" must be connected again. Nothing starts until you do.` },
   failing: { title: 'An email trigger keeps failing', body: (t) => `The email trigger on "${t}" could not read the mailbox several times in a row. It keeps trying.` },
@@ -322,6 +329,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
   },
   {
     event: {
+      key: DELIVERY_FAILED_EVENT,
+      label: 'A delivery after a run failed',
+      description: 'When the email, row, file or webhook that a task sends after a run could not be delivered (for instance because a connected account needs reconnecting). At most once a day for each task.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: deliveryFailed,
+  },
+  {
+    event: {
       key: MAIL_TRIGGER_ATTENTION_EVENT,
       label: 'An email trigger needs you',
       description: 'When a task\'s email trigger stops (its account must be connected again), keeps failing, skips a message that failed the sender check, or reaches its daily limit. At most once per cause per day.',
@@ -387,6 +404,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === CONNECTION_NEEDS_RECONNECT_EVENT) return { tag: `connection-${str(data, 'connectionId') || 'reconnect'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === CONNECTION_MCP_TOOLS_CHANGED_EVENT) return { tag: `connection-tools-${str(data, 'connectionId') || 'changed'}`.slice(0, 64), urgency: 'normal' };
+  if (event.key === DELIVERY_FAILED_EVENT) return { tag: `delivery-${str(data, 'taskId') || 'failed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === MAIL_TRIGGER_ATTENTION_EVENT) return { tag: `mail-trigger-${str(data, 'triggerId') || 'attention'}-${str(data, 'kind')}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;

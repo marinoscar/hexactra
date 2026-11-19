@@ -100,7 +100,7 @@ A **paused** or **needs_reconnect** connection is never chosen: naming one fails
 | Route | Notes |
 |---|---|
 | `GET /api/connections` | Label, provider, account email, capabilities, what the provider granted, defaults, status and reason code, last use. Accounts that need a reconnect first. Never a token or a scope string. |
-| `GET /api/connections/{id}` | The same, with `usedBy` (what uses it: tasks and deliveries, once E39.6 and later register them) |
+| `GET /api/connections/{id}` | The same, with `usedBy` (what uses it: the deliveries of E39.6 today, tools and triggers when E39.7 and E39.8 register them) |
 | `GET /api/connections/providers` | Which providers can be connected here (`ready`, or the `reason`: `not_installed`, `disabled`, `not_configured`) and which kinds of account work, with a note to read before starting |
 | `POST /api/connections/authorize` | Start a connection (above). Sets the binding cookie. |
 | `GET /api/connections/callback/{provider}` | Public; the redirect URI to register at the provider |
@@ -325,7 +325,7 @@ CLI: `hexactra tasks triggers list <task>`. The form is in the web app (the acco
 Everything above was tested against the in-memory capability double and, for the Google adapter's `senderAuth`, against `FakeGoogle`: **no real mailbox was used.**
 
 - **Google (done, #605).** Gmail returns every header of a `format=full` message, `Authentication-Results` included. The adapter fills `senderAuth` from the topmost header when `mx.google.com` (or a `*.google.com` server) wrote it. Not verified against a real Gmail message: check that a normal message from a domain with SPF and DKIM reads `pass`, and that mail sent through a mailing list or a forwarder (which often breaks both) reads `fail` or `unknown`, which is why `acceptUnverified` exists.
-- **Microsoft (#602, a parallel branch): required.** The Microsoft adapter **must fill `senderAuth`** the same way, from `internetMessageHeaders` (request it with `$select=internetMessageHeaders` on the message), passing the topmost `Authentication-Results` to `senderAuthFrom(value, fromAddress, { trusted })` with `trusted` accepting only Microsoft's own authserv-id (`*.protection.outlook.com` or `*.outlook.com`), and put it on every `MailSummary` and `MailMessage`. Until it does, every Microsoft message is `unknown` and a trigger on a Microsoft account starts nothing unless the owner turns `acceptUnverified` on. The adapter's test should cover pass, fail, a missing header, a spoofed From and a forged header below the provider's own, as the Google one does (`test/google-capabilities.spec.ts`).
+- **Microsoft (#602, E39.4): done.** The Microsoft adapter fills `senderAuth` on every `MailSummary` and `MailMessage` from `internetMessageHeaders` (requested with `$select`), passing the topmost `Authentication-Results` to `senderAuthFrom(value, fromAddress, { trusted })`. `trusted` accepts only Microsoft's own authserv-id (`*.protection.outlook.com`, `outlook.com`, `hotmail.com`, `live.com`, `office365.com`, `exchangelabs.com`); a header with another server's name, a look-alike name, or one the sender wrote below Microsoft's is ignored (`unknown`, or the fail above it). **Limit:** Exchange Online often writes its own header with no server name at all (`spf=pass ...; dkim=pass ...; dmarc=pass ...`); a header in that form is read as Microsoft's. That is safe because Microsoft stamps every message it receives and prepends its own, so a copy the sender wrote is always below it, and only the topmost counts. A message Microsoft did not stamp (no header) is `unknown`, so a trigger on a Microsoft account starts nothing for it unless the owner turns `acceptUnverified` on. Tests: `test/microsoft/microsoft-mail.spec.ts` (pass, fail, missing, spoofed From, forged header, foreign and look-alike server) and `test/mail-triggers.db.spec.ts` (a Microsoft message that passed starts one run).
 
 With the owner, on the deployed stack: a trigger on mail from the owner's own second address with a subject keyword; send a matching mail and a non-matching one; the task runs once within the poll interval; measure the lag; check the history list; check that a mail from a non-listed sender starts nothing.
 
@@ -403,3 +403,151 @@ Everything above is tested against an in-process fake MCP server (initialise and
 - **Features that reference a connection** (deliveries, tool grants, [mail triggers](#start-a-task-from-an-email-e398), which already do) register a `ConnectionUsageSource` with `ConnectionUsageRegistry`, so that removing a connection lists what uses it and clears the references.
 - **No MCP tool** exposes a connection (nor an MCP server added as one). If one ever does, it needs its own decision in [parity.md](parity.md).
 - **MCP servers** (`provider: mcp`) are a client, not an adapter: `src/connections/mcp/` (client, catalogue, OAuth, run service) and the run tools in `src/runner/host/tools/connections/mcp.ts`. `ConnectionTokensService.registerRefresher` is the seam for a provider that refreshes by its own means.
+
+## Microsoft: Outlook, Calendar, OneDrive, Word and Excel (E39.4, #602)
+
+The Microsoft provider signs in work, school and personal Microsoft accounts and gives the same mail, calendar and documents operations as the Google provider through Microsoft Graph (v1.0). A delivery or an agent tool written against the neutral interface (`src/connections/capabilities.ts`) works with either without knowing which. Code: `apps/api/src/connections/microsoft/`; the fake Graph for tests: `connections/microsoft/testing/`.
+
+**Status, honestly.** Everything below is implemented and tested against an **in-process fake of Graph** (`FakeGraph`, invented data only). **No real Microsoft account has been connected yet**, and the Microsoft documentation pages were not reachable from the environment this was written in, so every statement about how Graph behaves comes from the decision record ([decisions/connections-auth.md](decisions/connections-auth.md), itself provisional) and from knowledge of the documentation, not from an experiment. The items that need a real account are listed under "Not confirmed yet" and in the issue's verification section. Where the record and the issue disagree the record wins; the differences are listed under "Decisions".
+
+### What each kind of account can do
+
+One table in code (`src/connections/capability-matrix.ts`) says, for every method, whether Google, a Microsoft work or school account and a Microsoft personal account can do it: **Yes**, **Limited** (how), or **No** (why). The Microsoft adapter answers `NOT_SUPPORTED` for a method the table marks "No" for the account's kind (and makes no request); `GET /api/connections/providers` returns the same rows (`capabilityMatrix`, with `matrixColumns` for the provider) so the Connect dialog and the task UI never offer an unsupported choice; and a test fails when this table and the code disagree (`UPDATE_CAPABILITY_MATRIX_DOC=1 npx jest --config ./test/jest.config.js capability-matrix` from `apps/api` rewrites it: review the diff).
+
+The Google column follows the decision record (the narrow `drive.file` permission: only files the app created or the owner picked); the Google adapter's own section is the authority on Google.
+
+<!-- capability-matrix:start -->
+| Method | Needs | Google | Microsoft work or school | Microsoft personal |
+|---|---|---|---|---|
+| `mail.search` | `mail_read` | Yes | Limited: Free text goes through Microsoft search; the other filters are applied to each page, so a page can be short: follow the next page. | Limited: Free text goes through Microsoft search; the other filters are applied to each page, so a page can be short: follow the next page. |
+| `mail.get` | `mail_read` | Yes | Yes | Yes |
+| `mail.getAttachment` | `mail_read` | Yes | Limited: File attachments only; an attached message or a link is not downloadable. | Limited: File attachments only; an attached message or a link is not downloadable. |
+| `mail.createDraft` | `mail_modify` | Yes | Yes | Yes |
+| `mail.send` | `mail_send` | Yes | Limited: With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft. | Limited: With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft. |
+| `mail.modify` | `mail_modify` | Yes | Limited: Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message. | Limited: Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message. |
+| `mail.listLabels` | `mail_read` | Yes | Limited: Returns folders and categories, with the kind. | Limited: Returns folders and categories, with the kind. |
+| `calendar.listCalendars` | `calendar_read` | Yes | Yes | Yes |
+| `calendar.listEvents` | `calendar_read` | Yes | Limited: Text matches the event title. | Limited: Text matches the event title. |
+| `calendar.freeBusy` | `calendar_read` | Yes | Yes | Limited: Personal accounts have no free/busy service: computed from the events of the calendar. |
+| `calendar.createEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. A video conference is a Teams meeting. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. No video conference. |
+| `calendar.updateEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. |
+| `calendar.deleteEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. |
+| `documents.searchFiles` | `docs_read` | Limited: Only files the app created or you picked (the narrow Drive permission). | Yes | Yes |
+| `documents.getFile` | `docs_read` | Limited: Only files the app created or you picked (the narrow Drive permission). | Yes | Yes |
+| `documents.registerPickedFile` | `docs_read` | Yes | Yes | Yes |
+| `documents.readDocument` | `docs_read` | Yes | Limited: Word (.docx) and plain-text files; a PDF or an older .doc is not read. | Limited: Word (.docx) and plain-text files; a PDF or an older .doc is not read. |
+| `documents.createDocument` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Limited: Creates a plain Word (.docx) file of paragraphs. | Limited: Creates a plain Word (.docx) file of paragraphs. |
+| `documents.appendToDocument` | `docs_write` | Yes | Limited: Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict). | Limited: Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict). |
+| `documents.readSheet` | `docs_read` | Yes | Yes | No: Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do. |
+| `documents.appendRows` | `docs_write` | Yes | Limited: Rows go into the first table of the sheet, or below the used range when there is none. A failure that leaves it unknown is reported, not retried. | No: Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do. |
+| `documents.createSpreadsheet` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Limited: Creates an Excel (.xlsx) file with the header row as text. | Limited: Creates an Excel (.xlsx) file with the header row as text. |
+| `documents.uploadFile` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Yes | Yes |
+| `documents.createFolder` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Yes | Yes |
+<!-- capability-matrix:end -->
+
+### Administrator setup: the Microsoft app (bring your own app)
+
+1. In the Microsoft Entra admin center (or the Azure portal) open **App registrations, New registration**. Name it. For **Supported account types** choose **Accounts in any organizational directory and personal Microsoft accounts**. (A personal Microsoft account needs an Entra tenant to register in: a free Azure sign-up creates one.)
+2. Platform **Web**, redirect URI `<console base>/api/connections/callback/microsoft` (copy it from Administration, Browser agent, Connections). `http://localhost` is accepted for development; anything else must be https.
+3. **API permissions, Add a permission, Microsoft Graph, Delegated** (never Application): `offline_access` and `User.Read` always, plus those of the capabilities you will let owners switch on: `Mail.Read`, `Mail.Send`, `Mail.ReadWrite`, `Calendars.Read`, `Calendars.ReadWrite`, `Files.Read`, `Files.ReadWrite`.
+4. **Certificates and secrets, New client secret.** Copy the **value** at once (it is shown once) and note the expiry date (at most 24 months): when it expires every connection stops refreshing at the same moment.
+5. Paste the application (client) id and the secret into the administrator page, set the **tenant** (`common` for work, school and personal accounts; `organizations`, `consumers` or a tenant id narrow it) and switch Microsoft on. Leave publisher verification alone: it is optional and out of reach for an individual.
+
+What the console asks for, per capability (and the plain-words consent the owner reads):
+
+| Capability | Microsoft permission | What the owner is agreeing to |
+|---|---|---|
+| always | `openid`, `email`, `profile`, `offline_access`, `User.Read` | Sign in, know which account this is, and stay signed in |
+| `mail_read` | `Mail.Read` | Read your mail |
+| `mail_send` | `Mail.Send` | Send mail as you (no sending as someone else) |
+| `mail_modify` | `Mail.ReadWrite` | Read and change your mail: drafts, folders, categories, read state (**not** sending) |
+| `calendar_read` | `Calendars.Read` | See your calendars |
+| `calendar_write` | `Calendars.ReadWrite` | Create and change events |
+| `docs_read` | `Files.Read` | Read **all** your OneDrive files (Microsoft has no narrower permission) |
+| `docs_write` | `Files.ReadWrite` | Change **all** your OneDrive files |
+
+Only what the switched-on capabilities need is asked; switching one on later asks for just the added permission. A write brings its read. Microsoft's `Mail.ReadWrite` includes read but **not** send, so `mail_send` is its own switch. Personal accounts have a narrower `Files.ReadWrite.AppFolder` that the record lists as "expected, confirm"; it is not used.
+
+### Work and personal accounts of one person are two connections
+
+The account's stable id is stored as `accountId` in the form **`<tenant id>:<object id>`**, both lower-case GUIDs from the sign-in's id token. A personal account is always in the consumer tenant `9188040d-6c67-4c5b-b112-36a304b66dad`, so the same person's work and personal accounts have different ids and become two connections whose tokens never cross (tested). When no account is named, the consent page asks the owner to **pick the account** (`prompt=select_account`), so a browser signed in to the work account is not silently connected as that account when the personal one was meant; a reconnect names its account (`login_hint`).
+
+### When an administrator must approve (`ADMIN_CONSENT_REQUIRED`)
+
+A work or school account of another organization may be blocked from consenting until that organization's administrator approves the app (the "Need admin approval" screen), depending on its user-consent settings. The console tells this apart from the owner declining:
+
+- the redirect carries `connect=admin_consent_required` (not `denied`); the web page says an administrator must approve and that the link is on the connections page;
+- `GET /api/connections/providers` returns `adminConsentUrl` for Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone (`https://login.microsoftonline.com/organizations/v2.0/adminconsent?client_id=…`, built from the app and nothing personal). The owner sends it on; afterwards they connect again;
+- the typed error is `ADMIN_CONSENT_REQUIRED` (`CapabilityError`, with `details.adminConsentUrl`), and at the token endpoint it is an `OAuthClientError` with `oauthError: 'admin_consent_required'`. No text from Microsoft is shown.
+
+An owner who clicked "Cancel" gets `denied` as before.
+
+### What removing access means
+
+Microsoft has **no per-token revoke for delegated sign-ins**. Disconnect deletes the tokens on the console (and reports `revoked: false`, because Microsoft could not be asked). The app itself stays in the owner's Microsoft account until they remove it there: for a personal account at the account's **Privacy, Apps and services** page (`account.live.com/consent/Manage`); for a work or school account at **My Apps** (`myapps.microsoft.com`, the app's menu), or an administrator deletes the grant. Say so to owners who disconnect for security.
+
+### Differences from Gmail (mail)
+
+| | Gmail | Outlook (Graph) |
+|---|---|---|
+| Labels | one message, many labels | **folders** (one per message) and **categories** (many). The well-known folders carry the neutral system ids every provider shares (`INBOX`, `ARCHIVE`, `DRAFT`, `SENT`, `TRASH`, `SPAM`; the aliases `folder:inbox`, `folder:archive`, … are accepted too), other folders are `folder:<id>` and categories `category:<name>`. `listLabels` returns both, folders first, with `kind` `system` (the well-known folders) or `user` |
+| Archive | remove `INBOX` | `archive: true` moves to the Archive folder; `archive: false` back to the Inbox; removing `INBOX` is archiving. A message is in one folder: more than one destination is `INVALID_INPUT` |
+| Search | one query language | `$filter` for structured queries, `$search` (KQL) when there is free text, a subject or a name, and the two cannot be combined at Graph: in search mode the dates, unread, attachment and category filters are applied to each page, so **a page can be short or empty: follow `nextPageToken` until it is null** |
+| Send | one call | with `mail_modify` on, a draft is created and sent (a retry after a lost answer can look at the draft); with send-only permission, `/me/sendMail`, which returns **no message id** (the answer is a placeholder `sendmail:<uuid>`) and takes attachments under 3 MB |
+| Drafts | `gmail.modify` | need `mail_modify` (`Mail.ReadWrite`); `send({ draftId })` also needs it |
+| Message ids | stable | requested as immutable ids (`Prefer: IdType="ImmutableId"`) so a move does not change them |
+| Body | plain part preferred | the text body is asked for (`Prefer: outlook.body-content-type="text"`); a message with both `text` and `html` is sent as HTML only (Graph has one body) |
+| Attachments | all | file attachments only: an attached message or a link is `NOT_SUPPORTED` |
+
+Queries that cannot be expressed: a search that is both free text and a name or subject is one KQL expression, which Graph evaluates its own way; `unread`, `hasAttachment`, dates and category filters never narrow Graph's own search, only the page that comes back. Every value is escaped (an OData string doubles its quotes; a KQL phrase is quoted with quote and backslash escaped), so operators inside a value are text.
+
+### Calendar: nobody is emailed by surprise
+
+Graph emails the attendees when an event that has any is created, changed or cancelled, and, as far as the documentation read for the decision record says, offers no general "do not notify" switch. The neutral interface promises that an agent does not email people by side effect, so:
+
+- creating an event with attendees, adding attendees, changing an event that has attendees, or cancelling one **fails with `NOTIFY_REQUIRED` unless `notifyAttendees` is true**, before any request that could send; nothing is created or changed;
+- with `notifyAttendees: true` the event is written and Graph sends its invitation, update or cancellation (an organizer's cancellation is `POST …/cancel`, which is what tells the attendees);
+- an event without attendees, and an event somebody else organizes (only the organizer's changes are sent), need nothing.
+
+Times: every request asks for `Prefer: outlook.timezone="UTC"`, so instants come back with `Z`; an event is written as the wall time in the event's `timeZone` (UTC when none is given) with that zone named, and an all-day event is a date. `freeBusy`: `getSchedule` on work and school accounts; **computed from the calendar view on personal accounts** (and whenever calendars are named), clipped to the window. A video conference is a Teams meeting and is `NOT_SUPPORTED` on a personal account. A retried create with an `idempotencyKey` returns the first event (Graph's `transactionId`).
+
+### Documents: OneDrive, Word, Excel
+
+- **Files:** OneDrive for everything. `searchFiles` is Graph's drive search (words in the name or content, under the root or a folder) or a folder listing; a kind filter and short pages work as for mail. A file is uploaded in one request under **4 MB** and through an **upload session** above it, in chunks; a name that clashes is kept and the new file renamed. Names OneDrive refuses (`" * : < > ? / \ |`) become `-`. There is nothing to "pick" at Microsoft: `registerPickedFile` confirms the file can be reached.
+- **Word:** Graph cannot edit a `.docx` in place. `createDocument` uploads a generated plain `.docx` (paragraphs; a built-in writer of about 150 lines on `node:zlib`, no library, so the API image does not grow); `readDocument` extracts the text of a `.docx` here (and reads plain-text files; a PDF or an older `.doc` is `NOT_SUPPORTED`); `appendToDocument` **downloads the file, adds paragraphs and uploads a new version with the file's eTag as an `If-Match` precondition**, so a change made in the meantime is `CONFLICT`, never overwritten. Every other part of the file (styles, images, tables) is carried through untouched. A file without an eTag is refused rather than risked.
+- **Excel:** the workbook API on the file. `readSheet` reads the used range or a given range (cut at the cell limit, marked `truncated`). `appendRows` writes into the **first table of the sheet** when it has one (rows padded to the table's width; a wider row is `INVALID_INPUT`) and otherwise **below the used range**, starting at its first column. **Values are written as values:** a string Excel would read as a formula (it starts with `=`, `+`, `-` or `@`) is stored with a leading apostrophe, which Excel keeps as text; numbers, booleans and ordinary text are unchanged. A failure that leaves it unknown whether the rows were written is **not retried** for a table (`ambiguous: true`, `updatedRange: null`); writing to a range may be repeated because the same cells end the same. `createSpreadsheet` uploads a generated `.xlsx` with the header row as text.
+- **Personal accounts:** the workbook API is documented for OneDrive for Business and SharePoint; **it is not confirmed to work on personal OneDrive**, so `readSheet` and `appendRows` are marked unsupported for personal accounts until an experiment shows otherwise (`NOT_SUPPORTED`, reason `ACCOUNT_TYPE`). Everything else works on a personal account.
+
+### Reliability and privacy
+
+- **Plain `fetch`** against `graph.microsoft.com/v1.0` and `login.microsoftonline.com`, with small typed wrappers: no Microsoft SDK (the official client is large and pulls in its own HTTP stack; a dozen endpoints are used). Recorded here as the issue asks.
+- **Backoff:** at most 3 tries. `429` is retried after `Retry-After` (a wait longer than 30 s is returned as `RATE_LIMITED` with `retryAfterMs` instead of waiting); `502/503/504`, a timeout and a dropped connection are retried **only for requests that are safe to repeat** (reads, deletes, idempotent writes). A write that failed in a way that leaves it unknown is not repeated: the error says `outcomeUnknown: true` (and is not `retryable`).
+- **Concurrency:** 3 requests at a time per connection (Graph allows 4 per mailbox). **Timeout** 30 s per request. `AbortSignal` cancels a call under way and one still waiting for its turn.
+- **Sends do not happen twice.** With a draft, an ambiguous failure of the send is checked by looking at the draft (gone means sent); a caller's `idempotencyKey` is remembered for **ten minutes in this process** (a short-lived server-side record, not shared between API instances: run one API instance, or do not retry across instances) and a repeated call returns the first send. With send-only permission a lost answer cannot be checked, so the same key is refused with `CONFLICT` (`reason: SEND_AMBIGUOUS`) until the owner looks at the sent folder.
+- **A 401** forces one refresh of the access token and one retry; a refused grant is the token service's `CONNECTION_NEEDS_RECONNECT`. A Microsoft refresh token **rotates on every refresh**: the token service stores the new one before the old is dropped.
+- **No content in logs, spans or metrics:** telemetry carries the operation name, the connection id, the status, request and response sizes, the attempt and the duration. Never a subject, an address, a body, a file name, a query or a cell; Graph's own error text is never copied (only its `error.code`, a stable identifier). A marker test checks it (`test/microsoft/microsoft-privacy.spec.ts`).
+- **Page tokens** are opaque, can only be used for the operation that issued them and can never address another user's mailbox.
+
+### Decisions where this differs from the issue
+
+The decision record wins where it disagrees; each of these is also in the pull request.
+
+- **`mail_modify` exists** (record, "What changes in the epic's capability model"): drafts and `modify` need `Mail.ReadWrite`, which the issue's list names without saying which capability it belongs to.
+- **Send with `Mail.Send` alone cannot use a draft**, so large attachments are not available to a send-only connection (3 MB): the issue's draft-and-upload-session path is used when `mail_modify` is on (record, `mail_send` row).
+- **`Files.ReadWrite.AppFolder` is not used** (record: "expected, confirm").
+- **Interface refinements, additive** (as the issue allows): three typed errors (`CONFLICT`, `NOTIFY_REQUIRED`, `ADMIN_CONSENT_REQUIRED`), an optional `idempotencyKey` on an outgoing message, and the provider's account id in the call context (it tells a personal account from a work one).
+- **Interface refinements to the sign-in contract:** two optional hooks on `ConnectionProviderAdapter` (`classifyAuthorizationError`, `adminConsentUrl`), a new callback outcome `admin_consent_required`, and `GET /api/connections/providers` returning the capability matrix and the admin-consent link.
+
+### Not confirmed yet (needs a real account; the issue's verification section)
+
+None of this was observed on a real account, and the pages that would settle it were not reachable. Each is a behaviour the code assumes:
+
+1. That Graph offers no way to create or change an event with attendees without emailing them (if it does, `NOTIFY_REQUIRED` can be relaxed).
+2. The `$filter` and `$search` forms accepted together with the ordering used (`InefficientFilter` risk with a sender filter and `$orderby`).
+3. The Excel workbook API on personal OneDrive, and that a leading apostrophe stores a formula-like string as text through the API.
+4. `If-Match` on a file's content upload and on `createUploadSession` for a Word append.
+5. `getSchedule` on a work account; the absence of free/busy on a personal account.
+6. The scopes Microsoft returns after an incremental consent (only the added ones, or all consented), and the refresh-token inactivity of personal accounts.
+7. The admin-consent error codes and the "needs admin approval" redirect, and the tenants whose policy blocks user consent.
+8. That a personal account's mailbox accepts `Mail.ReadWrite` drafts and the calendar-view reads that replace free/busy for it, and that localized folder names do not matter (well-known folder aliases are used, never display names).
+9. The form of Graph's next links (`/users('<id>')/`, `/drives/<id>/`, `mailFolders('<id>')` are read back as the user's own `/me/...` path; a form not listed there would make a page token fail with `INVALID_INPUT`).

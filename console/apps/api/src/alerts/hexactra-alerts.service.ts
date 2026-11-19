@@ -108,6 +108,14 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       });
       return rows.map((r) => ({ runId: r.id, userId: r.userId, taskName: r.task?.name ?? null, goal: r.goal, recoveries: r.recoveries }));
     },
+    failingDeliveries: async (minFailures, since) => {
+      const groups = await this.prisma.runDelivery.groupBy({ by: ['deliveryId', 'userId', 'kind'], where: { status: 'failed', createdAt: { gte: since }, deliveryId: { not: null } }, _count: { _all: true } });
+      const over = groups.filter((g) => g._count._all >= minFailures && g.deliveryId).sort((a, b) => b._count._all - a._count._all).slice(0, 200);
+      if (over.length === 0) return [];
+      const tasks = await this.prisma.taskDelivery.findMany({ where: { id: { in: over.map((g) => g.deliveryId as string) } }, select: { id: true, task: { select: { name: true } } } });
+      const name = new Map(tasks.map((t) => [t.id, t.task.name]));
+      return over.map((g) => ({ deliveryId: g.deliveryId as string, userId: g.userId, kind: g.kind, taskName: name.get(g.deliveryId as string) ?? null, failures: g._count._all }));
+    },
     busyApprovals: (minUses, since) => this.approvals.busyRules(minUses, since),
     cardUsage: async (since) => {
       // Card payments are the `number` releases that were typed (E37.7): counts and the declared amount, never a card or a merchant.

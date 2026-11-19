@@ -309,7 +309,7 @@ export const mailSend = tool({
 // ---------------------------------------------------------------------------------------------------------------------------
 // Organising (asks, never deletes)
 
-const FORBIDDEN_LABELS = /^(trash|deleteditems|deleted items|bin)$/i;
+const FORBIDDEN_LABELS = /^(trash|deleteditems|folder:deleteditems|deleted items|bin)$/i;
 
 export const mailModify = tool({
   name: 'mail_modify',

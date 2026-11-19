@@ -64,6 +64,9 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'SecretsActivity', category: 'credentials' },
   { model: 'Connection', category: 'credentials' },
   { model: 'ConnectionFlow', category: 'credentials' },
+  { model: 'TaskDelivery', category: 'browser-tasks' },
+  { model: 'RunDelivery', category: 'browser-tasks' },
+  { model: 'DeliveryRecipient', category: 'browser-tasks' },
   { model: 'MailTrigger', category: 'browser-tasks' },
   { model: 'MailTriggerEvent', category: 'browser-tasks' },
 ];

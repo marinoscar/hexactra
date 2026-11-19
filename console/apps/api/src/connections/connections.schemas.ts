@@ -3,6 +3,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { MATRIX_COLUMNS } from './capability-matrix';
 import { CAPABILITIES, CAPABILITY_GROUPS, CONNECTION_PROVIDER_IDS, MAX_LABEL_LENGTH } from './connections.constants';
 
 const capability = z.enum(CAPABILITIES);
@@ -117,6 +118,19 @@ export const providerAvailabilitySchema = z.object({
   ready: z.boolean().describe('The provider can be connected now.'),
   reason: z.enum(['not_installed', 'disabled', 'not_configured']).nullable().describe('Why not: the code is not installed, the administrator switched it off, or the setup is unfinished.'),
   accountTypes: z.array(accountTypeSchema).describe('Which kinds of account work, and what to know before starting.'),
+  matrixColumns: z.array(z.enum(MATRIX_COLUMNS)).describe('The kinds of account the capability matrix distinguishes at this provider.'),
+  capabilityMatrix: z
+    .array(
+      z.object({
+        method: z.string().describe('`mail.search`, `calendar.createEvent`, `documents.appendRows`, ...'),
+        service: z.enum(['mail', 'calendar', 'documents']),
+        effect: z.enum(['read', 'write']),
+        capability: capability.describe('The switch the method needs.'),
+        support: z.record(z.string(), z.object({ support: z.enum(['supported', 'limited', 'unsupported']), note: z.string().optional() })).describe('Per matrix column: whether the method works, and how it is limited or why it is not supported.'),
+      }),
+    )
+    .describe('What each kind of account can do, per method. A method marked `unsupported` fails with `NOT_SUPPORTED`; do not offer it.'),
+  adminConsentUrl: z.string().nullable().describe('Microsoft: the address an administrator of the owner\'s organization opens to approve the app for everyone. Null elsewhere.'),
 });
 export class ProviderAvailabilityResponseDto extends createZodDto(providerAvailabilitySchema) {}
 

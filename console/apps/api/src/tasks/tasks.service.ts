@@ -11,6 +11,7 @@ import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunEndHooks } from './run-end-hooks';
+import { TaskDeleteHooks } from './task-delete-hooks';
 import { RunEvents } from './run-events';
 import { RunMetrics } from './run-metrics';
 import { PoliciesService } from '../policies/policies.service';
@@ -60,6 +61,7 @@ export class TasksService {
     @Optional() private readonly taskSchedules?: TaskSchedulesService,
     @Optional() readonly events?: RunEvents,
     @Optional() readonly endHooks?: RunEndHooks,
+    @Optional() private readonly deleteHooks?: TaskDeleteHooks,
   ) {}
 
   /** Tell waiters (MCP `run_wait`) that a run recorded a step; after the write. Never fails. */
@@ -198,6 +200,8 @@ export class TasksService {
   }
 
   async deleteTask(userId: string, id: string): Promise<void> {
+    // Before the rows go: what lives outside them (a webhook delivery's signing secret) is found through them.
+    if (this.deleteHooks && (await this.db(userId).task.findFirst({ where: { id }, select: { id: true } }))) await this.deleteHooks.fire(userId, id);
     const { count } = await this.db(userId).task.deleteMany({ where: { id } });
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
   }

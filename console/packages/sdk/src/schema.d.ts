@@ -6359,166 +6359,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connections/mcp/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Whether MCP servers can be added here
-         * @description Whether the administrator has switched MCP servers on (off by default) and whether the hosts are restricted. Never the lists.
-         *
-         *     **Requires:** authentication, plus permission `connections:read`.
-         */
-        get: operations["mcpConnections_status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/connections/mcp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Add an MCP server as a connection
-         * @description Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        post: operations["mcpConnections_add"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/connections/{id}/tools": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The tools of an MCP server
-         * @description The stored snapshot (no request is made to the server): each tool's title, description as plain text, parameters, the server's hints, what they suggest, your decision (`off`, `read`, `write`) and whether it awaits your review.
-         *
-         *     **Requires:** authentication, plus permission `connections:read`.
-         */
-        get: operations["mcpConnections_tools"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/connections/{id}/tools/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Refresh the tools of an MCP server
-         * @description Lists the server's tools again. A tool you enabled whose description, schema or hints changed is switched OFF and flagged `changed`; a tool that is new arrives `off` and flagged `new`; a tool the server stopped offering disappears. You are notified once. Only your own decision switches a tool on.
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        post: operations["mcpConnections_refresh"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/connections/{id}/tools/{toolId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Decide what a tool may do
-         * @description `off` (default), `read` (called without asking; choose it only for a tool that only reads) or `write` (it changes something: it asks you each time unless you chose "Don't ask again"). The server's hints only suggest a default; you decide. Deciding clears the review flag.
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        patch: operations["mcpConnections_setMode"];
-        trace?: never;
-    };
-    "/api/connections/{id}/mcp-auth": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Give an MCP server a new sign-in
-         * @description A new bearer token or header value (tested before it is kept), or a new OAuth consent (`consent.authorizeUrl`). This is how a connection that needs reconnecting comes back. The secret is write-only.
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        post: operations["mcpConnections_reauth"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/connections/admin/mcp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The deployment's MCP switch and host lists
-         * @description Whether owners may add and use MCP servers (off by default), and the allow-list and block-list of hosts. No access to any owner's connection or tool.
-         *
-         *     **Requires:** authentication, plus permission `system_settings:read`.
-         */
-        get: operations["mcpAdmin_get"];
-        /**
-         * Set the MCP switch and host lists
-         * @description Switching it off stops every MCP connection from being used within seconds (no call is made); the connections and tool choices are kept. Entries are host names or `*.example.test`. An empty allow-list admits any public host; the block-list wins.
-         *
-         *     **Requires:** authentication, plus permission `system_settings:write`.
-         */
-        put: operations["mcpAdmin_save"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/tasks/{id}/mail-triggers": {
         parameters: {
             query?: never;
@@ -6891,6 +6731,26 @@ export interface paths {
          *     **Requires:** authentication, plus permission `runs:delete`.
          */
         post: operations["runRetention_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A run's masked PDF report, by signed link
+         * @description No session: the signed token in the path is the authority. It names one run and expires 7 days after it was issued (deliveries and the `runs.run.finished` webhook carry it as `reportUrl`). It streams the masked PDF with `Cache-Control: private, no-store` and exposes nothing else. An expired, altered or unknown link, and a run that was deleted, are all `404`.
+         */
+        get: operations["runReportLink_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8543,6 +8403,340 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's deliveries
+         * @description What is sent when a run of the task ends (E39.6): an email with the PDF report, a signed webhook with the fields, a spreadsheet row, files saved to a folder. In the order they are sent. Each email delivery lists its addresses with where each stands (`own`, `confirmed`, `unconfirmed`, `unsubscribed`). Never a secret.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["taskDeliveries_list"];
+        put?: never;
+        /**
+         * Add a delivery to a task
+         * @description At most 10 per task. Recipients, destinations and file names are fixed here: nothing in a run can add or change one. An email address that is not yours (or one of your connections') must first be confirmed with `POST /delivery-recipients`; a delivery with such an address can be saved with `enabled: false`. A webhook delivery answers its `signingSecret` once; it cannot be read again. 400 `INVALID_DELIVERY` lists the problems (`details.issues`); 409 `RECIPIENT_NOT_CONFIRMED` lists the addresses (`details.addresses`); 422 `RECIPIENT_LIMIT` or `TOO_MANY_DELIVERIES`.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["taskDeliveries_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/deliveries/{deliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a delivery
+         * @description Its log entries stay with their runs, without the link to it. A webhook delivery's signing secret is deleted.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        delete: operations["taskDeliveries_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a delivery
+         * @description The kind never changes. `config` is the whole new configuration. Switching a delivery on, or changing it, re-checks it (addresses confirmed, the connection still yours and allowed).
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        patch: operations["taskDeliveries_update"];
+        trace?: never;
+    };
+    "/api/tasks/{id}/deliveries/{deliveryId}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test
+         * @description Sends a clearly marked TEST with sample values to the delivery's own destination (an email marked TEST, a webhook of type `deliveries.test`, a spreadsheet row whose Run ID reads `TEST-...` and whose location is returned, a small text file in the folder). It reads no run and writes no run's log. A failure is a `200` with `ok: false` and the `code`. At most 10 a minute.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["taskDeliveries_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What was sent for a run
+         * @description The delivery log of one of your runs (E39.6): one entry per delivery with its `status` (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed `errorCode` with a fixed `errorText`, and safe `detail` (sizes, counts, the destination's kind). Never an address, a subject, a body, a cell or a file name.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runDeliveries_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/deliveries/{runDeliveryId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a delivery
+         * @description A delivery that failed, or one stuck pending or sending, gets a fresh set of attempts. The send checks for its own earlier work first (a spreadsheet row, an uploaded file), but an email whose outcome was unknown (`OUTCOME_UNKNOWN`) may arrive twice. 409 `DELIVERY_NOT_RETRYABLE` otherwise.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["runDeliveries_retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/delivery-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The addresses you confirmed
+         * @description Addresses that are not yours that you confirmed as recipients of your run reports, with the time, and whether the recipient stopped the emails.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["deliveryRecipients_list"];
+        put?: never;
+        /**
+         * Confirm an address
+         * @description Your explicit "yes, send my run reports to this address": the web app asks with a dialog naming the address. Recorded with the time. The recipient gets a one-time notice on first use, with a link that stops the emails. Confirming again re-enables a recipient who had stopped them. Your own address and the addresses of your connections need no confirmation. No MCP tool does this.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["deliveryRecipients_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliveries/unsubscribe/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stop receiving run reports (page)
+         * @description A page with one button. Opening the link changes nothing (mail scanners open links); the button does.
+         */
+        get: operations["deliveryUnsubscribe_show"];
+        put?: never;
+        /**
+         * Stop receiving run reports
+         * @description Disables the address on every delivery of the person who set them up, until that person confirms it again. Idempotent.
+         */
+        post: operations["deliveryUnsubscribe_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/mcp/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether MCP servers can be added here
+         * @description Whether the administrator has switched MCP servers on (off by default) and whether the hosts are restricted. Never the lists.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["mcpConnections_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an MCP server as a connection
+         * @description Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tools of an MCP server
+         * @description The stored snapshot (no request is made to the server): each tool's title, description as plain text, parameters, the server's hints, what they suggest, your decision (`off`, `read`, `write`) and whether it awaits your review.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["mcpConnections_tools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/tools/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh the tools of an MCP server
+         * @description Lists the server's tools again. A tool you enabled whose description, schema or hints changed is switched OFF and flagged `changed`; a tool that is new arrives `off` and flagged `new`; a tool the server stopped offering disappears. You are notified once. Only your own decision switches a tool on.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/tools/{toolId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Decide what a tool may do
+         * @description `off` (default), `read` (called without asking; choose it only for a tool that only reads) or `write` (it changes something: it asks you each time unless you chose "Don't ask again"). The server's hints only suggest a default; you decide. Deciding clears the review flag.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        patch: operations["mcpConnections_setMode"];
+        trace?: never;
+    };
+    "/api/connections/{id}/mcp-auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give an MCP server a new sign-in
+         * @description A new bearer token or header value (tested before it is kept), or a new OAuth consent (`consent.authorizeUrl`). This is how a connection that needs reconnecting comes back. The secret is write-only.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_reauth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The deployment's MCP switch and host lists
+         * @description Whether owners may add and use MCP servers (off by default), and the allow-list and block-list of hosts. No access to any owner's connection or tool.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["mcpAdmin_get"];
+        /**
+         * Set the MCP switch and host lists
+         * @description Switching it off stops every MCP connection from being used within seconds (no call is made); the connections and tool choices are kept. Entries are host names or `*.example.test`. An empty allow-list admits any public host; the block-list wins.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        put: operations["mcpAdmin_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -8660,6 +8854,7 @@ export interface components {
              * @example RUN_NOT_PAUSABLE
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
+             * @example REPORT_LINK_INVALID
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -8695,6 +8890,14 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example INVALID_DELIVERY
+             * @example DELIVERY_NOT_FOUND
+             * @example TOO_MANY_DELIVERIES
+             * @example RUN_DELIVERY_NOT_FOUND
+             * @example DELIVERY_NOT_RETRYABLE
+             * @example DELIVERY_TEST_RATE_LIMITED
+             * @example RECIPIENT_NOT_CONFIRMED
+             * @example RECIPIENT_LIMIT
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -10011,6 +10214,11 @@ export interface components {
                     };
                 };
             };
+            deliveries: {
+                maxRecipientsPerTask?: number;
+                maxEmailsPerDay?: number;
+                maxAttachmentMb?: number;
+            };
             mailTriggers: {
                 minPollSeconds?: number;
                 maxTriggersPerUser?: number;
@@ -10279,6 +10487,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            deliveries?: {
+                maxRecipientsPerTask?: number;
+                maxEmailsPerDay?: number;
+                maxAttachmentMb?: number;
             };
             mailTriggers?: {
                 minPollSeconds?: number;
@@ -10553,6 +10766,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            deliveries?: {
+                maxRecipientsPerTask?: number;
+                maxEmailsPerDay?: number;
+                maxAttachmentMb?: number;
             };
             mailTriggers?: {
                 minPollSeconds?: number;
@@ -15919,6 +16137,32 @@ export interface components {
                 supported: boolean;
                 note: string;
             }[];
+            /** @description The kinds of account the capability matrix distinguishes at this provider. */
+            matrixColumns: ("google" | "microsoft_work" | "microsoft_personal")[];
+            /** @description What each kind of account can do, per method. A method marked `unsupported` fails with `NOT_SUPPORTED`; do not offer it. */
+            capabilityMatrix: {
+                /** @description `mail.search`, `calendar.createEvent`, `documents.appendRows`, ... */
+                method: string;
+                /** @enum {string} */
+                service: "mail" | "calendar" | "documents";
+                /** @enum {string} */
+                effect: "read" | "write";
+                /**
+                 * @description The switch the method needs.
+                 * @enum {string}
+                 */
+                capability: "mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
+                /** @description Per matrix column: whether the method works, and how it is limited or why it is not supported. */
+                support: {
+                    [key: string]: {
+                        /** @enum {string} */
+                        support: "supported" | "limited" | "unsupported";
+                        note?: string;
+                    };
+                };
+            }[];
+            /** @description Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone. Null elsewhere. */
+            adminConsentUrl: string | null;
         };
         AuthorizeResponseDto: {
             /** @description Send the browser here: the provider's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
@@ -16081,290 +16325,6 @@ export interface components {
             clientSecret?: string;
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
-        };
-        McpStatusResponseDto: {
-            /** @description The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`) */
-            externalAppsEnabled: boolean;
-            /** @description The switch of personal access tokens over MCP (`mcp.patMcpEnabled`) */
-            patMcpEnabled: boolean;
-            /** @description Whether the OAuth server is on (Administration → OAuth clients) */
-            oauthEnabled: boolean;
-            /** @description `<APP_URL>/api/mcp` */
-            mcpUrl: string;
-            /** @description Whether APP_URL is an https:// address on a public host name (not loopback, not a private address) */
-            publicHttps: boolean;
-            /** @description Active OAuth grants to the MCP endpoint, every user */
-            connectedApps: number;
-            connectedUsers: number;
-            /** @description Active grants holding browser:evaluate, desktop:control or policies:write */
-            highRiskGrants: number;
-        };
-        AddMcpResponseDto: {
-            /** @description Null while an OAuth consent is pending: the connection exists once the consent returns. */
-            connection: {
-                /** Format: uuid */
-                id: string;
-                /** @enum {string} */
-                provider: "google" | "microsoft" | "mcp";
-                label: string;
-                accountEmail: string;
-                accountName: string | null;
-                /** @description The switches that are on. */
-                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
-                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
-                defaultFor: ("mail" | "calendar" | "docs")[];
-                /** @enum {string} */
-                status: "active" | "paused" | "needs_reconnect" | "revoked";
-                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
-                statusReason: string | null;
-                /** @description ISO 8601 timestamp */
-                connectedAt: string;
-                lastUsedAt: string | null;
-                lastRefreshAt: string | null;
-                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
-                mcp?: {
-                    url: string;
-                    /** @enum {string} */
-                    auth: "none" | "bearer" | "header" | "oauth";
-                    serverName: string | null;
-                    tools: {
-                        total: number;
-                        enabled: number;
-                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
-                        needsReview: number;
-                    };
-                    toolsFetchedAt: string | null;
-                };
-            } | null;
-            catalog: {
-                tools: {
-                    /** Format: uuid */
-                    id: string;
-                    /** @description The server's own name for the tool. */
-                    name: string;
-                    title: string | null;
-                    /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
-                    description: string;
-                    parameters: {
-                        name: string;
-                        type: string | null;
-                        required: boolean;
-                    }[];
-                    /** @description What the server claims about the tool. A hint is not a guarantee. */
-                    hints: {
-                        readOnly: boolean | null;
-                        destructive: boolean | null;
-                        idempotent: boolean | null;
-                        openWorld: boolean | null;
-                    };
-                    /**
-                     * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
-                     * @enum {string}
-                     */
-                    suggested: "read" | "write";
-                    /**
-                     * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
-                     * @enum {string}
-                     */
-                    mode: "off" | "read" | "write";
-                    /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
-                    review: ("new" | "changed") | null;
-                }[];
-                needsReview: number;
-                fetchedAt: string | null;
-            } | null;
-            /** @description OAuth: send the browser here. The flow is bound to this browser by an HttpOnly cookie set on this response. */
-            consent: {
-                authorizeUrl: string;
-                /** @description ISO 8601 timestamp */
-                expiresAt: string;
-            } | null;
-        };
-        AddMcpDto: {
-            /** @description The server's Streamable HTTP endpoint. `https` only; no user name, password, query or fragment. */
-            url: string;
-            /** @description What you call it. Defaults to the server's host name. */
-            label?: string;
-            /** @description How the server signs you in: nothing, a bearer token, a header, or OAuth (a consent at the server's own sign-in page). Secrets are stored encrypted and never returned. */
-            auth: {
-                /** @constant */
-                kind: "none";
-            } | {
-                /** @constant */
-                kind: "bearer";
-                token: string;
-            } | {
-                /** @constant */
-                kind: "header";
-                header: string;
-                value: string;
-            } | {
-                /** @constant */
-                kind: "oauth";
-                /** @description The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration). */
-                clientId?: string | null;
-                /** @description Write-only. Only for a confidential client you registered. */
-                clientSecret?: string | null;
-            };
-            /** @description For OAuth: a path on this console to return to (default `/settings/connections`). */
-            returnTo?: string;
-        };
-        McpCatalogResponseDto: {
-            tools: {
-                /** Format: uuid */
-                id: string;
-                /** @description The server's own name for the tool. */
-                name: string;
-                title: string | null;
-                /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
-                description: string;
-                parameters: {
-                    name: string;
-                    type: string | null;
-                    required: boolean;
-                }[];
-                /** @description What the server claims about the tool. A hint is not a guarantee. */
-                hints: {
-                    readOnly: boolean | null;
-                    destructive: boolean | null;
-                    idempotent: boolean | null;
-                    openWorld: boolean | null;
-                };
-                /**
-                 * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
-                 * @enum {string}
-                 */
-                suggested: "read" | "write";
-                /**
-                 * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
-                 * @enum {string}
-                 */
-                mode: "off" | "read" | "write";
-                /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
-                review: ("new" | "changed") | null;
-            }[];
-            needsReview: number;
-            fetchedAt: string | null;
-        };
-        McpToolResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** @description The server's own name for the tool. */
-            name: string;
-            title: string | null;
-            /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
-            description: string;
-            parameters: {
-                name: string;
-                type: string | null;
-                required: boolean;
-            }[];
-            /** @description What the server claims about the tool. A hint is not a guarantee. */
-            hints: {
-                readOnly: boolean | null;
-                destructive: boolean | null;
-                idempotent: boolean | null;
-                openWorld: boolean | null;
-            };
-            /**
-             * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
-             * @enum {string}
-             */
-            suggested: "read" | "write";
-            /**
-             * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
-             * @enum {string}
-             */
-            mode: "off" | "read" | "write";
-            /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
-            review: ("new" | "changed") | null;
-        };
-        SetToolModeDto: {
-            /**
-             * @description `off`, `read` (the tool only reads: it is called without asking) or `write` (it changes something: it asks you first).
-             * @enum {string}
-             */
-            mode: "off" | "read" | "write";
-        };
-        McpAuthResponseDto: {
-            connection: {
-                /** Format: uuid */
-                id: string;
-                /** @enum {string} */
-                provider: "google" | "microsoft" | "mcp";
-                label: string;
-                accountEmail: string;
-                accountName: string | null;
-                /** @description The switches that are on. */
-                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
-                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
-                defaultFor: ("mail" | "calendar" | "docs")[];
-                /** @enum {string} */
-                status: "active" | "paused" | "needs_reconnect" | "revoked";
-                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
-                statusReason: string | null;
-                /** @description ISO 8601 timestamp */
-                connectedAt: string;
-                lastUsedAt: string | null;
-                lastRefreshAt: string | null;
-                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
-                mcp?: {
-                    url: string;
-                    /** @enum {string} */
-                    auth: "none" | "bearer" | "header" | "oauth";
-                    serverName: string | null;
-                    tools: {
-                        total: number;
-                        enabled: number;
-                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
-                        needsReview: number;
-                    };
-                    toolsFetchedAt: string | null;
-                };
-            };
-            consent: {
-                authorizeUrl: string;
-                /** @description ISO 8601 timestamp */
-                expiresAt: string;
-            } | null;
-        };
-        McpAuthDto: {
-            auth: {
-                /** @constant */
-                kind: "none";
-            } | {
-                /** @constant */
-                kind: "bearer";
-                token: string;
-            } | {
-                /** @constant */
-                kind: "header";
-                header: string;
-                value: string;
-            } | {
-                /** @constant */
-                kind: "oauth";
-                /** @description The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration). */
-                clientId?: string | null;
-                /** @description Write-only. Only for a confidential client you registered. */
-                clientSecret?: string | null;
-            };
-            returnTo?: string;
-        };
-        McpAdminResponseDto: {
-            enabled: boolean;
-            allowedHosts: string[];
-            blockedHosts: string[];
-        };
-        SaveMcpAdminDto: {
-            /** @description Whether owners may add and use MCP servers. Off by default. */
-            enabled?: boolean;
-            /** @description Exact host names or `*.example.test`. Empty: any public host. Replaces the stored list. */
-            allowedHosts?: string[];
-            /** @description Hosts that are never allowed, whatever the allow-list says. Replaces the stored list. */
-            blockedHosts?: string[];
         };
         MailTriggerResponseDto: {
             /** Format: uuid */
@@ -20030,6 +19990,23 @@ export interface components {
             }[];
             nextCursor: string | null;
         };
+        McpStatusResponseDto: {
+            /** @description The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`) */
+            externalAppsEnabled: boolean;
+            /** @description The switch of personal access tokens over MCP (`mcp.patMcpEnabled`) */
+            patMcpEnabled: boolean;
+            /** @description Whether the OAuth server is on (Administration → OAuth clients) */
+            oauthEnabled: boolean;
+            /** @description `<APP_URL>/api/mcp` */
+            mcpUrl: string;
+            /** @description Whether APP_URL is an https:// address on a public host name (not loopback, not a private address) */
+            publicHttps: boolean;
+            /** @description Active OAuth grants to the MCP endpoint, every user */
+            connectedApps: number;
+            connectedUsers: number;
+            /** @description Active grants holding browser:evaluate, desktop:control or policies:write */
+            highRiskGrants: number;
+        };
         AdminConnectedAppListResponseDto: {
             /**
              * Format: uuid
@@ -20284,6 +20261,8 @@ export interface components {
             inputs?: {
                 [key: string]: string;
             } | null;
+            /** @description Which of the task's deliveries this schedule's runs use (E39.6); null (the default) uses all of the task's enabled ones */
+            deliveryIds?: string[] | null;
             /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00" */
             description: string;
             /** @description ISO 8601 timestamp */
@@ -20348,6 +20327,8 @@ export interface components {
             inputs?: {
                 [key: string]: string | number;
             };
+            /** @description Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`. */
+            deliveryIds?: string[] | null;
         };
         UpdateScheduleDto: {
             cron?: string;
@@ -20361,6 +20342,8 @@ export interface components {
             inputs?: {
                 [key: string]: string | number;
             } | null;
+            /** @description Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`. */
+            deliveryIds?: string[] | null;
         };
         ChatPageResponseDto: {
             items: {
@@ -20995,6 +20978,430 @@ export interface components {
                 info: number;
             };
             lastEvaluatedAt: string | null;
+        };
+        DeliveryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            enabled: boolean;
+            /** @enum {string} */
+            when: "always" | "succeeded" | "failed" | "needs_attention";
+            position: number;
+            /** @description The configuration as stored. Never a secret. */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description `email`: where each address stands. Empty for other kinds. */
+            recipients: {
+                address: string;
+                /** @enum {string} */
+                state: "own" | "confirmed" | "unconfirmed" | "unsubscribed";
+            }[];
+            /** @description The connection it uses; `label` is null once the connection was removed. */
+            connection: {
+                /** Format: uuid */
+                id: string;
+                label: string | null;
+            } | null;
+            /** @description Why the system switched it off. */
+            disabledReason: "connection_removed" | null;
+            /** @description `webhook`: a signing secret is stored. Null for other kinds. */
+            webhookSecretConfigured: boolean | null;
+            /** @description An ISO 8601 instant. */
+            createdAt: string;
+            /** @description An ISO 8601 instant. */
+            updatedAt: string;
+        };
+        DeliveryCreatedResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            enabled: boolean;
+            /** @enum {string} */
+            when: "always" | "succeeded" | "failed" | "needs_attention";
+            position: number;
+            /** @description The configuration as stored. Never a secret. */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description `email`: where each address stands. Empty for other kinds. */
+            recipients: {
+                address: string;
+                /** @enum {string} */
+                state: "own" | "confirmed" | "unconfirmed" | "unsubscribed";
+            }[];
+            /** @description The connection it uses; `label` is null once the connection was removed. */
+            connection: {
+                /** Format: uuid */
+                id: string;
+                label: string | null;
+            } | null;
+            /** @description Why the system switched it off. */
+            disabledReason: "connection_removed" | null;
+            /** @description `webhook`: a signing secret is stored. Null for other kinds. */
+            webhookSecretConfigured: boolean | null;
+            /** @description An ISO 8601 instant. */
+            createdAt: string;
+            /** @description An ISO 8601 instant. */
+            updatedAt: string;
+            /** @description `webhook` only, only on creation: the secret to verify the signature with (`whsec_...`). It cannot be read again. */
+            signingSecret: string | null;
+        };
+        CreateDeliveryDto: {
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            /** @description The configuration of the kind (see the description of this route). */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on. */
+            enabled?: boolean;
+            /**
+             * @description `always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).
+             * @enum {string}
+             */
+            when?: "always" | "succeeded" | "failed" | "needs_attention";
+            position?: number;
+        };
+        UpdateDeliveryDto: {
+            /** @description Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on. */
+            enabled?: boolean;
+            /**
+             * @description `always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).
+             * @enum {string}
+             */
+            when?: "always" | "succeeded" | "failed" | "needs_attention";
+            position?: number;
+            /** @description The whole new config for the delivery's kind. */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        DeliveryTestResponseDto: {
+            ok: boolean;
+            code: ("CONNECTION_NEEDS_RECONNECT" | "CAPABILITY_OFF" | "PERMISSION_MISSING" | "NOT_FOUND" | "RATE_LIMITED" | "QUOTA_EXCEEDED" | "TOO_LARGE" | "PROVIDER_ERROR" | "CONNECTION_PAUSED" | "CONNECTION_NOT_FOUND" | "INVALID_INPUT" | "NOT_SUPPORTED" | "ABORTED" | "CONFLICT" | "NOTIFY_REQUIRED" | "ADMIN_CONSENT_REQUIRED" | "OUTCOME_UNKNOWN" | "NETWORK_ERROR" | "TIMEOUT" | "HTTP_4XX" | "HTTP_5XX" | "DESTINATION_BLOCKED" | "SECRET_MISSING" | "KIND_UNAVAILABLE" | "EMAIL_NOT_CONFIGURED" | "EMAIL_REFUSED" | "DAILY_LIMIT" | "RECIPIENT_UNSUBSCRIBED" | "RECIPIENT_NOT_CONFIRMED" | "CONFIG_INVALID" | "INTERNAL") | null;
+            /** @description One fixed sentence. */
+            message: string;
+            /** @description Safe facts: sizes, counts, and for a sheet the `location` of the TEST row. */
+            detail: {
+                [key: string]: unknown;
+            };
+        };
+        RunDeliveryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            runId: string;
+            /** @description Null once the delivery was deleted: the log stays. */
+            deliveryId: string | null;
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            /** @enum {string} */
+            status: "pending" | "sending" | "sent" | "failed" | "skipped";
+            attempts: number;
+            errorCode: ("CONNECTION_NEEDS_RECONNECT" | "CAPABILITY_OFF" | "PERMISSION_MISSING" | "NOT_FOUND" | "RATE_LIMITED" | "QUOTA_EXCEEDED" | "TOO_LARGE" | "PROVIDER_ERROR" | "CONNECTION_PAUSED" | "CONNECTION_NOT_FOUND" | "INVALID_INPUT" | "NOT_SUPPORTED" | "ABORTED" | "CONFLICT" | "NOTIFY_REQUIRED" | "ADMIN_CONSENT_REQUIRED" | "OUTCOME_UNKNOWN" | "NETWORK_ERROR" | "TIMEOUT" | "HTTP_4XX" | "HTTP_5XX" | "DESTINATION_BLOCKED" | "SECRET_MISSING" | "KIND_UNAVAILABLE" | "EMAIL_NOT_CONFIGURED" | "EMAIL_REFUSED" | "DAILY_LIMIT" | "RECIPIENT_UNSUBSCRIBED" | "RECIPIENT_NOT_CONFIRMED" | "CONFIG_INVALID" | "INTERNAL") | null;
+            /** @description A fixed sentence for the code. */
+            errorText: string | null;
+            /** @description Safe facts only: the destination, sizes, counts. Never content. */
+            detail: {
+                [key: string]: unknown;
+            };
+            sentAt: string | null;
+            nextAttemptAt: string | null;
+            /** @description An ISO 8601 instant. */
+            createdAt: string;
+        };
+        DeliveryRecipientResponseDto: {
+            address: string;
+            /** @description An ISO 8601 instant. */
+            confirmedAt: string;
+            unsubscribedAt: string | null;
+        };
+        ConfirmRecipientDto: {
+            /**
+             * Format: email
+             * @description An email address.
+             */
+            address: string;
+        };
+        ConnectionMcpStatusResponseDto: {
+            /** @description Whether the administrator has switched MCP servers on for this deployment. */
+            enabled: boolean;
+            /** @description The administrator limits which hosts may be used. */
+            restricted: boolean;
+        };
+        AddMcpResponseDto: {
+            /** @description Null while an OAuth consent is pending: the connection exists once the consent returns. */
+            connection: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                provider: "google" | "microsoft" | "mcp";
+                label: string;
+                accountEmail: string;
+                accountName: string | null;
+                /** @description The switches that are on. */
+                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                defaultFor: ("mail" | "calendar" | "docs")[];
+                /** @enum {string} */
+                status: "active" | "paused" | "needs_reconnect" | "revoked";
+                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+                statusReason: string | null;
+                /** @description ISO 8601 timestamp */
+                connectedAt: string;
+                lastUsedAt: string | null;
+                lastRefreshAt: string | null;
+                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+                mcp?: {
+                    url: string;
+                    /** @enum {string} */
+                    auth: "none" | "bearer" | "header" | "oauth";
+                    serverName: string | null;
+                    tools: {
+                        total: number;
+                        enabled: number;
+                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                        needsReview: number;
+                    };
+                    toolsFetchedAt: string | null;
+                };
+            } | null;
+            catalog: {
+                tools: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @description The server's own name for the tool. */
+                    name: string;
+                    title: string | null;
+                    /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
+                    description: string;
+                    parameters: {
+                        name: string;
+                        type: string | null;
+                        required: boolean;
+                    }[];
+                    /** @description What the server claims about the tool. A hint is not a guarantee. */
+                    hints: {
+                        readOnly: boolean | null;
+                        destructive: boolean | null;
+                        idempotent: boolean | null;
+                        openWorld: boolean | null;
+                    };
+                    /**
+                     * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
+                     * @enum {string}
+                     */
+                    suggested: "read" | "write";
+                    /**
+                     * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
+                     * @enum {string}
+                     */
+                    mode: "off" | "read" | "write";
+                    /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
+                    review: ("new" | "changed") | null;
+                }[];
+                needsReview: number;
+                fetchedAt: string | null;
+            } | null;
+            /** @description OAuth: send the browser here. The flow is bound to this browser by an HttpOnly cookie set on this response. */
+            consent: {
+                authorizeUrl: string;
+                /** @description ISO 8601 timestamp */
+                expiresAt: string;
+            } | null;
+        };
+        AddMcpDto: {
+            /** @description The server's Streamable HTTP endpoint. `https` only; no user name, password, query or fragment. */
+            url: string;
+            /** @description What you call it. Defaults to the server's host name. */
+            label?: string;
+            /** @description How the server signs you in: nothing, a bearer token, a header, or OAuth (a consent at the server's own sign-in page). Secrets are stored encrypted and never returned. */
+            auth: {
+                /** @constant */
+                kind: "none";
+            } | {
+                /** @constant */
+                kind: "bearer";
+                token: string;
+            } | {
+                /** @constant */
+                kind: "header";
+                header: string;
+                value: string;
+            } | {
+                /** @constant */
+                kind: "oauth";
+                /** @description The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration). */
+                clientId?: string | null;
+                /** @description Write-only. Only for a confidential client you registered. */
+                clientSecret?: string | null;
+            };
+            /** @description For OAuth: a path on this console to return to (default `/settings/connections`). */
+            returnTo?: string;
+        };
+        McpCatalogResponseDto: {
+            tools: {
+                /** Format: uuid */
+                id: string;
+                /** @description The server's own name for the tool. */
+                name: string;
+                title: string | null;
+                /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
+                description: string;
+                parameters: {
+                    name: string;
+                    type: string | null;
+                    required: boolean;
+                }[];
+                /** @description What the server claims about the tool. A hint is not a guarantee. */
+                hints: {
+                    readOnly: boolean | null;
+                    destructive: boolean | null;
+                    idempotent: boolean | null;
+                    openWorld: boolean | null;
+                };
+                /**
+                 * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
+                 * @enum {string}
+                 */
+                suggested: "read" | "write";
+                /**
+                 * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
+                 * @enum {string}
+                 */
+                mode: "off" | "read" | "write";
+                /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
+                review: ("new" | "changed") | null;
+            }[];
+            needsReview: number;
+            fetchedAt: string | null;
+        };
+        McpToolResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description The server's own name for the tool. */
+            name: string;
+            title: string | null;
+            /** @description The server's description as plain text (markup and control characters removed). It is the server's claim, not Hexactra's. */
+            description: string;
+            parameters: {
+                name: string;
+                type: string | null;
+                required: boolean;
+            }[];
+            /** @description What the server claims about the tool. A hint is not a guarantee. */
+            hints: {
+                readOnly: boolean | null;
+                destructive: boolean | null;
+                idempotent: boolean | null;
+                openWorld: boolean | null;
+            };
+            /**
+             * @description What the hints suggest. A tool with no hints is suggested `write`. Only a suggestion: nothing is on until you switch it on.
+             * @enum {string}
+             */
+            suggested: "read" | "write";
+            /**
+             * @description Your decision: `off` (default), `read` (called without asking) or `write` (asks you each time unless you chose "Don't ask again").
+             * @enum {string}
+             */
+            mode: "off" | "read" | "write";
+            /** @description Set while the tool is new, or its description, schema or hints changed since you decided: it is off until you decide again. */
+            review: ("new" | "changed") | null;
+        };
+        SetToolModeDto: {
+            /**
+             * @description `off`, `read` (the tool only reads: it is called without asking) or `write` (it changes something: it asks you first).
+             * @enum {string}
+             */
+            mode: "off" | "read" | "write";
+        };
+        McpAuthResponseDto: {
+            connection: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                provider: "google" | "microsoft" | "mcp";
+                label: string;
+                accountEmail: string;
+                accountName: string | null;
+                /** @description The switches that are on. */
+                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                defaultFor: ("mail" | "calendar" | "docs")[];
+                /** @enum {string} */
+                status: "active" | "paused" | "needs_reconnect" | "revoked";
+                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+                statusReason: string | null;
+                /** @description ISO 8601 timestamp */
+                connectedAt: string;
+                lastUsedAt: string | null;
+                lastRefreshAt: string | null;
+                /** @description MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret. */
+                mcp?: {
+                    url: string;
+                    /** @enum {string} */
+                    auth: "none" | "bearer" | "header" | "oauth";
+                    serverName: string | null;
+                    tools: {
+                        total: number;
+                        enabled: number;
+                        /** @description Tools that are new or changed since you last decided: they are off until you review them. */
+                        needsReview: number;
+                    };
+                    toolsFetchedAt: string | null;
+                };
+            };
+            consent: {
+                authorizeUrl: string;
+                /** @description ISO 8601 timestamp */
+                expiresAt: string;
+            } | null;
+        };
+        McpAuthDto: {
+            auth: {
+                /** @constant */
+                kind: "none";
+            } | {
+                /** @constant */
+                kind: "bearer";
+                token: string;
+            } | {
+                /** @constant */
+                kind: "header";
+                header: string;
+                value: string;
+            } | {
+                /** @constant */
+                kind: "oauth";
+                /** @description The client id of an app you registered with the server. Leave it out to let Hexactra register itself (dynamic client registration). */
+                clientId?: string | null;
+                /** @description Write-only. Only for a confidential client you registered. */
+                clientSecret?: string | null;
+            };
+            returnTo?: string;
+        };
+        McpAdminResponseDto: {
+            enabled: boolean;
+            allowedHosts: string[];
+            blockedHosts: string[];
+        };
+        SaveMcpAdminDto: {
+            /** @description Whether owners may add and use MCP servers. Off by default. */
+            enabled?: boolean;
+            /** @description Exact host names or `*.example.test`. Empty: any public host. Replaces the stored list. */
+            allowedHosts?: string[];
+            /** @description Hosts that are never allowed, whatever the allow-list says. Replaces the stored list. */
+            blockedHosts?: string[];
         };
     };
     responses: never;
@@ -40831,7 +41238,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
+            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `admin_consent_required`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
             302: {
                 headers: {
                     [name: string]: unknown;
@@ -41301,443 +41708,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AdminProviderResponseDto"][];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpConnections_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpStatusResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpConnections_add: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddMcpDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["AddMcpResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description `CONNECTION_PROVIDER_UNAVAILABLE` (`details.reason: disabled`: the administrator has not switched MCP servers on), `CONNECTION_MCP_EXISTS`, `CONNECTION_LABEL_TAKEN`, `CONNECTION_LIMIT` or `CONNECTION_MCP_AUTH_REQUIRED` (`details.oauth`: the server advertises OAuth). */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `CONNECTION_MCP_URL_REFUSED` (`details.reason`: `scheme_not_allowed`, `private_target`, `host_not_allowed`, `host_blocked`, `query_not_allowed`, ...). */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `CONNECTION_MCP_PROTOCOL`: the server does not speak the MCP protocol (Streamable HTTP, 2025-03-26 and later). */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpConnections_tools: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpCatalogResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpConnections_refresh: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpCatalogResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description `CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`, `CONNECTION_MCP_AUTH_REQUIRED` or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled). */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpConnections_setMode: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                toolId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetToolModeDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpToolResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpConnections_reauth: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["McpAuthDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpAuthResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpAdmin_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpAdminResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    mcpAdmin_save: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SaveMcpAdminDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["McpAdminResponseDto"];
                     };
                 };
             };
@@ -42920,6 +42890,43 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runReportLink_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The signed token from `reportUrl`. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF report (masked). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `REPORT_LINK_INVALID`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
@@ -48258,6 +48265,960 @@ export interface operations {
              *
              *     Forbidden - Insufficient permissions
              */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDeliveryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryCreatedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDeliveryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryTestResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `DELIVERY_TEST_RATE_LIMITED`. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runDeliveries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDeliveryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runDeliveries_retry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                runDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDeliveryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryRecipients_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryRecipientResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryRecipients_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRecipientDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryRecipientResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryUnsubscribe_show: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An HTML page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryUnsubscribe_stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An HTML page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionMcpStatusResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_add: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMcpDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AddMcpResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_PROVIDER_UNAVAILABLE` (`details.reason: disabled`: the administrator has not switched MCP servers on), `CONNECTION_MCP_EXISTS`, `CONNECTION_LABEL_TAKEN`, `CONNECTION_LIMIT` or `CONNECTION_MCP_AUTH_REQUIRED` (`details.oauth`: the server advertises OAuth). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_MCP_URL_REFUSED` (`details.reason`: `scheme_not_allowed`, `private_target`, `host_not_allowed`, `host_blocked`, `query_not_allowed`, ...). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_MCP_PROTOCOL`: the server does not speak the MCP protocol (Streamable HTTP, 2025-03-26 and later). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_tools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpCatalogResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpCatalogResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`, `CONNECTION_MCP_AUTH_REQUIRED` or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_setMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetToolModeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpToolResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_reauth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["McpAuthDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpAuthResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpAdminResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveMcpAdminDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpAdminResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
             403: {
                 headers: {
                     [name: string]: unknown;

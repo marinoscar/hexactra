@@ -27,6 +27,8 @@ import { ApprovalsModule } from './approvals/approvals.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { GoogleConnectionsModule } from './connections/google/google.module';
+import { DeliveriesModule } from './deliveries/deliveries.module';
+import { MicrosoftConnectionsModule } from './connections/microsoft/microsoft.module';
 import { MailTriggersModule } from './mail-triggers/mail-triggers.module';
 import { loadSecretsStoreModule, secretsStoreEnabled } from './secrets/builtin/secrets-store.loader';
 import { TasksModule } from './tasks/tasks.module';
@@ -35,6 +37,8 @@ import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
 import { isSliceEnabled } from './platform/slices/manifest';
 import { PrismaModule } from './prisma/prisma.service';
+// Last, so the MCP connection routes and schemas follow everything else in the generated OpenAPI document (E39.9).
+import { McpConnectionsModule } from './connections/mcp/mcp.module';
 
 /**
  * The root module: framework modules, the platform (src/platform/platform.ts)
@@ -60,7 +64,7 @@ import { PrismaModule } from './prisma/prisma.service';
     // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
     // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
-    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MailTriggersModule] : []),
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MicrosoftConnectionsModule, MailTriggersModule] : []),
     // The built-in secrets store (E37.5): the Vault packages embedded, OFF by default. With SECRETS_STORE_ENABLED unset no
     // Vault package is loaded; with it on and no valid SECRETS_STORE_KEY the API refuses to start (one clear error).
     ...(secretsStoreEnabled() ? [loadSecretsStoreModule()] : []),
@@ -80,6 +84,8 @@ import { PrismaModule } from './prisma/prisma.service';
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [webhooksModule] : []),
     // Alerts (Administration → Alerts): the platform slice plus the console's rule kinds.
     ...(alertsMounted() ? [alertsModule, HexactraAlertsModule] : []),
+    // Deliveries after a run (E39.6): an email with the report, a signed webhook, a spreadsheet row, files in a folder. Mounted with Connections; last, so its routes follow the others in the OpenAPI document.
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule, McpConnectionsModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },
