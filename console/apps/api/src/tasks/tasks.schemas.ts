@@ -14,6 +14,10 @@ export const domainSchema = z
   .toLowerCase()
   .regex(/^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/, 'A hostname such as example.test or *.example.test');
 
+/** `Task.unattendedPayments`: what an unattended run that used a saved login does at a payment step (E37.3). */
+export const UNATTENDED_PAYMENTS = ['ask', 'allow'] as const;
+export type UnattendedPayments = (typeof UNATTENDED_PAYMENTS)[number];
+
 const taskFields = {
   name: z.string().trim().min(1).max(200),
   goal: z.string().trim().min(1).max(4000),
@@ -29,6 +33,16 @@ const taskFields = {
   model: z.string().trim().min(1).max(200).nullable().meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `models.pins.standard`.'),
   policyId: policyRefSchema.nullable().describe("The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
   parameters: taskParametersField,
+  useSavedLogins: z
+    .boolean()
+    .describe(
+      "Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected.",
+    ),
+  unattendedPayments: z
+    .enum(UNATTENDED_PAYMENTS)
+    .describe(
+      "What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.",
+    ),
 };
 
 export const createTaskSchema = z.object({
@@ -45,6 +59,9 @@ export const createTaskSchema = z.object({
   model: taskFields.model.optional(),
   policyId: taskFields.policyId.optional(),
   parameters: taskFields.parameters.optional(),
+  // Absent: the owner's `secrets.defaultUseSavedLogins` (off unless they turned it on).
+  useSavedLogins: taskFields.useSavedLogins.optional(),
+  unattendedPayments: taskFields.unattendedPayments.default('ask'),
   schedules: taskSchedulesField.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}

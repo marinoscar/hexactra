@@ -22,6 +22,7 @@ export const chatResponseSchema = z.object({
   policyId: z.string().nullable().describe("The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default"),
   allowedDomains: z.array(z.string()).describe("Sites the chat's runs may visit; empty is any site"),
   confirmRiskyActions: z.boolean().describe('Ask the owner before a purchase or another step that is hard to undo'),
+  useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"),
   lastMessageAt: iso,
   createdAt: iso,
   updatedAt: iso,
@@ -55,6 +56,7 @@ export const chatTaskDraftResponseSchema = z.object({
   policyId: z.string().nullable(),
   allowedDomains: z.array(z.string()),
   confirmRiskyActions: z.boolean(),
+  useSavedLogins: z.boolean().describe("The chat's saved-logins switch (E37.3), carried over to the task"),
   parameters: z.array(taskParameterResponseSchema).describe("The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."),
 });
 export class ChatTaskDraftResponseDto extends createZodDto(chatTaskDraftResponseSchema) {}

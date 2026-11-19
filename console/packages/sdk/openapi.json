@@ -43955,6 +43955,30 @@
               "defaultPolicyRef"
             ]
           },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "defaultUseSavedLogins": {
+                "description": "New tasks and chats start with \"Sign in with my saved logins\" on (E37.3). Off by default. Each task and chat still has its own switch.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "agentUse"
+            ]
+          },
           "memories": {
             "type": "object",
             "properties": {
@@ -44039,26 +44063,6 @@
             },
             "required": [
               "paused"
-            ]
-          },
-          "secrets": {
-            "type": "object",
-            "properties": {
-              "agentUse": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
-                  }
-                },
-                "required": [
-                  "enabled"
-                ]
-              }
-            },
-            "required": [
-              "agentUse"
             ]
           },
           "notifications": {
@@ -44384,6 +44388,30 @@
               "defaultPolicyRef"
             ]
           },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "defaultUseSavedLogins": {
+                "description": "New tasks and chats start with \"Sign in with my saved logins\" on (E37.3). Off by default. Each task and chat still has its own switch.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "agentUse"
+            ]
+          },
           "memories": {
             "type": "object",
             "properties": {
@@ -44468,26 +44496,6 @@
             },
             "required": [
               "paused"
-            ]
-          },
-          "secrets": {
-            "type": "object",
-            "properties": {
-              "agentUse": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
-                  }
-                },
-                "required": [
-                  "enabled"
-                ]
-              }
-            },
-            "required": [
-              "agentUse"
             ]
           },
           "notifications": {
@@ -44847,6 +44855,29 @@
               }
             ]
           },
+          "secrets": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "agentUse": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "defaultUseSavedLogins": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memories": {
             "anyOf": [
               {
@@ -44934,26 +44965,6 @@
                 "properties": {
                   "paused": {
                     "type": "boolean"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "secrets": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "agentUse": {
-                    "type": "object",
-                    "properties": {
-                      "enabled": {
-                        "type": "boolean"
-                      }
-                    }
                   }
                 }
               },
@@ -45120,6 +45131,67 @@
             "required": [
               "jwtAccessTtlMinutes",
               "refreshTtlDays"
+            ]
+          },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Deployment kill switch for the agent using stored secrets. Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "baseUrl": {
+                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientId": {
+                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allowedHosts": {
+                    "description": "Vault host names exempt from the private-address check (https is still required).",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "agentUse"
             ]
           },
           "mcp": {
@@ -45571,67 +45643,6 @@
               "maxInputTokens",
               "maxOutputTokens",
               "maxCostUsd"
-            ]
-          },
-          "secrets": {
-            "type": "object",
-            "properties": {
-              "agentUse": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Deployment kill switch for the agent using stored secrets. Off by default."
-                  }
-                },
-                "required": [
-                  "enabled"
-                ]
-              },
-              "vault": {
-                "type": "object",
-                "properties": {
-                  "baseUrl": {
-                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 2048
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "clientId": {
-                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 200
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "allowedHosts": {
-                    "description": "Vault host names exempt from the private-address check (https is still required).",
-                    "maxItems": 20,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 253,
-                      "pattern": "^[a-z0-9.-]+$"
-                    }
-                  }
-                }
-              }
-            },
-            "required": [
-              "agentUse"
             ]
           },
           "storage": {
@@ -46234,13 +46245,13 @@
         },
         "required": [
           "security",
+          "secrets",
           "mcp",
           "runs",
           "notes",
           "browserAgentTiers",
           "agentPricing",
           "browserAgentCeilings",
-          "secrets",
           "storage",
           "notifications",
           "ai",
@@ -46257,6 +46268,67 @@
       "UpdateSystemSettingsDto": {
         "type": "object",
         "properties": {
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Deployment kill switch for the agent using stored secrets. Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "baseUrl": {
+                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientId": {
+                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allowedHosts": {
+                    "description": "Vault host names exempt from the private-address check (https is still required).",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "agentUse"
+            ]
+          },
           "mcp": {
             "type": "object",
             "properties": {
@@ -46706,67 +46778,6 @@
               "maxInputTokens",
               "maxOutputTokens",
               "maxCostUsd"
-            ]
-          },
-          "secrets": {
-            "type": "object",
-            "properties": {
-              "agentUse": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Deployment kill switch for the agent using stored secrets. Off by default."
-                  }
-                },
-                "required": [
-                  "enabled"
-                ]
-              },
-              "vault": {
-                "type": "object",
-                "properties": {
-                  "baseUrl": {
-                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 2048
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "clientId": {
-                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 200
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "allowedHosts": {
-                    "description": "Vault host names exempt from the private-address check (https is still required).",
-                    "maxItems": 20,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 253,
-                      "pattern": "^[a-z0-9.-]+$"
-                    }
-                  }
-                }
-              }
-            },
-            "required": [
-              "agentUse"
             ]
           },
           "storage": {
@@ -47473,6 +47484,60 @@
       "PatchSystemSettingsDto": {
         "type": "object",
         "properties": {
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "baseUrl": {
+                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientId": {
+                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allowedHosts": {
+                    "description": "Vault host names exempt from the private-address check (https is still required).",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "mcp": {
             "type": "object",
             "properties": {
@@ -47875,60 +47940,6 @@
                   }
                 ],
                 "description": "Most a run may cost in US dollars. `null` sets no ceiling."
-              }
-            }
-          },
-          "secrets": {
-            "type": "object",
-            "properties": {
-              "agentUse": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                }
-              },
-              "vault": {
-                "type": "object",
-                "properties": {
-                  "baseUrl": {
-                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 2048
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "clientId": {
-                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 200
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "allowedHosts": {
-                    "description": "Vault host names exempt from the private-address check (https is still required).",
-                    "maxItems": 20,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 253,
-                      "pattern": "^[a-z0-9.-]+$"
-                    }
-                  }
-                }
               }
             }
           },
@@ -50137,6 +50148,30 @@
                   "defaultPolicyRef"
                 ]
               },
+              "secrets": {
+                "type": "object",
+                "properties": {
+                  "agentUse": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ]
+                  },
+                  "defaultUseSavedLogins": {
+                    "description": "New tasks and chats start with \"Sign in with my saved logins\" on (E37.3). Off by default. Each task and chat still has its own switch.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "agentUse"
+                ]
+              },
               "memories": {
                 "type": "object",
                 "properties": {
@@ -50221,26 +50256,6 @@
                 },
                 "required": [
                   "paused"
-                ]
-              },
-              "secrets": {
-                "type": "object",
-                "properties": {
-                  "agentUse": {
-                    "type": "object",
-                    "properties": {
-                      "enabled": {
-                        "type": "boolean",
-                        "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
-                      }
-                    },
-                    "required": [
-                      "enabled"
-                    ]
-                  }
-                },
-                "required": [
-                  "agentUse"
                 ]
               },
               "notifications": {
@@ -72040,6 +72055,10 @@
                   "type": "boolean",
                   "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
                 },
+                "allowSavedLogins": {
+                  "type": "boolean",
+                  "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -72054,6 +72073,7 @@
                 "dailyCostLimitUsd",
                 "confirmPurchases",
                 "confirmSensitiveActions",
+                "allowSavedLogins",
                 "paused"
               ]
             },
@@ -72402,6 +72422,10 @@
                 "type": "boolean",
                 "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
               },
+              "allowSavedLogins": {
+                "type": "boolean",
+                "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -72416,6 +72440,7 @@
               "dailyCostLimitUsd",
               "confirmPurchases",
               "confirmSensitiveActions",
+              "allowSavedLogins",
               "paused"
             ]
           },
@@ -72532,6 +72557,10 @@
             "type": "boolean",
             "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
           },
+          "allowSavedLogins": {
+            "type": "boolean",
+            "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -72546,6 +72575,7 @@
           "dailyCostLimitUsd",
           "confirmPurchases",
           "confirmSensitiveActions",
+          "allowSavedLogins",
           "paused"
         ]
       },
@@ -72608,6 +72638,9 @@
             "type": "boolean"
           },
           "confirmSensitiveActions": {
+            "type": "boolean"
+          },
+          "allowSavedLogins": {
             "type": "boolean"
           },
           "paused": {
@@ -72676,6 +72709,18 @@
           },
           "confirmRiskyActions": {
             "type": "boolean"
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "unattendedPayments": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow"
+            ],
+            "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
           },
           "model": {
             "deprecated": true,
@@ -73162,6 +73207,8 @@
           "maxSteps",
           "maxMinutes",
           "confirmRiskyActions",
+          "useSavedLogins",
+          "unattendedPayments",
           "model",
           "policyId",
           "parameters",
@@ -73235,6 +73282,18 @@
                 },
                 "confirmRiskyActions": {
                   "type": "boolean"
+                },
+                "useSavedLogins": {
+                  "type": "boolean",
+                  "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+                },
+                "unattendedPayments": {
+                  "type": "string",
+                  "enum": [
+                    "ask",
+                    "allow"
+                  ],
+                  "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
                 },
                 "model": {
                   "deprecated": true,
@@ -73721,6 +73780,8 @@
                 "maxSteps",
                 "maxMinutes",
                 "confirmRiskyActions",
+                "useSavedLogins",
+                "unattendedPayments",
                 "model",
                 "policyId",
                 "parameters",
@@ -73810,6 +73871,18 @@
           },
           "confirmRiskyActions": {
             "type": "boolean"
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "unattendedPayments": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow"
+            ],
+            "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
           },
           "model": {
             "deprecated": true,
@@ -74296,6 +74369,8 @@
           "maxSteps",
           "maxMinutes",
           "confirmRiskyActions",
+          "useSavedLogins",
+          "unattendedPayments",
           "model",
           "policyId",
           "parameters",
@@ -74527,6 +74602,19 @@
             },
             "description": "Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter."
           },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected."
+          },
+          "unattendedPayments": {
+            "default": "ask",
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow"
+            ],
+            "description": "What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply."
+          },
           "schedules": {
             "maxItems": 10,
             "type": "array",
@@ -74671,6 +74759,18 @@
           },
           "confirmRiskyActions": {
             "type": "boolean"
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "unattendedPayments": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow"
+            ],
+            "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
           },
           "model": {
             "deprecated": true,
@@ -74873,6 +74973,8 @@
           "maxSteps",
           "maxMinutes",
           "confirmRiskyActions",
+          "useSavedLogins",
+          "unattendedPayments",
           "model",
           "policyId",
           "parameters",
@@ -75096,6 +75198,18 @@
               "additionalProperties": false
             },
             "description": "Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter."
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected."
+          },
+          "unattendedPayments": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow"
+            ],
+            "description": "What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply."
           }
         }
       },
@@ -75250,6 +75364,18 @@
           },
           "confirmRiskyActions": {
             "type": "boolean"
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "unattendedPayments": {
+            "type": "string",
+            "enum": [
+              "ask",
+              "allow"
+            ],
+            "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
           },
           "model": {
             "deprecated": true,
@@ -75745,6 +75871,8 @@
           "maxSteps",
           "maxMinutes",
           "confirmRiskyActions",
+          "useSavedLogins",
+          "unattendedPayments",
           "model",
           "policyId",
           "parameters",
@@ -76953,6 +77081,37 @@
             "maximum": 9007199254740991,
             "description": "How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`."
           },
+          "usedSavedLogins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the login (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved login's name as the owner gave it (\"Shop login\"), never its username, password or code"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site the login was used on (`https://shop.example.test`)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first used in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -77072,6 +77231,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "usedSavedLogins",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -77728,6 +77888,37 @@
                   "maximum": 9007199254740991,
                   "description": "How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`."
                 },
+                "usedSavedLogins": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "description": "The secrets provider that held the login (`vault`)"
+                      },
+                      "itemName": {
+                        "type": "string",
+                        "description": "The saved login's name as the owner gave it (\"Shop login\"), never its username, password or code"
+                      },
+                      "origin": {
+                        "type": "string",
+                        "description": "The site the login was used on (`https://shop.example.test`)"
+                      },
+                      "at": {
+                        "type": "string",
+                        "description": "When it was first used in this run"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "itemName",
+                      "origin",
+                      "at"
+                    ]
+                  },
+                  "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
+                },
                 "inputs": {
                   "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
                   "anyOf": [
@@ -77847,6 +78038,7 @@
                 "costUsd",
                 "costKnown",
                 "confirmedActions",
+                "usedSavedLogins",
                 "memoryIds",
                 "createdAt",
                 "startedAt",
@@ -79911,6 +80103,37 @@
             },
             "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
           },
+          "usedSavedLogins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the login (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved login's name as the owner gave it (\"Shop login\"), never its username, password or code"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site the login was used on (`https://shop.example.test`)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first used in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -80326,6 +80549,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "usedSavedLogins",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -81004,6 +81228,37 @@
             },
             "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
           },
+          "usedSavedLogins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the login (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved login's name as the owner gave it (\"Shop login\"), never its username, password or code"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site the login was used on (`https://shop.example.test`)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first used in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -81116,6 +81371,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "usedSavedLogins",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -84706,6 +84962,10 @@
                   "type": "boolean",
                   "description": "Ask the owner before a purchase or another step that is hard to undo"
                 },
+                "useSavedLogins": {
+                  "type": "boolean",
+                  "description": "Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"
+                },
                 "lastMessageAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -84800,6 +85060,7 @@
                 "policyId",
                 "allowedDomains",
                 "confirmRiskyActions",
+                "useSavedLogins",
                 "lastMessageAt",
                 "createdAt",
                 "updatedAt",
@@ -84879,6 +85140,10 @@
             "type": "boolean",
             "description": "Ask the owner before a purchase or another step that is hard to undo"
           },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"
+          },
           "lastMessageAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -84902,6 +85167,7 @@
           "policyId",
           "allowedDomains",
           "confirmRiskyActions",
+          "useSavedLogins",
           "lastMessageAt",
           "createdAt",
           "updatedAt"
@@ -84962,6 +85228,10 @@
           "confirmRiskyActions": {
             "type": "boolean",
             "description": "Ask the owner before a purchase or another step that is hard to undo. On by default in a chat."
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."
           }
         }
       },
@@ -85022,6 +85292,10 @@
           "confirmRiskyActions": {
             "type": "boolean",
             "description": "Ask the owner before a purchase or another step that is hard to undo"
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"
           },
           "lastMessageAt": {
             "type": "string",
@@ -85162,6 +85436,7 @@
           "policyId",
           "allowedDomains",
           "confirmRiskyActions",
+          "useSavedLogins",
           "lastMessageAt",
           "createdAt",
           "updatedAt",
@@ -85234,6 +85509,10 @@
           "confirmRiskyActions": {
             "type": "boolean",
             "description": "Ask the owner before a purchase or another step that is hard to undo. On by default in a chat."
+          },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."
           }
         }
       },
@@ -85370,6 +85649,10 @@
           "confirmRiskyActions": {
             "type": "boolean"
           },
+          "useSavedLogins": {
+            "type": "boolean",
+            "description": "The chat's saved-logins switch (E37.3), carried over to the task"
+          },
           "parameters": {
             "type": "array",
             "items": {
@@ -85491,6 +85774,7 @@
           "policyId",
           "allowedDomains",
           "confirmRiskyActions",
+          "useSavedLogins",
           "parameters"
         ]
       },
