@@ -29,6 +29,8 @@ export const RUN_CARD_AMOUNT_MISMATCH_EVENT = 'runs.card_amount_mismatch';
 export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 /** A connected account (Google, Microsoft) stopped working and must be connected again (E39.2): once per episode. */
 export const CONNECTION_NEEDS_RECONNECT_EVENT = 'connections.needs_reconnect';
+/** An MCP server changed a tool the owner had enabled, or offered a new one (E39.9): those tools are off until the owner reviews them. */
+export const CONNECTION_MCP_TOOLS_CHANGED_EVENT = 'connections.mcp_tools_changed';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -122,6 +124,14 @@ const connectionNeedsReconnect: BrowserNotificationTemplate = (d) => ({
   body: trim(`${str(d, 'label') || 'A connected account'} no longer works, so agents cannot use it. Connect it again in Settings → Connections.`, 180),
   link: '/settings/connections',
 });
+const connectionMcpToolsChanged: BrowserNotificationTemplate = (d) => {
+  const n = Number((d as { count?: unknown }).count) || 1;
+  return {
+    title: 'An MCP server changed its tools',
+    body: trim(`The connection ${str(d, 'label') || 'to an MCP server'} changed ${n} tool${n === 1 ? '' : 's'}. ${n === 1 ? 'It is' : 'They are'} off until you review ${n === 1 ? 'it' : 'them'} in Settings → Connections.`, 180),
+    link: '/settings/connections',
+  };
+};
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
 export function failingScheduleLink(taskId: string | null | undefined): string {
   return taskId ? `/tasks/${encodeURIComponent(taskId)}#schedule` : '/tasks';
@@ -285,6 +295,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
     },
     browserTemplate: connectionNeedsReconnect,
   },
+  {
+    event: {
+      key: CONNECTION_MCP_TOOLS_CHANGED_EVENT,
+      label: 'An MCP server changed its tools',
+      description: 'When an MCP server you connected changes the description or schema of a tool you enabled, or offers a new tool: those tools are switched off until you review them.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: connectionMcpToolsChanged,
+  },
 ];
 
 /**
@@ -341,6 +361,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_SAVED_LOGIN_EVENT) return { tag: runId ? `saved-login-${runId}`.slice(0, 64) : 'saved-login', urgency: 'normal' };
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === CONNECTION_NEEDS_RECONNECT_EVENT) return { tag: `connection-${str(data, 'connectionId') || 'reconnect'}`.slice(0, 64), urgency: 'normal' };
+  if (event.key === CONNECTION_MCP_TOOLS_CHANGED_EVENT) return { tag: `connection-tools-${str(data, 'connectionId') || 'changed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };

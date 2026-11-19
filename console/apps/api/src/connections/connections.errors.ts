@@ -14,6 +14,10 @@ registerErrorCode({ code: 'CONNECTION_AMBIGUOUS', status: 409, description: 'Mor
 registerErrorCode({ code: 'CONNECTION_NONE', status: 409, description: 'No active connection has this capability. `details.unavailable` lists those that do but cannot be used (paused or needing a reconnect).' });
 registerErrorCode({ code: 'CONNECTION_UNAVAILABLE', status: 503, description: 'The provider could not be reached or answered with an error. Nothing was changed; try again.' });
 registerErrorCode({ code: 'CONNECTION_DEFAULT_NEEDS_CAPABILITY', status: 422, description: 'A connection can be the default for a group only while one of its capabilities is switched on.' });
+registerErrorCode({ code: 'CONNECTION_MCP_URL_REFUSED', status: 422, description: 'The MCP server address is not allowed. `details.reason` (closed): `invalid_url`, `scheme_not_allowed`, `userinfo_not_allowed`, `query_not_allowed`, `port_not_allowed`, `private_target`, `unresolvable`, `host_not_allowed`, `host_blocked`.' });
+registerErrorCode({ code: 'CONNECTION_MCP_EXISTS', status: 409, description: 'The caller already has a connection to this MCP server address.' });
+registerErrorCode({ code: 'CONNECTION_MCP_AUTH_REQUIRED', status: 409, description: 'The MCP server wants a sign-in the request did not give (or no longer accepts it). `details.oauth` is true when the server advertises OAuth.' });
+registerErrorCode({ code: 'CONNECTION_MCP_PROTOCOL', status: 502, description: 'The server did not answer in the MCP protocol this console speaks (Streamable HTTP, revisions 2025-03-26 and later).' });
 
 export type ConnectionErrorCode =
   | 'CONNECTION_NOT_FOUND'
@@ -26,7 +30,11 @@ export type ConnectionErrorCode =
   | 'CONNECTION_AMBIGUOUS'
   | 'CONNECTION_NONE'
   | 'CONNECTION_UNAVAILABLE'
-  | 'CONNECTION_DEFAULT_NEEDS_CAPABILITY';
+  | 'CONNECTION_DEFAULT_NEEDS_CAPABILITY'
+  | 'CONNECTION_MCP_URL_REFUSED'
+  | 'CONNECTION_MCP_EXISTS'
+  | 'CONNECTION_MCP_AUTH_REQUIRED'
+  | 'CONNECTION_MCP_PROTOCOL';
 
 const STATUS: Record<ConnectionErrorCode, HttpStatus> = {
   CONNECTION_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -40,6 +48,10 @@ const STATUS: Record<ConnectionErrorCode, HttpStatus> = {
   CONNECTION_NONE: HttpStatus.CONFLICT,
   CONNECTION_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
   CONNECTION_DEFAULT_NEEDS_CAPABILITY: HttpStatus.UNPROCESSABLE_ENTITY,
+  CONNECTION_MCP_URL_REFUSED: HttpStatus.UNPROCESSABLE_ENTITY,
+  CONNECTION_MCP_EXISTS: HttpStatus.CONFLICT,
+  CONNECTION_MCP_AUTH_REQUIRED: HttpStatus.CONFLICT,
+  CONNECTION_MCP_PROTOCOL: HttpStatus.BAD_GATEWAY,
 };
 
 /**
