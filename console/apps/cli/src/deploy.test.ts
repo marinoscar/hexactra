@@ -35,6 +35,14 @@ describe('deploy environment of the fabric keys', () => {
   });
 });
 
+describe('the built-in secrets store keys (E37.5)', () => {
+  it('may stay blank (the store is off by default), the key is a secret and is never generated for the owner', () => {
+    for (const name of ['SECRETS_STORE_ENABLED', 'SECRETS_STORE_KEY', 'SECRETS_STORE_KEY_PREVIOUS', 'SECRETS_STORE_CALLBACK_URL']) expect(resolveEnvMetadata(name)).toMatchObject({ allowBlank: true });
+    for (const name of ['SECRETS_STORE_KEY', 'SECRETS_STORE_KEY_PREVIOUS']) expect(resolveEnvMetadata(name)).toMatchObject({ secret: true });
+    expect(resolveEnvMetadata('SECRETS_STORE_KEY')?.autoGenerate).toBeFalsy();
+  });
+});
+
 describe('the stack-agent image the VPS deploy runs', () => {
   it('is the platform image of the installed platform version', async () => {
     const { readFileSync } = await import('node:fs');
