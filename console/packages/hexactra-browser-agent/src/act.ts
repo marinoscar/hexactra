@@ -1,6 +1,6 @@
 // Running one browser action under the run's rules (E38.5), and turning its result into the text the model reads and the step a person
 // reads. Every browser tool that acts goes through `act`; none of them records the step itself.
-import { actionTarget, clip, digest, inCommitTool, LEASE_LOST_TEXT, mutatingAction, redactUrl, STOPPED_TEXT, type GateTarget } from '../harness';
+import { actionTarget, clip, digest, inCommitTool, LEASE_LOST_TEXT, mutatingAction, redactUrl, STOPPED_TEXT, type GateTarget } from '@marinoscar/hexactra-agent';
 import { ACTION_TIMEOUT_MS, BrowserAborted, BrowserError } from './browser-port';
 import type { BrowserContext } from './context';
 

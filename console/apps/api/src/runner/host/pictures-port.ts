@@ -2,10 +2,10 @@
 // step without a picture and say why; the run goes on. Never the model's unmasked screenshot, never during a secret request.
 import { buildObjectKey } from '@marinoscar/platform-api/storage';
 
-import type { BrowserPort } from '../browser/browser-port';
-import type { ReadMasking } from '../browser/context';
-import { TraceCaptureError, type TraceNote, type TraceShot } from '../browser/vision';
-import type { Picture, PicturePort } from '../harness';
+import type { BrowserPort } from '@marinoscar/hexactra-browser-agent/browser-port';
+import type { ReadMasking } from '@marinoscar/hexactra-browser-agent/context';
+import { TraceCaptureError, type TraceNote, type TraceShot } from '@marinoscar/hexactra-browser-agent/vision';
+import type { Picture, PicturePort } from '@marinoscar/hexactra-agent';
 import { traceAllowed, traceKeyParts, type TraceMoment } from '../trace';
 import type { HostDeps } from './deps';
 import type { RunMemory } from './run-memory';

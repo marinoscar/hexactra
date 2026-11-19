@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { actionTarget, defineRunnerTool, LEASE_LOST_TEXT, inCommitTool } from '../../harness';
+import { actionTarget, defineRunnerTool, LEASE_LOST_TEXT, inCommitTool } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from '../context';
 
 export const typeHandoffSecret = defineRunnerTool({

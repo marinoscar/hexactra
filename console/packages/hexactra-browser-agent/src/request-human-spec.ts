@@ -1,5 +1,5 @@
 // The words of a request for a person (`request_human`) and of the line the model reads after the answer: pure helpers.
-import { clip } from '../harness';
+import { clip } from '@marinoscar/hexactra-agent';
 
 /** The model's `request_human` arguments (snake_case, nulls for what does not apply). */
 export interface RequestHumanArgs {

@@ -1,5 +1,5 @@
 // The saved-card tools (E37.7, #596): saved_cards, declare_charge, pay_with_saved_card, confirm_charge. The rules are in saved-card-helpers.ts.
-import { defineRunnerTool, type RunnerTool } from '../../harness';
+import { defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../context';
 import type { ApprovalRule } from '@prisma/client';
 import { z } from 'zod';
@@ -11,9 +11,9 @@ import { questionSpecSchema, type QuestionSpec } from '../../../questions/questi
 import type { RunNotifier } from '../../../tasks/run-notifier';
 import { FabricError } from '../../../fabric/fabric.client';
 import { SecretsProviderError } from '../../../secrets/secrets-provider.port';
-import type { RunActivityPhase, runActivity } from '../../harness/activity';
+import type { RunActivityPhase, runActivity } from '@marinoscar/hexactra-agent/activity';
 import type { CardFieldName, FabricSession } from '../../fabric-session';
-import type { GateTarget } from '../../browser/policy';
+import type { GateTarget } from '@marinoscar/hexactra-browser-agent/policy';
 import {
   amountsAgree,
   appendUsedSavedCard,

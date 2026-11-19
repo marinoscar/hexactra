@@ -5,19 +5,19 @@ import { randomUUID } from 'node:crypto';
 import { ASK_TOPICS } from '../../approvals/approval-match';
 import { readAppLimits } from '../../policies/policy-snapshot';
 import { readRunInputs } from '../../tasks/task-params.schemas';
-import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '../browser/round';
-import type { BrowserHooks, BrowserState } from '../browser/context';
-import { ScreenshotWindow } from '../browser/context-settings';
-import { siteGate } from '../browser/gates/site-gate';
-import { riskGate } from '../browser/gates/risk-gate';
-import { browserInstructions } from '../browser/instructions';
-import { currentUrl, currentUrlOf } from '../browser/page';
-import { domainAllowed } from '../browser/policy';
-import { browserTools } from '../browser/tools';
+import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
+import type { BrowserHooks, BrowserState } from '@marinoscar/hexactra-browser-agent/context';
+import { ScreenshotWindow } from '@marinoscar/hexactra-browser-agent/context-settings';
+import { siteGate } from '@marinoscar/hexactra-browser-agent/gates';
+import { riskGate } from '@marinoscar/hexactra-browser-agent/gates';
+import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
+import { currentUrl, currentUrlOf } from '@marinoscar/hexactra-browser-agent/page';
+import { domainAllowed } from '@marinoscar/hexactra-browser-agent/policy';
+import { browserTools } from '@marinoscar/hexactra-browser-agent/tools';
 import { instructionsWithOutputs, outputsHandle, outputsNudge, outputsWrapUpNote } from '../outputs';
 import { readOutputs } from '../../tasks/task-outputs.schemas';
-import { BudgetTracker, GatePipeline, RunUsage, ToolRegistry, type LoopProfile, type Ports, type RunnerTool } from '../harness';
-import { createRunContext } from '../harness/engine';
+import { BudgetTracker, GatePipeline, ToolRegistry, type LoopProfile, type Ports, type RunnerTool } from '@marinoscar/hexactra-agent';
+import { createRunLoop, type RunLoop } from '@marinoscar/hexactra-agent/engine';
 import { guidanceSummary } from '../trace';
 import { readUsedSavedCards } from '../saved-cards';
 import { readUsedSavedIdentity } from '../saved-identity';
@@ -47,6 +47,8 @@ import { savedLoginTools } from './tools/saved-logins';
 import { proposeMemory, proposeSavingLogin } from './tools/propose';
 
 export interface BuiltRun {
+  /** The harness's loop for this run: `loop.run(profile)` drives it. */
+  loop: RunLoop<HostContext['memory'], HostExt>;
   ctx: HostContext;
   profile: LoopProfile<HostContext>;
 }
@@ -133,34 +135,25 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   };
   // Routing steps (#405) take a `seq` but are not actions: the sequence runs ahead of `stepCount` by their number.
   const newest = await store.newestSeq();
-  const ctx: HostContext = createRunContext({
+  const loop = createRunLoop<HostContext['memory'], HostExt>(ports, {
     run: { id: run.id, userId, orgId, goal: run.goal, trigger: run.trigger, taskId: run.taskId ?? null, conversationId: run.conversationId ?? null },
-    ports,
     memory,
     state: {
       stepCount: run.stepCount,
       seq: Math.max(run.stepCount, newest),
-      stall: null,
-      stop: null,
-      budgetKey: null,
-      finished: null,
-      wrappingUp: false,
-      handoffId: null,
-      handoffExpiresAt: null,
-      handoffAsk: null,
     },
     tracker,
     stall,
     tier: s.tier,
     startTier: snapshot.spec.models.startTier,
     active: s.active,
-    usage: new RunUsage(),
     prices: await priceTable(d),
     // This job hands the run on a little before its lease runs out.
     hopAfterMs: GOAL_RUN_MAX_RUNTIME_MS - GOAL_RUN_HOP_MARGIN_MS,
     startedAt: s.jobStartedAt,
     ext,
   });
+  const ctx: HostContext = loop.context;
 
   // The saved cards' own context: the rules of a card are in saved-card-tools; this hands them the run's helpers.
   const cardCtx: SavedCardToolsContext = buildSavedCardContext(ctx);
@@ -204,5 +197,5 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),
     wrapUpNote: (c) => outputsWrapUpNote(c.ext.outputs),
   };
-  return { ctx, profile };
+  return { loop, ctx, profile };
 }

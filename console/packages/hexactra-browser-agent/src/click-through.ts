@@ -1,6 +1,6 @@
 // What every click does once the risk gate let it through: the card payment around the pay button, the action itself, and the spending of
 // the approval. Shared by `click`, `click_mark` and `click_at`; the gate and the target are the tool's.
-import type { GateDecision } from '../harness';
+import type { GateDecision } from '@marinoscar/hexactra-agent';
 import { act } from './act';
 import type { BrowserContext } from './context';
 import { allowedByRule, RISK_GATE, spend, type RiskDecision } from './gates/risk-gate';

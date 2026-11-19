@@ -1,5 +1,5 @@
 // The allowed-sites gate (#508): a URL must pass the task's list and the AI app's list. Decided by the URL alone.
-import type { Gate, RefusalStep } from '../../harness';
+import type { Gate, RefusalStep } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from '../context';
 
 export const SITE_GATE = 'site';

@@ -1,5 +1,5 @@
 // How a round is shown to the model (#366): the screen, as a person would see it, and the text that goes with it.
-import { clip, digest, NO_OBSERVATION, type Observation } from '../harness';
+import { clip, digest, NO_OBSERVATION, type Observation } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from './context';
 import { shotHash } from './context-settings';
 import { roundInput, type ScreenView } from './vision';

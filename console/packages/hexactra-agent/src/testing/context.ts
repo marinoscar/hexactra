@@ -22,6 +22,8 @@ export interface FakeRunOptions<X> {
   approvals?: FakeApprovals | null;
   /** Time, in ms, that the clock advances at each call. */
   clockStep?: number;
+  /** Ports of a real host to run the harness over instead of the fakes (the host conformance suite does). The returned fakes are then unused. */
+  ports?: Partial<Ports>;
 }
 
 export interface FakeRun<X> {
@@ -35,17 +37,10 @@ export interface FakeRun<X> {
   events: { notified: string[]; steps: string[] };
 }
 
-export function fakeRun<X = Record<string, never>>(options: FakeRunOptions<X> = {}): FakeRun<X> {
-  const store = new FakeRunStore();
-  const control = new FakeControl();
-  const questions = new FakeQuestions();
-  const telemetry = new FakeTelemetry();
-  const model = options.model ?? new ScriptedModel([]);
-  const approvals = options.approvals === undefined ? new FakeApprovals() : options.approvals;
-  const events = { notified: [] as string[], steps: [] as string[] };
-  let now = 1_000_000;
-  const policy: PolicyPort = {
-    policy: { ref: 'fake', startTier: 'standard', maxTier: 'frontier', allowProviderFallback: true, callsPerChunk: 10, stall: { maxConsecutiveFailures: 5, maxRepeatedAction: 4, noProgressActions: 12, onStall: 'nudge_then_escalate', maxEscalations: 2 }, effectiveBudget: UNLIMITED, ...options.policy },
+/** A policy port with no limits: the standard tier, no fallback model, a model named after each tier. `overrides` changes the run's policy. */
+export function fakePolicy(overrides: Partial<PolicyPort['policy']> = {}): PolicyPort {
+  return {
+    policy: { ref: 'fake', startTier: 'standard', maxTier: 'frontier', allowProviderFallback: true, callsPerChunk: 10, stall: { maxConsecutiveFailures: 5, maxRepeatedAction: 4, noProgressActions: 12, onStall: 'nudge_then_escalate', maxEscalations: 2 }, effectiveBudget: UNLIMITED, ...overrides },
     routing: {
       problem: () => null,
       route: (tier) => ({ label: tier, params: { model: `fake-${tier}` } }),
@@ -55,6 +50,18 @@ export function fakeRun<X = Record<string, never>>(options: FakeRunOptions<X> = 
     },
     mask: (text) => text,
   };
+}
+
+export function fakeRun<X = Record<string, never>>(options: FakeRunOptions<X> = {}): FakeRun<X> {
+  const store = new FakeRunStore();
+  const control = new FakeControl();
+  const questions = new FakeQuestions();
+  const telemetry = new FakeTelemetry();
+  const model = options.model ?? new ScriptedModel([]);
+  const approvals = options.approvals === undefined ? new FakeApprovals() : options.approvals;
+  const events = { notified: [] as string[], steps: [] as string[] };
+  let now = 1_000_000;
+  const policy = fakePolicy(options.policy);
   const ports: Ports = {
     model,
     store,
@@ -75,6 +82,7 @@ export function fakeRun<X = Record<string, never>>(options: FakeRunOptions<X> = 
     clock: { now: () => (now += options.clockStep ?? 0) },
     ids: { uuid: () => `id-${now++}` },
     ...(approvals ? { approvals } : {}),
+    ...options.ports,
   };
   const memory: HarnessMemory = { log: [], chunks: 0, ...options.memory };
   const ctx = createRunContext<HarnessMemory, X>({

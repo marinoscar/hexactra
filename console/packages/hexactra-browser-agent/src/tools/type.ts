@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { defineRunnerTool } from '../../harness';
+import { defineRunnerTool } from '@marinoscar/hexactra-agent';
 import { act } from '../act';
 import type { BrowserContext } from '../context';
 

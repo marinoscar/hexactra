@@ -1,7 +1,7 @@
 // The browser toolset's tools, in the order the model is offered them. The order is part of the stable prefix the provider caches, so it
 // is fixed here and never sorted. The app registers its own tool families (saved logins, memories, ...) between `core` and `typeSecret`
 // and before `finish`, exactly where they were offered before the split.
-import type { RunnerTool } from '../../harness';
+import type { RunnerTool } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from '../context';
 import { clickAt, click, clickMark } from './click';
 import { desktopClick, desktopDrag, desktopKey, desktopScroll, desktopType } from './desktop';

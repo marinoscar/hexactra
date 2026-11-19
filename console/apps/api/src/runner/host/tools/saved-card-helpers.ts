@@ -32,9 +32,9 @@ import { questionSpecSchema, type QuestionSpec } from '../../../questions/questi
 import type { RunNotifier } from '../../../tasks/run-notifier';
 import { FabricError } from '../../../fabric/fabric.client';
 import { SecretsProviderError } from '../../../secrets/secrets-provider.port';
-import type { RunActivityPhase, runActivity } from '../../harness/activity';
+import type { RunActivityPhase, runActivity } from '@marinoscar/hexactra-agent/activity';
 import type { CardFieldName, FabricSession } from '../../fabric-session';
-import type { GateTarget } from '../../browser/policy';
+import type { GateTarget } from '@marinoscar/hexactra-browser-agent/policy';
 import {
   amountsAgree,
   appendUsedSavedCard,

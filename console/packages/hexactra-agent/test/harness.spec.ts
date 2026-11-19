@@ -18,9 +18,9 @@ import {
   type Gate,
   type RunContext,
   type HarnessMemory,
-} from '../src/runner/harness';
-import { executeTool, runLoop } from '../src/runner/harness/engine';
-import { fakeRun, ScriptedModel, textProfile } from '../src/runner/harness/testing';
+} from '../src';
+import { executeTool, runLoop } from '../src/engine';
+import { fakeRun, ScriptedModel, textProfile } from '../src/testing';
 
 type Ctx = RunContext<HarnessMemory, Record<string, never>>;
 

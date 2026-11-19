@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { clip, defineRunnerTool } from '../../harness';
+import { clip, defineRunnerTool } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from '../context';
 
 const plain = z.object({ success: z.boolean(), result: z.string().min(1).max(4000) });

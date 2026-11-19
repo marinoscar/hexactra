@@ -1,15 +1,15 @@
 // The browser toolset's tools and gates, each alone, against a fake context and a fake browser (E38.5, #586): no database, no fabric, no loop.
-import { GatePipeline } from '../src/runner/harness';
-import { executeTool } from '../src/runner/harness/engine';
-import { fakeBrowserRun } from '../src/runner/browser/testing/fake-browser';
-import { browserTools } from '../src/runner/browser/tools';
-import { finish } from '../src/runner/browser/tools/finish';
-import { navigate, newTab } from '../src/runner/browser/tools/navigate';
-import { click } from '../src/runner/browser/tools/click';
-import { look } from '../src/runner/browser/tools/look';
-import { requestHuman } from '../src/runner/browser/tools/request-human';
-import { typeHandoffSecret } from '../src/runner/browser/tools/type-secret';
-import { observeElements } from '../src/runner/browser/tools/observe';
+import { GatePipeline } from '@marinoscar/hexactra-agent';
+import { executeTool } from '@marinoscar/hexactra-agent/engine';
+import { fakeBrowserRun } from '../src/testing';
+import { browserTools } from '../src/tools';
+import { finish } from '../src/tools/finish';
+import { navigate, newTab } from '../src/tools/navigate';
+import { click } from '../src/tools/click';
+import { look } from '../src/tools/look';
+import { requestHuman } from '../src/tools/request-human';
+import { typeHandoffSecret } from '../src/tools/type-secret';
+import { observeElements } from '../src/tools/observe';
 
 type Run = ReturnType<typeof fakeBrowserRun>;
 const call = (run: Run, tool: unknown, args: unknown) => executeTool(run.ctx, tool as never, args, new GatePipeline(run.gates as never) as never);

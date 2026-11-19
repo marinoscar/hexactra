@@ -1,7 +1,7 @@
 // The browser agent's system instructions (E38.5), composed from sections: the order and the words are the prompt, so a change here is a
 // change of what the agent does and needs its own issue. A tool may contribute a usage note (`RunnerTool.usage`); the harness appends the
 // notes after the sections in registration order, so the text stays byte-identical between rounds.
-import { composeInstructions } from '../harness';
+import { composeInstructions } from '@marinoscar/hexactra-agent';
 
 /** The sections, in order. `askTopics` is the fixed list of topics a confirmation the agent asks on its own may name (#555). */
 export function browserInstructionSections(askTopics: readonly string[]): string[] {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { defineRunnerTool } from '../../harness';
+import { defineRunnerTool } from '@marinoscar/hexactra-agent';
 import { clickThrough } from '../click-through';
 import type { BrowserContext } from '../context';
 import { RISK_GATE, type RiskRequest } from '../gates/risk-gate';

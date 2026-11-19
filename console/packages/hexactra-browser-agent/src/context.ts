@@ -2,7 +2,7 @@
 // toolset's own state and hooks. The host builds it; the tools reach the page, the site list and the gates only through it.
 import type { z } from 'zod';
 
-import type { GateTarget, HarnessMemory, ResultField, RunContext } from '../harness';
+import type { GateTarget, HarnessMemory, ResultField, RunContext } from '@marinoscar/hexactra-agent';
 import type { BrowserPort } from './browser-port';
 import type { ScreenshotWindow } from './context-settings';
 import type { TargetFacts } from './policy';

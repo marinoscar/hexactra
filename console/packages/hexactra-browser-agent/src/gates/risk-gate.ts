@@ -1,7 +1,7 @@
 // The confirmation gate (#550) and the owner's saved approvals (#555). Whether a click must wait for a person is decided by what is
 // clicked (the target's facts, read from the page), never by the model's reason. A saved approval is matched by the server and the model
 // cannot claim one.
-import { clip, targetUnknown, type Gate, type GateTarget, type SavedApproval } from '../../harness';
+import { clip, targetUnknown, type Gate, type GateTarget, type SavedApproval } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from '../context';
 import { currentHost } from '../page';
 import { approvalCovers, classifyTarget, type TargetFacts } from '../policy';

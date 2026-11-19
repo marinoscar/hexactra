@@ -1,6 +1,6 @@
 // A scriptable fake of the browser, and a BrowserExt over it: what the browser tools' unit tests run on (E38.5). It answers each action type from
 // a table the test fills, records every action it was sent, and never touches a network.
-import { fakeRun, type FakeRun, type FakeRunOptions } from '../../harness/testing';
+import { fakeRun, type FakeRun, type FakeRunOptions } from '@marinoscar/hexactra-agent/testing';
 import { ScreenshotWindow } from '../context-settings';
 import { type ActionOp, type BrowserPort } from '../browser-port';
 import { NO_MASKING, type BrowserContext, type BrowserExt, type BrowserMemory } from '../context';
