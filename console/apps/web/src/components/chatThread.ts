@@ -76,7 +76,7 @@ export function threadRows(messages: readonly ChatMessage[], timeZone: string, n
   return rows;
 }
 
-const RUN_WORDS: Record<string, string> = { queued: 'Starting the browser…', running: 'Working in the browser…', waiting_human: 'Waiting for you' };
+const RUN_WORDS: Record<string, string> = { queued: 'Starting the browser…', running: 'Working in the browser…', waiting_human: 'Waiting for you', paused: 'Paused' };
 
 /** The line under the chat's title: what is happening right now, or nothing. */
 export function chatSubtitle(state: { chat: Pick<Chat, 'status'> | null; thinking: boolean; run: Pick<ChatRun, 'status'> | null }): string {

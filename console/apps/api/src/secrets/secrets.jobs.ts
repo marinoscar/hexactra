@@ -13,7 +13,7 @@ import { REGISTRATION_MIN_REMAINING_MS, SecretsProviderRegistrar } from './secre
 export const VAULT_KEEP_FRESH_JOB = 'secrets.vault.keep_fresh';
 
 /** Runs that can use a stored secret are live in these states. */
-const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human'] as const;
+const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused'] as const;
 /** A token is due for renewal when it has less than this left (the registrar replaces it at 90 s; the tick is a minute). */
 const DUE_WITHIN_MS = REGISTRATION_MIN_REMAINING_MS + 60_000;
 

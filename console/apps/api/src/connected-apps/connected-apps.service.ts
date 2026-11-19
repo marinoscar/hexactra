@@ -22,7 +22,7 @@ import { APP_CEILING_DEFAULTS, APP_LIMIT_DEFAULTS, type AppLimits, type Connecte
 import { APP_FIRST_RUN_EVENT } from './connected-apps.notifications';
 import { clientLabel, friendlyAppName, type RequestClient } from './request-client';
 
-const LIVE = ['queued', 'running', 'waiting_human'] as const;
+const LIVE = ['queued', 'running', 'waiting_human', 'paused'] as const;
 const DAY_MS = 86_400_000;
 
 /** The short words of each scope (the list's chips). */

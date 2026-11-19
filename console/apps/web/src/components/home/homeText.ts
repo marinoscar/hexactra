@@ -37,10 +37,12 @@ export function statusSentence(s: HomeSummary, now: Date | number, timeZone: str
   if (!s.needsYou && !s.liveRuns && !s.upcoming && !s.recentRuns) return 'Ask an administrator for access to tasks and runs.';
   const running = s.liveRuns?.running ?? 0;
   const waiting = s.needsYou?.count ?? 0;
-  const queued = Math.max(0, (s.liveRuns?.count ?? 0) - running - (s.liveRuns?.items.filter((r) => r.status === 'waiting_human').length ?? 0));
+  const paused = s.liveRuns?.items.filter((r) => r.status === 'paused').length ?? 0;
+  const queued = Math.max(0, (s.liveRuns?.count ?? 0) - running - paused - (s.liveRuns?.items.filter((r) => r.status === 'waiting_human').length ?? 0));
   if (running > 0 && waiting > 0) return `${agents(running, ['is', 'are'])} running and ${waiting} ${waiting === 1 ? 'is' : 'are'} waiting for you.`;
   if (running > 0) return `${agents(running, ['is', 'are'])} running.`;
   if (waiting > 0) return `${agents(waiting, ['is', 'are'])} waiting for you.`;
+  if (paused > 0) return `${paused} ${paused === 1 ? 'run is' : 'runs are'} paused: resume ${paused === 1 ? 'it' : 'them'} when you are ready.`;
   if (queued > 0) return `${queued} ${queued === 1 ? 'run is' : 'runs are'} waiting for a machine.`;
   const next = s.upcoming?.items[0];
   if (next) return `Nothing is running. Next: ${next.taskName} ${formatRelative(next.nextRunAt, now, { timeZone })}.`;
@@ -69,6 +71,7 @@ export function shortDuration(ms: number): string {
 /** What a live run's card says it is doing. */
 export function liveLine(run: HomeLiveRun): string {
   if (run.status === 'waiting_human') return 'Waiting for your answer';
+  if (run.status === 'paused') return 'Paused: waiting for you to resume it';
   if (run.status === 'queued') return 'Waiting for a machine';
   return run.activity ? activityLine(run.activity) : 'Working';
 }

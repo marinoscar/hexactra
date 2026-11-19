@@ -11,6 +11,8 @@ import { z } from 'zod';
 import { createApp } from '../src/main';
 import { FabricClient } from '../src/fabric/fabric.client';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { RunPauseService } from '../src/tasks/run-pause.service';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -82,6 +84,12 @@ describe('structured results validate against the output schemas (real REST answ
       expect(await call(t, 'run_card_poll', { run_id: run.id, wait_s: 0 })).toMatchObject({ id: run.id, progress: { run_id: run.id, status: 'queued' } });
       expect((await call(t, 'runs_list', {})).items!.map((r) => r.id)).toContain(run.id);
       expect(await call(t, 'runs_list', { limit: 1 })).toMatchObject({ items: [expect.objectContaining({ id: run.id })] });
+      // Pause and resume (E38.2): the flag is set on a queued run; once the runner has paused it, resume queues it again (the queue only records here).
+      Object.assign(app.get(RunPauseService), { jobs: { enqueue: async () => undefined } });
+      expect(await call(t, 'run_pause', { run_id: run.id })).toMatchObject({ id: run.id, pauseRequested: true });
+      await app.get(PrismaService).run.update({ where: { id: String(run.id) }, data: { status: 'paused', pausedAt: new Date() } });
+      expect(await call(t, 'run_status', { run_id: run.id })).toMatchObject({ status: 'paused', progress: { status: 'paused', needs_human: false } });
+      expect(await call(t, 'run_resume', { run_id: run.id })).toMatchObject({ id: run.id, status: 'queued', pauseRequested: false });
       expect(await call(t, 'run_cancel', { run_id: run.id })).toMatchObject({ id: run.id });
       expect(await call(t, 'run_export', { run_id: run.id })).toMatchObject({ type: 'hexactra.run-trace', formatVersion: 1, run: { id: run.id }, truncated: false });
 

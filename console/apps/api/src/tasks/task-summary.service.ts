@@ -239,14 +239,14 @@ export class TaskSummaryService {
   /** Per task: its newest run, and its newest live run when there is one (two rows at most per task). */
   private async newestRuns(userId: string, ids: string[]) {
     const rows = await this.prisma.$queryRaw<{ taskId: string; live: boolean; id: string; status: string; trigger: string; createdAt: Date; finishedAt: Date | null }[]>(Prisma.sql`
-      SELECT DISTINCT ON (r.task_id, (r.status IN ('queued', 'running', 'waiting_human')))
+      SELECT DISTINCT ON (r.task_id, (r.status IN ('queued', 'running', 'waiting_human', 'paused')))
              r.task_id::text AS "taskId",
-             (r.status IN ('queued', 'running', 'waiting_human')) AS live,
+             (r.status IN ('queued', 'running', 'waiting_human', 'paused')) AS live,
              r.id::text AS id, r.status::text AS status, r.trigger::text AS trigger,
              r.created_at AS "createdAt", r.finished_at AS "finishedAt"
       FROM runs r
       WHERE r.user_id = ${userId}::uuid AND r.task_id = ANY(${ids}::uuid[])
-      ORDER BY r.task_id, (r.status IN ('queued', 'running', 'waiting_human')), r.created_at DESC, r.id DESC`);
+      ORDER BY r.task_id, (r.status IN ('queued', 'running', 'waiting_human', 'paused')), r.created_at DESC, r.id DESC`);
     const out = new Map<string, { last: (typeof rows)[number] | null; live: (typeof rows)[number] | null }>();
     for (const r of rows) {
       const entry = out.get(r.taskId) ?? { last: null, live: null };

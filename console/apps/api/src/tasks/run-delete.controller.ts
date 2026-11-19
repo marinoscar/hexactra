@@ -29,7 +29,7 @@ export class RunsDeleteController {
   @ApiOperation({
     summary: 'Delete runs: a list of ids, or every finished run that matches a filter',
     description:
-      'Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. ' +
+      'Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human, paused) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. ' +
       'A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.',
   })
   @ApiDataResponse(RunsDeletedResponseDto, { description: 'The runs were deleted in the request.' })

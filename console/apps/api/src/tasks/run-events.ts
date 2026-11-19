@@ -6,9 +6,10 @@ export const RUN_EVENTS_CHANNEL = 'runs.events';
 
 /**
  * What happened to a run: its status changed, it recorded a step, or its owner pressed Stop (`run.cancel`, E38.1:
- * the worker that holds the run aborts its work at once; every other subscriber ignores it).
+ * the worker that holds the run aborts its work at once; every other subscriber ignores it) or Pause (`run.pause`, E38.2:
+ * the same worker ends its chunk before the next action and pauses the run).
  */
-export const RUN_EVENT_TYPES = ['run.status', 'run.step', 'run.cancel'] as const;
+export const RUN_EVENT_TYPES = ['run.status', 'run.step', 'run.cancel', 'run.pause'] as const;
 export type RunEventType = (typeof RUN_EVENT_TYPES)[number];
 
 /**

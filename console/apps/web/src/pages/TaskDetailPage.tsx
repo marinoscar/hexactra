@@ -63,6 +63,24 @@ function LiveBanner({ runId, run, fallbackStatus, canOpen }: { runId: string; ru
       </Alert>
     );
   }
+  if (status === 'paused') {
+    return (
+      <Alert
+        severity="warning"
+        data-testid="task-live-banner"
+        sx={{ mb: 2, alignItems: 'center' }}
+        action={
+          canOpen ? (
+            <Button color="inherit" size="small" component={RouterLink} to={taskPaths.run(runId)} sx={touch}>
+              Resume
+            </Button>
+          ) : undefined
+        }
+      >
+        <strong>Paused</strong>: nothing happens until you resume it.
+      </Alert>
+    );
+  }
   const line = status === 'queued' ? 'waiting for a machine' : run?.activity ? describeActivity(run.activity) : 'working';
   return (
     <Alert

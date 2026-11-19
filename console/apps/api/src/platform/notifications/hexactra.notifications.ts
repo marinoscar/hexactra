@@ -15,6 +15,8 @@ export const QUESTION_ASKED_EVENT = 'questions.asked';
 export const RUN_RETENTION_NOTICE_EVENT = 'runs.retention_notice';
 /** A chat run went over one of its usual limits and is still working (#537): once per run. */
 export const RUN_OVER_BUDGET_EVENT = 'runs.over_budget';
+/** A run has been paused for an hour (E38.2): once per pause; nothing is sent before. */
+export const RUN_STILL_PAUSED_EVENT = 'runs.still_paused';
 /** Steps of a run went ahead on saved approvals (#555): once, at the end of the run. */
 export const RUN_SAVED_APPROVALS_EVENT = 'runs.saved_approvals_used';
 /** A scheduled run signed in with a saved login (E37.3): once per run, grouped, at the end of the run. */
@@ -81,6 +83,11 @@ const finished: BrowserNotificationTemplate = (d) => ({
 const overBudget: BrowserNotificationTemplate = (d) => ({
   title: 'Still working, over its usual limit',
   body: trim(`${str(d, 'usedOfLimit') ? `${str(d, 'usedOfLimit')} ${str(d, 'budget')}. ` : ''}${str(d, 'goal')}`, 180),
+  link: finishedLink(d),
+});
+const stillPaused: BrowserNotificationTemplate = (d) => ({
+  title: 'Still paused',
+  body: trim(str(d, 'goal'), 180),
   link: finishedLink(d),
 });
 const savedApprovals: BrowserNotificationTemplate = (d) => ({
@@ -180,6 +187,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
       defaultEnabled: true,
     },
     browserTemplate: overBudget,
+  },
+  {
+    event: {
+      key: RUN_STILL_PAUSED_EVENT,
+      label: 'Run still paused',
+      description: 'A run you paused has been waiting for you to resume it for an hour. It never resumes by itself.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: stillPaused,
   },
   {
     event: {
@@ -301,6 +318,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
     return { tag: id ? `question-${id}`.slice(0, 64) : 'question', urgency: 'high', ...(actions.length ? { actions } : {}) };
   }
   if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
+  if (event.key === RUN_STILL_PAUSED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'normal' };
   if (event.key === RUN_OVER_BUDGET_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'normal' };
   if (event.key === RUN_SAVED_APPROVALS_EVENT) return { tag: runId ? `approvals-${runId}`.slice(0, 64) : 'approvals', urgency: 'normal' };
   if (event.key === RUN_SAVED_LOGIN_EVENT) return { tag: runId ? `saved-login-${runId}`.slice(0, 64) : 'saved-login', urgency: 'normal' };

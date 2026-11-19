@@ -113,7 +113,7 @@ export interface RunsClient {
   start(body: { goal: string; profile?: string; hostId?: string | null; hostFallback?: boolean; policyId?: PolicyRef }): Promise<Schema<'RunResponseDto'>>;
   /** One page of runs, newest first (`envelope=1`): pass `nextCursor` back as `cursor`; `null` is the end. */
   list(query?: RunFilter & { cursor?: string; limit?: number; order?: 'desc' | 'asc' }): Promise<RunPage>;
-  /** Delete one finished run, permanently. 409 `RUN_LIVE` for a queued, running or waiting run: cancel it first. Needs `runs:delete`. */
+  /** Delete one finished run, permanently. 409 `RUN_LIVE` for a queued, running, waiting or paused run: cancel it first. Needs `runs:delete`. */
   delete(id: string): Promise<void>;
   /**
    * Delete many finished runs, permanently: `{ ids }` (1 to 500), or `{ filter, expectedCount }` for every finished run a

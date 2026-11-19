@@ -191,7 +191,7 @@ describe('StatusChip', () => {
   });
 
   it('tells live from terminal statuses', () => {
-    expect(RUN_STATUSES.filter(isLive)).toEqual(['queued', 'running', 'waiting_human']);
+    expect(RUN_STATUSES.filter(isLive)).toEqual(['queued', 'running', 'waiting_human', 'paused']);
     expect(RUN_STATUSES.filter(isTerminal)).toEqual(['succeeded', 'failed', 'cancelled']);
     expect(isLive('something_new')).toBe(false);
     expect(isTerminal('something_new')).toBe(false);

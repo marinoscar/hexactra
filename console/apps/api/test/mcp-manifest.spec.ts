@@ -167,20 +167,20 @@ describe('MCP tool manifest (#462)', () => {
 
   it('classifies the tools by the rules of #462', () => {
     const by = (n: string) => MCP_TOOLS.find((t) => t.name === n)!;
-    // 56 tools for the model, plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
-    expect(MCP_TOOLS).toHaveLength(58);
+    // 58 tools for the model (run_pause and run_resume, E38.2), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
+    expect(MCP_TOOLS).toHaveLength(60);
     for (const n of ['run_cancel', 'browser_close', 'task_update', 'policy_update', 'policy_set_default', 'policies_import', 'task_pause', 'browser_click', 'browser_type', 'browser_press', 'browser_click_at', 'browser_drag', 'browser_type_keys', 'browser_key', 'browser_evaluate', 'browser_type_secret']) {
       expect([n, by(n).effect]).toEqual([n, 'destructive']);
     }
     for (const t of MCP_TOOLS.filter((x) => x.name.startsWith('browser_desktop_'))) expect([t.name, t.effect]).toEqual([t.name, t.name === 'browser_desktop_screenshot' ? 'read' : 'destructive']);
-    for (const n of ['browser_navigate', 'browser_scroll', 'browser_hover_at', 'browser_wait_for', 'browser_back', 'browser_open', 'run_goal', 'task_run', 'ask_human', 'inbox_answer', 'browser_request_human']) {
+    for (const n of ['browser_navigate', 'browser_scroll', 'browser_hover_at', 'browser_wait_for', 'browser_back', 'browser_open', 'run_goal', 'task_run', 'ask_human', 'inbox_answer', 'browser_request_human', 'run_pause', 'run_resume']) {
       expect([n, by(n).effect]).toEqual([n, 'write']);
     }
     for (const n of ['policies_export', 'run_export', 'schedule_preview', 'browser_handoff_status', 'browser_screenshot', 'browser_text', 'browser_elements', 'browser_tabs']) expect([n, by(n).effect]).toEqual([n, 'read']);
     for (const t of MCP_TOOLS) {
       const web = t.name.startsWith('browser_') || t.name === 'run_goal' || t.name === 'task_run';
       expect([t.name, t.openWorld]).toEqual([t.name, web]);
-      const idem = t.effect === 'read' || ['task_pause', 'task_resume', 'policy_set_default', 'run_cancel', 'browser_close'].includes(t.name);
+      const idem = t.effect === 'read' || ['task_pause', 'task_resume', 'policy_set_default', 'run_cancel', 'run_pause', 'run_resume', 'browser_close'].includes(t.name);
       expect([t.name, t.idempotent ?? false]).toEqual([t.name, idem]);
     }
     // Read tools sit in a read scope; policies_export only reads, so it is runs:read (not policies:write).

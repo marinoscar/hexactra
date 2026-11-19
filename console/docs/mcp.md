@@ -57,7 +57,7 @@ Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its s
 | Scope | Consent page | Risk | Default | Also needs | Tools | Console permissions |
 |---|---|---|---|---|---|---|
 | `runs:read` | See your runs, tasks, schedules and machines | low | yes | — | `run_status`, `run_wait`, `runs_list`, `run_export`, `tasks_list`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
-| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `task_run` | `runs:write`, `runs:read` |
+| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `run_pause`, `run_resume`, `task_run` | `runs:write`, `runs:read` |
 | `tasks:write` | Create and change tasks and schedules | low | yes | — | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
 | `inbox:read` | See questions your agent is waiting on | low | yes | — | `inbox_list`, `question_status` | `runs:read` |
 | `inbox:write` | Ask you questions and pass on answers you give in the chat | low | yes | — | `inbox_answer`, `ask_human`, `question_card_answer` | `runs:write`, `runs:read` |
@@ -249,7 +249,7 @@ The acceptance run adds the facts it observes (registration path, redirect URI, 
 
 | Group | Tools |
 |---|---|
-| Delegate to Hexactra's agent | `run_goal`, `run_status`, `run_wait`, `runs_list`, `run_cancel`, `tasks_list`, `task_create`, `task_update`, `task_run`, `task_pause`, `task_resume`, `schedule_create`, `schedule_preview`, `schedules_list` |
+| Delegate to Hexactra's agent | `run_goal`, `run_status`, `run_wait`, `runs_list`, `run_cancel`, `run_pause`, `run_resume`, `tasks_list`, `task_create`, `task_update`, `task_run`, `task_pause`, `task_resume`, `schedule_create`, `schedule_preview`, `schedules_list` |
 | Agent policies (budgets and model tiers) | `policies_list`, `policy_get`, `policies_export` (read); `policy_create`, `policy_update`, `policy_set_default`, `policies_import` (write) |
 | Ask the user a question | `ask_human` (no browser: text, choice, multi_choice, number, confirm, none, takeover; `wait_s` ≤ 300, 200 for OAuth clients, waits for the answer), `question_status` |
 | Relay a person's answers | `inbox_list`, `inbox_answer` (by `question_id` or `run_id`): only answers the user actually gave |
@@ -267,6 +267,8 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `run_wait` | Wait for a run | `runs:read` | read | no | yes | yes |
 | `runs_list` | List runs | `runs:read` | read | no | yes | yes |
 | `run_cancel` | Stop a run | `runs:write` | destructive | no | yes | yes |
+| `run_pause` | Pause a run | `runs:write` | write | no | yes | yes |
+| `run_resume` | Resume a paused run | `runs:write` | write | no | yes | yes |
 | `run_export` | Export a run's trace | `runs:read` | read | no | yes | yes |
 | `tasks_list` | List saved tasks | `runs:read` | read | no | yes | yes |
 | `task_create` | Save a task | `tasks:write` | write | no | no | yes |
@@ -438,7 +440,7 @@ In a host that renders MCP Apps (Claude, ChatGPT), `run_goal`, `task_run`, `run_
 
 | Field | |
 |---|---|
-| `run_id`, `status` | `queued`, `running`, `waiting_human`, `succeeded`, `failed` or `cancelled` |
+| `run_id`, `status` | `queued`, `running`, `waiting_human`, `paused`, `succeeded`, `failed` or `cancelled` |
 | `changed`, `cursor` | Whether something happened since `since` (or since the call began); pass `cursor` as `since` next time. The cursor is opaque. |
 | `activity` | The live activity line of the run page ("Doing: click #checkout (Filling the checkout form)"), or the last step when the run is between activities. From the browser: marked untrusted. |
 | `steps_done`, `elapsed_s` | |

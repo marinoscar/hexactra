@@ -131,6 +131,9 @@ export function ChatPage() {
   const liveRunId = liveRun?.id ?? null;
   // Stop was pressed on this run (E38.1): shown at once, before the run's own `cancelRequested` arrives.
   const [stoppingRunId, setStoppingRunId] = useState<string | null>(null);
+  // Pause and Resume were pressed on this run (E38.2): "Pausing…" and "Resuming…" at once, until the stream says so.
+  const [pausingRunId, setPausingRunId] = useState<string | null>(null);
+  const [resumingRunId, setResumingRunId] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [cardVisible, setCardVisible] = useState(false);
   const [viewerOf, setViewerOf] = useState<{ runId: string; viewer: RunViewer } | null>(null);
@@ -181,6 +184,33 @@ export function ChatPage() {
     } catch (e) {
       setStoppingRunId(null);
       toast(e instanceof Error ? e.message : 'Could not stop the run', 'error');
+    }
+  };
+  // The pause took effect (or the run went on some other way): the page's own "Pausing…" is over.
+  const liveStatus = liveRun?.status ?? null;
+  useEffect(() => {
+    if (liveStatus === 'paused' || liveStatus === null) setPausingRunId(null);
+  }, [liveStatus]);
+  const pauseRun = async () => {
+    if (!liveRun) return;
+    setPausingRunId(liveRun.id);
+    try {
+      await api.post(`/runs/${liveRun.id}/pause`, {});
+    } catch (e) {
+      setPausingRunId(null);
+      toast(e instanceof Error ? e.message : 'Could not pause the run', 'error');
+    }
+  };
+  const resumeRun = async () => {
+    if (!liveRun) return;
+    setResumingRunId(liveRun.id);
+    setPausingRunId(null);
+    try {
+      await api.post(`/runs/${liveRun.id}/resume`, {});
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not resume the run', 'error');
+    } finally {
+      setResumingRunId(null);
     }
   };
   // ---- The run's request, answered in the thread (#488) ----
@@ -378,6 +408,7 @@ export function ChatPage() {
     paneOpen,
     onOpenBrowser: openBrowser,
     onCardVisible,
+    onResumeRun: viewer.hasPermission('runs:write') ? () => void resumeRun() : undefined,
     onRunAgain: mayType && !sending && liveRun === null ? runAgain : undefined,
     onSaveAsTask: canSaveTask ? () => void saveAsTask() : undefined,
     savingTask,
@@ -447,7 +478,7 @@ export function ChatPage() {
   }
 
   const browserPane = paneOpen && liveRun && (
-    <BrowserPane run={stoppingRunId === liveRun.id && !liveRun.cancelRequested ? { ...liveRun, cancelRequested: true } : liveRun} frame={frame} frameHidden={frameHidden} now={now} canStop={viewer.hasPermission('runs:write')} onStop={() => void stopRun()} takeOver={takeOver} onClose={() => setBrowserOpen(false)} />
+    <BrowserPane run={stoppingRunId === liveRun.id && !liveRun.cancelRequested ? { ...liveRun, cancelRequested: true } : liveRun} frame={frame} frameHidden={frameHidden} now={now} canStop={viewer.hasPermission('runs:write')} onStop={() => void stopRun()} onPause={() => void pauseRun()} onResume={() => void resumeRun()} pausing={pausingRunId === liveRun.id} resuming={resumingRunId === liveRun.id} takeOver={takeOver} onClose={() => setBrowserOpen(false)} />
   );
 
   const thread = (

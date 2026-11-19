@@ -8,7 +8,7 @@ import { RUN_STOP_REASONS } from '../runner/budget';
 import { taskResponseSchema } from './console.responses';
 
 const iso = z.string().describe('ISO 8601 timestamp');
-const runStatus = z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']);
+const runStatus = z.enum(['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled']);
 
 export const taskSummaryScheduleSchema = z.object({
   id: z.uuid(),

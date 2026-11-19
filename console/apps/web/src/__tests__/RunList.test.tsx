@@ -50,8 +50,8 @@ function run(i: number, over: Partial<RunListItem> = {}): RunListItem {
 }
 
 function counts(over: Partial<RunCounts['byStatus']> = {}, cost: Pick<RunCounts, 'costUsd' | 'costKnown'> = { costUsd: null, costKnown: true }): RunCounts {
-  const byStatus = { queued: 0, running: 0, waiting_human: 0, succeeded: 0, failed: 0, cancelled: 0, ...over };
-  return { total: Object.values(byStatus).reduce((a, b) => a + b, 0), live: byStatus.queued + byStatus.running + byStatus.waiting_human, byStatus, ...cost };
+  const byStatus = { queued: 0, running: 0, waiting_human: 0, paused: 0, succeeded: 0, failed: 0, cancelled: 0, ...over };
+  return { total: Object.values(byStatus).reduce((a, b) => a + b, 0), live: byStatus.queued + byStatus.running + byStatus.waiting_human + byStatus.paused, byStatus, ...cost };
 }
 
 type Request = { method: string; path: string; body?: unknown };
@@ -131,6 +131,24 @@ describe('RunList: paging and filters', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
     expect(screen.getByTestId('run-showing')).toHaveTextContent('Showing 70 of 70');
   }, 30_000);
+
+  it('lists a paused run with the paused chip, counts it as live and under "Needs you", and has its own Paused tab (E38.2)', async () => {
+    const host = createTestPlatformHost({
+      permissions: ALL,
+      responses: {
+        'GET /runs': (r: Request) => (query(r).get('status') === 'paused' ? { items: [run(5, { status: 'paused', goal: 'A paused goal', stopReason: null, finishedAt: null })], nextCursor: null } : { items: [run(1)], nextCursor: null }),
+        'GET /runs/counts': counts({ running: 1, waiting_human: 1, paused: 2, succeeded: 3 }),
+        'GET /tasks': [],
+      },
+    });
+    renderList(host);
+    expect(await screen.findByText('Goal 1')).toBeInTheDocument();
+    for (const name of ['All 7', 'Live 4', 'Needs you 3', 'Paused 2']) expect(await screen.findByRole('tab', { name })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Paused 2' }));
+    expect(await screen.findByText('A paused goal')).toBeInTheDocument();
+    expect(query(listRequests(host).at(-1)!).get('status')).toBe('paused');
+    expect(screen.getAllByText('paused').length).toBeGreaterThan(0);
+  });
 
   it('shows each tab with its count, and a tab change resets the list and asks again', async () => {
     const host = createTestPlatformHost({
@@ -539,7 +557,7 @@ describe('RunList: select and bulk delete', () => {
 });
 
 describe('the row menu', () => {
-  const LIVE: RunStatus[] = ['queued', 'running', 'waiting_human'];
+  const LIVE: RunStatus[] = ['queued', 'running', 'waiting_human', 'paused'];
   const cases = RUN_STATUSES.flatMap((status) =>
     [true, false].flatMap((canWrite) => [true, false].flatMap((canDelete) => [true, false].map((canPickPolicy) => ({ status, canWrite, canDelete, canPickPolicy })))),
   );
@@ -647,7 +665,9 @@ describe('the filters, as the URL and the API read them', () => {
 
   it('maps the tabs, drops "Stopped by" where it does not apply, and restricts a delete to finished runs', () => {
     expect(apiFilter({ ...NO_FILTERS, view: 'live' }, {}, zone)).toEqual({ state: 'live' });
-    expect(apiFilter({ ...NO_FILTERS, view: 'needs' }, {}, zone)).toEqual({ status: ['waiting_human'] });
+    // "Needs you" is every run that waits for its owner: a question to answer, or a pause to end (E38.2); "Paused" is the pause alone.
+    expect(apiFilter({ ...NO_FILTERS, view: 'needs' }, {}, zone)).toEqual({ status: ['waiting_human', 'paused'] });
+    expect(apiFilter({ ...NO_FILTERS, view: 'paused' }, {}, zone)).toEqual({ status: ['paused'] });
     expect(apiFilter({ ...NO_FILTERS, view: 'succeeded', stopReason: ['budget'] }, { taskId: TASK_ID }, zone)).toEqual({ status: ['succeeded'], taskId: TASK_ID });
     expect(apiFilter({ ...NO_FILTERS, view: 'failed', stopReason: ['budget', 'stalled'] }, {}, zone, false)).toEqual({ stopReason: ['budget', 'stalled'] });
     expect(deleteFilter(NO_FILTERS, {}, zone)).toEqual({ state: 'finished' });
@@ -816,6 +836,43 @@ describe('RunDetailPage: delete, run again, a missing run', () => {
     detail(createTestPlatformHost({ permissions: ['runs:read', 'runs:write'], responses: { [`GET /runs/${uuid(2)}`]: run(2, { steps: [] }) } }), uuid(2));
     expect(await screen.findByRole('button', { name: 'Run again' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('Pause (E38.2): beside Cancel while running, "Pausing…" at once; paused shows the banner with Resume and Cancel, and the browser view stays', async () => {
+    const liveRun = run(1, { status: 'running', stopReason: null, finishedAt: null, steps: [] });
+    const host = createTestPlatformHost({
+      permissions: ['runs:read', 'runs:write'],
+      responses: { [`GET /runs/${uuid(1)}`]: liveRun, [`GET /runs/${uuid(1)}/viewer`]: { hostId: null, hostName: null, desktop: false }, [`POST /runs/${uuid(1)}/pause`]: {}, [`POST /runs/${uuid(1)}/resume`]: {} },
+    });
+    const first = detail(host, uuid(1));
+    expect(await screen.findByRole('button', { name: 'Cancel run' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(await screen.findByRole('button', { name: 'Pausing…' })).toBeDisabled();
+    expect(host.requests.filter((r) => r.method === 'POST' && r.path === `/runs/${uuid(1)}/pause`)).toHaveLength(1);
+    first.unmount();
+
+    const pausedRun = run(2, { status: 'paused', stopReason: null, finishedAt: null, pauseRequested: true, pausedAt: new Date(T0).toISOString(), steps: [] });
+    const host2 = createTestPlatformHost({
+      permissions: ['runs:read', 'runs:write'],
+      responses: { [`GET /runs/${uuid(2)}`]: pausedRun, [`GET /runs/${uuid(2)}/viewer`]: { hostId: null, hostName: null, desktop: false }, [`POST /runs/${uuid(2)}/resume`]: {} },
+    });
+    detail(host2, uuid(2));
+    const banner = await screen.findByTestId('paused-banner');
+    expect(banner).toHaveTextContent('Paused. Nothing happens until you resume.');
+    expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pausing…' })).not.toBeInTheDocument();
+    expect(within(banner).getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    // The browser view is still offered while paused.
+    expect(screen.getByRole('button', { name: /Stop watching|Watch the browser/ })).toBeInTheDocument();
+    fireEvent.click(within(banner).getByRole('button', { name: 'Resume' }));
+    await waitFor(() => expect(host2.requests.some((r) => r.method === 'POST' && r.path === `/runs/${uuid(2)}/resume`)).toBe(true));
+  });
+
+  it('has no Pause, Resume or Stop without runs:write', async () => {
+    const pausedRun = run(3, { status: 'paused', stopReason: null, finishedAt: null, pauseRequested: true, steps: [] });
+    detail(createTestPlatformHost({ permissions: ['runs:read'], responses: { [`GET /runs/${uuid(3)}`]: pausedRun, [`GET /runs/${uuid(3)}/viewer`]: { hostId: null, hostName: null, desktop: false } } }), uuid(3));
+    const banner = await screen.findByTestId('paused-banner');
+    expect(within(banner).queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('says a missing run does not exist any more, with a link to Runs', async () => {

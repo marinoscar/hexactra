@@ -11,12 +11,12 @@ import { RUN_STOP_REASONS } from '../runner/budget';
 import { RUN_ORIGINS } from '../connected-apps/request-client';
 import { TERMINAL_RUN_STATUSES, type RunStatus } from './run-status';
 
-export const RUN_STATUSES = ['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled'] as const satisfies readonly RunStatus[];
+export const RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled'] as const satisfies readonly RunStatus[];
 export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 /** A run that is not finished: it can still change, and is never deleted (#418). */
-export const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human'] as const satisfies readonly RunStatus[];
+export const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused'] as const satisfies readonly RunStatus[];
 /** `state=live|finished`: shorthand for the two status groups. */
 export const RUN_STATES = { live: LIVE_RUN_STATUSES, finished: TERMINAL_RUN_STATUSES } as const satisfies Record<string, readonly RunStatus[]>;
 
@@ -46,7 +46,7 @@ function listOf<const T extends readonly [string, ...string[]]>(values: T, what:
  */
 export const runFilterSchema = z.object({
   status: listOf(RUN_STATUSES, 'Run status.'),
-  state: z.enum(['live', 'finished']).optional().describe('Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.'),
+  state: z.enum(['live', 'finished']).optional().describe('Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`.'),
   taskId: z.union([z.literal('none'), z.uuid()]).optional().describe("A task's id, or `none` for runs without a task (ad-hoc and external runs)."),
   trigger: listOf(RUN_TRIGGERS, 'What started the run.'),
   from: z.iso.datetime({ offset: true }).optional().describe('Runs created at or after this ISO 8601 date-time (inclusive).'),

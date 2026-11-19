@@ -32109,7 +32109,7 @@
     },
     "/api/runs/delete": {
       "post": {
-        "description": "Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "description": "Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human, paused) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.\n\n**Requires:** authentication, plus permission `runs:delete`.",
         "operationId": "runsDelete_deleteMany",
         "parameters": [],
         "requestBody": {
@@ -32663,7 +32663,7 @@
             "name": "status",
             "required": false,
             "in": "query",
-            "description": "Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+            "description": "Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -32682,7 +32682,7 @@
             "name": "state",
             "required": false,
             "in": "query",
-            "description": "Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+            "description": "Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`.",
             "schema": {
               "type": "string",
               "enum": [
@@ -33463,6 +33463,176 @@
           ]
         },
         "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
+    "/api/runs/{id}/pause": {
+      "post": {
+        "description": "Freezes the run: it sets `pauseRequested` and answers the run. A running or queued run ends its current step and pauses before its next action (`status` becomes `paused`, the browser stays where it is, no budget time runs); a run waiting for a person pauses once the question is answered, before the agent acts on the answer. Already paused: answers the run unchanged. 409 `RUN_FINISHED` for a finished run; 409 `RUN_NOT_PAUSABLE` for an external agent's run. A paused run never resumes by itself: `POST /runs/{id}/resume` or Stop.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "runs_pause",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Pause a run",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}/resume": {
+      "post": {
+        "description": "From `paused`: clears the pause, moves the run to `queued` and starts its job (reason `resumed`); the agent looks at the page again before it acts. 409 `RUN_NOT_PAUSED` when the run is not paused.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "runs_resume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Resume a paused run",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
       }
     },
     "/api/questions": {
@@ -41452,6 +41622,9 @@
               "RUN_NOT_FOUND",
               "RUN_LIVE",
               "COUNT_CHANGED",
+              "RUN_FINISHED",
+              "RUN_NOT_PAUSED",
+              "RUN_NOT_PAUSABLE",
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
               "CONFIRMATION_REQUIRED",
@@ -45732,6 +45905,19 @@
                   }
                 ],
                 "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              },
+              "maxPausedHours": {
+                "description": "The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason \"Paused too long\" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner).",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8760
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -46867,6 +47053,19 @@
                   }
                 ],
                 "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              },
+              "maxPausedHours": {
+                "description": "The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason \"Paused too long\" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner).",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8760
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -48072,6 +48271,19 @@
                   }
                 ],
                 "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              },
+              "maxPausedHours": {
+                "description": "The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason \"Paused too long\" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner).",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8760
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             }
           },
@@ -74088,6 +74300,7 @@
                           "queued",
                           "running",
                           "waiting_human",
+                          "paused",
                           "succeeded",
                           "failed",
                           "cancelled"
@@ -74671,6 +74884,7 @@
                                 "queued",
                                 "running",
                                 "waiting_human",
+                                "paused",
                                 "succeeded",
                                 "failed",
                                 "cancelled"
@@ -75270,6 +75484,7 @@
                           "queued",
                           "running",
                           "waiting_human",
+                          "paused",
                           "succeeded",
                           "failed",
                           "cancelled"
@@ -76871,6 +77086,7 @@
                           "queued",
                           "running",
                           "waiting_human",
+                          "paused",
                           "succeeded",
                           "failed",
                           "cancelled"
@@ -77331,7 +77547,7 @@
             "type": "object",
             "properties": {
               "status": {
-                "description": "Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+                "description": "Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
                 "anyOf": [
                   {
                     "type": "string"
@@ -77345,7 +77561,7 @@
                 ]
               },
               "state": {
-                "description": "Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+                "description": "Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`.",
                 "type": "string",
                 "enum": [
                   "live",
@@ -77650,6 +77866,7 @@
               "queued",
               "running",
               "waiting_human",
+              "paused",
               "succeeded",
               "failed",
               "cancelled"
@@ -77793,6 +78010,22 @@
               }
             ],
             "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+          },
+          "pauseRequested": {
+            "type": "boolean",
+            "description": "The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it."
+          },
+          "pausedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the run was paused (`paused` only, until it runs again); null otherwise"
           },
           "stepCount": {
             "type": "integer",
@@ -78152,7 +78385,7 @@
                 "type": "null"
               }
             ],
-            "description": "The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`)."
+            "description": "The run budget while the run is live (queued, running, waiting_human, paused); null on a finished run in a list (read it from `GET /runs/{id}`)."
           },
           "tier": {
             "anyOf": [
@@ -78517,6 +78750,8 @@
           "error",
           "cancelRequested",
           "cancelRequestedAt",
+          "pauseRequested",
+          "pausedAt",
           "stepCount",
           "activity",
           "inputTokens",
@@ -78592,6 +78827,7 @@
                     "queued",
                     "running",
                     "waiting_human",
+                    "paused",
                     "succeeded",
                     "failed",
                     "cancelled"
@@ -78735,6 +78971,22 @@
                     }
                   ],
                   "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+                },
+                "pauseRequested": {
+                  "type": "boolean",
+                  "description": "The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it."
+                },
+                "pausedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When the run was paused (`paused` only, until it runs again); null otherwise"
                 },
                 "stepCount": {
                   "type": "integer",
@@ -79094,7 +79346,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`)."
+                  "description": "The run budget while the run is live (queued, running, waiting_human, paused); null on a finished run in a list (read it from `GET /runs/{id}`)."
                 },
                 "tier": {
                   "anyOf": [
@@ -79459,6 +79711,8 @@
                 "error",
                 "cancelRequested",
                 "cancelRequestedAt",
+                "pauseRequested",
+                "pausedAt",
                 "stepCount",
                 "activity",
                 "inputTokens",
@@ -79512,7 +79766,7 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991,
-            "description": "Of those: queued + running + waiting_human"
+            "description": "Of those: queued + running + waiting_human + paused"
           },
           "byStatus": {
             "type": "object",
@@ -79528,6 +79782,11 @@
                 "maximum": 9007199254740991
               },
               "waiting_human": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "paused": {
                 "type": "integer",
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991
@@ -79552,6 +79811,7 @@
               "queued",
               "running",
               "waiting_human",
+              "paused",
               "succeeded",
               "failed",
               "cancelled"
@@ -79671,6 +79931,7 @@
                   "queued",
                   "running",
                   "waiting_human",
+                  "paused",
                   "succeeded",
                   "failed",
                   "cancelled"
@@ -80924,6 +81185,7 @@
               "queued",
               "running",
               "waiting_human",
+              "paused",
               "succeeded",
               "failed",
               "cancelled"
@@ -81067,6 +81329,22 @@
               }
             ],
             "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+          },
+          "pauseRequested": {
+            "type": "boolean",
+            "description": "The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it."
+          },
+          "pausedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the run was paused (`paused` only, until it runs again); null otherwise"
           },
           "stepCount": {
             "type": "integer",
@@ -82113,6 +82391,8 @@
           "error",
           "cancelRequested",
           "cancelRequestedAt",
+          "pauseRequested",
+          "pausedAt",
           "stepCount",
           "activity",
           "inputTokens",
@@ -82184,6 +82464,7 @@
               "queued",
               "running",
               "waiting_human",
+              "paused",
               "succeeded",
               "failed",
               "cancelled"
@@ -82327,6 +82608,22 @@
               }
             ],
             "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+          },
+          "pauseRequested": {
+            "type": "boolean",
+            "description": "The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it."
+          },
+          "pausedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the run was paused (`paused` only, until it runs again); null otherwise"
           },
           "stepCount": {
             "type": "integer",
@@ -83070,6 +83367,8 @@
           "error",
           "cancelRequested",
           "cancelRequestedAt",
+          "pauseRequested",
+          "pausedAt",
           "stepCount",
           "activity",
           "inputTokens",
@@ -85625,7 +85924,8 @@
                           "enum": [
                             "queued",
                             "running",
-                            "waiting_human"
+                            "waiting_human",
+                            "paused"
                           ]
                         },
                         "activity": {
@@ -86913,7 +87213,8 @@
                           "enum": [
                             "queued",
                             "running",
-                            "waiting_human"
+                            "waiting_human",
+                            "paused"
                           ]
                         }
                       },
@@ -87313,7 +87614,8 @@
                     "enum": [
                       "queued",
                       "running",
-                      "waiting_human"
+                      "waiting_human",
+                      "paused"
                     ]
                   }
                 },

@@ -91,7 +91,7 @@ export type RunStatusCounts = Record<RunStatus, number>;
 
 export interface RunCounts {
   total: number;
-  /** queued + running + waiting_human. */
+  /** queued + running + waiting_human + paused. */
   live: number;
   byStatus: RunStatusCounts;
   /** USD over the counted runs; null when none of them made a model call. A lower bound while `costKnown` is false. */
@@ -195,7 +195,7 @@ export class RunsQueryService {
              CASE WHEN jsonb_typeof(policy_snapshot->'version') = 'number' THEN (policy_snapshot->>'version')::int END AS version,
              policy_snapshot->>'source' AS source,
              CASE WHEN jsonb_typeof(policy_snapshot->'builtin') = 'boolean' THEN (policy_snapshot->>'builtin')::boolean END AS builtin,
-             CASE WHEN status IN ('queued', 'running', 'waiting_human') THEN policy_snapshot->'effectiveBudget' END AS effective_budget
+             CASE WHEN status IN ('queued', 'running', 'waiting_human', 'paused') THEN policy_snapshot->'effectiveBudget' END AS effective_budget
       FROM runs
       WHERE user_id = ${userId}::uuid AND id = ANY(${ids}::uuid[])`;
     return new Map(rows.map((r) => [r.id, r]));

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
-import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_CARD_AMOUNT_MISMATCH_EVENT, RUN_CARD_USED_EVENT, RUN_SAVED_APPROVALS_EVENT, RUN_SAVED_LOGIN_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_STILL_PAUSED_EVENT, RUN_CARD_AMOUNT_MISMATCH_EVENT, RUN_CARD_USED_EVENT, RUN_SAVED_APPROVALS_EVENT, RUN_SAVED_LOGIN_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
 import { FINAL_WINDOW_MS, canSnooze } from './reminder-schedule';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
@@ -115,6 +115,11 @@ export class RunNotifier {
       ...(left !== null ? { minutesLeft: Math.max(1, Math.round(left)), final: left * 60_000 <= FINAL_WINDOW_MS } : {}),
       ...this.buttons(userId, run, ask.kind, ask.input, canSnooze(when.expiresAt, when.now, when.reminderCount)),
     });
+  }
+
+  /** A run has been paused for an hour (E38.2): once per pause. It leads to the chat or the run page, where it is resumed or stopped. No webhook. */
+  async stillPaused(userId: string, run: RunRef): Promise<void> {
+    await this.send(RUN_STILL_PAUSED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
   }
 
   async finished(userId: string, run: RunRef, status: string, result?: string | null): Promise<void> {

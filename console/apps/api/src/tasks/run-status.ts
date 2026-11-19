@@ -1,6 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 
-export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | 'failed' | 'cancelled';
+export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
 
 /**
  * The run state machine:
@@ -11,19 +11,26 @@ export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | '
  *     │     waiting_human ─▶ failed | cancelled
  *     └──────────────────────▶ cancelled | failed
  *
+ * A run the owner paused (E38.2) is live, not finished: it holds its browser session and its memory, and its time budget does
+ * not run. running | waiting_human | queued ─▶ paused ─▶ queued (resumed) | cancelled | failed.
+ *
  * A task run created waiting for its parameter values (#552) goes
  * waiting_human ─▶ queued once its form is answered.
  *
  * Terminal states never change again.
  */
 export const RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> = {
-  queued: ['running', 'cancelled', 'failed'],
-  running: ['waiting_human', 'succeeded', 'failed', 'cancelled'],
-  waiting_human: ['running', 'queued', 'failed', 'cancelled'],
+  queued: ['running', 'cancelled', 'failed', 'paused'],
+  running: ['waiting_human', 'succeeded', 'failed', 'cancelled', 'paused'],
+  waiting_human: ['running', 'queued', 'failed', 'cancelled', 'paused'],
+  paused: ['queued', 'cancelled', 'failed'],
   succeeded: [],
   failed: [],
   cancelled: [],
 };
+
+/** Every status in which a run is not finished (the `state=live` group). */
+export const LIVE_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting_human', 'paused'];
 
 export const TERMINAL_RUN_STATUSES: readonly RunStatus[] = ['succeeded', 'failed', 'cancelled'];
 

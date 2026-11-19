@@ -28,8 +28,8 @@ All of them work with and without `envelope`.
 | `cursor` | string | The previous page's `nextCursor`. |
 | `limit` | 1 to 100 with `envelope` (1 to 200 without), default 50 | Rows per page. |
 | `order` | `desc` (default) or `asc` | By creation time, then id. `desc` is newest first. |
-| `status` | one or more of `queued`, `running`, `waiting_human`, `succeeded`, `failed`, `cancelled` | Any of them. |
-| `state` | `live` or `finished` | `live` = `queued`, `running`, `waiting_human`; `finished` = `succeeded`, `failed`, `cancelled`. Not together with `status`. |
+| `status` | one or more of `queued`, `running`, `waiting_human`, `paused`, `succeeded`, `failed`, `cancelled` | Any of them. |
+| `state` | `live` or `finished` | `live` = `queued`, `running`, `waiting_human`, `paused`; `finished` = `succeeded`, `failed`, `cancelled`. Not together with `status`. |
 | `taskId` | a task's UUID, or `none` | `none` is the runs without a task (ad-hoc and external runs). A task that is not yours is an empty list. |
 | `trigger` | one or more of `manual`, `schedule`, `api`, `mcp`, `external` | Any of them. |
 | `from`, `to` | ISO 8601 date-time with a zone (`2026-06-01T00:00:00Z`) | On the creation time: `from` inclusive, `to` exclusive. |
@@ -81,16 +81,16 @@ Existing runs were backfilled from `trigger` (`manual` and `chat` → `web`, `sc
 The number of runs per status, and what they cost, in one query:
 
 ```json
-{ "data": { "total": 5000, "live": 0, "byStatus": { "queued": 0, "running": 0, "waiting_human": 0, "succeeded": 3433, "failed": 1139, "cancelled": 428 }, "costUsd": 512.4, "costKnown": false } }
+{ "data": { "total": 5000, "live": 0, "byStatus": { "queued": 0, "running": 0, "waiting_human": 0, "paused": 0, "succeeded": 3433, "failed": 1139, "cancelled": 428 }, "costUsd": 512.4, "costKnown": false } }
 ```
 
-It takes the same filter parameters as the list except `status` and `state` (the counts are per status): `taskId`, `trigger`, `from`, `to`, `q`, `stopReason`, `policyId`. `live` is `queued + running + waiting_human`. `costUsd` is the sum over the counted runs, `null` when none of them made a model call; it is a lower bound ("at least") while `costKnown` is false.
+It takes the same filter parameters as the list except `status` and `state` (the counts are per status): `taskId`, `trigger`, `from`, `to`, `q`, `stopReason`, `policyId`. `live` is `queued + running + waiting_human + paused`. `costUsd` is the sum over the counted runs, `null` when none of them made a model call; it is a lower bound ("at least") while `costKnown` is false.
 
 ## Deleting runs
 
 Deleting is permanent: the run, its steps, its questions and the stored screenshots of its steps. There is no trash and no undo. All three forms need the `runs:delete` permission (contributors and organization admins have it; a viewer does not). It is separate from `runs:write`, so a role can start and answer runs without being able to erase history.
 
-**A live run is never deleted.** A run that is `queued`, `running` or `waiting_human` must be cancelled first (`POST /api/runs/{id}/cancel`). The status is checked again inside the transaction that deletes.
+**A live run is never deleted.** A run that is `queued`, `running`, `waiting_human` or `paused` must be cancelled first (`POST /api/runs/{id}/cancel`). The status is checked again inside the transaction that deletes.
 
 **Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.** A task's `spend30d` and the run-budget, stalled-runs and expensive-run alerts are computed from run rows, so they drop when the rows go. The AI usage report (**Administration → AI Usage**, `/admin/settings/ai/usage`) is not affected: it reads the AI gateway's own records (`ai_usage_events`), never the `runs` table.
 
@@ -142,6 +142,27 @@ The `browser.runs.delete` job ("Delete runs by filter" under **Administration �
 - **What the result says.** "Stopped by the owner. The last completed step was: 2. navigate …", masked. If a confirmed action was already carried out, its note comes first (#540).
 - **What is measured.** `runs.cancel_requested_at` is the time of the first press. When the run reaches a terminal status the API records the histogram `app.runs.stop_latency_ms` (label `status`, no run, user or goal) and writes one log line, `run <id>: Stop took <n> ms (cancelled)`. A run that finished by itself just after Stop is counted too, with its own status.
 - **The interface.** The Stop button of the chat browser pane, the run page (Cancel run), the runs list and the MCP run card say "Stopping…" at once and cannot be pressed twice; the run page's activity bar says "Stopping…" instead of the step in progress.
+
+## Pause and Resume (E38.2)
+
+Stop ends a run; **Pause holds it.** The owner freezes a running job from the chat, the run page or the phone, looks at what it is doing, and resumes it. While it is paused the agent does nothing, the browser stays as it is, and no budget time runs.
+
+| Route | Effect |
+|---|---|
+| `POST /api/runs/{id}/pause` (`runs:write`) | From `running` or `queued`: sets `pause_requested` and answers the run (`pauseRequested: true`); the status becomes `paused` within about a second. From `waiting_human`: sets it; the run becomes `paused` when the question is answered, **before the agent acts on the answer** (the answer is already in its memory). Already paused: the run, unchanged. Finished: `409 RUN_FINISHED`. An external agent's run: `409 RUN_NOT_PAUSABLE` (the console does not drive it). |
+| `POST /api/runs/{id}/resume` (`runs:write`) | From `paused`: clears the flag, moves the run to `queued` and enqueues `browser.goal.run` with the reason `resumed`. Not paused: `409 RUN_NOT_PAUSED`. |
+
+Another user's run is `404` on both.
+
+- **The status.** `paused` is a **live** status, not a finished one: `GET /api/runs?state=live`, the counts' `live`, the list chips, the `Needs you` group and the paused tab all include it; a paused run is never deleted (`RUN_LIVE`) and retention never touches it. Transitions: `queued | running | waiting_human → paused → queued (resume) | cancelled | failed`.
+- **How the worker hears it.** The same stop signal as Stop (`runner/stop-signal.ts`) carries the pause: the API publishes `run.pause` on the run event bus and the worker also reads `runs.pause_requested` every second. The one wrapper around tool execution checks it before every tool, beside Stop: a tool chosen before the pause and not yet started is not carried out (the model reads "The owner paused the run. This was not done."), and the chunk ends. **An action already sent is never aborted by a pause** (only Stop does that): the host finishes it, and the run pauses after it. A model call in flight is aborted, since nothing was done with its answer.
+- **What a pause saves.** After the chunk the memory and the usage are saved (budgets are unchanged: the pause costs nothing and its time is not counted), the status becomes `paused`, `active_since` is cleared (active time stops, as for `waiting_human`) and `paused_at` is set. **The fabric session is kept**: the browser stays where it is, with its tabs and what is typed into forms. A job hop that finds `pause_requested` pauses instead of continuing, and a job that starts on a flagged run (queued, or the next job of a hop) pauses before any model call.
+- **Resume.** `advance` starts as after a handoff: it reads the memory, takes a fresh screenshot (the page may have changed while paused) and adds one line to the log: "The owner paused the run and resumed it after N minutes. Look at the page again before acting." If the owner took over the browser while paused, the fabric's takeover rules apply as always (actions wait for the release). A resumed run is not a crashed run: it carries no "interrupted" note, and the `started` notification is not sent again. Guidance typed in the chat while paused is queued and read at the first chunk after resume.
+- **A dead session.** The fabric has **no idle limit for sessions** (`crates/hexactra-control/src/runtime/`: a session ends only when it is deleted, or when its host is lost), so no idle limit needs raising for a pause of any length. If the session is gone anyway (the host restarted), resume opens a new one on the same profile and the log says "The browser session was restarted while paused."
+- **No automatic resume.** A paused run stays paused until the owner resumes or stops it. After **one hour** the owner gets one notification ("Still paused: <goal>", event `runs.still_paused`); none before. A run paused longer than `runs.maxPausedHours` (the `runs` namespace of the system settings, default **72**, `null` for no limit) is cancelled with the reason "Paused too long: more than 72 hours without being resumed" and the usual finished notification. Both are done by `browser.runs.paused_sweep`, an enqueue-only cron every 5 minutes.
+- **Stop while paused** cancels at once (no job holds the run): the browser session is released and the run ends `cancelled`.
+- **The interface.** The chat's browser pane and the run page show **Pause** beside Stop while the run works ("Pausing…" until the status changes), and while paused a banner "Paused. Nothing happens until you resume." with **Resume** and **Stop**; the live browser view and Take over stay available. The runs list has a `paused` chip, a **Paused** tab and includes paused runs under **Needs you**. Home lists a paused run under Running now with **Resume**. CLI: `hexactra runs pause <id>` and `runs resume <id>` (the Runs screen: `p` and `u`). MCP: `run_pause` and `run_resume` (`runs:write`, not destructive, idempotent); `run_status` and `run_wait` report `paused`.
+- **Chat.** The orchestrator has `pause_run` and `resume_run`, so "hold on" and "ok, continue" work in words. A paused run still counts as the chat's live run: no second run is started.
 
 ## Retention
 

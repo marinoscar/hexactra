@@ -47,7 +47,7 @@ export interface ChatMessage {
 
 export interface ChatLiveRun {
   id: string;
-  status: Extract<RunStatus, 'queued' | 'running' | 'waiting_human'>;
+  status: Extract<RunStatus, 'queued' | 'running' | 'waiting_human' | 'paused'>;
 }
 
 export interface ChatListItem extends Chat {
@@ -78,6 +78,8 @@ export interface ChatRun {
   error: string | null;
   stopReason: RunStopReason | null;
   cancelRequested: boolean;
+  /** Pause was pressed and the run has not paused yet (E38.2). Absent from an older console. */
+  pauseRequested?: boolean;
   hostId: string | null;
   costUsd: number;
   costKnown: boolean;

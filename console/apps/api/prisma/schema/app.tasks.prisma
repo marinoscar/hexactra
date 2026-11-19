@@ -15,6 +15,8 @@ enum RunStatus {
   succeeded
   failed
   cancelled
+  /// The owner froze the run (E38.2, #583): nothing happens until they resume or stop it.
+  paused
 
   @@map("run_status")
 }
@@ -141,6 +143,13 @@ model Run {
   cancelRequested Boolean    @default(false) @map("cancel_requested")
   /// When Stop was pressed (E38.1, #582): the start of the stop-latency measure; set with `cancel_requested`.
   cancelRequestedAt DateTime? @map("cancel_requested_at")
+  /// The owner pressed Pause (E38.2, #583): the runner ends its chunk before the next action and moves the run to `paused`;
+  /// from `waiting_human` it pauses once the question is answered. Stays set while the run is paused; Resume clears it.
+  pauseRequested  Boolean    @default(false) @map("pause_requested")
+  /// When the run was paused; kept until the resumed job has told the model how long it was paused.
+  pausedAt        DateTime?  @map("paused_at") @db.Timestamptz
+  /// When the "still paused" notification went out for this pause (null: not yet).
+  pauseNotifiedAt DateTime?  @map("pause_notified_at") @db.Timestamptz
   stepCount       Int        @default(0) @map("step_count")
   /// What the goal runner is doing right now (#379): `{ phase, action?, args?, reason?, startedAt, timeoutMs? }`.
   /// Redacted like step args; cleared whenever the run leaves `running`.

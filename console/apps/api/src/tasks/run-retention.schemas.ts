@@ -39,10 +39,20 @@ export const RUN_RETENTION_DEFAULTS = { keepDays: 90, keepPerTask: null, keepFai
 /** The `runs` namespace of the system settings document: the deployment's ceiling. */
 export const runRetentionCeilingSchema = z.object({
   maxKeepDays: days.nullable().describe("The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."),
+  maxPausedHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(8_760)
+    .nullable()
+    .optional()
+    .describe('The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner).'),
 });
 export type RunRetentionCeiling = z.infer<typeof runRetentionCeilingSchema>;
 export const runRetentionCeilingPatchSchema = runRetentionCeilingSchema.partial();
-export const NO_RETENTION_CEILING: RunRetentionCeiling = { maxKeepDays: null };
+/** The deployment default of `maxPausedHours` (E38.2). */
+export const DEFAULT_MAX_PAUSED_HOURS = 72;
+export const NO_RETENTION_CEILING: RunRetentionCeiling = { maxKeepDays: null, maxPausedHours: DEFAULT_MAX_PAUSED_HOURS };
 
 /** The three limits of a rule, as the user chose them. */
 export type RunRetentionLimits = Pick<RunRetentionSettings, 'keepDays' | 'keepPerTask' | 'keepFailedDays'>;

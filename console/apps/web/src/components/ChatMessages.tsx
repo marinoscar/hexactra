@@ -93,6 +93,8 @@ export interface ThreadCards {
   paneOpen: boolean;
   onOpenBrowser: () => void;
   onCardVisible: (visible: boolean) => void;
+  /** Resume the chat's paused run (E38.2); undefined without `runs:write`. */
+  onResumeRun?: () => void;
   /** Owner messages passed to a run as guidance, by `seq` (#490): each shows what became of it. */
   guidance?: ReadonlyMap<number, ChatGuidanceState>;
   /** Start the job of a finished run again; undefined when that is not possible now. */
@@ -146,6 +148,7 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
           now={cards.now}
           paneOpen={cards.paneOpen}
           onOpen={cards.onOpenBrowser}
+          onResume={cards.onResumeRun}
           onVisible={cards.onCardVisible}
         />
       ) : message.kind === 'result' ? (

@@ -12,6 +12,7 @@ import type { ChatMessage, ChatRun } from '../types/chat';
 import type { RunStep } from '../types/runs';
 import { StatusChip, formatCost, isLive, stopReasonLabel } from '../ui';
 import { ActionOverlay, describeActivity, frameCaption, type RunActivity } from './RunActivity';
+import { PausedBanner, canPauseRun, isPausing } from './RunPause';
 import { RunExportButton } from './RunExport';
 import { RunTimeline } from './RunTimeline';
 import { softBudgetNotice } from './runBudget';
@@ -22,8 +23,10 @@ import type { RunFrame } from './useRunFrame';
 const CARD_MAX = { xs: '100%', sm: 440 } as const;
 
 /** What the Browser card and the pane say the run is doing, in a few words. */
-export function browserStatusLine(run: Pick<ChatRun, 'status' | 'activity' | 'cancelRequested'>): string {
+export function browserStatusLine(run: Pick<ChatRun, 'status' | 'activity' | 'cancelRequested' | 'pauseRequested'>): string {
   if (run.cancelRequested && isLive(run.status)) return 'Stopping…';
+  if (run.status === 'paused') return 'Paused';
+  if (isPausing(run)) return 'Pausing…';
   if (run.status === 'queued') return 'Starting the browser…';
   if (run.status === 'waiting_human') return 'Waiting for you';
   if (run.status === 'running') return run.activity ? `${describeActivity(run.activity)}…` : 'Working…';
@@ -139,6 +142,8 @@ export interface BrowserCardProps {
   now: number;
   paneOpen: boolean;
   onOpen: () => void;
+  /** Resume the paused run (E38.2); absent without `runs:write`. */
+  onResume?: () => void;
   /** Tells the page whether the card is on screen, so frames are only fetched for a picture someone can see. */
   onVisible: (visible: boolean) => void;
 }
@@ -149,7 +154,7 @@ export interface BrowserCardProps {
  * updates in place while the run is live and settles into a status line when
  * the run ends.
  */
-export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, onOpen, onVisible }: BrowserCardProps) {
+export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, onOpen, onResume, onVisible }: BrowserCardProps) {
   const anchor = useRef<HTMLDivElement | null>(null);
   const live = run !== null && isLive(run.status);
   useEffect(() => {
@@ -219,6 +224,7 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
         {/* Open: the picture is in the browser pane, one fetch feeds both. */}
         {!paneOpen && <BrowserFrame frame={frame} activity={run.activity} hidden={frameHidden} now={now} />}
       </Box>
+      {run.status === 'paused' && <PausedBanner onResume={onResume} />}
       <UsedSavedLogins logins={run.usedSavedLogins} />
       <UsedSavedCards cards={run.usedSavedCards?.map(cardEntry)} />
       <SoftBudgetLine run={run} />
@@ -237,6 +243,11 @@ export interface BrowserPaneProps {
   now: number;
   canStop: boolean;
   onStop: () => void;
+  /** Pause and Resume (E38.2): shown with Stop, for a viewer who may stop. `pausing`: Pause was pressed here and the status has not changed yet. */
+  onPause?: () => void;
+  onResume?: () => void;
+  pausing?: boolean;
+  resuming?: boolean;
   /** Where "Take over" goes; null hides it (no desktop to open, or no permission). */
   takeOver: { to: string; label: string } | null;
   onClose: () => void;
@@ -248,7 +259,9 @@ export interface BrowserPaneProps {
  * on a wide window, above it on a tablet and in a full-screen sheet on a
  * phone.
  */
-export function BrowserPane({ run, frame, frameHidden, now, canStop, onStop, takeOver, onClose }: BrowserPaneProps) {
+export function BrowserPane({ run, frame, frameHidden, now, canStop, onStop, onPause, onResume, pausing = false, resuming = false, takeOver, onClose }: BrowserPaneProps) {
+  const paused = run.status === 'paused';
+  const pauseBusy = isPausing(run, pausing);
   return (
     <Box component="section" aria-label="Browser" sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 1.5, minHeight: 56, borderBottom: 1, borderColor: 'divider', flex: 'none' }}>
@@ -266,12 +279,19 @@ export function BrowserPane({ run, frame, frameHidden, now, canStop, onStop, tak
         </IconButton>
       </Stack>
       <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', p: 1.5 }}>
+        {paused && canStop && <PausedBanner onResume={onResume} onStop={onStop} resuming={resuming} stopping={run.cancelRequested} />}
+        {paused && !canStop && <PausedBanner />}
         <BrowserFrame frame={frame} activity={run.status === 'running' ? run.activity : null} hidden={frameHidden} now={now} fit="contain" />
       </Box>
       <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, p: 1.5, borderTop: 1, borderColor: 'divider', flex: 'none', alignItems: 'center' }}>
-        {canStop && (
+        {canStop && !paused && (
           <Button color="error" variant="outlined" onClick={onStop} disabled={run.cancelRequested} sx={{ minHeight: 44 }}>
             {run.cancelRequested ? 'Stopping…' : 'Stop'}
+          </Button>
+        )}
+        {canStop && onPause && canPauseRun(run) && !run.cancelRequested && (
+          <Button variant="outlined" onClick={onPause} disabled={pauseBusy} sx={{ minHeight: 44 }}>
+            {pauseBusy ? 'Pausing…' : 'Pause'}
           </Button>
         )}
         {takeOver && (

@@ -43,7 +43,7 @@
 // accessible name of a button to press before the screenshot: a dialog).
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
+// `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
 // `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
@@ -87,6 +87,10 @@ export const ROUTES = [
   ['runs', '/runs'],
   ['run-live', '/runs/{liveRun}'],
   ['run-finished', '/runs/{finishedRun}'],
+  // A paused run (E38.2): the banner with Resume and Stop, the live browser view; in the chat, the card and the pane.
+  ['run-paused', '/runs/{pausedRun}'],
+  ['chat-thread-paused', '/chat/{pausedChat}'],
+  ['chat-browser-paused', '/chat/{pausedChat}', { action: pressButton('Open browser'), viewport: true }],
   // A chat run that went over its (soft) usual limit and finished (#537).
   ['run-chat-over-limit', '/runs/{chatRun}'],
   // A run's trace (#544): questions with their answers, guidance, a confirmed step and five pictures;
@@ -280,13 +284,16 @@ async function discoverIds(page) {
       return Array.isArray(data) ? data : (data.items ?? []);
     };
     const [runs, tasks, hosts, inbox, policies, groups, chats, apps] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups'), get('/chats'), get('/connected-apps')]);
-    const live = new Set(['queued', 'running', 'waiting_human']);
+    const live = new Set(['queued', 'running', 'waiting_human', 'paused']);
     return {
       liveRun: runs.find((r) => live.has(r.status))?.id,
       finishedRun: runs.find((r) => !live.has(r.status))?.id,
       chatRun: (runs.find((r) => r.trigger === 'chat' && r.budget?.over?.length) ?? runs.find((r) => r.trigger === 'chat'))?.id,
       // The trace routes open the first finished run; whether it has pictures depends on the account.
       traceRun: runs.find((r) => !live.has(r.status))?.id,
+      // A run the owner paused (E38.2) and the chat that holds it; absent unless the account has one.
+      pausedRun: runs.find((r) => r.status === 'paused')?.id,
+      pausedChat: chats.find((c) => c.liveRun?.status === 'paused')?.id,
       task: tasks[0]?.id,
       host: (hosts.find((h) => h.desktop && h.online) ?? hosts[0])?.id,
       question: inbox[0]?.questionId,

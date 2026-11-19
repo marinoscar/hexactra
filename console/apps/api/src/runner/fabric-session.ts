@@ -211,6 +211,20 @@ export class FabricSession {
     });
   }
 
+  /**
+   * Whether the fabric still has this session open (a resumed run checks, E38.2). Only a definite answer says no: a session the
+   * fabric does not know (404) or reports `ended`. A fabric that cannot be reached counts as alive, so the run's next action
+   * fails the usual way instead of the run opening a second browser.
+   */
+  async isAlive(sessionId: string): Promise<boolean> {
+    try {
+      const s = await this.fabric.request<{ status?: string }>('GET', `/v1/sessions/${sessionId}`);
+      return s.status !== 'ended';
+    } catch (e) {
+      return !(e instanceof FabricError && e.status === 404);
+    }
+  }
+
   async end(sessionId: string): Promise<void> {
     await this.fabric.request('DELETE', `/v1/sessions/${sessionId}`).catch(() => undefined);
   }

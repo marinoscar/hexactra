@@ -38,7 +38,7 @@ const homeLiveRunSchema = z.object({
   taskId: z.uuid().nullable(),
   taskName: z.string().nullable(),
   goal: z.string().describe('At most 300 characters'),
-  status: z.enum(['queued', 'running', 'waiting_human']),
+  status: z.enum(['queued', 'running', 'waiting_human', 'paused']),
   activity: homeActivitySchema.nullable().describe('Only while `running`'),
   stepCount: z.number().int(),
   startedAt: iso.nullable(),

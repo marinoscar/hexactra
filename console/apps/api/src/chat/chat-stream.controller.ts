@@ -35,6 +35,8 @@ export interface ChatRunView {
   error: string | null;
   stopReason: string | null;
   cancelRequested: boolean;
+  /** The owner pressed Pause and the run has not paused yet (E38.2). */
+  pauseRequested: boolean;
   hostId: string | null;
   costUsd: number;
   costKnown: boolean;
@@ -110,6 +112,7 @@ function chatRunView(row: {
   error: string | null;
   stopReason: string | null;
   cancelRequested: boolean;
+  pauseRequested: boolean;
   hostId: string | null;
   costUsd: Prisma.Decimal;
   costKnown: boolean;
@@ -160,6 +163,7 @@ export class ChatStreamService {
           error: true,
           stopReason: true,
           cancelRequested: true,
+          pauseRequested: true,
           hostId: true,
           costUsd: true,
           costKnown: true,

@@ -24,14 +24,14 @@ export interface Run extends RunPolicyFields {
 }
 
 const label = (s: string) => (s === 'waiting_human' ? 'needs you' : s);
-const live = (s: string) => s === 'queued' || s === 'running' || s === 'waiting_human';
+const live = (s: string) => s === 'queued' || s === 'running' || s === 'waiting_human' || s === 'paused';
 
 /** How many runs one page holds: the first one, and each "more". */
 export const RUNS_PAGE_SIZE = 30;
 
 /**
  * Runs, newest first; the first page is refreshed every 2 s. Up/down selects;
- * Enter shows the run's steps (live); `c` cancels it; `m` loads the next page
+ * Enter shows the run's steps (live); `p` pauses it and `u` resumes a paused one (E38.2); `c` cancels it; `m` loads the next page
  * of older runs (`GET /runs?envelope=1&cursor=…`); `r` refreshes; Esc goes
  * back (to the list, then the menu).
  */
@@ -102,6 +102,18 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
         .then(setOpen)
         .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
     }
+    if (input === 'p' && (current.status === 'queued' || current.status === 'running' || current.status === 'waiting_human')) {
+      void consoleApi()
+        .post(`/runs/${current.id}/pause`, {})
+        .then(() => setStatus('pause requested'))
+        .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
+    }
+    if (input === 'u' && current.status === 'paused') {
+      void consoleApi()
+        .post(`/runs/${current.id}/resume`, {})
+        .then(() => setStatus('resumed'))
+        .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
+    }
     if (input === 'c' && live(current.status)) {
       void consoleApi()
         .post(`/runs/${current.id}/cancel`, {})
@@ -132,7 +144,7 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
         {open.result && <Text>result: {open.result}</Text>}
         {open.error && <Text {...textColor(theme.error)}>error: {open.error}</Text>}
         {status && <Text>{status}</Text>}
-        <Text dimColor>c cancel · esc back</Text>
+        <Text dimColor>p pause · u resume · c cancel · esc back</Text>
       </Box>
     );
   }
@@ -152,7 +164,7 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
       </Box>
       {status && <Text>{status}</Text>}
       {runs && runs.length > 0 && <Text dimColor>{loadingMore ? 'Loading older runs…' : nextCursor ? `${runs.length} runs shown · m for older runs` : `${runs.length} runs shown · that is all of them`}</Text>}
-      <Text dimColor>↑/↓ select · enter steps · c cancel · m more · r refresh · esc back</Text>
+      <Text dimColor>↑/↓ select · enter steps · p pause · u resume · c cancel · m more · r refresh · esc back</Text>
     </Box>
   );
 }

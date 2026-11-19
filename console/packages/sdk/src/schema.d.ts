@@ -6375,7 +6375,7 @@ export interface paths {
         put?: never;
         /**
          * Delete runs: a list of ids, or every finished run that matches a filter
-         * @description Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.
+         * @description Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human, paused) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.
          *
          *     **Requires:** authentication, plus permission `runs:delete`.
          */
@@ -6543,6 +6543,50 @@ export interface paths {
         put?: never;
         /** @description **Requires:** authentication, plus permission `runs:write`. */
         post: operations["runs_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a run
+         * @description Freezes the run: it sets `pauseRequested` and answers the run. A running or queued run ends its current step and pauses before its next action (`status` becomes `paused`, the browser stays where it is, no budget time runs); a run waiting for a person pauses once the question is answered, before the agent acts on the answer. Already paused: answers the run unchanged. 409 `RUN_FINISHED` for a finished run; 409 `RUN_NOT_PAUSABLE` for an external agent's run. A paused run never resumes by itself: `POST /runs/{id}/resume` or Stop.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["runs_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a paused run
+         * @description From `paused`: clears the pause, moves the run to `queued` and starts its job (reason `resumed`); the agent looks at the page again before it acts. 409 `RUN_NOT_PAUSED` when the run is not paused.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["runs_resume"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8093,6 +8137,9 @@ export interface components {
              * @example RUN_NOT_FOUND
              * @example RUN_LIVE
              * @example COUNT_CHANGED
+             * @example RUN_FINISHED
+             * @example RUN_NOT_PAUSED
+             * @example RUN_NOT_PAUSABLE
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
              * @example CONFIRMATION_REQUIRED
@@ -9343,6 +9390,8 @@ export interface components {
             runs: {
                 /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
                 maxKeepDays: number | null;
+                /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
+                maxPausedHours?: number | null;
             };
             notes: {
                 archiveAfterDays: number;
@@ -9587,6 +9636,8 @@ export interface components {
             runs?: {
                 /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
                 maxKeepDays: number | null;
+                /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
+                maxPausedHours?: number | null;
             };
             notes?: {
                 archiveAfterDays: number;
@@ -9837,6 +9888,8 @@ export interface components {
             runs?: {
                 /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
                 maxKeepDays?: number | null;
+                /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
+                maxPausedHours?: number | null;
             };
             notes?: {
                 archiveAfterDays?: number;
@@ -15514,7 +15567,7 @@ export interface components {
                     /** Format: uuid */
                     id: string;
                     /** @enum {string} */
-                    status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                    status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
                     trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
@@ -15671,7 +15724,7 @@ export interface components {
                         /** Format: uuid */
                         id: string;
                         /** @enum {string} */
-                        status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                        status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                         /** @enum {string} */
                         trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                         /** @description ISO 8601 timestamp */
@@ -15832,7 +15885,7 @@ export interface components {
                     /** Format: uuid */
                     id: string;
                     /** @enum {string} */
-                    status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                    status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
                     trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
@@ -16288,7 +16341,7 @@ export interface components {
                     /** Format: uuid */
                     id: string;
                     /** @enum {string} */
-                    status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                    status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
                     trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
@@ -16386,10 +16439,10 @@ export interface components {
             ids?: string[];
             /** @description Delete every FINISHED run (succeeded, failed, cancelled) that matches: the same filter as `GET /runs`. A live status in it is ignored, never deleted. Not together with `ids`. `{}` means all finished runs and needs `expectedCount`. */
             filter?: {
-                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                /** @description Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
                 status?: string | string[];
                 /**
-                 * @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.
+                 * @description Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`.
                  * @enum {string}
                  */
                 state?: "live" | "finished";
@@ -16470,7 +16523,7 @@ export interface components {
             /** @description The chat that started the run (trigger `chat`); null for every other run */
             conversationId: string | null;
             /** @enum {string} */
-            status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+            status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
             trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
             /**
@@ -16499,6 +16552,10 @@ export interface components {
             cancelRequested: boolean;
             /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
             cancelRequestedAt: string | null;
+            /** @description The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it. */
+            pauseRequested: boolean;
+            /** @description When the run was paused (`paused` only, until it runs again); null otherwise */
+            pausedAt: string | null;
             stepCount: number;
             activity: {
                 /** @enum {string} */
@@ -16540,7 +16597,7 @@ export interface components {
             } | null;
             /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
             stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
-            /** @description The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`). */
+            /** @description The run budget while the run is live (queued, running, waiting_human, paused); null on a finished run in a list (read it from `GET /runs/{id}`). */
             budget: {
                 /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                 effective: {
@@ -16688,7 +16745,7 @@ export interface components {
                 /** @description The chat that started the run (trigger `chat`); null for every other run */
                 conversationId: string | null;
                 /** @enum {string} */
-                status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                 /** @enum {string} */
                 trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                 /**
@@ -16717,6 +16774,10 @@ export interface components {
                 cancelRequested: boolean;
                 /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
                 cancelRequestedAt: string | null;
+                /** @description The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it. */
+                pauseRequested: boolean;
+                /** @description When the run was paused (`paused` only, until it runs again); null otherwise */
+                pausedAt: string | null;
                 stepCount: number;
                 activity: {
                     /** @enum {string} */
@@ -16758,7 +16819,7 @@ export interface components {
                 } | null;
                 /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
                 stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
-                /** @description The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`). */
+                /** @description The run budget while the run is live (queued, running, waiting_human, paused); null on a finished run in a list (read it from `GET /runs/{id}`). */
                 budget: {
                     /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                     effective: {
@@ -16902,12 +16963,13 @@ export interface components {
         RunCountsResponseDto: {
             /** @description Runs that match the filter */
             total: number;
-            /** @description Of those: queued + running + waiting_human */
+            /** @description Of those: queued + running + waiting_human + paused */
             live: number;
             byStatus: {
                 queued: number;
                 running: number;
                 waiting_human: number;
+                paused: number;
                 succeeded: number;
                 failed: number;
                 cancelled: number;
@@ -16952,7 +17014,7 @@ export interface components {
                 id: string;
                 goal: string;
                 /** @enum {string} */
-                status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                 stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
                 result: string | null;
                 error: string | null;
@@ -17210,7 +17272,7 @@ export interface components {
             /** @description The chat that started the run (trigger `chat`); null for every other run */
             conversationId: string | null;
             /** @enum {string} */
-            status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+            status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
             trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
             /**
@@ -17239,6 +17301,10 @@ export interface components {
             cancelRequested: boolean;
             /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
             cancelRequestedAt: string | null;
+            /** @description The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it. */
+            pauseRequested: boolean;
+            /** @description When the run was paused (`paused` only, until it runs again); null otherwise */
+            pausedAt: string | null;
             stepCount: number;
             activity: {
                 /** @enum {string} */
@@ -17495,7 +17561,7 @@ export interface components {
             /** @description The chat that started the run (trigger `chat`); null for every other run */
             conversationId: string | null;
             /** @enum {string} */
-            status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+            status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
             trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
             /**
@@ -17524,6 +17590,10 @@ export interface components {
             cancelRequested: boolean;
             /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
             cancelRequestedAt: string | null;
+            /** @description The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it. */
+            pauseRequested: boolean;
+            /** @description When the run was paused (`paused` only, until it runs again); null otherwise */
+            pausedAt: string | null;
             stepCount: number;
             activity: {
                 /** @enum {string} */
@@ -18292,7 +18362,7 @@ export interface components {
                     /** @description At most 300 characters */
                     goal: string;
                     /** @enum {string} */
-                    status: "queued" | "running" | "waiting_human";
+                    status: "queued" | "running" | "waiting_human" | "paused";
                     /** @description Only while `running` */
                     activity: {
                         /** @description starting, looking, thinking or acting */
@@ -18600,7 +18670,7 @@ export interface components {
                     /** Format: uuid */
                     id: string;
                     /** @enum {string} */
-                    status: "queued" | "running" | "waiting_human";
+                    status: "queued" | "running" | "waiting_human" | "paused";
                 } | null;
             }[];
             /** @description Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it. */
@@ -18722,7 +18792,7 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 /** @enum {string} */
-                status: "queued" | "running" | "waiting_human";
+                status: "queued" | "running" | "waiting_human" | "paused";
             } | null;
             /** @description True while the AI is working on its reply to the newest message */
             thinking: boolean;
@@ -39803,9 +39873,9 @@ export interface operations {
     runs_list: {
         parameters: {
             query?: {
-                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                /** @description Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
                 status?: string | string[];
-                /** @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`. */
+                /** @description Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`. */
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
@@ -40065,6 +40135,106 @@ export interface operations {
         };
     };
     runs_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_resume: {
         parameters: {
             query?: never;
             header?: never;

@@ -8,13 +8,14 @@ import { RUN_ORIGINS, type RunOrigin } from '../aiApps/types';
 import { RUN_TRIGGERS, type RunCounts, type RunListItem, type RunStatus, type RunTrigger } from '../types/runs';
 
 /** The status tabs, in the order they show. */
-export const RUN_VIEWS = ['all', 'live', 'needs', 'succeeded', 'failed', 'cancelled'] as const;
+export const RUN_VIEWS = ['all', 'live', 'needs', 'paused', 'succeeded', 'failed', 'cancelled'] as const;
 export type RunView = (typeof RUN_VIEWS)[number];
 
 export const RUN_VIEW_LABEL: Record<RunView, string> = {
   all: 'All',
   live: 'Live',
   needs: 'Needs you',
+  paused: 'Paused',
   succeeded: 'Succeeded',
   failed: 'Failed',
   cancelled: 'Cancelled',
@@ -174,7 +175,16 @@ export function rangeInstants(filters: Pick<RunFilters, 'from' | 'to'>, timeZone
 
 // ---- The API's form ----
 
-const VIEW_STATUS: Partial<Record<RunView, RunStatus>> = { needs: 'waiting_human', succeeded: 'succeeded', failed: 'failed', cancelled: 'cancelled' };
+/**
+ * The statuses each status tab holds. "Needs you" is every run that waits for its owner: a question to answer, or a pause to end (E38.2).
+ */
+const VIEW_STATUSES: Partial<Record<RunView, readonly RunStatus[]>> = {
+  needs: ['waiting_human', 'paused'],
+  paused: ['paused'],
+  succeeded: ['succeeded'],
+  failed: ['failed'],
+  cancelled: ['cancelled'],
+};
 
 /** `scope.taskId` fixes the task: the list of one task's runs (the task page). */
 export interface RunListScope {
@@ -192,8 +202,8 @@ export function apiFilter(filters: RunFilters, scope: RunListScope, timeZone: st
   const out: Record<string, string | string[]> = {};
   if (withStatus) {
     if (filters.view === 'live') out.state = 'live';
-    const status = VIEW_STATUS[filters.view];
-    if (status) out.status = [status];
+    const statuses = VIEW_STATUSES[filters.view];
+    if (statuses) out.status = [...statuses];
   }
   const taskId = scope.taskId ?? filters.taskId;
   if (taskId) out.taskId = taskId;
@@ -226,28 +236,28 @@ export function deleteFilter(filters: RunFilters, scope: RunListScope, timeZone:
   return filter;
 }
 
-const LIVE: readonly RunStatus[] = ['queued', 'running', 'waiting_human'];
+const LIVE: readonly RunStatus[] = ['queued', 'running', 'waiting_human', 'paused'];
 
 /** How many runs a tab holds, from the counts. */
 export function viewCount(counts: RunCounts | null, view: RunView): number | null {
   if (!counts) return null;
   if (view === 'all') return counts.total;
   if (view === 'live') return counts.live;
-  return counts.byStatus[VIEW_STATUS[view]!] ?? 0;
+  return (VIEW_STATUSES[view] ?? []).reduce((n, s) => n + (counts.byStatus[s] ?? 0), 0);
 }
 
 /** The finished runs the tab holds: what "select all that match" would delete. */
 export function finishedCount(counts: RunCounts | null, view: RunView): number {
-  if (!counts || view === 'live' || view === 'needs') return 0;
+  if (!counts || view === 'live' || view === 'needs' || view === 'paused') return 0;
   if (view === 'all') return counts.byStatus.succeeded + counts.byStatus.failed + counts.byStatus.cancelled;
-  return counts.byStatus[VIEW_STATUS[view]!] ?? 0;
+  return (VIEW_STATUSES[view] ?? []).reduce((n, s) => n + (counts.byStatus[s] ?? 0), 0);
 }
 
 /** True when the run is one the filter lists: the client's copy of the server's test, for a run that arrives on a live tick. */
 export function matchesFilters(run: RunListItem, filters: RunFilters, scope: RunListScope, timeZone: string): boolean {
   if (filters.view === 'live' && !LIVE.includes(run.status)) return false;
-  const status = VIEW_STATUS[filters.view];
-  if (status && run.status !== status) return false;
+  const statuses = VIEW_STATUSES[filters.view];
+  if (statuses && !statuses.includes(run.status)) return false;
   const taskId = scope.taskId ?? filters.taskId;
   if (taskId === 'none' ? run.taskId !== null : taskId ? run.taskId !== taskId : false) return false;
   if (filters.trigger.length && !filters.trigger.includes(run.trigger as RunTrigger)) return false;

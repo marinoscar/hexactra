@@ -679,7 +679,7 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'run_status',
     title: 'Check a run',
     description:
-      'Read one run: its status (queued, running, waiting_human = needs the person, succeeded, failed, cancelled), result and latest steps. ' +
+      'Read one run: its status (queued, running, waiting_human = needs the person, paused = frozen by the owner until resumed, succeeded, failed, cancelled), result and latest steps. ' +
       'Use it to follow a run started with run_goal or task_run. ' +
       'It also has the agent policy (`policy`), tier (`tier`, `currentTier`, `escalations`), cost (`costUsd`, `costKnown`, `modelCalls`), budget use (`budget`) and why it stopped (`stopReason`). ' +
       '`progress` says it plainly (what it is doing now, whether it waits for the user and how to answer, its result, a console link); screenshot: true adds a picture of its browser. ' +
@@ -794,6 +794,39 @@ export const MCP_TOOLS: McpTool[] = [
     idempotent: true,
     async call(a, ctx) {
       const run = await ctx.api<Record<string, unknown>>('POST', `/runs/${String(a.run_id)}/cancel`, {});
+      return runWithProgress(run, progressOf(ctx, { run: run as never, question: null, secretOpen: false }, true));
+    },
+  },
+  {
+    name: 'run_pause',
+    title: 'Pause a run',
+    description:
+      'Freeze a run the user wants to look at or hold: it finishes the step it is on, then nothing happens until it is resumed (run_resume) or stopped (run_cancel). The browser stays where it is and no time budget runs. ' +
+      'A run waiting for a person pauses once the question is answered. Pausing a run that is already paused changes nothing. Returns the run with its progress block; follow it with run_wait until it says paused.',
+    input: z.object({ run_id: runId }),
+    output: runWithProgressOutput,
+    scope: 'runs:write',
+    effect: 'write',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const run = await ctx.api<Record<string, unknown>>('POST', `/runs/${String(a.run_id)}/pause`, {});
+      return runWithProgress(run, progressOf(ctx, { run: run as never, question: null, secretOpen: false }, true));
+    },
+  },
+  {
+    name: 'run_resume',
+    title: 'Resume a paused run',
+    description:
+      'Continue a paused run from where it stopped. The agent looks at the page again before it acts, and is told how long it was paused. Only a paused run can be resumed. Returns the run with its progress block; follow it with run_wait.',
+    input: z.object({ run_id: runId }),
+    output: runWithProgressOutput,
+    scope: 'runs:write',
+    effect: 'write',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const run = await ctx.api<Record<string, unknown>>('POST', `/runs/${String(a.run_id)}/resume`, {});
       return runWithProgress(run, progressOf(ctx, { run: run as never, question: null, secretOpen: false }, true));
     },
   },

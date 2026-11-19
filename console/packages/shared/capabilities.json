@@ -267,6 +267,28 @@
       "web": "/runs/:id"
     },
     {
+      "id": "runs.pause",
+      "description": "Pause a run: it finishes its current step, then nothing happens until it is resumed or stopped; its browser stays as it is",
+      "rest": [
+        "POST /api/runs/{id}/pause"
+      ],
+      "cli": "runs pause",
+      "mcp": "run_pause",
+      "tui": "runs",
+      "web": "/runs/:id"
+    },
+    {
+      "id": "runs.resume",
+      "description": "Resume a paused run from where it stopped; the agent looks at the page again before it acts",
+      "rest": [
+        "POST /api/runs/{id}/resume"
+      ],
+      "cli": "runs resume",
+      "mcp": "run_resume",
+      "tui": "runs",
+      "web": "/runs/:id"
+    },
+    {
       "id": "runs.export",
       "description": "Export a run as one masked JSON trace file (the run, its policy, budget, steps, questions and answers, trace screenshots and chat) or as a PDF report",
       "rest": [

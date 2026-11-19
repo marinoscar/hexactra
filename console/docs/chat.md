@@ -16,13 +16,14 @@ you type ──► POST /api/chats/:id/messages ──► job chat.turn
                                                 ├─ start_run  → Run (trigger chat) → job goal.run → the browser
                                                 ├─ guide_run  → a line for the live run
                                                 ├─ stop_run   → cancels the live run
+                                                ├─ pause_run / resume_run → holds the live run, continues it later
                                                 └─ draft_task → a task draft to review
 run ends ──► one result message in the thread
 ```
 
 - **One turn at a time.** A turn takes a lease on the chat (`turn_lease_until`) and records the newest message it took up (`answered_seq`), so a message is answered once however many jobs were queued. A crashed turn's lease runs out after three minutes.
 - **Clarify once, then act.** The assistant is told to ask at most one question before starting, and only when the answer changes what is done. Questions during the work come from the browser agent (`request_human`).
-- **One run per chat at a time.** `start_run` is refused while a run is live.
+- **One run per chat at a time.** `start_run` is refused while a run is live. A run the owner **paused** is still live (it is held, not finished): "hold on" calls `pause_run`, "ok, continue" calls `resume_run`, and no second run starts while one is paused ([runs.md](runs.md#pause-and-resume-e382)). The browser pane has **Pause** beside **Stop**; while paused the card and the pane show "Paused. Nothing happens until you resume." with **Resume** and **Stop**, and the live view and Take over stay available. Guidance you type while it is paused is queued and read when it resumes.
 - **The model is set by an administrator** under Administration → AI, feature "Chat: understand the request and start browser runs". Until then the thread says no model is set up.
 
 ## The thread

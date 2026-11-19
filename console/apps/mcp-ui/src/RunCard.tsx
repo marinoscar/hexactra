@@ -55,6 +55,7 @@ function StateIcon({ state }: { state: CardState }) {
     queued: 'M12 7v5l3 2M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18Z',
     running: 'M8 5v14l11-7Z',
     waiting: 'M12 8v5M12 16.5v.5M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18Z',
+    paused: 'M10 9v6M14 9v6M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18Z',
     succeeded: 'M5 12.5l4.5 4.5L19 7.5',
     failed: 'M7 7l10 10M17 7L7 17',
     cancelled: 'M7 7h10v10H7Z',

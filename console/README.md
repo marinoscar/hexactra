@@ -584,7 +584,7 @@ What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP 
 |---|---|
 | ![The Runs page: status tabs with counts, search and filters, and the list, on a desktop](docs/images/runs-desktop.png) | ![The Runs page: status tabs with counts, search and filters, and the list, on a phone](docs/images/runs-phone.png) |
 
-- **Status tabs** with the number of runs in each: All, Live, Needs you, Succeeded, Failed, Cancelled. Beside them, how many runs match and what they cost ("≥" when a call could not be priced).
+- **Status tabs** with the number of runs in each: All, Live, Needs you, Paused, Succeeded, Failed, Cancelled. A paused run counts as live and under Needs you. Beside them, how many runs match and what they cost ("≥" when a call could not be priced).
 - **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, started by (Console, CLI, Schedule, any AI app, or one app), a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
 - **Every filter is in the URL** (`?view=failed&q=invoice&trigger=schedule&from=2026-11-01`), so a filtered view can be bookmarked or sent, and survives a reload. Active filters show as chips; **Clear all** removes them.
 - **Each run** shows its status (with the reason a failed run stopped), goal, task, trigger, steps, when it started, how long it took, its cost, and what a running one is doing right now. The list refreshes the live runs every 5 seconds while the tab is visible.
@@ -597,9 +597,13 @@ What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP 
 2. To delete more than what is loaded, choose **Select all N finished runs that match**: the delete then goes by the current filter, not by a list.
 3. Press **Delete** in the bar at the bottom and confirm. More than 100 runs asks you to type `delete`.
 
-A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running or waiting for you is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
+A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running, waiting for you or paused is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
 
 For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
+
+### Pausing a run
+
+**Pause** holds a running job: it finishes the step it is on, then nothing happens (no actions, no model calls, no time counted against its budget) and its browser stays exactly where it is, so you can look at the page, take over the desktop, and **Resume** when you are ready; the agent then looks at the page again before it acts. Pause sits beside **Stop** in the chat's browser pane and on the run page, and works in words in the chat ("hold on", "continue"). A paused run never resumes by itself: you get one notification after an hour, and a run paused for more than 72 hours (`runs.maxPausedHours`) is cancelled. `hexactra runs pause <id>` and `runs resume <id>`, and the MCP tools `run_pause` and `run_resume`, do the same. Details: [docs/runs.md](docs/runs.md#pause-and-resume-e382).
 
 ### A run's page
 

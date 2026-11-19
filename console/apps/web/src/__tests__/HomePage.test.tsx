@@ -7,7 +7,7 @@ import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InboxCountProvider, useInboxCount } from '../components/InboxCountProvider';
-import { NEW_RUN_LINK, budgetColor, checklistSteps, greeting, recentTasks, statusSentence, timeLeft, upNextWhen, weekRunsLink } from '../components/home/homeText';
+import { NEW_RUN_LINK, budgetColor, checklistSteps, greeting, liveLine, recentTasks, statusSentence, timeLeft, upNextWhen, weekRunsLink } from '../components/home/homeText';
 import { NO_FILTERS, filtersFromParams } from '../components/runFilters';
 import { HOME_ONBOARDED_KEY, HOME_POLL_LIVE_MS, HOME_POLL_MS, HomePage } from '../pages/HomePage';
 import type { HomeLiveRun, HomeQuestion, HomeRecentRun, HomeSummary } from '../types/home';
@@ -187,6 +187,12 @@ describe('the words of the Home page', () => {
     const queued = quiet();
     queued.liveRuns = { count: 1, running: 0, items: [liveRun({ status: 'queued', activity: null })] };
     expect(statusSentence(queued, NOW, 'UTC')).toBe('1 run is waiting for a machine.');
+
+    // A paused run is not "waiting for a machine": it waits for its owner to resume it (E38.2).
+    const paused = quiet();
+    paused.liveRuns = { count: 2, running: 0, items: [liveRun({ status: 'paused', activity: null }), liveRun({ id: 'run-p2', status: 'paused', activity: null })] };
+    expect(statusSentence(paused, NOW, 'UTC')).toBe('2 runs are paused: resume them when you are ready.');
+    expect(liveLine(liveRun({ status: 'paused', activity: null }))).toBe('Paused: waiting for you to resume it');
 
     const nothing: HomeSummary = { ...quiet(), needsYou: null, liveRuns: null, upcoming: null, recentRuns: null, week: null, fleet: null, counts: { tasks: null, runs: null } };
     expect(statusSentence(nothing, NOW, 'UTC')).toBe('Ask an administrator for access to tasks and runs.');
