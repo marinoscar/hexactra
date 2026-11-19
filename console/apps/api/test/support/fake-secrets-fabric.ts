@@ -21,6 +21,45 @@ export const FIXTURE = {
   sitePassword: 'canary-pw-2-b81d44aa-test',
 } as const;
 
+/** The Rust fixture's identity item (E37.6): the date of birth and the ID number are sensitive and allowed only on `FIXTURE.origin`. */
+export const IDENTITY = {
+  itemId: 'test-identity-1',
+  name: 'Passport',
+  fullName: 'Person A Canary-Name',
+  dob: '1990-03-27',
+  idNumber: 'CANARY-ID-5521-7788',
+  country: 'Canada',
+  city: 'Exampleton',
+} as const;
+
+export interface TestIdentityField {
+  key: string;
+  label: string;
+  value: string;
+  sensitive: boolean;
+}
+export interface TestIdentity {
+  id: string;
+  name: string;
+  allowedOrigins: string[];
+  fields: TestIdentityField[];
+}
+
+export const defaultIdentities = (): TestIdentity[] => [
+  {
+    id: IDENTITY.itemId,
+    name: IDENTITY.name,
+    allowedOrigins: [FIXTURE.origin],
+    fields: [
+      { key: 'full_name', label: 'Full name', value: IDENTITY.fullName, sensitive: false },
+      { key: 'date_of_birth', label: 'Date of birth', value: IDENTITY.dob, sensitive: true },
+      { key: 'id_number', label: 'ID number', value: IDENTITY.idNumber, sensitive: true },
+      { key: 'country', label: 'Country', value: IDENTITY.country, sensitive: false },
+      { key: 'city', label: 'City', value: IDENTITY.city, sensitive: false },
+    ],
+  },
+];
+
 export interface TestItem {
   id: string;
   name: string;
@@ -53,14 +92,30 @@ interface Handoff {
 export function fakeSecretsFabric(url: string) {
   const actions: Record<string, unknown>[] = [];
   const handoffs = new Map<string, Handoff>();
-  const page = { url, fields: {} as Record<string, string> };
+  const page = {
+    url,
+    /** What each input of the page holds now: typed or chosen from a provider. The only place a value lives. */
+    fields: {} as Record<string, string>,
+    /** The selectors the page lists as interactive elements (a form), as `observe_elements` and the marks show them. */
+    inputs: [] as { selector: string; tag: string }[],
+    /** Whether the runner's cover is over the filled inputs right now (the picture is taken while it is). */
+    covered: false,
+  };
+  /** Every screenshot taken, with whether the cover was drawn and what the marks said. */
+  const shots: { screen: string; covered: boolean; markTexts: string[] }[] = [];
+  const covers: string[][] = [];
   const targets = new Map<string, Record<string, unknown> | null>([['#pay', { tag: 'button', label: 'Pay' }]]);
   /** What the provider was asked (never a value). */
-  const providerCalls: { op: 'lookup' | 'release' | 'one_time_code'; origin: string; itemId?: string; field?: string; purpose?: string; clientLabel?: string; runId?: string }[] = [];
+  const providerCalls: { op: 'lookup' | 'release' | 'one_time_code'; origin: string; itemId?: string; field?: string; purpose?: string; clientLabel?: string; runId?: string; kind?: string; part?: string }[] = [];
   const registrations: { owner: string; provider: string; kind: string }[] = [];
   const sessions: Record<string, unknown>[] = [];
   const state = {
     items: defaultItems(),
+    identities: defaultIdentities(),
+    /** Whether the fake's screenshots work (the default fabric answers none). */
+    screenshots: false,
+    /** Runs after an identity lookup answered (a test moves the page here). */
+    afterLookup: null as null | (() => void),
     /** Fail every provider call (lookup, release, code) with this error. */
     failAll: null as FailMode | null,
     /** Fail only typing (release and code) with this error, once per entry. */
@@ -96,6 +151,72 @@ export function fakeSecretsFabric(url: string) {
       if (action.type === 'tabs') return { id: 'op', state: 'succeeded', result: { tabs: [{ id: 1, active: true, url: page.url, title: 'Sign in' }] } };
       const origin = new URL(page.url).origin;
       const meta = { runId: action.run_id as string | undefined, clientLabel: action.client_label as string | undefined };
+      // The page itself (E37.6): the elements it lists, its text, scripts that cover and read, and pictures.
+      if (action.type === 'elements') {
+        return { id: 'op', state: 'succeeded', result: { elements: page.inputs.map((i) => ({ selector: i.selector, tag: i.tag, text: page.fields[i.selector] ?? '', type: 'text' })) } };
+      }
+      if (action.type === 'text') {
+        const sel = typeof action.selector === 'string' ? action.selector : null;
+        return { id: 'op', state: 'succeeded', result: { text: sel ? (page.fields[sel] ?? '') : 'Apply for a card' } };
+      }
+      if (action.type === 'evaluate') {
+        const script = String(action.script);
+        if (script.startsWith('/* hexactra:filled-among */')) {
+          const sels = JSON.parse(/const sels = (\[.*?\]);/.exec(script)![1]!) as string[];
+          const filled = JSON.parse(/const filled = (\[.*?\]);/.exec(script)![1]!) as string[];
+          return { id: 'op', state: 'succeeded', result: { type: 'object', value: sels.filter((x) => filled.includes(x)) } };
+        }
+        if (script.startsWith('/* hexactra:cover-filled */')) {
+          covers.push(JSON.parse(/for \(const s of (\[.*?\])\)/.exec(script)![1]!) as string[]);
+          page.covered = true;
+          return { id: 'op', state: 'succeeded', result: { type: 'boolean', value: true } };
+        }
+        if (script.startsWith('/* hexactra:uncover-filled */')) {
+          page.covered = false;
+          return { id: 'op', state: 'succeeded', result: { type: 'boolean', value: true } };
+        }
+        // run_javascript: it reads the input's value, as a page script would.
+        const readSel = /querySelector\('([^']+)'\)\.value/.exec(script)?.[1];
+        if (readSel) return { id: 'op', state: 'succeeded', result: { type: 'string', value: page.fields[readSel] ?? '' } };
+        return { id: 'op', state: 'succeeded', result: { type: 'undefined', value: null } };
+      }
+      if (action.type === 'screenshot' || action.type === 'desktop_screenshot') {
+        if (!state.screenshots) return { id: 'op', state: 'failed', error: 'no screenshots in this fake' };
+        const marks = page.inputs.map((i, n) => ({ n: n + 1, selector: i.selector, tag: i.tag, text: page.fields[i.selector] ?? '', x: 10, y: 10 + n * 30, w: 100, h: 20 }));
+        shots.push({ screen: action.type === 'screenshot' ? 'page' : 'desktop', covered: page.covered, markTexts: marks.map((m) => m.text) });
+        return { id: 'op', state: 'succeeded', result: { mime: 'image/jpeg', data: 'AAAA', width: 800, height: 600, url: page.url, title: 'Form', marks, masked: action.mask === true ? 0 : undefined } };
+      }
+      if (action.type === 'secrets_lookup' && action.kind === 'identity') {
+        providerCalls.push({ op: 'lookup', origin, kind: 'identity', ...meta });
+        if (state.failAll && state.failAll !== 'origin_mismatch' && state.failAll !== 'typing_failed') return failure(state.failAll, 'lookup');
+        const items = state.identities
+          .map((i) => ({ i, allowed: i.allowedOrigins.includes(origin) }))
+          .sort((a, b) => Number(b.allowed) - Number(a.allowed))
+          .map(({ i, allowed }) => ({
+            id: i.id,
+            name: i.name,
+            origins: [],
+            match_kind: allowed ? 'exact' : 'site',
+            has_code: false,
+            fields: i.fields.map((f) => ({ key: f.key, label: f.label, sensitive: f.sensitive, usable_here: !f.sensitive || allowed })),
+          }));
+        state.afterLookup?.();
+        return { id: 'op', state: 'succeeded', result: { origin, provider: 'test', items } };
+      }
+      if ((action.type === 'type_from_provider' || action.type === 'select_from_provider') && state.identities.some((i) => i.id === action.item_id)) {
+        const field = String(action.field);
+        providerCalls.push({ op: 'release', origin, itemId: String(action.item_id), field, purpose: (action.purpose as string | undefined) ?? 'form', ...(action.part ? { part: String(action.part) } : {}), ...meta });
+        if (state.failAll) return failure(state.failAll, 'type');
+        const next = state.failTyping.shift();
+        if (next) return failure(next, 'type');
+        const item = state.identities.find((i) => i.id === action.item_id)!;
+        const f = item.fields.find((x) => x.key === field);
+        if (!f) return { id: 'op', state: 'failed', error: 'not_found: no such field' };
+        if (f.sensitive && new URL(page.url).protocol !== 'https:') return { id: 'op', state: 'failed', error: 'insecure_origin: this detail is only typed into a page that uses https; nothing was typed' };
+        if (f.sensitive && !item.allowedOrigins.includes(origin)) return failure('origin_mismatch', 'type');
+        page.fields[String(action.selector)] = action.type === 'select_from_provider' && action.part ? `${f.value}#${String(action.part)}` : f.value;
+        return { id: 'op', state: 'succeeded', result: action.type === 'select_from_provider' ? { selected: true } : { typed: true } };
+      }
       if (action.type === 'secrets_lookup') {
         providerCalls.push({ op: 'lookup', origin, ...meta });
         if (state.failAll && state.failAll !== 'origin_mismatch' && state.failAll !== 'typing_failed') return failure(state.failAll, 'lookup');
@@ -150,7 +271,7 @@ export function fakeSecretsFabric(url: string) {
   const typed = () => providerCalls.filter((c) => c.op !== 'lookup');
   /** Answer the handoff the way the fabric reports a finished one. */
   const answer = (h: Handoff, response: Record<string, unknown>) => Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false, ...response } });
-  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer };
+  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer, shots, covers };
 }
 
 export type SecretsFabric = ReturnType<typeof fakeSecretsFabric>;

@@ -99,6 +99,8 @@ export interface SavedIdentityMemory {
   typeNow?: { label: string; origin: string; selector: string } | null;
   /** The owner was asked about each (item, field, site) at most once per run. */
   askedKeys?: string[];
+  /** Keys the owner said they allowed: the next fill asks the provider even though the (older) lookup said "not usable here". */
+  tryAnyway?: string[];
 }
 
 /** The reference of an item in this run, handing out the next one (`details-1`, `details-2`, …) the first time. */

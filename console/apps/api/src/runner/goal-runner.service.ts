@@ -640,12 +640,10 @@ export class GoalRunnerService {
           const choice = resp?.value ?? h.response?.value;
           memory.savedIdentity!.asked = null;
           if (choice === 'allow_site') {
-            // The earlier ask no longer counts, so a detail that is still not allowed can be asked about once more.
+            // The lookup is older than the owner's change: the next fill asks the provider, which decides.
             const k = askedKey(askedDetail.itemId, askedDetail.key, askedDetail.origin);
-            const list = memory.savedIdentity!.askedKeys ?? [];
-            const i = list.lastIndexOf(k);
-            if (i >= 0) memory.savedIdentity!.askedKeys = [...list.slice(0, i), ...list.slice(i + 1)];
-            memory.log.push(`The owner says they allowed this site for ${askedDetail.label}. Call saved_identity again on this page, then fill_from_identity.`);
+            memory.savedIdentity!.tryAnyway = [...new Set([...(memory.savedIdentity!.tryAnyway ?? []), k])];
+            memory.log.push(`The owner says they allowed this site for ${askedDetail.label}. Call fill_from_identity for it again (call saved_identity first if you need the references).`);
           } else if (choice === 'type_now') {
             memory.savedIdentity!.typeNow = { label: askedDetail.label, origin: askedDetail.origin, selector: askedDetail.selector };
           }
@@ -1429,7 +1427,7 @@ export class GoalRunnerService {
           if (!f) return refuse(`That item has no field "${field}". Its fields: ${item.fields.map((x) => x.key).join(', ')}.`, 'refused: the item has no such field');
           const now = originOf(await currentUrl());
           if (now && now !== lookup.origin) return refuse('The page changed since saved_identity looked it up. Call saved_identity again for the page you are on.', 'refused: the page changed since the lookup');
-          if (!f.usableHere) return detailNotAllowed('fill_from_identity', args, item, f, lookup, selector, started);
+          if (!f.usableHere && !(si().tryAnyway ?? []).includes(askedKey(item.itemId, f.key, lookup.origin))) return detailNotAllowed('fill_from_identity', args, item, f, lookup, selector, started);
           // A select takes the option that matches; an input takes the keystrokes. The page says which it is.
           const facts = await describeTarget({ selector });
           const isSelect = facts?.tag === 'select';
