@@ -8,6 +8,7 @@
 import { isPlatformApiError } from '@marinoscar/platform-web/core';
 
 import { draftFromSchedule, draftToItem, newScheduleDraft, type ScheduleDraft, type ScheduleItemInput } from '../schedule/draft';
+import { cleanSelections, selectionsOf, type ConnectionSelection, type NeedsBrowser } from '../taskConnections/model';
 import { cleanOutputs, outputProblems, type TaskOutput } from '../taskOutputs/model';
 import { cleanParameters, syncParameters, type TaskParameter } from '../taskParams/model';
 import type { Task } from '../types/tasks';
@@ -58,6 +59,10 @@ export interface TaskFormValues {
   parameters: TaskParameter[];
   /** The values the agent must return when it finishes (E39.5, #600): rows the form edits; empty rows are not saved. */
   outputs: TaskOutput[];
+  /** The accounts the agent may use (E39.7, #604), each read only or read and change; none by default. */
+  connections: ConnectionSelection[];
+  /** Whether the task's runs open a browser: `auto` (when a tool needs one), `always` or `never`. */
+  needsBrowser: NeedsBrowser;
   /** Each carries an optional `policyId` override. */
   schedules: ScheduleDraft[];
 }
@@ -73,7 +78,7 @@ export interface TaskWithSchedules extends Task {
 }
 
 export function emptyValues(): TaskFormValues {
-  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], schedules: [] };
+  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], connections: [], needsBrowser: 'auto', schedules: [] };
 }
 
 /** The form values of a saved task. */
@@ -93,6 +98,8 @@ export function valuesFromTask(task: TaskWithSchedules): TaskFormValues {
     unattendedPayments: task.unattendedPayments === 'allow' ? 'allow' : 'ask',
     parameters: (task.parameters ?? []).map((p) => ({ ...p })),
     outputs: (task.outputs ?? []).map((o) => ({ ...o })),
+    connections: selectionsOf(task.connections),
+    needsBrowser: task.needsBrowser ?? 'auto',
     schedules: (task.summary?.schedules ?? []).map(draftFromSchedule),
   };
 }
@@ -195,6 +202,10 @@ export interface CreateTaskBody {
   parameters?: TaskParameter[];
   /** The task's outputs (E39.5): present only when the form has some; an empty list on a change removes them. */
   outputs?: TaskOutput[];
+  /** The accounts the agent may use (E39.7): present only when the form lists some; an empty list on a change switches them all off. */
+  connections?: ConnectionSelection[];
+  /** Present only when it is not `auto` (or changed back to it). */
+  needsBrowser?: NeedsBrowser;
   /** Present only when the form has schedules. */
   schedules?: ScheduleItemInput[];
 }
@@ -204,7 +215,7 @@ export function savedParameters(values: Pick<TaskFieldValues, 'goal' | 'paramete
   return cleanParameters(syncParameters(values.goal.trim(), values.parameters).parameters);
 }
 
-function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs'> & { parameters: TaskParameter[]; outputs: TaskOutput[] } {
+function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs' | 'connections' | 'needsBrowser'> & { parameters: TaskParameter[]; outputs: TaskOutput[]; connections: ConnectionSelection[]; needsBrowser: NeedsBrowser } {
   return {
     name: values.name.trim(),
     goal: values.goal.trim(),
@@ -219,6 +230,8 @@ function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | '
     unattendedPayments: values.unattendedPayments,
     parameters: savedParameters(values),
     outputs: cleanOutputs(values.outputs),
+    connections: cleanSelections(values.connections),
+    needsBrowser: values.needsBrowser,
   };
 }
 
@@ -228,11 +241,13 @@ export function scheduleItems(schedules: readonly ScheduleDraft[]): ScheduleItem
 
 /** The body of `POST /tasks`: the task and its schedules in one request. */
 export function createBody(values: TaskFormValues, options: { sendPolicy: boolean }): CreateTaskBody {
-  const { parameters, outputs, ...fields } = fieldBody(values);
+  const { parameters, outputs, connections, needsBrowser, ...fields } = fieldBody(values);
   return {
     ...fields,
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(outputs.length > 0 ? { outputs } : {}),
+    ...(connections.length > 0 ? { connections } : {}),
+    ...(needsBrowser !== 'auto' ? { needsBrowser } : {}),
     ...(options.sendPolicy ? { policyId: values.policyId } : {}),
     ...(values.schedules.length > 0 ? { schedules: scheduleItems(values.schedules) } : {}),
   };
@@ -272,7 +287,7 @@ export interface MappedError {
   banner: string | null;
 }
 
-const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs'];
+const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs', 'connections', 'needsBrowser'];
 
 /** `allowedDomains.2` (zod) and `schedules[1].cron` (the schedule checks) in one spelling: `a[2]`, `schedules[1].cron`. */
 export function normalizePath(path: unknown): string {

@@ -26,6 +26,16 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useConnections } from '../connections/useConnections';
+import { DeliveriesSection } from '../deliveries/DeliveriesSection';
+import { DeliverySecretsDialog } from '../deliveries/DeliverySecretsDialog';
+import { summarize } from '../deliveries/drafts';
+import { syncDeliveries, type CreatedSecret } from '../deliveries/sync';
+import { deliveryErrorText } from '../deliveries/drafts';
+import { useTaskDeliveries } from '../deliveries/useTaskDeliveries';
+import { AccountsSection } from '../taskConnections/AccountsSection';
+import { summaryLine, type ConnectionSelection, type NeedsBrowser } from '../taskConnections/model';
+import { CollapsedSection } from '../taskForm/CollapsedSection';
 import { AllowedSitesInput } from './AllowedSitesInput';
 import { MachinePicker } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
@@ -174,6 +184,14 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
   const catalog = usePolicyCatalog();
   const memories = useMemoryOptions();
   const runInputs = useRunInputs();
+  const accounts = useConnections();
+  const deliveries = useTaskDeliveries(mode === 'edit' ? taskId : undefined);
+  const canReadConnections = viewer.hasPermission('connections:read');
+  const canSeeDeliveries = viewer.hasPermission('runs:read');
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const [deliveriesOpen, setDeliveriesOpen] = useState(false);
+  const [guidedOpen, setGuidedOpen] = useState(false);
+  const [secrets, setSecrets] = useState<{ list: CreatedSecret[]; then: string } | null>(null);
 
   const [form, setForm] = useState<FormState>(() => initialState(initial));
   const savedLogins = useSavedLoginsAvailability();
@@ -260,8 +278,11 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
       return { ...f, fields: { ...f.fields, outputs }, errors: rest };
     });
 
+  const setConnections = (connections: ConnectionSelection[]) => setFields({ connections });
+  const setNeedsBrowser = (needsBrowser: NeedsBrowser) => setFields({ needsBrowser });
+
   const values: TaskFormValues = useMemo(() => ({ ...fields, schedules: rows.filter((r) => !r.removed).map((r) => r.draft) }), [fields, rows]);
-  const dirty = isDirty(values, form.initial);
+  const dirty = isDirty(values, form.initial) || deliveries.dirty;
   const local = validateValues(values, { checkProfile: true });
 
   // The outputs' messages by row: the form's own checks while editing, and the server's after a failed save.
@@ -354,18 +375,39 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
         }
       }
     }
+    // The deliveries (E39.10): saved after the task, which they belong to. A refusal leaves the task saved and says so.
+    let dest = taskPath(id);
+    let toldSecrets: CreatedSecret[] = [];
+    if (canSeeDeliveries && !deliveries.failed && deliveries.dirty) {
+      const result = await syncDeliveries(api, id, deliveries.saved, deliveries.drafts);
+      deliveries.settle(result.saved, result.drafts);
+      toldSecrets = result.secrets;
+      if (result.error) {
+        const text = deliveryErrorText(result.error.cause);
+        if (mode === 'create') {
+          // The task exists now: go to its edit page, where the delivery that was refused can be fixed.
+          allowLeave();
+          toast(`The task was saved, but its deliveries were not: ${text}`, 'error');
+          if (toldSecrets.length > 0) return setSecrets({ list: toldSecrets, then: `/tasks/${id}/edit` });
+          return navigate(`/tasks/${id}/edit`);
+        }
+        setDeliveriesOpen(true);
+        return update({ saving: null, banner: `The deliveries were not all saved: ${text}` });
+      }
+    }
     allowLeave();
     toast(mode === 'create' ? 'Task created' : 'Task saved');
     if (andRun) {
       try {
         // Values still missing are asked for first (#556); Cancel leaves the saved task on its page.
         const run = await runInputs.ask({ id, name: fields.name.trim(), parameters: savedParameters(fields) }, (inputs) => runTaskWith(api, id, undefined, inputs));
-        if (run) return navigate(`/runs/${run.id}`);
+        if (run) dest = `/runs/${run.id}`;
       } catch (e) {
         toast(`The task was saved, but the run could not be started: ${e instanceof Error && e.message ? e.message : 'try again from the task'}`, 'error');
       }
     }
-    navigate(taskPath(id));
+    if (toldSecrets.length > 0) return setSecrets({ list: toldSecrets, then: dest });
+    navigate(dest);
   };
 
   const onSubmit = (event: FormEvent) => {
@@ -527,6 +569,25 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
           </Section>
         )}
 
+        {canReadConnections && (
+          <CollapsedSection
+            title="Accounts the agent may use"
+            anchor="accounts"
+            summary={summaryLine(fields.connections, accounts.connections)}
+            open={accountsOpen}
+            onToggle={setAccountsOpen}
+          >
+            <AccountsSection
+              connections={accounts.connections}
+              failed={accounts.failed}
+              selections={fields.connections}
+              onChange={setConnections}
+              disabled={busy}
+              browser={{ value: fields.needsBrowser, onChange: setNeedsBrowser, goal: fields.goal }}
+            />
+          </CollapsedSection>
+        )}
+
         <Section title="Outputs" id={`${uid}-outputs`} anchor="outputs">
           <OutputsSection
             outputs={fields.outputs}
@@ -536,6 +597,34 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             disabled={busy}
           />
         </Section>
+
+        {canSeeDeliveries && (
+          <CollapsedSection
+            title="Where the result goes"
+            anchor="deliveries"
+            summary={deliveries.drafts.length === 0 ? 'Nothing is sent when a run ends.' : deliveries.drafts.length === 1 ? summarize(deliveries.drafts[0]!, accounts.connections ?? []) : `${deliveries.drafts.length} deliveries after each run`}
+            open={deliveriesOpen}
+            onToggle={setDeliveriesOpen}
+          >
+            <DeliveriesSection
+              drafts={deliveries.drafts}
+              onChange={deliveries.setDrafts}
+              saved={deliveries.saved}
+              taskId={mode === 'edit' ? (taskId ?? null) : null}
+              taskName={fields.name}
+              outputs={fields.outputs}
+              connections={accounts.connections}
+              canEdit={canRun && !busy}
+              loadFailed={deliveries.failed}
+              guidedOpen={guidedOpen}
+              onGuidedOpenChange={setGuidedOpen}
+              onGuided={(r) => {
+                if (r.outputs.length > 0) setOutputs([...fields.outputs, ...r.outputs]);
+                deliveries.setDrafts((old) => [...old, ...r.deliveries]);
+              }}
+            />
+          </CollapsedSection>
+        )}
 
         <Section title="Where it runs" id={`${uid}-where`}>
           <Box data-field="hostId">
@@ -741,6 +830,14 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
       </Stack>
 
       {runInputs.dialog}
+      <DeliverySecretsDialog
+        secrets={secrets?.list ?? []}
+        onClose={() => {
+          const to = secrets?.then;
+          setSecrets(null);
+          if (to) navigate(to);
+        }}
+      />
       {isPhone && (
         // Fixed above the shell's bottom navigation; last in the form, so the focus order ends here.
         <Paper

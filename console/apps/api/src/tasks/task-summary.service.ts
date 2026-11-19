@@ -45,6 +45,8 @@ export interface TaskSummary {
   policy: { id: string; name: string; builtin: boolean; isDefault: boolean } | null;
   /** Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. */
   mailTriggers: number;
+  /** Deliveries that are switched on (E39.6, E39.10): what is sent when a run ends. */
+  deliveries: number;
 }
 
 export type TaskWithSpend = Task & { spend30d: TaskSpend; connections: ConnectionSelectionView[] };
@@ -286,15 +288,17 @@ export class TaskSummaryService {
     if (tasks.length === 0) return [];
     const ids = tasks.map((t) => t.id);
     const connections = await taskConnectionViews(this.prisma, ids);
-    const [schedules, facts, newest, policies, triggers] = await Promise.all([
+    const [schedules, facts, newest, policies, triggers, deliveries] = await Promise.all([
       this.db(userId).taskSchedule.findMany({ where: { taskId: { in: ids } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
       this.runFacts(userId, ids),
       this.newestRuns(userId, ids),
       // A policy that cannot be read must not fail the list: `policy` is then null.
       this.resolver.forTasks(userId, tasks).catch(() => new Map<string, never>()),
       this.prisma.mailTrigger.groupBy({ by: ['taskId'], where: { userId, taskId: { in: ids }, enabled: true }, _count: { _all: true } }),
+      this.prisma.taskDelivery.groupBy({ by: ['taskId'], where: { userId, taskId: { in: ids }, enabled: true }, _count: { _all: true } }),
     ]);
     const triggerCounts = new Map(triggers.map((g) => [g.taskId, g._count._all]));
+    const deliveryCounts = new Map(deliveries.map((g) => [g.taskId, g._count._all]));
     const byTask = new Map<string, TaskSummarySchedule[]>();
     for (const s of schedules) {
       const list = byTask.get(s.taskId) ?? [];
@@ -329,6 +333,7 @@ export class TaskSummaryService {
         runCounts: { total: f?.total ?? 0, last7d: { succeeded: f?.succeeded7 ?? 0, failed: f?.failed7 ?? 0, cancelled: f?.cancelled7 ?? 0 } },
         policy: resolved ? { id: resolved.policy.id, name: resolved.policy.name, builtin: resolved.policy.builtin, isDefault: resolved.isDefault } : null,
         mailTriggers: triggerCounts.get(t.id) ?? 0,
+        deliveries: deliveryCounts.get(t.id) ?? 0,
       };
       return { ...t, spend30d: this.spendOf(f), connections: connections.get(t.id) ?? [], summary };
     });
