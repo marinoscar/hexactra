@@ -1668,6 +1668,7 @@ The agent's hands are the browser and the node's desktop (Section 27). Epic E39 
 
 - **During a run and in a chat** the agent can search and read mail, draft and send it, read and change the calendar, read documents and append rows to a spreadsheet, through provider-neutral tools. A chat answers a simple question about mail or the calendar itself, with no browser and no run.
 - **After a run** a task's **deliveries** send its result where the owner said: an email with the masked PDF report, a signed webhook, a spreadsheet row, files in a folder. A delivery is deterministic: a queue job reads the finished run and the delivery's settings; the model is not in that step, and its recipients and destinations were fixed by the owner when they set it up.
+- **Any other tool** the owner adds as an **MCP server** (Hexactra is then an MCP client, over HTTPS only, never a local command): every tool of it is off until the owner switches it on as `read` or `write`, a tool that changes is switched off again for review, and what it describes and returns is data.
 - **Before a run** a task can **start from an email** that matches a filter, from a sender the owner named, after the provider's own sender check.
 - **A run's result is named values** (task outputs, #600), so that a delivery can put an amount, a confirmation number or a date in a table and a cell.
 
@@ -1722,6 +1723,6 @@ Upstream seam: image tool outputs in the platform's `runTools` (marinoscar/Enter
 
 Epic E37 (#579) adds saved logins, identity details and cards the agent uses without seeing them (Sections 11.6, 12.2, 13.3 and the bullets above); it is implemented and tested against fakes, and its acceptance session on the owner's deployed stack is still to be recorded (#624).
 
-Epic E39 (#581) adds the owner's connected accounts, the agent's tools over them, deliveries after a run and email triggers (Section 26.9); it is implemented and tested against fakes, and no real Google or Microsoft account has been used. Its acceptance run on the owner's deployed stack, with real accounts, is still to be recorded (#608, `console/docs/acceptance-connections.md`).
+Epic E39 (#581) adds the owner's connected accounts and MCP servers, the agent's tools over them, deliveries after a run and email triggers, with a console UI to choose accounts and edit deliveries (Section 26.9); it is implemented and tested against fakes, and no real Google or Microsoft account has been used. Its acceptance run on the owner's deployed stack, with real accounts, is still to be recorded (#608, `console/docs/acceptance-connections.md`).
 
 The desktop needs `xdotool` and `imagemagick` on the node. `hexactra agent install` installs them in every mode that has an X11 desktop, and `hexactra agent update` adds them on older nodes (#373).

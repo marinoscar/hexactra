@@ -1,30 +1,35 @@
 # Connections: your Google and Microsoft accounts and MCP servers
 
-Epic E39 (#581) lets the owner connect their accounts at Google and Microsoft **once**, with a name they choose and a switch for each of Mail, Calendar and Documents, so that tasks, chats and deliveries can use them later. This chapter is the foundation (issue E39.2, #599): the model, the capabilities, the defaults, how tokens are kept, what "needs reconnect" means, and the administrator's setup. What uses a connection is built on top of it by later issues: the Google and Microsoft providers (E39.3, E39.4), deliveries after a run (E39.6), agent tools (E39.7), triggers (E39.8) and generic MCP connections (E39.9).
+Epic E39 (#581) lets the owner connect their accounts at Google and Microsoft, and any MCP server, **once**: with a name they choose and, for Google and Microsoft, a switch for each of Mail, Calendar and Documents. After that the agent can use them in a run and in a chat, a task can start when a matching email arrives, and a finished run can send its result out ([deliveries.md](deliveries.md)). This is the one chapter for all of it: accounts, labels, capabilities and defaults; the administrator's setup of the two apps and what each kind of account can do; how tokens are kept; what the agent can do and the rules; MCP servers and their trust model; the mail trigger; choosing files; limits and quotas; what is not offered; and what has not been verified. What stops each misuse is [security-connections.md](security-connections.md); the owner's acceptance checklist is [acceptance-connections.md](acceptance-connections.md).
 
-**Status, honestly.** The model, the flows, the token service, the pages and the CLI are implemented and tested against a **fake provider** (`apps/api/test/support/fake-connection-provider.ts`). The **Google provider** (E39.3, #601: [Google](#google) below) is implemented and tested against an **in-process fake of Google's endpoints**; the Microsoft provider is E39.4, and until it is installed Microsoft is listed as "not available on this deployment yet". **No real Google or Microsoft account has been connected yet:** the real-account checks of E39.3 need the owner and are listed at the end of the Google chapter. The app model below (bring your own app), the account types and the setup checklists follow the decision record [decisions/connections-auth.md](decisions/connections-auth.md) (E39.1, #598), which is itself **provisional**: derived from documentation, not yet verified on a real account. That record proposes a seventh capability, `mail_modify` (archive, labels, mark read, drafts); **E39.3 adds it** (it is a switch like the others), because at both providers it needs a higher permission than sending.
+**Status, honestly.** Everything in this chapter is implemented and tested against **fakes**: a fake provider (`apps/api/test/support/fake-connection-provider.ts`), an in-process fake of Google's endpoints, a fake of Microsoft Graph, a fake MCP server and an in-memory capability double. **No real Google or Microsoft account, and no real MCP server, has been connected.** The app model (bring your own app), the account types and the setup checklists follow the decision record [decisions/connections-auth.md](decisions/connections-auth.md) (E39.1, #598), which is itself **provisional**: derived from documentation, not verified on a real account, its experiments still pending. Where this chapter says what a provider does, that is what the documentation was believed to say and what the fakes were built to do. [What has not been verified, and what the owner must do](#what-has-not-been-verified-and-what-the-owner-must-do) lists every such point.
 
 ## In short
 
-- A **connection** is one account at one provider: `Work` (a Google account), `Personal` (another Google account), `Outlook` (a Microsoft account). The same owner can have several of each.
-- Each connection has **seven switches** (the capabilities): `mail_read`, `mail_send`, `mail_modify`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`. Read is never write. The page shows them as Mail, Calendar and Documents, each "read", "read and write" (Mail: also "organize").
-- **Nothing uses a connection until a task or chat is told to.** Connecting an account gives no run any access by itself.
+- A **connection** is one account at one provider: `Work` (a Google account), `Personal` (another Google account), `Outlook` (a Microsoft account), or one MCP server. The same owner can have several of each.
+- A Google or Microsoft connection has **seven switches** (the capabilities): `mail_read`, `mail_send`, `mail_modify`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`. Read is never write. The page shows them as Mail, Calendar and Documents, each "read", "read and write" (Mail: also "organize"). An MCP server has **tools**, each `off`, `read` or `write`, decided by the owner.
+- **Nothing uses a connection until a task or chat is told to.** Connecting an account gives no run any access by itself. A task lists the connections it may use, each `read` or `read_write`; a hosted AI app's run gets none unless that app's limit `allowConnections` is on.
 - **The account is always explicit.** If two could do a job and the owner did not say which, the caller asks (`CONNECTION_AMBIGUOUS`); nothing guesses.
-- **Tokens never leave the server.** They are encrypted in the credential store, refreshed in the background, and reach no API response, model, step, log, span or export.
+- **Reading is free; changing asks.** Every call that sends, creates, changes, appends or uploads waits for the owner on a card the server builds, unless the owner remembered that exact kind of call for those recipients. Mail to someone new always asks.
+- **What a connection returns is data**, never an instruction: an email, a file, an MCP tool's description or result cannot change a run's allowed sites, approvals, recipients or connections.
+- **Tokens stay on the server**, with one named exception (the Google file picker, [below](#choosing-files-the-picker-e3910)). They are encrypted in the credential store, refreshed in the background, and reach no API response, model, step, log, span or export.
 - **A connection that stops working says so** (`needs_reconnect`), tells the owner once, and is never chosen until it is connected again.
+- **No connection is exposed through Hexactra's own MCP server.** A hosted assistant cannot list, use or change the owner's accounts.
 
 ## Where things are
 
 | What | Where |
 |---|---|
-| The pages | Settings → Browser agent → Connections (`/settings/connections`, avatar menu); Administration → Browser agent → Connections (`/admin/settings/connections`) |
-| The API | `/api/connections` (below); the OpenAPI at `/api/docs` is the reference |
-| The CLI | `hexactra connections list\|test\|pause\|resume\|rm` (connecting needs a browser: use the web app) |
+| The pages | Settings → Browser agent → Connections (`/settings/connections`, avatar menu): connect an account, switch its capabilities, **Add an MCP server**, review an MCP server's tools, and for each account what uses it and its recent activity (no content); Administration → Browser agent → Connections (`/admin/settings/connections`): the Google and Microsoft apps and the MCP switch and host lists. The task form's **Accounts the agent may use** and **Where the result goes** sections, a chat's **Accounts this chat may use**, a task's **When an email arrives** ([README, Accounts and deliveries in the form](../README.md#accounts-and-deliveries-in-the-form)) |
+| The API | `/api/connections` ([The API](#the-api)); the OpenAPI at `/api/docs` is the reference |
+| The CLI | `hexactra connections list\|test\|tools\|pause\|resume\|rm` (connecting and deciding a tool need a browser: use the web app); `hexactra tasks deliveries list\|test`, `hexactra tasks triggers list` |
 | MCP | **No tool.** Hosted AI apps cannot list, add or use the owner's connections ([parity.md](parity.md#what-connections-added-e39)) |
-| The code | `apps/api/src/connections/` (the capability interfaces `capabilities.ts`, the Google provider `google/`, test doubles `testing/` and `google/testing/`), `apps/api/prisma/fragments/connections.prisma`, `apps/web/src/pages/ConnectionsPage.tsx`, `apps/cli/src/connections.command.ts` |
+| The code | `apps/api/src/connections/` (the capability interfaces `capabilities.ts`, the Google provider `google/`, the Microsoft provider `microsoft/`, the MCP client `mcp/`, the picker routes `connection-files.*`, test doubles `testing/`, `google/testing/`, `microsoft/testing/`), `apps/api/src/mail-triggers/`, `apps/api/src/deliveries/`, `apps/api/src/runner/host/tools/connections/` and `host/gates/connection-gate.ts`, `apps/api/prisma/fragments/connections.prisma`, `apps/web/src/connections/`, `apps/web/src/taskConnections/`, `apps/web/src/deliveries/`, `apps/web/src/mailTriggers/`, `apps/web/src/pages/ConnectionsPage.tsx`, `apps/cli/src/connections.command.ts` |
 | Permissions | `connections:read` and `connections:write` (contributors and organization admins); the administrator's page uses `system_settings:read` and `:write` |
 
-## Capabilities, groups and defaults
+## Accounts, labels, capabilities and defaults
+
+### Capabilities, groups and defaults
 
 | Capability | The group the owner sees | What it allows |
 |---|---|---|
@@ -42,7 +47,7 @@ Epic E39 (#581) lets the owner connect their accounts at Google and Microsoft **
 - **If the provider grants fewer permissions than asked** (the owner unticked one on the consent screen), the missing capabilities are off and the page says which.
 - **A default account** can be set for each group (`mail`, `calendar`, `docs`) and provider: it is what a task or chat uses when it does not say which account. There is **at most one default per provider and group per user**: choosing it for one account takes it from the other. It is enforced by the service (a per-user lock) and by the database (a trigger). A default needs a capability of its group switched on; turning the group off drops the default.
 
-## Connecting, reconnecting and the same account twice
+### Connecting, reconnecting and the same account twice
 
 `POST /api/connections/authorize` `{ provider, capabilities, label?, loginHint? }` answers the URL to open (the provider's own consent screen, in the same tab). The browser comes back to `GET /api/connections/callback/{provider}`, which answers a redirect to `/settings/connections?connect=<outcome>` (plus `connection=<id>` and `missing=<capabilities>`).
 
@@ -55,6 +60,116 @@ Epic E39 (#581) lets the owner connect their accounts at Google and Microsoft **
 
 The callback's `code` and `state` never reach a log line (the request log's URL is redacted for these paths), a span (the path is not traced) or nginx's access log (`infra/nginx/app.d/locations/connections-callback.conf`).
 
+### Choosing an account: `resolveConnection`
+
+Every later issue calls `resolveConnection(userId, { provider?, capability, connectionId?, label? })` (`ConnectionResolverService`):
+
+1. An explicit **id or label** wins (a label matches ignoring case). Not found, or another user's: `CONNECTION_NOT_FOUND`.
+2. Otherwise **the default** for the capability's group. A default at two providers with none named is ambiguous too.
+3. Otherwise, if **exactly one active** connection has the capability, that one.
+4. Otherwise `CONNECTION_AMBIGUOUS` with the candidates' **labels** (the caller asks the owner), or `CONNECTION_NONE` when none has it.
+
+A **paused** or **needs_reconnect** connection is never chosen: naming one fails with its typed error; a default that cannot be used is an error naming it, never a silent switch to the other account; and it is never counted as the single candidate.
+
+## Administrator setup (bring your own app)
+
+Hexactra does not ship a Google project or a Microsoft app: **the deployment's administrator registers one of each** and Hexactra's users connect their accounts through it. (This is the decision record's recommendation; per-user apps are not offered.)
+
+1. Open **Administration → Browser agent → Connections**. Each provider shows the **redirect URI** to copy (`<console base>/api/connections/callback/<provider>`) and a **setup checklist**.
+2. Register the app at the provider: the [Google checklist](#setup-checklist-for-the-administrator) or the [Microsoft checklist](#administrator-setup-the-microsoft-app-bring-your-own-app). The redirect URI must be an `https` address with a public domain name; for Google a tunnel or a reverse proxy is enough.
+3. Paste the client id and secret (Microsoft: and set the **tenant**) and switch the provider on. It can be switched on only when the client id and secret are set.
+4. MCP servers have their own switch, **off by default**, and host lists in the same page ([MCP servers](#mcp-servers-e399)).
+
+The client id, tenant and switch are the `connections` system settings; the secret is a write-only system credential (`connection_app_google`, `connection_app_microsoft`), never returned. Switching a provider off stops new connections; existing connections keep refreshing. Removing the app deletes the id and secret and switches it off: connected accounts stay but cannot refresh until an app is set again. [Rotating the secret](runbooks/operations.md#rotate-the-providers-app-secret) keeps the client id, so owners do not reconnect. The Connect dialog explains which kinds of account work (personal accounts, work or school accounts) before the owner starts; that text is provisional until the record's experiments are done.
+
+### Setup checklist for the administrator
+
+Follows the decision record (provisional until the experiments of #598 are done).
+
+1. In the Google Cloud console create a project and enable the **Gmail, Google Calendar, Google Docs, Google Sheets and Google Drive** APIs. A switched-off API shows up in the connection's **Test** as "the service is switched off" (`API_DISABLED`).
+2. **Google Auth Platform:** set the audience to **External** and the publishing status to **In production**. A project left in **Testing** ends every sign-in after about seven days (the connection then says it needs to be connected again). You do not submit the app for verification for your own use; users click through the "Google hasn't verified this app" page. Adding the restricted Gmail permissions is what makes Google say verification is needed: for your own accounts you do not take that step.
+3. **Clients, Create client:** type **Web application**. Authorised redirect URI, to copy exactly: `<console base>/api/connections/callback/google` (the page under Administration shows it with your address filled in). It must be `https` with a public domain name (a tunnel or a reverse proxy is enough); Google refuses a raw IP address and a private name.
+4. Paste the client id and secret into **Administration, Connections** and switch Google on.
+5. Google Workspace only: in the Admin console (Security, API controls) mark the client **Trusted** if your organization blocks unverified apps.
+6. Connect an account; on the consent screen tick **every** permission asked (an unticked one leaves that capability off, and the page says which).
+7. Use an AI model provider whose terms do not train on API inputs: Google's API user-data policy ("limited use") applies to Gmail data whether or not the app is verified.
+
+### Administrator setup: the Microsoft app (bring your own app)
+
+1. In the Microsoft Entra admin center (or the Azure portal) open **App registrations, New registration**. Name it. For **Supported account types** choose **Accounts in any organizational directory and personal Microsoft accounts**. (A personal Microsoft account needs an Entra tenant to register in: a free Azure sign-up creates one.)
+2. Platform **Web**, redirect URI `<console base>/api/connections/callback/microsoft` (copy it from Administration, Browser agent, Connections). `http://localhost` is accepted for development; anything else must be https.
+3. **API permissions, Add a permission, Microsoft Graph, Delegated** (never Application): `offline_access` and `User.Read` always, plus those of the capabilities you will let owners switch on: `Mail.Read`, `Mail.Send`, `Mail.ReadWrite`, `Calendars.Read`, `Calendars.ReadWrite`, `Files.Read`, `Files.ReadWrite`.
+4. **Certificates and secrets, New client secret.** Copy the **value** at once (it is shown once) and note the expiry date (at most 24 months): when it expires every connection stops refreshing at the same moment.
+5. Paste the application (client) id and the secret into the administrator page, set the **tenant** (`common` for work, school and personal accounts; `organizations`, `consumers` or a tenant id narrow it) and switch Microsoft on. Leave publisher verification alone: it is optional and out of reach for an individual.
+
+What the console asks for, per capability (and the plain-words consent the owner reads):
+
+| Capability | Microsoft permission | What the owner is agreeing to |
+|---|---|---|
+| always | `openid`, `email`, `profile`, `offline_access`, `User.Read` | Sign in, know which account this is, and stay signed in |
+| `mail_read` | `Mail.Read` | Read your mail |
+| `mail_send` | `Mail.Send` | Send mail as you (no sending as someone else) |
+| `mail_modify` | `Mail.ReadWrite` | Read and change your mail: drafts, folders, categories, read state (**not** sending) |
+| `calendar_read` | `Calendars.Read` | See your calendars |
+| `calendar_write` | `Calendars.ReadWrite` | Create and change events |
+| `docs_read` | `Files.Read` | Read **all** your OneDrive files (Microsoft has no narrower permission) |
+| `docs_write` | `Files.ReadWrite` | Change **all** your OneDrive files |
+
+Only what the switched-on capabilities need is asked; switching one on later asks for just the added permission. A write brings its read. Microsoft's `Mail.ReadWrite` includes read but **not** send, so `mail_send` is its own switch. Personal accounts have a narrower `Files.ReadWrite.AppFolder` that the record lists as "expected, confirm"; it is not used.
+
+### What each kind of account can do
+
+One table in code (`src/connections/capability-matrix.ts`) says, for every method, whether Google, a Microsoft work or school account and a Microsoft personal account can do it: **Yes**, **Limited** (how), or **No** (why). The Microsoft adapter answers `NOT_SUPPORTED` for a method the table marks "No" for the account's kind (and makes no request); `GET /api/connections/providers` returns the same rows (`capabilityMatrix`, with `matrixColumns` for the provider) so the Connect dialog and the task UI never offer an unsupported choice; and a test fails when this table and the code disagree (`UPDATE_CAPABILITY_MATRIX_DOC=1 npx jest --config ./test/jest.config.js capability-matrix` from `apps/api` rewrites it: review the diff).
+
+The Google column follows the decision record (the narrow `drive.file` permission: only files the app created or the owner picked); the Google adapter's own section is the authority on Google.
+
+<!-- capability-matrix:start -->
+| Method | Needs | Google | Microsoft work or school | Microsoft personal |
+|---|---|---|---|---|
+| `mail.search` | `mail_read` | Yes | Limited: Free text goes through Microsoft search; the other filters are applied to each page, so a page can be short: follow the next page. | Limited: Free text goes through Microsoft search; the other filters are applied to each page, so a page can be short: follow the next page. |
+| `mail.get` | `mail_read` | Yes | Yes | Yes |
+| `mail.getAttachment` | `mail_read` | Yes | Limited: File attachments only; an attached message or a link is not downloadable. | Limited: File attachments only; an attached message or a link is not downloadable. |
+| `mail.createDraft` | `mail_modify` | Yes | Yes | Yes |
+| `mail.send` | `mail_send` | Yes | Limited: With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft. | Limited: With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft. |
+| `mail.modify` | `mail_modify` | Yes | Limited: Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message. | Limited: Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message. |
+| `mail.listLabels` | `mail_read` | Yes | Limited: Returns folders and categories, with the kind. | Limited: Returns folders and categories, with the kind. |
+| `calendar.listCalendars` | `calendar_read` | Yes | Yes | Yes |
+| `calendar.listEvents` | `calendar_read` | Yes | Limited: Text matches the event title. | Limited: Text matches the event title. |
+| `calendar.freeBusy` | `calendar_read` | Yes | Yes | Limited: Personal accounts have no free/busy service: computed from the events of the calendar. |
+| `calendar.createEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. A video conference is a Teams meeting. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. No video conference. |
+| `calendar.updateEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. |
+| `calendar.deleteEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. |
+| `documents.searchFiles` | `docs_read` | Limited: Only files the app created or you picked (the narrow Drive permission). | Yes | Yes |
+| `documents.getFile` | `docs_read` | Limited: Only files the app created or you picked (the narrow Drive permission). | Yes | Yes |
+| `documents.registerPickedFile` | `docs_read` | Yes | Yes | Yes |
+| `documents.readDocument` | `docs_read` | Yes | Limited: Word (.docx) and plain-text files; a PDF or an older .doc is not read. | Limited: Word (.docx) and plain-text files; a PDF or an older .doc is not read. |
+| `documents.createDocument` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Limited: Creates a plain Word (.docx) file of paragraphs. | Limited: Creates a plain Word (.docx) file of paragraphs. |
+| `documents.appendToDocument` | `docs_write` | Yes | Limited: Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict). | Limited: Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict). |
+| `documents.readSheet` | `docs_read` | Yes | Yes | No: Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do. |
+| `documents.appendRows` | `docs_write` | Yes | Limited: Rows go into the first table of the sheet, or below the used range when there is none. A failure that leaves it unknown is reported, not retried. | No: Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do. |
+| `documents.createSpreadsheet` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Limited: Creates an Excel (.xlsx) file with the header row as text. | Limited: Creates an Excel (.xlsx) file with the header row as text. |
+| `documents.uploadFile` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Yes | Yes |
+| `documents.createFolder` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Yes | Yes |
+<!-- capability-matrix:end -->
+
+### Work and personal accounts of one person are two connections
+
+The account's stable id is stored as `accountId` in the form **`<tenant id>:<object id>`**, both lower-case GUIDs from the sign-in's id token. A personal account is always in the consumer tenant `9188040d-6c67-4c5b-b112-36a304b66dad`, so the same person's work and personal accounts have different ids and become two connections whose tokens never cross (tested). When no account is named, the consent page asks the owner to **pick the account** (`prompt=select_account`), so a browser signed in to the work account is not silently connected as that account when the personal one was meant; a reconnect names its account (`login_hint`).
+
+### When an administrator must approve (`ADMIN_CONSENT_REQUIRED`)
+
+A work or school account of another organization may be blocked from consenting until that organization's administrator approves the app (the "Need admin approval" screen), depending on its user-consent settings. The console tells this apart from the owner declining:
+
+- the redirect carries `connect=admin_consent_required` (not `denied`); the web page says an administrator must approve and that the link is on the connections page;
+- `GET /api/connections/providers` returns `adminConsentUrl` for Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone (`https://login.microsoftonline.com/organizations/v2.0/adminconsent?client_id=…`, built from the app and nothing personal). The owner sends it on; afterwards they connect again;
+- the typed error is `ADMIN_CONSENT_REQUIRED` (`CapabilityError`, with `details.adminConsentUrl`), and at the token endpoint it is an `OAuthClientError` with `oauthError: 'admin_consent_required'`. No text from Microsoft is shown.
+
+An owner who clicked "Cancel" gets `denied` as before.
+
+### What removing access means
+
+Microsoft has **no per-token revoke for delegated sign-ins**. Disconnect deletes the tokens on the console (and reports `revoked: false`, because Microsoft could not be asked). The app itself stays in the owner's Microsoft account until they remove it there: for a personal account at the account's **Privacy, Apps and services** page (`account.live.com/consent/Manage`); for a work or school account at **My Apps** (`myapps.microsoft.com`, the app's menu), or an administrator deletes the grant. Say so to owners who disconnect for security.
+
 ## How tokens are kept
 
 | Token | Where | Notes |
@@ -64,7 +179,7 @@ The callback's `code` and `state` never reach a log line (the request log's URL 
 | PKCE verifier of a flow in progress | The same, name `flow.<flowId>` | Deleted with the flow. |
 | The deployment's app secrets | Credential store, system tier, purposes `connection_app_google` and `connection_app_microsoft` | Write-only, set by the administrator. |
 
-No token is a column. Deleting a connection deletes its tokens; deleting the user deletes everything (the connection and flow rows cascade, and the user-owned data registry lists both models). The access token is given **only to server code in `connections/`** (`ConnectionTokensService.getAccessToken`); tests scan every response, audit event, notification, row and log line for seeded token markers and read the credential rows to prove they are ciphertext.
+No token is a column. Deleting a connection deletes its tokens; deleting the user deletes everything (the connection and flow rows cascade, and the user-owned data registry lists both models). The access token is given **only to server code in `connections/`** (`ConnectionTokensService.getAccessToken`), with **one exception**: the Google file picker route hands the signed-in user's own browser the connection's short-lived access token ([Choosing files](#choosing-files-the-picker-e3910)). Tests scan every response, audit event, notification, row and log line for seeded token markers and read the credential rows to prove they are ciphertext.
 
 **Refreshing.** `getAccessToken(connectionId, userId)` returns a valid access token, refreshing when fewer than **two minutes** remain.
 
@@ -80,50 +195,9 @@ The provider refused the saved grant (`invalid_grant`): the owner removed the ap
 1. The connection's status becomes `needs_reconnect` with a stable reason code (`GRANT_REVOKED`, `NO_REFRESH_TOKEN`, `TOKEN_STORE_FAILED`), its tokens are deleted, and an audit event `connection.needs_reconnect` is written.
 2. **The owner is notified once per episode** (the `connections.needs_reconnect` notification: bell, push and Android). Reconnecting clears the flag, so a later episode notifies again.
 3. **Every caller fails with the typed error** `CONNECTION_NEEDS_RECONNECT` (409), which names the connection's label. A task or chat turns that into a question or a failed delivery; nothing falls back to another account.
-4. The page lists it at the top, under **Needs reconnecting**, with a **Reconnect** button.
+4. The page lists it at the top, under **Needs reconnecting**, with a **Reconnect** button, and **Home** shows a notice while any account needs it. (Home does not show repeated delivery failures; those are in the run's Deliveries block, a notification once per task per day, and the alert rule **Delivery keeps failing**.)
 
 A **paused** connection is not used by anything (`CONNECTION_PAUSED`); its sign-in is kept alive by the health job.
-
-## Choosing an account: `resolveConnection`
-
-Every later issue calls `resolveConnection(userId, { provider?, capability, connectionId?, label? })` (`ConnectionResolverService`):
-
-1. An explicit **id or label** wins (a label matches ignoring case). Not found, or another user's: `CONNECTION_NOT_FOUND`.
-2. Otherwise **the default** for the capability's group. A default at two providers with none named is ambiguous too.
-3. Otherwise, if **exactly one active** connection has the capability, that one.
-4. Otherwise `CONNECTION_AMBIGUOUS` with the candidates' **labels** (the caller asks the owner), or `CONNECTION_NONE` when none has it.
-
-A **paused** or **needs_reconnect** connection is never chosen: naming one fails with its typed error; a default that cannot be used is an error naming it, never a silent switch to the other account; and it is never counted as the single candidate.
-
-## The API
-
-| Route | Notes |
-|---|---|
-| `GET /api/connections` | Label, provider, account email, capabilities, what the provider granted, defaults, status and reason code, last use. Accounts that need a reconnect first. Never a token or a scope string. |
-| `GET /api/connections/{id}` | The same, with `usedBy` (what uses it: the deliveries of E39.6 today, tools and triggers when E39.7 and E39.8 register them) |
-| `GET /api/connections/providers` | Which providers can be connected here (`ready`, or the `reason`: `not_installed`, `disabled`, `not_configured`) and which kinds of account work, with a note to read before starting |
-| `POST /api/connections/authorize` | Start a connection (above). Sets the binding cookie. |
-| `GET /api/connections/callback/{provider}` | Public; the redirect URI to register at the provider |
-| `PATCH /api/connections/{id}` | `label`, `capabilities`, `defaultFor`. A capability to add that the provider has not granted answers `consent.authorizeUrl` (and sets the binding cookie). |
-| `POST /api/connections/{id}/pause`, `/resume` | |
-| `POST /api/connections/{id}/test` | One cheap read call per switched-on capability: `{ results: [{ capability, ok, code }] }`, `code` a closed reason (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...) |
-| `DELETE /api/connections/{id}` | Revoke at the provider (best effort: `revoked: false` when it could not be asked), clear references from tasks and deliveries (they show "connection removed"), delete tokens and the row |
-| `GET /api/connections/admin/apps`, `PUT\|DELETE /api/connections/admin/apps/{provider}` | The administrator's apps. **No route reaches a user's connections.** |
-
-Another user's connection is `404` (`CONNECTION_NOT_FOUND`) on every route, like a missing one. A viewer has no access. Audit events: `connection.created`, `.updated`, `.paused`, `.resumed`, `.needs_reconnect`, `.removed` (plus `.connect_started`, `.connect_failed`, `.app_saved`, `.app_removed`), with ids, provider and capabilities; never an email body or a token. The counter `app.connections.events` is by provider and outcome only.
-
-## Administrator setup (bring your own app)
-
-Hexactra does not ship a Google project or a Microsoft app: **the deployment's administrator registers one of each** and Hexactra's users connect their accounts through it. (This is the decision record's recommendation; per-user apps are not part of this issue.)
-
-1. Open **Administration → Browser agent → Connections**. Each provider shows the **redirect URI** to copy and a **setup checklist**.
-2. **Google.** In the Google Cloud console create or choose a project, enable the Gmail, Calendar, Docs, Sheets and Drive APIs, configure the Google Auth Platform (the OAuth consent screen) as **External** and **publish it** ("In production": a project left in testing mode ends every sign-in after about a week; an unverified app is fine for your own use, users accept a warning), create an OAuth client of type *Web application* with the redirect URI shown (an https address with a public domain name), and paste the client id and secret. For Google Workspace, mark the client trusted in the Admin console if your organization blocks unverified apps.
-3. **Microsoft.** In the Microsoft Entra admin center register an application ("any organizational directory and personal Microsoft accounts"), add the redirect URI as a *Web* redirect, add the delegated Graph permissions you will use plus `offline_access` and `User.Read`, create a client secret (note its expiry date: sign-ins stop refreshing when it expires), paste the application (client) id and secret, and set the **tenant** (`common` allows work, school and personal accounts; `organizations`, `consumers` or a tenant id narrow it). A work or school account of another organization needs that organization's administrator to approve the app once.
-4. Switch the provider on. It can be switched on only when the client id and secret are set.
-
-The client id, tenant and switch are the `connections` system settings; the secret is a write-only system credential (`connection_app_google`, `connection_app_microsoft`), never returned. Switching a provider off stops new connections; existing connections keep refreshing. Removing the app deletes the id and secret and switches it off: connected accounts stay but cannot refresh until an app is set again.
-
-Until the adapter for a provider is installed (E39.3, E39.4) the provider is listed as not available even when switched on. The Connect dialog explains which kinds of account work (personal accounts, work or school accounts) before the owner starts; that text is provisional until the record's experiments are done.
 
 ## What the agent can do with a connection (E39.7)
 
@@ -186,97 +260,7 @@ A chat that lists connections answers a simple question about the owner's mail, 
 
 A value typed from a secrets provider or marked sensitive is never held by the runner, so it cannot be passed to a connection tool. **Text the model read from a page can be**: a hostile page plus a write-capable connection is the exfiltration path this design limits with the rules above (off by default, approval on first use, recipients that must be approved, the card and the trace), and does not remove. The owner's remedy is the same as for every other tool: connections that are read only, tasks with allowed sites, and Stop.
 
-### Not done yet
-
-`mail_attachment_to_browser` and the file input of a page depend on the browser host accepting an `upload_file` action with a store handle; the fabric does not implement it yet, so the tool reports that the host cannot take a file and asks the owner to attach it. Verification against a real Google or Microsoft account, and on the deployed stack, is the owner's (the tests use the in-memory capability double).
-
-## Google
-
-Epic E39 (#581), issue E39.3 (#601). The Google provider signs several Google accounts in and gives the rest of the console one typed set of operations for mail, calendar and documents. **Nothing that uses a connection talks to Google directly**: deliveries (E39.6), agent tools (E39.7) and the mail trigger (E39.8) call the neutral interfaces below, and the Microsoft provider (E39.4) implements the same ones.
-
-### What the owner gets, in plain words
-
-| Capability | What the agent can do with the account | The Google permission asked | Google's tier |
-|---|---|---|---|
-| Mail: read (`mail_read`) | Search and read messages and attachments, list labels | `gmail.readonly` | restricted |
-| Mail: send (`mail_send`) | Send a message from the account's own address | `gmail.send` | sensitive |
-| Mail: organize (`mail_modify`) | Archive, label, mark read or unread, create and send drafts | `gmail.modify` | restricted |
-| Calendar: read (`calendar_read`) | List calendars and events, see free and busy time | `calendar.readonly` | sensitive |
-| Calendar: write (`calendar_write`) | Create, change and delete events (nobody is emailed unless asked) | `calendar.events` | sensitive |
-| Documents: read (`docs_read`) | Read documents and spreadsheets, find files the app made or you picked | `drive.file`, `documents.readonly`, `spreadsheets.readonly` | non-sensitive and sensitive |
-| Documents: write (`docs_write`) | Create documents, spreadsheets, folders and files, add text and spreadsheet rows | `drive.file`, `documents`, `spreadsheets` | non-sensitive and sensitive |
-
-Always asked: `openid`, `email` and `profile` (who the account is). Only the permissions of the switched-on capabilities are asked; switching one on later asks for just the new permission (incremental consent). Only mail read and mail organize ask a restricted permission, so a deployment that never switches those on never meets the restricted tier. The decision record is the source for this table; the code is `google/google.scopes.ts` and a test pins it.
-
-**Where this issue and the decision record differ, the record wins:** (1) `mail_modify` is a seventh switch; `createDraft`, sending a saved draft (`send({ draftId })`) and `modify` need it, while `send(message)` needs only `mail_send`. (2) Documents are reached **by id, or from files the owner picked or the app created**, not by a search of the whole Drive (see "Only files you picked" below), because the narrow `drive.file` permission is the one the record chose.
-
-### Setup checklist for the administrator
-
-Follows the decision record (provisional until the experiments of #598 are done).
-
-1. In the Google Cloud console create a project and enable the **Gmail, Google Calendar, Google Docs, Google Sheets and Google Drive** APIs. A switched-off API shows up in the connection's **Test** as "the service is switched off" (`API_DISABLED`).
-2. **Google Auth Platform:** set the audience to **External** and the publishing status to **In production**. A project left in **Testing** ends every sign-in after about seven days (the connection then says it needs to be connected again). You do not submit the app for verification for your own use; users click through the "Google hasn't verified this app" page. Adding the restricted Gmail permissions is what makes Google say verification is needed: for your own accounts you do not take that step.
-3. **Clients, Create client:** type **Web application**. Authorised redirect URI, to copy exactly: `<console base>/api/connections/callback/google` (the page under Administration shows it with your address filled in). It must be `https` with a public domain name (a tunnel or a reverse proxy is enough); Google refuses a raw IP address and a private name.
-4. Paste the client id and secret into **Administration, Connections** and switch Google on.
-5. Google Workspace only: in the Admin console (Security, API controls) mark the client **Trusted** if your organization blocks unverified apps.
-6. Connect an account; on the consent screen tick **every** permission asked (an unticked one leaves that capability off, and the page says which).
-7. Use an AI model provider whose terms do not train on API inputs: Google's API user-data policy ("limited use") applies to Gmail data whether or not the app is verified.
-
-### Only files you picked
-
-With the narrow `drive.file` permission, Google lets the app see **only files it created, or files you picked** for it in Google's file picker. It cannot list, search or open the rest of your Drive. Concretely:
-
-- `searchFiles`, `getFile`, putting a file into a folder and `registerPickedFile` work on those files only. A file you did not pick looks like "not found" to the app.
-- Reading and changing a **document or spreadsheet by its id or link** goes through the Docs and Sheets permissions, which accept any file the account can itself open: paste the link and it works, without a pick.
-- A folder the app did not create is not reachable until you pick it. The app creates and keeps one folder of its own for what it saves.
-- Picking a file is **Choose from Google Drive** in the delivery editor's chooser (E39.10; [below](#choosing-files-the-picker-e3910)). `registerPickedFile(id)` is what the server calls after a pick: it checks that the account can reach the file and returns its details. Nothing is stored on our side: Google remembers the pick, and `searchFiles` shows it.
-
-### What is not supported, and why
-
-Searching the whole Drive (needs the restricted `drive.readonly`), shared-drive administration, Gmail filters and settings, Google Chat, Meet, Contacts and Tasks (out of scope), sending as another address (the `From` is always the connected account; send-as aliases are not used), push notifications for new mail (E39.8 polls), accounts in Google's Advanced Protection programme (Google allows only verified apps there), and the Google device flow (it does not offer these permissions).
-
-### The neutral interfaces
-
-`apps/api/src/connections/capabilities.ts` defines `MailCapability`, `CalendarCapability` and `DocumentsCapability` with zod schemas for every input and output. A service asks `ConnectionCapabilities` (`connection-capabilities.service.ts`) for the one it needs, after it has chosen the account with `ConnectionResolverService`:
-
-```ts
-const mail = capabilities.mail({ connectionId, userId, signal });   // signal: Stop (#582)
-const page = await mail.search({ from: 'person-b@example.test', unread: true, pageSize: 25 });
-```
-
-The provider is resolved from the connection, so the same code works for a Google and a Microsoft account. Every call goes through one gate (`capability-hub.ts`), so no provider and no caller skips a step:
-
-1. The connection is read now: paused is `CONNECTION_PAUSED`, needing a reconnect is `CONNECTION_NEEDS_RECONNECT`.
-2. **The capability gate, before any request:** a capability that is off is `CAPABILITY_OFF`; one the provider did not grant is `PERMISSION_MISSING` (offer an incremental consent).
-3. The arguments are validated (`INVALID_INPUT`, listing the field paths and never the values) and checked against the limits.
-4. The adapter runs; its result is validated against the result schema (no provider type or extra field gets out), and cut at the limits with `truncated`.
-
-Every method is tagged **read or write** and with the capability it needs (`METHOD_TAGS`): mail search, get, attachment download and label list need `mail_read`; `send` needs `mail_send` (and `mail_modify` for a saved draft); `createDraft` and `modify` need `mail_modify`; calendar reads need `calendar_read`, create, update and delete need `calendar_write`; document, sheet and file reads need `docs_read`, everything that creates or changes needs `docs_write`.
-
-**Typed errors** (`CapabilityError`, one class): `CONNECTION_NEEDS_RECONNECT`, `CAPABILITY_OFF`, `PERMISSION_MISSING`, `NOT_FOUND`, `RATE_LIMITED { retryAfterMs }`, `QUOTA_EXCEEDED`, `TOO_LARGE`, `PROVIDER_ERROR { status }`, plus `CONNECTION_PAUSED`, `CONNECTION_NOT_FOUND`, `INVALID_INPUT`, `NOT_SUPPORTED` and `ABORTED`. The text is fixed and no provider message is ever copied, because it can carry a subject, an address or a file name. `details.outcomeUnknown` marks a write that was sent and got no definite answer (see below): it is not `retryable`.
-
-**Limits, enforced here and not by callers:** message and document text 50,000 characters, an attachment or uploaded file 10 MB (all attachments of one outgoing message 18 MB, because Gmail's 25 MB limit counts the encoding), a sheet read or append 5,000 cells, a list page at most 50 items (the default is 25). A limit that is exceeded on a read is a cut with `truncated: true`; on a write it is `TOO_LARGE`.
-
-### How the Google adapter works
-
-- **Plain `fetch`, not Google's client library.** About twenty REST calls are needed. `googleapis` would add tens of megabytes to the API image and a large dependency surface, and the attack surface of every transitive package, for typed wrappers that are small to write and test here. Requests go through the console's `OutboundHttp` (HTTPS only, SSRF-checked, no redirects, bounded responses, now with `PUT`, `PATCH`, `DELETE` and an abort signal). No dependency was added.
-- **Sign-in:** authorization code with PKCE (S256), `access_type=offline`, `include_granted_scopes=true`, `prompt=consent` only when a refresh token is needed (a new connection or a reconnect, not an incremental consent), `login_hint` for a known account. The account's stable id (`sub`) and email come from Google's userinfo endpoint. Revoke uses Google's revoke endpoint.
-- **Mail:** search builds a Gmail query from the structured `MailQuery`; every value is quoted and cannot add an operator (`OR`, `in:anywhere`, `label:` inside a value are plain text). A label is a label id, never part of the query. Reading prefers the plain part and reduces HTML to text on the server. Sending builds an RFC 5322 message with a small tested composer: UTF-8 subjects and names as encoded words, plain and HTML parts, attachments, `In-Reply-To` and `References` for a reply (and the thread), `From` always the connected account, **and a newline in a subject, name, address, file name or content type is refused, never stripped**.
-- **Calendar:** times carry explicit offsets. `sendUpdates` is `none` unless `notifyAttendees` is true, on create, update and delete: **an agent must not email people by side effect**. An event is created with a client-generated id (from the caller's `idempotencyKey`), so a retry after a lost answer finds the same event (409) instead of making a second.
-- **Documents:** Drive for search, metadata, folders and upload; Docs for create, read (structure flattened to text, tables as tab-separated rows) and append; Sheets for read, append and create. **Spreadsheet values are written `RAW`: a cell that starts with `=` is text, never a formula, and there is no flag to change that.**
-- **Reliability:** at most 3 tries on `429` and `5xx` with exponential backoff and jitter, honouring `Retry-After` (a wait over 30 seconds is not slept through: the caller gets `RATE_LIMITED` with `retryAfterMs`); at most 4 requests in flight per connection; timeouts; an abort signal that cancels a wait, a backoff sleep and an in-flight request; a `401` forces one token refresh and one retry, then means the account must be connected again. A request that is **not safe to repeat** (a send, an append, creating a file) is retried only on `429`, never after a `5xx` or a lost connection.
-- **`appendRows` and an unknown outcome.** If the append is answered with a `5xx` or the connection is lost, the rows may or may not have been written. The adapter does **not** retry (that could duplicate a row) and returns `{ updatedRange: null, ambiguous: true }`; the caller decides (read the sheet, or accept a possible duplicate). A `429` was not applied and is retried. Mail `send` after an unknown outcome throws `PROVIDER_ERROR` with `outcomeUnknown: true` for the same reason.
-- **Privacy in telemetry.** Spans, metrics and logs carry the service, the operation name (`messages.list`), the connection id, sizes, attempt counts, durations and status codes. **Never** a subject, an address, a body, a file name, a search query, a URL or a cell. A test seeds markers in all of them and scans every span, metric, log line and error. The metrics are `app.connections.google.requests` (by service and outcome) and `app.connections.google.duration_ms` (by service).
-- **Test:** `POST /api/connections/{id}/test` makes one cheap read per switched-on capability: the label list (mail), the calendar list, a Drive `about` call (documents). The reason codes are a closed set: `UNAUTHORIZED`, `FORBIDDEN`, `API_DISABLED`, `RATE_LIMITED`, `UNAVAILABLE`, `FAILED`.
-
-### Test doubles for the code that uses connections
-
-- `connections/testing/` (`createTestCapabilities()`): an in-memory `FakeCapabilityProvider` behind the same gate, with one account per connection (`fake.account(connectionId).addMessage(...)`), failure injection (`failNext`), a call log and latency for abort tests. No network, no database.
-- `connections/google/testing/` (`FakeGoogle`): an in-process fake of the Google endpoints (OAuth, Gmail, Calendar, Drive, Docs, Sheets) that implements `OutboundHttp`, checks scopes and bearer tokens, records every request and can fail, drop or delay the next ones. Built from the documented response shapes with invented data; no real response is recorded in the repository.
-
-### What has not been verified, and what the owner must do
-
-Everything above was tested against the fakes: **no real Google account was used.** The shapes of Google's responses and errors are from the documentation as the author knew it and may differ in detail. With the owner, on the deployed stack, for each supported account type of the decision record (a personal Gmail account, a Google Workspace account): connect, press **Test**, then run a manual script or admin action that sends a mail to the same account, creates and deletes a calendar event, creates a spreadsheet and appends a row. Record pass or fail per capability and account type, with no mailbox content. Also to check by hand: that Google accepts base64 content in the Drive multipart upload, that an unverified In-production app keeps its refresh token for more than a week with the restricted Gmail permissions (decision record, G4a), and that `drive.file` shows a picked file in a search.
+The agent also reaches **MCP servers** the owner added, under the same selection, gate and caps ([MCP servers](#mcp-servers-e399)). A **mail** can start a run ([below](#start-a-task-from-an-email-e398)), and a finished run can send its result out ([Deliveries after a run](#deliveries-after-a-run)). `mail_attachment_to_browser` depends on a browser-host action that does not exist yet: see [what has not been verified](#what-has-not-been-verified-and-what-the-owner-must-do).
 
 ## Start a task from an email (E39.8)
 
@@ -320,14 +304,7 @@ All of it is the caller's own (another user's id is a 404) and none of it is an 
 
 CLI: `hexactra tasks triggers list <task>`. The form is in the web app (the account, the senders and the input mapping). Removing a connection lists its triggers in the Disconnect dialog and switches them off (`connection_removed`); deleting the task deletes them; deleting the user purges them and their events.
 
-### What has not been verified, and what the owner must do
-
-Everything above was tested against the in-memory capability double and, for the Google adapter's `senderAuth`, against `FakeGoogle`: **no real mailbox was used.**
-
-- **Google (done, #605).** Gmail returns every header of a `format=full` message, `Authentication-Results` included. The adapter fills `senderAuth` from the topmost header when `mx.google.com` (or a `*.google.com` server) wrote it. Not verified against a real Gmail message: check that a normal message from a domain with SPF and DKIM reads `pass`, and that mail sent through a mailing list or a forwarder (which often breaks both) reads `fail` or `unknown`, which is why `acceptUnverified` exists.
-- **Microsoft (#602, E39.4): done.** The Microsoft adapter fills `senderAuth` on every `MailSummary` and `MailMessage` from `internetMessageHeaders` (requested with `$select`), passing the topmost `Authentication-Results` to `senderAuthFrom(value, fromAddress, { trusted })`. `trusted` accepts only Microsoft's own authserv-id (`*.protection.outlook.com`, `outlook.com`, `hotmail.com`, `live.com`, `office365.com`, `exchangelabs.com`); a header with another server's name, a look-alike name, or one the sender wrote below Microsoft's is ignored (`unknown`, or the fail above it). **Limit:** Exchange Online often writes its own header with no server name at all (`spf=pass ...; dkim=pass ...; dmarc=pass ...`); a header in that form is read as Microsoft's. That is safe because Microsoft stamps every message it receives and prepends its own, so a copy the sender wrote is always below it, and only the topmost counts. A message Microsoft did not stamp (no header) is `unknown`, so a trigger on a Microsoft account starts nothing for it unless the owner turns `acceptUnverified` on. Tests: `test/microsoft/microsoft-mail.spec.ts` (pass, fail, missing, spoofed From, forged header, foreign and look-alike server) and `test/mail-triggers.db.spec.ts` (a Microsoft message that passed starts one run).
-
-With the owner, on the deployed stack: a trigger on mail from the owner's own second address with a subject keyword; send a matching mail and a non-matching one; the task runs once within the poll interval; measure the lag; check the history list; check that a mail from a non-listed sender starts nothing.
+What only a real mailbox can settle (the sender check at each provider, the poll lag) is under [What has not been verified](#what-has-not-been-verified-and-what-the-owner-must-do).
 
 ## MCP servers (E39.9)
 
@@ -390,11 +367,11 @@ The connection is offered only to a task or chat that lists it ([the selection](
 
 ### What this does not do
 
-Stdio servers or any local command; MCP resources, prompts, sampling, elicitation and roots; exposing a connected server's tools through Hexactra's own MCP server; a directory of servers; images and other binary results; following resource links. The daily health job does not refresh idle MCP OAuth tokens (a token that dies of inactivity needs the owner's new sign-in).
+Stdio servers or any local command; MCP resources, prompts, sampling, elicitation and roots; exposing a connected server's tools through Hexactra's own MCP server; a directory of servers; images and other binary results; following resource links. The daily health job does not refresh idle MCP OAuth tokens (a token that dies of inactivity needs the owner's new sign-in); it keeps only Google and Microsoft grants alive.
 
-### What has not been verified, and what the owner must do
+## Deliveries after a run
 
-Everything above is tested against an in-process fake MCP server (initialise and revision negotiation, paged lists, calls, deadline, size cap, abort, refused server requests, redirects, private addresses and rebinding, bearer, header and OAuth with a fake authorization server, the rug-pull review, injection through a result and through a description, redaction of seeded credentials). **A real server has not been tried.** On the deployed stack: switch MCP on in Administration, add a public test MCP server (or one you run) with the sign-in it needs, switch on one read tool and one write tool, start a task that lists the connection, and check the run calls both, the approval card for the write, and the step list; then change a tool's description on the server and press Refresh tools to see it come back off.
+A finished run's result can go where the owner said, with no one present: an email with the masked PDF report, a signed webhook, a spreadsheet row and files in a folder. A delivery is deterministic (a queue job, the model is not in that step), its recipients and destinations are fixed by the owner when they set it up, and a run cannot add or change one. A delivery that uses a connection needs `mail_send` or `docs_write` switched on, is listed in the connection's Disconnect dialog, and is switched off (`connection_removed`) when the connection is removed. The whole of it is [deliveries.md](deliveries.md).
 
 ## Choosing files: the picker (E39.10)
 
@@ -417,95 +394,83 @@ The delivery editor's spreadsheet and folder choosers need to browse an account.
 
 Suggested seam request (EnterpriseAppBase, `seam_request.yml`): "an `app.d/csp/script-src*.conf` include, or a per-path override, so an app can allow one named third-party script host (Google's file picker) on the pages that need it, with the same review rule as the other includes."
 
-## For the next issues
+## The provider-neutral interfaces and the test doubles
 
-- **Adapters** implement `ConnectionProviderAdapter` (`src/connections/provider.ts`: `scopesFor`, `authorizeUrl`, `exchangeCode`, `refresh`, `revoke`, `capabilitiesGranted`, `probe`) over `OAuthClientService` (`src/oauth-client/`), and register with `ConnectionProviderRegistry` from their own module's `onModuleInit`. A refused grant must surface as an `OAuthClientError` of kind `invalid_grant`; `TokenSet.scopes` must list what the provider granted.
-- **Callers** use `ConnectionResolverService.resolveConnection` to pick the account, then `ConnectionCapabilities` (`mail`, `calendar`, `documents`) to use it: the neutral interfaces, the gate, the limits and `CapabilityError` ([Google](#google) above). They never ask for a token. The resolver's own `ConnectionError`s are `.code` strings too.
-- **Features that reference a connection** (deliveries, tool grants, [mail triggers](#start-a-task-from-an-email-e398), which already do) register a `ConnectionUsageSource` with `ConnectionUsageRegistry`, so that removing a connection lists what uses it and clears the references.
-- **No MCP tool** exposes a connection (nor an MCP server added as one). If one ever does, it needs its own decision in [parity.md](parity.md).
-- **MCP servers** (`provider: mcp`) are a client, not an adapter: `src/connections/mcp/` (client, catalogue, OAuth, run service) and the run tools in `src/runner/host/tools/connections/mcp.ts`. `ConnectionTokensService.registerRefresher` is the seam for a provider that refreshes by its own means.
+### The neutral interfaces
 
-## Microsoft: Outlook, Calendar, OneDrive, Word and Excel (E39.4, #602)
+`apps/api/src/connections/capabilities.ts` defines `MailCapability`, `CalendarCapability` and `DocumentsCapability` with zod schemas for every input and output. A service asks `ConnectionCapabilities` (`connection-capabilities.service.ts`) for the one it needs, after it has chosen the account with `ConnectionResolverService`:
 
-The Microsoft provider signs in work, school and personal Microsoft accounts and gives the same mail, calendar and documents operations as the Google provider through Microsoft Graph (v1.0). A delivery or an agent tool written against the neutral interface (`src/connections/capabilities.ts`) works with either without knowing which. Code: `apps/api/src/connections/microsoft/`; the fake Graph for tests: `connections/microsoft/testing/`.
+```ts
+const mail = capabilities.mail({ connectionId, userId, signal });   // signal: Stop (#582)
+const page = await mail.search({ from: 'person-b@example.test', unread: true, pageSize: 25 });
+```
 
-**Status, honestly.** Everything below is implemented and tested against an **in-process fake of Graph** (`FakeGraph`, invented data only). **No real Microsoft account has been connected yet**, and the Microsoft documentation pages were not reachable from the environment this was written in, so every statement about how Graph behaves comes from the decision record ([decisions/connections-auth.md](decisions/connections-auth.md), itself provisional) and from knowledge of the documentation, not from an experiment. The items that need a real account are listed under "Not confirmed yet" and in the issue's verification section. Where the record and the issue disagree the record wins; the differences are listed under "Decisions".
+The provider is resolved from the connection, so the same code works for a Google and a Microsoft account. Every call goes through one gate (`capability-hub.ts`), so no provider and no caller skips a step:
 
-### What each kind of account can do
+1. The connection is read now: paused is `CONNECTION_PAUSED`, needing a reconnect is `CONNECTION_NEEDS_RECONNECT`.
+2. **The capability gate, before any request:** a capability that is off is `CAPABILITY_OFF`; one the provider did not grant is `PERMISSION_MISSING` (offer an incremental consent).
+3. The arguments are validated (`INVALID_INPUT`, listing the field paths and never the values) and checked against the limits.
+4. The adapter runs; its result is validated against the result schema (no provider type or extra field gets out), and cut at the limits with `truncated`.
 
-One table in code (`src/connections/capability-matrix.ts`) says, for every method, whether Google, a Microsoft work or school account and a Microsoft personal account can do it: **Yes**, **Limited** (how), or **No** (why). The Microsoft adapter answers `NOT_SUPPORTED` for a method the table marks "No" for the account's kind (and makes no request); `GET /api/connections/providers` returns the same rows (`capabilityMatrix`, with `matrixColumns` for the provider) so the Connect dialog and the task UI never offer an unsupported choice; and a test fails when this table and the code disagree (`UPDATE_CAPABILITY_MATRIX_DOC=1 npx jest --config ./test/jest.config.js capability-matrix` from `apps/api` rewrites it: review the diff).
+Every method is tagged **read or write** and with the capability it needs (`METHOD_TAGS`): mail search, get, attachment download and label list need `mail_read`; `send` needs `mail_send` (and `mail_modify` for a saved draft); `createDraft` and `modify` need `mail_modify`; calendar reads need `calendar_read`, create, update and delete need `calendar_write`; document, sheet and file reads need `docs_read`, everything that creates or changes needs `docs_write`.
 
-The Google column follows the decision record (the narrow `drive.file` permission: only files the app created or the owner picked); the Google adapter's own section is the authority on Google.
+**Typed errors** (`CapabilityError`, one class): `CONNECTION_NEEDS_RECONNECT`, `CAPABILITY_OFF`, `PERMISSION_MISSING`, `NOT_FOUND`, `RATE_LIMITED { retryAfterMs }`, `QUOTA_EXCEEDED`, `TOO_LARGE`, `PROVIDER_ERROR { status }`, plus `CONNECTION_PAUSED`, `CONNECTION_NOT_FOUND`, `INVALID_INPUT`, `NOT_SUPPORTED` and `ABORTED`. The text is fixed and no provider message is ever copied, because it can carry a subject, an address or a file name. `details.outcomeUnknown` marks a write that was sent and got no definite answer (see below): it is not `retryable`.
 
-<!-- capability-matrix:start -->
-| Method | Needs | Google | Microsoft work or school | Microsoft personal |
-|---|---|---|---|---|
-| `mail.search` | `mail_read` | Yes | Limited: Free text goes through Microsoft search; the other filters are applied to each page, so a page can be short: follow the next page. | Limited: Free text goes through Microsoft search; the other filters are applied to each page, so a page can be short: follow the next page. |
-| `mail.get` | `mail_read` | Yes | Yes | Yes |
-| `mail.getAttachment` | `mail_read` | Yes | Limited: File attachments only; an attached message or a link is not downloadable. | Limited: File attachments only; an attached message or a link is not downloadable. |
-| `mail.createDraft` | `mail_modify` | Yes | Yes | Yes |
-| `mail.send` | `mail_send` | Yes | Limited: With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft. | Limited: With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft. |
-| `mail.modify` | `mail_modify` | Yes | Limited: Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message. | Limited: Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message. |
-| `mail.listLabels` | `mail_read` | Yes | Limited: Returns folders and categories, with the kind. | Limited: Returns folders and categories, with the kind. |
-| `calendar.listCalendars` | `calendar_read` | Yes | Yes | Yes |
-| `calendar.listEvents` | `calendar_read` | Yes | Limited: Text matches the event title. | Limited: Text matches the event title. |
-| `calendar.freeBusy` | `calendar_read` | Yes | Yes | Limited: Personal accounts have no free/busy service: computed from the events of the calendar. |
-| `calendar.createEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. A video conference is a Teams meeting. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. No video conference. |
-| `calendar.updateEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. |
-| `calendar.deleteEvent` | `calendar_write` | Yes | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. | Limited: Changing an event that has attendees emails them at Microsoft, which cannot be turned off: it is refused unless notifying is allowed. |
-| `documents.searchFiles` | `docs_read` | Limited: Only files the app created or you picked (the narrow Drive permission). | Yes | Yes |
-| `documents.getFile` | `docs_read` | Limited: Only files the app created or you picked (the narrow Drive permission). | Yes | Yes |
-| `documents.registerPickedFile` | `docs_read` | Yes | Yes | Yes |
-| `documents.readDocument` | `docs_read` | Yes | Limited: Word (.docx) and plain-text files; a PDF or an older .doc is not read. | Limited: Word (.docx) and plain-text files; a PDF or an older .doc is not read. |
-| `documents.createDocument` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Limited: Creates a plain Word (.docx) file of paragraphs. | Limited: Creates a plain Word (.docx) file of paragraphs. |
-| `documents.appendToDocument` | `docs_write` | Yes | Limited: Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict). | Limited: Rewrites the whole .docx file as a new version; a concurrent edit is detected and refused (conflict). |
-| `documents.readSheet` | `docs_read` | Yes | Yes | No: Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do. |
-| `documents.appendRows` | `docs_write` | Yes | Limited: Rows go into the first table of the sheet, or below the used range when there is none. A failure that leaves it unknown is reported, not retried. | No: Excel workbook calls are not confirmed to work on personal OneDrive; refused until an experiment shows they do. |
-| `documents.createSpreadsheet` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Limited: Creates an Excel (.xlsx) file with the header row as text. | Limited: Creates an Excel (.xlsx) file with the header row as text. |
-| `documents.uploadFile` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Yes | Yes |
-| `documents.createFolder` | `docs_write` | Limited: Into a folder only when the app created it or you picked it (the narrow Drive permission); otherwise the root. | Yes | Yes |
-<!-- capability-matrix:end -->
+**Limits, enforced here and not by callers:** message and document text 50,000 characters, an attachment or uploaded file 10 MB (all attachments of one outgoing message 18 MB, because Gmail's 25 MB limit counts the encoding), a sheet read or append 5,000 cells, a list page at most 50 items (the default is 25). A limit that is exceeded on a read is a cut with `truncated: true`; on a write it is `TOO_LARGE`.
 
-### Administrator setup: the Microsoft app (bring your own app)
+### Test doubles for the code that uses connections
 
-1. In the Microsoft Entra admin center (or the Azure portal) open **App registrations, New registration**. Name it. For **Supported account types** choose **Accounts in any organizational directory and personal Microsoft accounts**. (A personal Microsoft account needs an Entra tenant to register in: a free Azure sign-up creates one.)
-2. Platform **Web**, redirect URI `<console base>/api/connections/callback/microsoft` (copy it from Administration, Browser agent, Connections). `http://localhost` is accepted for development; anything else must be https.
-3. **API permissions, Add a permission, Microsoft Graph, Delegated** (never Application): `offline_access` and `User.Read` always, plus those of the capabilities you will let owners switch on: `Mail.Read`, `Mail.Send`, `Mail.ReadWrite`, `Calendars.Read`, `Calendars.ReadWrite`, `Files.Read`, `Files.ReadWrite`.
-4. **Certificates and secrets, New client secret.** Copy the **value** at once (it is shown once) and note the expiry date (at most 24 months): when it expires every connection stops refreshing at the same moment.
-5. Paste the application (client) id and the secret into the administrator page, set the **tenant** (`common` for work, school and personal accounts; `organizations`, `consumers` or a tenant id narrow it) and switch Microsoft on. Leave publisher verification alone: it is optional and out of reach for an individual.
+- `connections/testing/` (`createTestCapabilities()`): an in-memory `FakeCapabilityProvider` behind the same gate, with one account per connection (`fake.account(connectionId).addMessage(...)`), failure injection (`failNext`), a call log and latency for abort tests. No network, no database.
+- `connections/google/testing/` (`FakeGoogle`): an in-process fake of the Google endpoints (OAuth, Gmail, Calendar, Drive, Docs, Sheets) that implements `OutboundHttp`, checks scopes and bearer tokens, records every request and can fail, drop or delay the next ones. Built from the documented response shapes with invented data; no real response is recorded in the repository.
 
-What the console asks for, per capability (and the plain-words consent the owner reads):
+## Google: what it gives and how the adapter works
 
-| Capability | Microsoft permission | What the owner is agreeing to |
-|---|---|---|
-| always | `openid`, `email`, `profile`, `offline_access`, `User.Read` | Sign in, know which account this is, and stay signed in |
-| `mail_read` | `Mail.Read` | Read your mail |
-| `mail_send` | `Mail.Send` | Send mail as you (no sending as someone else) |
-| `mail_modify` | `Mail.ReadWrite` | Read and change your mail: drafts, folders, categories, read state (**not** sending) |
-| `calendar_read` | `Calendars.Read` | See your calendars |
-| `calendar_write` | `Calendars.ReadWrite` | Create and change events |
-| `docs_read` | `Files.Read` | Read **all** your OneDrive files (Microsoft has no narrower permission) |
-| `docs_write` | `Files.ReadWrite` | Change **all** your OneDrive files |
+Epic E39 (#581), issue E39.3 (#601). The Google provider signs several Google accounts in and gives the rest of the console one typed set of operations for mail, calendar and documents. **Nothing that uses a connection talks to Google directly**: deliveries, agent tools and the mail trigger call the neutral interfaces, and the Microsoft provider implements the same ones.
 
-Only what the switched-on capabilities need is asked; switching one on later asks for just the added permission. A write brings its read. Microsoft's `Mail.ReadWrite` includes read but **not** send, so `mail_send` is its own switch. Personal accounts have a narrower `Files.ReadWrite.AppFolder` that the record lists as "expected, confirm"; it is not used.
+### What the owner gets, in plain words
 
-### Work and personal accounts of one person are two connections
+| Capability | What the agent can do with the account | The Google permission asked | Google's tier |
+|---|---|---|---|
+| Mail: read (`mail_read`) | Search and read messages and attachments, list labels | `gmail.readonly` | restricted |
+| Mail: send (`mail_send`) | Send a message from the account's own address | `gmail.send` | sensitive |
+| Mail: organize (`mail_modify`) | Archive, label, mark read or unread, create and send drafts | `gmail.modify` | restricted |
+| Calendar: read (`calendar_read`) | List calendars and events, see free and busy time | `calendar.readonly` | sensitive |
+| Calendar: write (`calendar_write`) | Create, change and delete events (nobody is emailed unless asked) | `calendar.events` | sensitive |
+| Documents: read (`docs_read`) | Read documents and spreadsheets, find files the app made or you picked | `drive.file`, `documents.readonly`, `spreadsheets.readonly` | non-sensitive and sensitive |
+| Documents: write (`docs_write`) | Create documents, spreadsheets, folders and files, add text and spreadsheet rows | `drive.file`, `documents`, `spreadsheets` | non-sensitive and sensitive |
 
-The account's stable id is stored as `accountId` in the form **`<tenant id>:<object id>`**, both lower-case GUIDs from the sign-in's id token. A personal account is always in the consumer tenant `9188040d-6c67-4c5b-b112-36a304b66dad`, so the same person's work and personal accounts have different ids and become two connections whose tokens never cross (tested). When no account is named, the consent page asks the owner to **pick the account** (`prompt=select_account`), so a browser signed in to the work account is not silently connected as that account when the personal one was meant; a reconnect names its account (`login_hint`).
+Always asked: `openid`, `email` and `profile` (who the account is). Only the permissions of the switched-on capabilities are asked; switching one on later asks for just the new permission (incremental consent). Only mail read and mail organize ask a restricted permission, so a deployment that never switches those on never meets the restricted tier. The decision record is the source for this table; the code is `google/google.scopes.ts` and a test pins it.
 
-### When an administrator must approve (`ADMIN_CONSENT_REQUIRED`)
+**Where this issue and the decision record differ, the record wins:** (1) `mail_modify` is a seventh switch; `createDraft`, sending a saved draft (`send({ draftId })`) and `modify` need it, while `send(message)` needs only `mail_send`. (2) Documents are reached **by id, or from files the owner picked or the app created**, not by a search of the whole Drive (see "Only files you picked" below), because the narrow `drive.file` permission is the one the record chose.
 
-A work or school account of another organization may be blocked from consenting until that organization's administrator approves the app (the "Need admin approval" screen), depending on its user-consent settings. The console tells this apart from the owner declining:
+### Only files you picked
 
-- the redirect carries `connect=admin_consent_required` (not `denied`); the web page says an administrator must approve and that the link is on the connections page;
-- `GET /api/connections/providers` returns `adminConsentUrl` for Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone (`https://login.microsoftonline.com/organizations/v2.0/adminconsent?client_id=…`, built from the app and nothing personal). The owner sends it on; afterwards they connect again;
-- the typed error is `ADMIN_CONSENT_REQUIRED` (`CapabilityError`, with `details.adminConsentUrl`), and at the token endpoint it is an `OAuthClientError` with `oauthError: 'admin_consent_required'`. No text from Microsoft is shown.
+With the narrow `drive.file` permission, Google lets the app see **only files it created, or files you picked** for it in Google's file picker. It cannot list, search or open the rest of your Drive. Concretely:
 
-An owner who clicked "Cancel" gets `denied` as before.
+- `searchFiles`, `getFile`, putting a file into a folder and `registerPickedFile` work on those files only. A file you did not pick looks like "not found" to the app.
+- Reading and changing a **document or spreadsheet by its id or link** goes through the Docs and Sheets permissions, which accept any file the account can itself open: paste the link and it works, without a pick.
+- A folder the app did not create is not reachable until you pick it. The app creates and keeps one folder of its own for what it saves.
+- Picking a file is **Choose from Google Drive** in the delivery editor's chooser (E39.10; [below](#choosing-files-the-picker-e3910)). `registerPickedFile(id)` is what the server calls after a pick: it checks that the account can reach the file and returns its details. Nothing is stored on our side: Google remembers the pick, and `searchFiles` shows it.
 
-### What removing access means
+### What is not supported, and why
 
-Microsoft has **no per-token revoke for delegated sign-ins**. Disconnect deletes the tokens on the console (and reports `revoked: false`, because Microsoft could not be asked). The app itself stays in the owner's Microsoft account until they remove it there: for a personal account at the account's **Privacy, Apps and services** page (`account.live.com/consent/Manage`); for a work or school account at **My Apps** (`myapps.microsoft.com`, the app's menu), or an administrator deletes the grant. Say so to owners who disconnect for security.
+Searching the whole Drive (needs the restricted `drive.readonly`), shared-drive administration, Gmail filters and settings, Google Chat, Meet, Contacts and Tasks (out of scope), sending as another address (the `From` is always the connected account; send-as aliases are not used), push notifications for new mail (E39.8 polls), accounts in Google's Advanced Protection programme (Google allows only verified apps there), and the Google device flow (it does not offer these permissions).
+
+### How the Google adapter works
+
+- **Plain `fetch`, not Google's client library.** About twenty REST calls are needed. `googleapis` would add tens of megabytes to the API image and a large dependency surface, and the attack surface of every transitive package, for typed wrappers that are small to write and test here. Requests go through the console's `OutboundHttp` (HTTPS only, SSRF-checked, no redirects, bounded responses, now with `PUT`, `PATCH`, `DELETE` and an abort signal). No dependency was added.
+- **Sign-in:** authorization code with PKCE (S256), `access_type=offline`, `include_granted_scopes=true`, `prompt=consent` only when a refresh token is needed (a new connection or a reconnect, not an incremental consent), `login_hint` for a known account. The account's stable id (`sub`) and email come from Google's userinfo endpoint. Revoke uses Google's revoke endpoint.
+- **Mail:** search builds a Gmail query from the structured `MailQuery`; every value is quoted and cannot add an operator (`OR`, `in:anywhere`, `label:` inside a value are plain text). A label is a label id, never part of the query. Reading prefers the plain part and reduces HTML to text on the server. Sending builds an RFC 5322 message with a small tested composer: UTF-8 subjects and names as encoded words, plain and HTML parts, attachments, `In-Reply-To` and `References` for a reply (and the thread), `From` always the connected account, **and a newline in a subject, name, address, file name or content type is refused, never stripped**.
+- **Calendar:** times carry explicit offsets. `sendUpdates` is `none` unless `notifyAttendees` is true, on create, update and delete: **an agent must not email people by side effect**. An event is created with a client-generated id (from the caller's `idempotencyKey`), so a retry after a lost answer finds the same event (409) instead of making a second.
+- **Documents:** Drive for search, metadata, folders and upload; Docs for create, read (structure flattened to text, tables as tab-separated rows) and append; Sheets for read, append and create. **Spreadsheet values are written `RAW`: a cell that starts with `=` is text, never a formula, and there is no flag to change that.**
+- **Reliability:** at most 3 tries on `429` and `5xx` with exponential backoff and jitter, honouring `Retry-After` (a wait over 30 seconds is not slept through: the caller gets `RATE_LIMITED` with `retryAfterMs`); at most 4 requests in flight per connection; timeouts; an abort signal that cancels a wait, a backoff sleep and an in-flight request; a `401` forces one token refresh and one retry, then means the account must be connected again. A request that is **not safe to repeat** (a send, an append, creating a file) is retried only on `429`, never after a `5xx` or a lost connection.
+- **`appendRows` and an unknown outcome.** If the append is answered with a `5xx` or the connection is lost, the rows may or may not have been written. The adapter does **not** retry (that could duplicate a row) and returns `{ updatedRange: null, ambiguous: true }`; the caller decides (read the sheet, or accept a possible duplicate). A `429` was not applied and is retried. Mail `send` after an unknown outcome throws `PROVIDER_ERROR` with `outcomeUnknown: true` for the same reason.
+- **Privacy in telemetry.** Spans, metrics and logs carry the service, the operation name (`messages.list`), the connection id, sizes, attempt counts, durations and status codes. **Never** a subject, an address, a body, a file name, a search query, a URL or a cell. A test seeds markers in all of them and scans every span, metric, log line and error. The metrics are `app.connections.google.requests` (by service and outcome) and `app.connections.google.duration_ms` (by service).
+- **Test:** `POST /api/connections/{id}/test` makes one cheap read per switched-on capability: the label list (mail), the calendar list, a Drive `about` call (documents). The reason codes are a closed set: `UNAUTHORIZED`, `FORBIDDEN`, `API_DISABLED`, `RATE_LIMITED`, `UNAVAILABLE`, `FAILED`.
+
+## Microsoft: how the adapter works (E39.4, #602)
+
+The Microsoft provider signs in work, school and personal Microsoft accounts and gives the same mail, calendar and documents operations as the Google provider through Microsoft Graph (v1.0). A delivery or an agent tool written against the neutral interface (`src/connections/capabilities.ts`) works with either without knowing which. Code: `apps/api/src/connections/microsoft/`; the fake Graph for tests: `connections/microsoft/testing/`. The administrator's checklist, the capability matrix and the account-type rules are in [Administrator setup](#administrator-setup-bring-your-own-app).
 
 ### Differences from Gmail (mail)
 
@@ -559,7 +524,72 @@ The decision record wins where it disagrees; each of these is also in the pull r
 - **Interface refinements, additive** (as the issue allows): three typed errors (`CONFLICT`, `NOTIFY_REQUIRED`, `ADMIN_CONSENT_REQUIRED`), an optional `idempotencyKey` on an outgoing message, and the provider's account id in the call context (it tells a personal account from a work one).
 - **Interface refinements to the sign-in contract:** two optional hooks on `ConnectionProviderAdapter` (`classifyAuthorizationError`, `adminConsentUrl`), a new callback outcome `admin_consent_required`, and `GET /api/connections/providers` returning the capability matrix and the admin-consent link.
 
-### Not confirmed yet (needs a real account; the issue's verification section)
+## The API
+
+| Route | Notes |
+|---|---|
+| `GET /api/connections` | Label, provider, account email, capabilities, what the provider granted, defaults, status and reason code, last use. Accounts that need a reconnect first. Never a token or a scope string. |
+| `GET /api/connections/{id}` | The same, with `usedBy` (what uses it: deliveries, tasks and chats that list it, mail triggers) |
+| `GET /api/connections/providers` | Which providers can be connected here (`ready`, or the `reason`: `not_installed`, `disabled`, `not_configured`) and which kinds of account work, with a note to read before starting |
+| `POST /api/connections/authorize` | Start a connection (above). Sets the binding cookie. |
+| `GET /api/connections/callback/{provider}` | Public; the redirect URI to register at the provider |
+| `PATCH /api/connections/{id}` | `label`, `capabilities`, `defaultFor`. A capability to add that the provider has not granted answers `consent.authorizeUrl` (and sets the binding cookie). |
+| `POST /api/connections/{id}/pause`, `/resume` | |
+| `POST /api/connections/{id}/test` | One cheap read call per switched-on capability: `{ results: [{ capability, ok, code }] }`, `code` a closed reason (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...) |
+| `DELETE /api/connections/{id}` | Revoke at the provider (best effort: `revoked: false` when it could not be asked), clear references from tasks and deliveries (they show "connection removed"), delete tokens and the row |
+| `GET /api/connections/admin/apps`, `PUT\|DELETE /api/connections/admin/apps/{provider}` | The administrator's apps. **No route reaches a user's connections.** |
+
+Other routes of the same family, each documented where it is used:
+
+| Routes | Where |
+|---|---|
+| `GET /api/connections/{id}/files`, `.../files/{fileId}`, `POST .../files/picked`, `POST .../folders`, `POST .../picker`, `GET .../activity` | [Choosing files](#choosing-files-the-picker-e3910) |
+| `GET /api/connections/mcp/status`, `POST /api/connections/mcp`, `POST /api/connections/{id}/mcp-auth`, `GET .../tools`, `POST .../tools/refresh`, `PATCH .../tools/{toolId}`, `GET\|PUT /api/connections/admin/mcp` | [MCP servers](#mcp-servers-e399) |
+| `GET\|POST /api/tasks/{id}/mail-triggers`, `PATCH\|DELETE /api/mail-triggers/{id}`, `POST .../test`, `GET .../events` | [Start a task from an email](#start-a-task-from-an-email-e398) |
+| `GET\|POST\|PATCH\|DELETE /api/tasks/{id}/deliveries`, `GET /api/runs/{id}/deliveries`, `GET\|POST /api/delivery-recipients`, `GET /api/reports/{token}` | [deliveries.md](deliveries.md) |
+
+Another user's connection is `404` (`CONNECTION_NOT_FOUND`) on every route, like a missing one. A viewer has no access. Audit events: `connection.created`, `.updated`, `.paused`, `.resumed`, `.needs_reconnect`, `.removed` (plus `.connect_started`, `.connect_failed`, `.app_saved`, `.app_removed`, `.picker_opened`, `.mcp_tools_quarantined`), with ids, provider and capabilities; never an email body or a token. The counter `app.connections.events` is by provider and outcome only.
+
+## Limits and quotas
+
+The console's own limits (a value in parentheses is the default; the system settings named can change it, with `PATCH /api/system-settings`):
+
+| What | Limit |
+|---|---|
+| Accounts per owner | 25 connections; a label is at most 60 characters and unique ignoring case; a Connect must finish in 10 minutes |
+| A capability call | Message and document text 50,000 characters; an attachment or uploaded file 10 MB, all attachments of one outgoing message 18 MB; a sheet read or append 5,000 cells; a list page at most 50 items (25) |
+| What a run may read through its connections | 25 messages and 200,000 characters (the agent policy's `connectionReadMessages` 1 to 500 and `connectionReadChars` 1,000 to 2,000,000) |
+| Requests in flight per connection | Google 4, Microsoft 3; at most 3 tries on a rate limit or server error; a wait over 30 seconds is returned as `RATE_LIMITED` |
+| MCP servers | Off by default; at most 40 tools offered to one run; a description is cut at 500 characters; a result at 20,000 characters (256 kB on the wire); 30 seconds for a call; 20 pages and 500 tools in a listing |
+| Mail triggers | 20 per owner, 10 runs a day per trigger (at most 100) and 50 a day across an owner's triggers; polled every 5 minutes (at least 60 seconds); at most 5 pages of 50 a poll; mail from the last 24 hours is caught up after a gap; `failing` after 3 failed polls in a row (`mailTriggers` settings `minPollSeconds`, `maxTriggersPerUser`, `maxRunsPerUserPerDay`) |
+| Deliveries | 10 per task, 10 addresses per delivery and per task, 100 emails per owner a day, 7 MB of attachments on a console email, up to 20 step pictures, 5 attempts, 10 test sends a minute; a report link works 7 days (`deliveries` settings `maxRecipientsPerTask`, `maxEmailsPerDay`, `maxAttachmentMb`) |
+
+What the providers limit (from the decision record, **expected and not re-read**; check the provider's page before sizing anything): Gmail sending 500 recipients a day for a consumer account and 2,000 for Workspace, and 25 MB for a message including its encoding (hence 18 MB of attachments); Gmail quota units per project and per user per second; Sheets about 60 requests per user per minute per project; Graph about 10,000 requests per 10 minutes per app per mailbox and 4 concurrent requests per mailbox; Graph's `sendMail` takes attachments under 3 MB without a draft. A Google refresh token of a project left in **Testing** ends after 7 days, an unused one after about 6 months, and a project has a cap of about 100 tokens per client; a Microsoft refresh token expires after about 90 days unused and **rotates on every use**; a Microsoft client secret lives at most 24 months and, when it expires, stops every connection at once. A change of the provider's limits is the provider's.
+
+## What is not offered
+
+On purpose, or not yet:
+
+- **Deleting mail and deleting files.** No tool exists; `mail_modify` refuses the Trash label. Removing an event is offered (`calendar_delete_event`, asking first).
+- **Sending as someone else.** The `From` is always the connected account; send-as aliases are not used.
+- **Local commands.** An MCP server is reached over HTTPS only; there is no stdio server and no "run a command on the node" action anywhere.
+- **Any connection through Hexactra's own MCP server**, creating or changing a mail trigger or a delivery over MCP, and a hosted app choosing a recipient.
+- **Searching a whole Drive** with the narrow `drive.file` permission (the restricted `drive.readonly` is not asked for), shared-drive administration, Gmail filters and settings, Google Chat, Meet, Contacts and Tasks, accounts in Google's Advanced Protection programme, and the Google device flow.
+- **Push notifications for new mail** (the trigger polls), and a provider change-notification service.
+- **Microsoft:** Excel workbook calls on a personal account (refused until an experiment shows they work), reading a PDF or an older `.doc`, editing a Word file other than appending paragraphs, a video conference on a personal account, and an attached message or link as an attachment.
+- **MCP:** resources, prompts, sampling, elicitation and roots, images and other binary results, following resource links, a directory of servers, and exposing a connected server's tools to other clients.
+- **Deliveries:** for a chat job without a task, messaging apps, SMS and other storage providers, unmasked reports, and a webhook to an existing platform endpoint.
+- **Contacts and tasks capabilities, deleting and moving files, a model reading an email to fill task values, and an iOS app** are follow-ups, not part of this epic.
+
+## What has not been verified, and what the owner must do
+
+Every test in this chapter ran against fakes. The owner's acceptance run on the deployed stack, with real accounts, settles the rest; the checklist to fill in, with what to record and what not to, is [acceptance-connections.md](acceptance-connections.md). The points, by area:
+
+### Google
+
+Everything about Google in this chapter was tested against the fakes: **no real Google account was used.** The shapes of Google's responses and errors are from the documentation as the author knew it and may differ in detail. With the owner, on the deployed stack, for each supported account type of the decision record (a personal Gmail account, a Google Workspace account): connect, press **Test**, then run a manual script or admin action that sends a mail to the same account, creates and deletes a calendar event, creates a spreadsheet and appends a row. Record pass or fail per capability and account type, with no mailbox content. Also to check by hand: that Google accepts base64 content in the Drive multipart upload, that an unverified In-production app keeps its refresh token for more than a week with the restricted Gmail permissions (decision record, G4a), and that `drive.file` shows a picked file in a search.
+
+### Microsoft: not confirmed yet (needs a real account)
 
 None of this was observed on a real account, and the pages that would settle it were not reachable. Each is a behaviour the code assumes:
 
@@ -572,3 +602,39 @@ None of this was observed on a real account, and the pages that would settle it 
 7. The admin-consent error codes and the "needs admin approval" redirect, and the tenants whose policy blocks user consent.
 8. That a personal account's mailbox accepts `Mail.ReadWrite` drafts and the calendar-view reads that replace free/busy for it, and that localized folder names do not matter (well-known folder aliases are used, never display names).
 9. The form of Graph's next links (`/users('<id>')/`, `/drives/<id>/`, `mailFolders('<id>')` are read back as the user's own `/me/...` path; a form not listed there would make a page token fail with `INVALID_INPUT`).
+
+Also for sender verification at Microsoft: Exchange Online often writes its own `Authentication-Results` header with no server name at all; the adapter reads a header in that form as Microsoft's, which is safe only because Microsoft prepends its own and only the topmost counts (an argument, not an observation). The well-known folder ids `INBOX` and `ARCHIVE` are neutral ids the adapter maps to Graph's aliases; a trigger's default inbox search depends on that mapping.
+
+### Mail triggers
+
+The mail trigger was tested against the in-memory capability double and, for the Google adapter's `senderAuth`, against `FakeGoogle`: **no real mailbox was used.**
+
+- **Google (done, #605).** Gmail returns every header of a `format=full` message, `Authentication-Results` included. The adapter fills `senderAuth` from the topmost header when `mx.google.com` (or a `*.google.com` server) wrote it. Not verified against a real Gmail message: check that a normal message from a domain with SPF and DKIM reads `pass`, and that mail sent through a mailing list or a forwarder (which often breaks both) reads `fail` or `unknown`, which is why `acceptUnverified` exists.
+- **Microsoft (#602, E39.4): done.** The Microsoft adapter fills `senderAuth` on every `MailSummary` and `MailMessage` from `internetMessageHeaders` (requested with `$select`), passing the topmost `Authentication-Results` to `senderAuthFrom(value, fromAddress, { trusted })`. `trusted` accepts only Microsoft's own authserv-id (`*.protection.outlook.com`, `outlook.com`, `hotmail.com`, `live.com`, `office365.com`, `exchangelabs.com`); a header with another server's name, a look-alike name, or one the sender wrote below Microsoft's is ignored (`unknown`, or the fail above it). **Limit:** Exchange Online often writes its own header with no server name at all (`spf=pass ...; dkim=pass ...; dmarc=pass ...`); a header in that form is read as Microsoft's. That is safe because Microsoft stamps every message it receives and prepends its own, so a copy the sender wrote is always below it, and only the topmost counts. A message Microsoft did not stamp (no header) is `unknown`, so a trigger on a Microsoft account starts nothing for it unless the owner turns `acceptUnverified` on. Tests: `test/microsoft/microsoft-mail.spec.ts` (pass, fail, missing, spoofed From, forged header, foreign and look-alike server) and `test/mail-triggers.db.spec.ts` (a Microsoft message that passed starts one run).
+
+With the owner, on the deployed stack: a trigger on mail from the owner's own second address with a subject keyword; send a matching mail and a non-matching one; the task runs once within the poll interval; measure the lag; check the history list; check that a mail from a non-listed sender starts nothing.
+
+### MCP servers
+
+Tested against an in-process fake MCP server (initialise and revision negotiation, paged lists, calls, deadline, size cap, abort, refused server requests, redirects, private addresses and rebinding, bearer, header and OAuth with a fake authorization server, the rug-pull review, injection through a result and through a description, redaction of seeded credentials). **A real server has not been tried.** On the deployed stack: switch MCP on in Administration, add a public test MCP server (or one you run) with the sign-in it needs, switch on one read tool and one write tool, start a task that lists the connection, and check the run calls both, the approval card for the write, and the step list; then change a tool's description on the server and press **Refresh tools** to see it come back off. Idle MCP OAuth tokens are not refreshed by the health job: an idle token needs a new sign-in.
+
+### The picker, the browser node and the phone
+
+- **Google's file picker cannot load in production yet.** The platform's content security policy has no `script-src` include, and its files under `infra/nginx/` are generated; only `frame-src https://docs.google.com` and `style-src https://www.gstatic.com` were added, through `console/infra/nginx/app.d/csp/`. An upstream EnterpriseAppBase seam request (the draft is in [Choosing files](#choosing-files-the-picker-e3910)) has **not been filed**. Until then the chooser reports that the picker could not be loaded and offers search, a pasted link and a spreadsheet created on the first send.
+- **The picker route gives the browser a token.** It hands the signed-in user's browser the connection's short-lived Google access token (the one exception to "tokens stay on the server"): Google only, Documents on, `Cache-Control: no-store`, audited without the token, session-authenticated so a hosted OAuth app cannot reach it. Not tested in a real browser.
+- **`mail_attachment_to_browser`** needs a fabric `upload_file` action that does not exist; the tool tells the model the host cannot take a file and asks the owner to attach it.
+- **After deploying the console, update each browser node.** Run `hexactra agent update` on each node, then `hexactra agent doctor`. The Chrome extension (force-installed by policy, `update_url` `https://github.com/marinoscar/hexactra/releases/download/agent-latest/updates.xml`) carries the E37.10 `expect_origin` check on `type` and `type_keys` and the E35 masked screenshots; an old extension silently ignores `expect_origin`. The rolling `agent-latest` release is rebuilt by `.github/workflows/agent-release.yml` on every merge to `main` that touches `crates/` or `apps/chrome-extension/`.
+- **Android** was not run on a device: [runbooks/android-app.md, section 7](runbooks/android-app.md#7-connections-on-a-phone-e3910) has the checklist.
+- **Home** notices an account that must be connected again; it does not notice repeated delivery failures.
+
+### The decision record
+
+[decisions/connections-auth.md](decisions/connections-auth.md) is **provisional**: written from documentation without fetching a page, with an experiment matrix that no one has run on a real account (the 7-day rule with the restricted Gmail permissions, whether personal Gmail keeps a refresh token for more than a week, the Microsoft admin-consent behaviour and the others). It may change the choices above.
+
+## Extending connections
+
+- **Adapters** implement `ConnectionProviderAdapter` (`src/connections/provider.ts`: `scopesFor`, `authorizeUrl`, `exchangeCode`, `refresh`, `revoke`, `capabilitiesGranted`, `probe`) over `OAuthClientService` (`src/oauth-client/`), and register with `ConnectionProviderRegistry` from their own module's `onModuleInit`. A refused grant must surface as an `OAuthClientError` of kind `invalid_grant`; `TokenSet.scopes` must list what the provider granted.
+- **Callers** use `ConnectionResolverService.resolveConnection` to pick the account, then `ConnectionCapabilities` (`mail`, `calendar`, `documents`) to use it: the neutral interfaces, the gate, the limits and `CapabilityError` ([the neutral interfaces](#the-neutral-interfaces) above). They never ask for a token. The resolver's own `ConnectionError`s are `.code` strings too.
+- **Features that reference a connection** (deliveries, tool grants, [mail triggers](#start-a-task-from-an-email-e398), which already do) register a `ConnectionUsageSource` with `ConnectionUsageRegistry`, so that removing a connection lists what uses it and clears the references.
+- **No MCP tool** exposes a connection (nor an MCP server added as one). If one ever does, it needs its own decision in [parity.md](parity.md).
+- **MCP servers** (`provider: mcp`) are a client, not an adapter: `src/connections/mcp/` (client, catalogue, OAuth, run service) and the run tools in `src/runner/host/tools/connections/mcp.ts`. `ConnectionTokensService.registerRefresher` is the seam for a provider that refreshes by its own means.
