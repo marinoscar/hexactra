@@ -1,4 +1,4 @@
-# Secrets: connecting a Vault, and signing in from a saved login
+# Secrets: connecting a Vault or the built-in store, and signing in from a saved login
 
 Epic E37 (#579) lets an agent use the owner's saved logins and one-time codes **without ever seeing them**. This page is the console's half of the Vault provider (E37.2, #591): how an owner connects their Vault, what Hexactra stores, the kill switches, and what happens when the connection breaks. Looking up a login and typing a field is the fabric's job (E37.1, E37.3); **the console never receives a login, a password or a code**, and there is no console route that returns one.
 
@@ -203,3 +203,87 @@ npx ts-node --transpile-only test/support/fake-vault.main.ts --grant   # prints 
 ```
 
 From jest: `const vault = await startFakeVault({ clientSecret, redirectUris })`. When Vault's conformance kit (marinoscar/vault#196) is published, a follow-up replaces this fake with it. The tests: `test/secrets-vault.spec.ts` (PKCE, the SSRF guard, the OAuth client, the fake itself) and `test/secrets-vault.db.spec.ts` (the flow, rotation across two instances, a replayed refresh token, the switches, a seeded-marker scan of every response, audit row, notification, row and log line).
+
+# The built-in store (E37.5)
+
+Someone who runs Hexactra without a separate Vault still gets saved logins. The console embeds **Vault's own domain packages** (`@marinoscar/vault-api`, `vault-contract`, `vault-db`; decision record: [decisions/secrets-embedding.md](decisions/secrets-embedding.md)) and offers them to the agent as a second provider, `builtin`. The rules are Vault's, enforced by Vault's code: a login is visible to the agent only if its owner opened it (**per-item opt-in**), a release is bound to the **exact origin** of the page, **one field per call** (`username` or `password`; a one-time code is its own call), a login that is closed, missing or somebody else's gives **one identical not-found**, every call is **audited** (`agent.credential.*`, credential `embedded`, label `hexactra-agent`), calls are **rate limited** per minute, and Vault's **kill switch** is the deployment's `secrets.agentUse.enabled`. On top, the console's two switches apply (the deployment's and the owner's, both off by default).
+
+## Which one to use
+
+| | Built-in store | Your own Vault |
+|---|---|---|
+| Needs | This deployment and its key | A running Vault (an OAuth client registered there) |
+| Where the logins are | This console's database, encrypted | Your Vault |
+| Types | Saved logins (the `Credential` type) | Whatever your Vault holds (cards and identity come later) |
+| A value crosses | **The console's Node process** (see the limit below) | Only the fabric: the console never sees it |
+| Choose it for | One person or a small team, logins only | Anything more than logins; passwords you also use outside Hexactra |
+
+**One provider is active per owner**, set in the owner's user setting `secrets.provider` (`vault`, the default, or `builtin`). Switching does not move data (an export and import path is a follow-up) and takes effect on the next call: the provider that is not chosen answers `disabled`. We recommend the remote Vault for anyone who stores more than logins.
+
+## Switch it on
+
+Deployment configuration, off by default (`infra/compose/app.env.example`; read at boot, restart the API after changing):
+
+| Variable | |
+|---|---|
+| `SECRETS_STORE_ENABLED` | `true` loads the slice. Unset or false: **no Vault package is loaded**, the app starts without the key, every existing route and test is unchanged. |
+| `SECRETS_STORE_KEY` | Required when on: 32 random bytes as 64 hex characters or base64 (`openssl rand -base64 32`). Missing or malformed, the API **refuses to start** with one error naming the variable (never the value). It is not in the env template (the installer asks for every secret a template declares): **add the line to `infra/compose/.env` yourself when you switch the store on, and back it up separately.** |
+| `SECRETS_STORE_KEY_PREVIOUS` | Only during a rotation: add the line to `infra/compose/.env` yourself (also not in the template). |
+| `SECRETS_STORE_CALLBACK_URL` | The address of the API as the fabric reaches it (default `http://api:3000`). |
+
+The slice needs the credential store and notifications slices, like the Vault connection. These are deployment secrets, not runtime configuration: a key that protects a database cannot live in it (the "never an environment variable" rule is for runtime-configured features such as storage and AI). Enabling it also needs `npm run prisma:migrate` (the Vault tables and `secrets_store_data_keys` ship in every build) and a restart; the `Credential` secret type is created at start-up.
+
+Then: the deployment switch `secrets.agentUse.enabled` (Administration), and per owner: choose the built-in store, turn on "let the agent use my saved logins", save a login and tick **Allow agents to use this login**.
+
+## Key handling
+
+```
+SECRETS_STORE_KEY (environment)  --wraps-->    one random data key per owner (database, wrapped only)
+data key                         --encrypts--> that owner's values (AES-256-GCM)
+```
+
+- Values exist only as ciphertext (`secret_versions`), written as `ss1.<owner id>.<base64>` with the owner bound as associated data. A database dump holds ciphertext and wrapped keys only: **it cannot be decrypted without `SECRETS_STORE_KEY`**. The tests scan the database for a seeded marker and print an excerpt.
+- The store key is **not** `SECRETS_ENCRYPTION_KEY` (the credential store's) and not derived from it. It is never logged, never in a Doctor output, never sent to the fabric, and in no API response.
+- A wrong key **fails closed**: nothing is returned, the request is an error.
+- Associated data binds a value to its owner; it does **not** bind the item or field (Vault's crypto port does not provide them: vault#227).
+
+### Backups
+
+The console's database backup contains only ciphertext. **The key must be backed up separately, somewhere other than the database backup** (a password manager, an offline copy). **Losing the key loses every saved login for good.** Restoring the database without the key gives a working app with unreadable logins (Doctor `secrets.store_key` fails: "wrapped under a store key this deployment no longer has").
+
+### Rotating the store key
+
+1. Generate the new key. Keep the old one.
+2. Set `SECRETS_STORE_KEY` to the new key and `SECRETS_STORE_KEY_PREVIOUS` to the old one; restart the API. Everything keeps working: rows still wrapped under the old key are read with it. Doctor `secrets.store_key` warns "a rotation is unfinished".
+3. Run **Re-wrap**: `POST /api/admin/secrets-store/rewrap` (`system_settings:write`), which queues the job `secrets.store.maintain` (also queued hourly when there is work). It re-wraps every owner's data key under the new key; **the values are not re-encrypted**. It is safe to repeat.
+4. When Doctor passes ("every owner key is wrapped under it"), remove `SECRETS_STORE_KEY_PREVIOUS` and restart. Keep the old key until you hold a backup taken after step 3.
+
+The same job removes expired fabric credentials and secrets that lost their owner (a user removed by a path that skipped the user-data purge: their data key goes with them, so the ciphertext is unreadable anyway).
+
+## How the fabric reaches it
+
+The store has no address of its own, so the fabric **calls back**. When a run starts, `SecretsProviderRegistrar.ensureRegistered(userId)` registers the provider with the fabric as `kind: console` with `base_url = <SECRETS_STORE_CALLBACK_URL>/api/internal/secrets-store/v1` and, as the access token, a credential `sct_...` the console minted for that owner (kept only as a SHA-256 hash, valid for an hour, replaced on every registration, revoked when the owner leaves the built-in store or a switch is turned off). **This is the path used**, not an HTTP call to Vault's agent API: there is no Vault server in the picture.
+
+| Route (POST, JSON in) | Answer |
+|---|---|
+| `/lookup` `{ owner_id, origin, kind?: "login" }` | `{ items: [{ id, name, username, origins, match_kind, has_code, updated_at }] }`, never a value |
+| `/release` `{ owner_id, item_id, field, origin, purpose, run_id?, client_label? }` | the field's bytes, `application/octet-stream` |
+| `/code` `{ owner_id, item_id, origin, purpose, ... }` | the code's bytes, `X-Expires-At` |
+
+Errors are `{ "code": "<provider error code>" }`: `not_found` 404, `origin_mismatch` 403, `disabled` 403, `rate_limited` 429 (`Retry-After`), `unauthorized` 401, `refused` 403, `unsupported` 422, `unavailable` 503. Every answer is `Cache-Control: no-store`. The route is **only** for the fabric: a session, a personal access token and an AI app's OAuth token all get the same `401`; the credential names one owner and a request that names another is refused; the owner must have a live run; nginx answers 404 for `/api/internal/` on the public side (`infra/nginx/app.d/locations/secrets-store-internal.conf`), so the fabric calls the API directly over the private network. The fabric accepts the callback address only as https, or as http on a private path (loopback, a private address, a single-label name such as the compose service `api`, `.internal`, `.local`): the console's address is on the deployment's own network, unlike a Vault's, which must be https. The fabric half is `ConsoleProvider` (`crates/hexactra-credential-resolver/src/console.rs`), registered with `PUT /v1/secrets-providers/{owner}/builtin` as kind `console`.
+
+### What the built-in store cannot do (a limit the Vault path does not have)
+
+**The value crosses the console's Node process.** On the Vault path only the fabric ever holds a value. Here the console decrypts it and writes it to the response. It is reduced, not removed: Vault's service returns a JavaScript string, which is converted to a `Buffer` at once, written straight to the response, and the buffer is zeroed when the response has finished or the socket closed; it is never logged (the request log prints the method and path only, and the tests scan the logs for the seeded marker). But the string Vault's code decrypted lives until the garbage collector frees it and cannot be wiped (vault#229). Someone who can read the console's process memory can read the logins of owners who used one recently: a reason to prefer your own Vault for anything more than logins.
+
+Also not included: cards, identity items, attachments, backups and the zip export, card scanning, card expiry reminders, media, Vault's MCP, Vault's agent HTTP API, custom secret types, the owner notices of Vault's agent slice (every use is audited instead), migrating between providers. Those routes answer 404 or do not exist; their tables exist and stay empty. No AI app's token can reach this store (`/api/secrets/*` is not part of any protected resource).
+
+## Routes, permissions and who can read what
+
+Vault's own controllers are mounted under `/api/secrets` and `/api/secret-types` (the page's API) with `secrets:read`, `secrets:write`, `secrets:delete` and `secret_types:read` (contributors and organization admins, and viewers for the read ones, as for the Vault connection; deleting: contributors and organization admins). `secret_types:write` and `:delete` are declared and granted to nobody. **No role can read another owner's secret values**: the `secrets:read_any`, `:write_any` and `:delete_any` permissions that Vault gives its administrators are **not declared**, so no role can hold them (`test/secrets-store.db.spec.ts` walks every role). A personal access token can manage the owner's own logins only with `secrets:write` and **can never release a value through the agent route** (the release route accepts nothing but the fabric's credential). `GET /api/secrets/store/status` (`secrets:read`) tells the owner which provider is chosen and how many logins are open.
+
+Vault's `agentAccess` settings namespace is answered by the console (`enabled` is the deployment switch, per-minute limits at Vault's defaults, cards and identity off). There is no `secretsStore.*` namespace yet because nothing needs configuring.
+
+## Testing
+
+`test/secrets-store.spec.ts` (the slice off loads no package, key parsing, the envelope fails closed), `test/secrets-store.packages.spec.ts` (the console's ownership and permission copies against the packages), `test/secrets-store.db.spec.ts` (a real database: the whole flow, the identical not-found, the origin refusal, the switches, every role, ciphertext only, rotation, a wrong key, the internal route with every kind of credential, user deletion, a seeded-marker scan). Vault's own host conformance kit (`runVaultHostConformance`) cannot run for a host that mounts a subset (vault#228); the same assertions are in the db spec, in process.

@@ -1,6 +1,7 @@
 // The deploy's view of this app (issue #294): the wizard generates the
 // fabric's secrets without asking, so `deploy install --non-interactive`
 // needs no answer for them.
+import { readFileSync } from 'node:fs';
 import { createCli } from '@marinoscar/platform-cli';
 import { generateValue, resolveEnvMetadata } from '@marinoscar/platform-cli/core';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
@@ -32,6 +33,18 @@ describe('deploy environment of the fabric keys', () => {
 
   it('lets the fabric OTLP endpoint stay blank', () => {
     expect(resolveEnvMetadata('HEXACTRA_FABRIC_OTLP_ENDPOINT')).toMatchObject({ allowBlank: true });
+  });
+});
+
+describe('the built-in secrets store keys (E37.5)', () => {
+  it('the switch and the callback address may stay blank (the store is off by default)', () => {
+    for (const name of ['SECRETS_STORE_ENABLED', 'SECRETS_STORE_CALLBACK_URL']) expect(resolveEnvMetadata(name)).toMatchObject({ allowBlank: true });
+  });
+
+  it('neither key is a variable of the template: a declared secret is asked for, and the key matters only when the store is on', () => {
+    const template = readFileSync(new URL('../../../infra/compose/.env.example', import.meta.url), 'utf8');
+    expect(template).toMatch(/^SECRETS_STORE_ENABLED=/m);
+    expect(template).not.toMatch(/^SECRETS_STORE_KEY(_PREVIOUS)?=/m);
   });
 });
 

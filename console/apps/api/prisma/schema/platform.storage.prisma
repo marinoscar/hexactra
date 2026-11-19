@@ -43,6 +43,13 @@ model StorageObject {
   // The target of the chunks' composite foreign key (object_id, org_id): a
   // reference between two org-owned tables is composite, because a foreign-key
   // check bypasses row-level security (ADR 0002 D5).
+
+  // composed from app:vault.media.prisma
+  mediaFolderFile MediaFolderFile?
+
+  // composed from app:vault.secrets.prisma
+  secretAttachments SecretAttachment[]
+
   @@unique([id, orgId])
   @@index([uploadedById])
   @@index([status])
