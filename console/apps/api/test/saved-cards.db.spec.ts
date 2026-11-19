@@ -111,7 +111,9 @@ function seamOf(opts: { state?: 'registered' | 'not_enabled'; cards?: boolean } 
   const cardsSupported = jest.fn(async () => opts.cards ?? true);
   const identitySupported = jest.fn(async () => false);
   const providerAddress = jest.fn(async () => 'https://vault.example.com');
-  return { seam: { prepare, outcome, cardsSupported, identitySupported, providerAddress } as unknown as RunSecretsService, cardsSupported, outcome };
+  // Offering to save a typed sign-in (E37.4b) is off here: these specs are about cards.
+  const saveLoginSupported = jest.fn(async () => false);
+  return { seam: { prepare, outcome, cardsSupported, identitySupported, providerAddress, saveLoginSupported } as unknown as RunSecretsService, cardsSupported, outcome };
 }
 
 /** The broker over a run's own fake fabric (an answer goes to its handoff); the resume job is only recorded. */

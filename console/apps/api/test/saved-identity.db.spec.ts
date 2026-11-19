@@ -82,7 +82,9 @@ function seamOf(opts: { state?: 'registered' | 'not_enabled'; identity?: boolean
   const outcome = jest.fn(async () => undefined);
   const identitySupported = jest.fn(async () => opts.identity ?? true);
   const providerAddress = jest.fn(async () => 'https://vault.example.test');
-  return { seam: { prepare, outcome, identitySupported, providerAddress } as unknown as RunSecretsService, prepare, outcome, identitySupported };
+  // Offering to save a typed sign-in (E37.4b) is off here: these specs are about identity details.
+  const saveLoginSupported = jest.fn(async () => false);
+  return { seam: { prepare, outcome, identitySupported, providerAddress, saveLoginSupported } as unknown as RunSecretsService, prepare, outcome, identitySupported };
 }
 
 function runnerOf(fabric: SecretsFabric, ai: AiService, seam?: RunSecretsService) {
