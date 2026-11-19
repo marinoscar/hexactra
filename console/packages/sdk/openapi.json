@@ -34064,6 +34064,45 @@
         }
       }
     },
+    "/api/reports/{token}": {
+      "get": {
+        "description": "No session: the signed token in the path is the authority. It names one run and expires 7 days after it was issued (deliveries and the `runs.run.finished` webhook carry it as `reportUrl`). It streams the masked PDF with `Cache-Control: private, no-store` and exposes nothing else. An expired, altered or unknown link, and a run that was deleted, are all `404`.",
+        "operationId": "runReportLink_get",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "The signed token from `reportUrl`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF report (masked)."
+          },
+          "404": {
+            "description": "`REPORT_LINK_INVALID`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A run's masked PDF report, by signed link",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
     "/api/runs": {
       "get": {
         "operationId": "runs_list",
@@ -43169,6 +43208,871 @@
           ]
         }
       }
+    },
+    "/api/tasks/{id}/deliveries": {
+      "get": {
+        "description": "What is sent when a run of the task ends (E39.6): an email with the PDF report, a signed webhook with the fields, a spreadsheet row, files saved to a folder. In the order they are sent. Each email delivery lists its addresses with where each stands (`own`, `confirmed`, `unconfirmed`, `unsubscribed`). Never a secret.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "taskDeliveries_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DeliveryResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's deliveries",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "At most 10 per task. Recipients, destinations and file names are fixed here: nothing in a run can add or change one. An email address that is not yours (or one of your connections') must first be confirmed with `POST /delivery-recipients`; a delivery with such an address can be saved with `enabled: false`. A webhook delivery answers its `signingSecret` once; it cannot be read again. 400 `INVALID_DELIVERY` lists the problems (`details.issues`); 409 `RECIPIENT_NOT_CONFIRMED` lists the addresses (`details.addresses`); 422 `RECIPIENT_LIMIT` or `TOO_MANY_DELIVERIES`.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeliveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryCreatedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add a delivery to a task",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/deliveries/{deliveryId}": {
+      "patch": {
+        "description": "The kind never changes. `config` is the whole new configuration. Switching a delivery on, or changing it, re-checks it (addresses confirmed, the connection still yours and allowed).\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeliveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change a delivery",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Its log entries stay with their runs, without the link to it. A webhook delivery's signing secret is deleted.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Remove a delivery",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/deliveries/{deliveryId}/test": {
+      "post": {
+        "description": "Sends a clearly marked TEST with sample values to the delivery's own destination (an email marked TEST, a webhook of type `deliveries.test`, a spreadsheet row whose Run ID reads `TEST-...` and whose location is returned, a small text file in the folder). It reads no run and writes no run's log. A failure is a `200` with `ok: false` and the `code`. At most 10 a minute.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "taskDeliveries_test",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryTestResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`DELIVERY_TEST_RATE_LIMITED`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Send a test",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}/deliveries": {
+      "get": {
+        "description": "The delivery log of one of your runs (E39.6): one entry per delivery with its `status` (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed `errorCode` with a fixed `errorText`, and safe `detail` (sizes, counts, the destination's kind). Never an address, a subject, a body, a cell or a file name.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "runDeliveries_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunDeliveryResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What was sent for a run",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}/deliveries/{runDeliveryId}/retry": {
+      "post": {
+        "description": "A delivery that failed, or one stuck pending or sending, gets a fresh set of attempts. The send checks for its own earlier work first (a spreadsheet row, an uploaded file), but an email whose outcome was unknown (`OUTCOME_UNKNOWN`) may arrive twice. 409 `DELIVERY_NOT_RETRYABLE` otherwise.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "runDeliveries_retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runDeliveryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunDeliveryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Retry a delivery",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/delivery-recipients": {
+      "get": {
+        "description": "Addresses that are not yours that you confirmed as recipients of your run reports, with the time, and whether the recipient stopped the emails.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "deliveryRecipients_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DeliveryRecipientResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The addresses you confirmed",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Your explicit \"yes, send my run reports to this address\": the web app asks with a dialog naming the address. Recorded with the time. The recipient gets a one-time notice on first use, with a link that stops the emails. Confirming again re-enables a recipient who had stopped them. Your own address and the addresses of your connections need no confirmation. No MCP tool does this.\n\n**Requires:** authentication, plus permission `runs:write`.",
+        "operationId": "deliveryRecipients_confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRecipientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DeliveryRecipientResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Confirm an address",
+        "tags": [
+          "Deliveries"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        }
+      }
+    },
+    "/api/deliveries/unsubscribe/{token}": {
+      "get": {
+        "description": "A page with one button. Opening the link changes nothing (mail scanners open links); the button does.",
+        "operationId": "deliveryUnsubscribe_show",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop receiving run reports (page)",
+        "tags": [
+          "Deliveries"
+        ]
+      },
+      "post": {
+        "description": "Disables the address on every delivery of the person who set them up, until that person confirms it again. Idempotent.",
+        "operationId": "deliveryUnsubscribe_stop",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop receiving run reports",
+        "tags": [
+          "Deliveries"
+        ]
+      }
     }
   },
   "info": {
@@ -43453,6 +44357,7 @@
               "RUN_NOT_PAUSABLE",
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
+              "REPORT_LINK_INVALID",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -43484,6 +44389,14 @@
               "SECRETS_VAULT_NEEDS_RECONNECT",
               "SECRETS_VAULT_UNAVAILABLE",
               "SECRETS_VAULT_CONNECT_FAILED",
+              "INVALID_DELIVERY",
+              "DELIVERY_NOT_FOUND",
+              "TOO_MANY_DELIVERIES",
+              "RUN_DELIVERY_NOT_FOUND",
+              "DELIVERY_NOT_RETRYABLE",
+              "DELIVERY_TEST_RATE_LIMITED",
+              "RECIPIENT_NOT_CONFIRMED",
+              "RECIPIENT_LIMIT",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -48184,6 +49097,26 @@
               }
             }
           },
+          "deliveries": {
+            "type": "object",
+            "properties": {
+              "maxRecipientsPerTask": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "maxEmailsPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "maxAttachmentMb": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 25
+              }
+            }
+          },
           "mailTriggers": {
             "type": "object",
             "properties": {
@@ -48812,6 +49745,7 @@
           "agentPricing",
           "browserAgentCeilings",
           "connections",
+          "deliveries",
           "mailTriggers",
           "storage",
           "notifications",
@@ -49407,6 +50341,26 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "deliveries": {
+            "type": "object",
+            "properties": {
+              "maxRecipientsPerTask": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "maxEmailsPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "maxAttachmentMb": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 25
               }
             }
           },
@@ -50659,6 +51613,26 @@
                     }
                   }
                 }
+              }
+            }
+          },
+          "deliveries": {
+            "type": "object",
+            "properties": {
+              "maxRecipientsPerTask": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "maxEmailsPerDay": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "maxAttachmentMb": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 25
               }
             }
           },
@@ -92243,6 +93217,22 @@
               }
             ]
           },
+          "deliveryIds": {
+            "description": "Which of the task's deliveries this schedule's runs use (E39.6); null (the default) uses all of the task's enabled ones",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "type": "string",
             "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\""
@@ -92440,6 +93430,23 @@
                 }
               ]
             }
+          },
+          "deliveryIds": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`."
           }
         },
         "required": [
@@ -92510,6 +93517,23 @@
                 "type": "null"
               }
             ]
+          },
+          "deliveryIds": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`."
           }
         }
       },
@@ -94972,6 +95996,648 @@
           "firing",
           "lastEvaluatedAt"
         ]
+      },
+      "DeliveryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The configuration as stored. Never a secret."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "own",
+                    "confirmed",
+                    "unconfirmed",
+                    "unsubscribed"
+                  ]
+                }
+              },
+              "required": [
+                "address",
+                "state"
+              ]
+            },
+            "description": "`email`: where each address stands. Empty for other kinds."
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The connection it uses; `label` is null once the connection was removed."
+          },
+          "disabledReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "connection_removed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the system switched it off."
+          },
+          "webhookSecretConfigured": {
+            "description": "`webhook`: a signing secret is stored. Null for other kinds.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "kind",
+          "enabled",
+          "when",
+          "position",
+          "config",
+          "recipients",
+          "connection",
+          "disabledReason",
+          "webhookSecretConfigured",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DeliveryCreatedResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The configuration as stored. Never a secret."
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "own",
+                    "confirmed",
+                    "unconfirmed",
+                    "unsubscribed"
+                  ]
+                }
+              },
+              "required": [
+                "address",
+                "state"
+              ]
+            },
+            "description": "`email`: where each address stands. Empty for other kinds."
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The connection it uses; `label` is null once the connection was removed."
+          },
+          "disabledReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "connection_removed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the system switched it off."
+          },
+          "webhookSecretConfigured": {
+            "description": "`webhook`: a signing secret is stored. Null for other kinds.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "signingSecret": {
+            "description": "`webhook` only, only on creation: the secret to verify the signature with (`whsec_...`). It cannot be read again.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "kind",
+          "enabled",
+          "when",
+          "position",
+          "config",
+          "recipients",
+          "connection",
+          "disabledReason",
+          "webhookSecretConfigured",
+          "createdAt",
+          "updatedAt",
+          "signingSecret"
+        ]
+      },
+      "CreateDeliveryDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "config": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "The configuration of the kind (see the description of this route)."
+          },
+          "enabled": {
+            "description": "Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on.",
+            "type": "boolean"
+          },
+          "when": {
+            "description": "`always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).",
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "kind",
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateDeliveryDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on.",
+            "type": "boolean"
+          },
+          "when": {
+            "description": "`always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).",
+            "type": "string",
+            "enum": [
+              "always",
+              "succeeded",
+              "failed",
+              "needs_attention"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "config": {
+            "description": "The whole new config for the delivery's kind.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeliveryTestResponseDto": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CONNECTION_NEEDS_RECONNECT",
+                  "CAPABILITY_OFF",
+                  "PERMISSION_MISSING",
+                  "NOT_FOUND",
+                  "RATE_LIMITED",
+                  "QUOTA_EXCEEDED",
+                  "TOO_LARGE",
+                  "PROVIDER_ERROR",
+                  "CONNECTION_PAUSED",
+                  "CONNECTION_NOT_FOUND",
+                  "INVALID_INPUT",
+                  "NOT_SUPPORTED",
+                  "ABORTED",
+                  "CONFLICT",
+                  "NOTIFY_REQUIRED",
+                  "ADMIN_CONSENT_REQUIRED",
+                  "OUTCOME_UNKNOWN",
+                  "NETWORK_ERROR",
+                  "TIMEOUT",
+                  "HTTP_4XX",
+                  "HTTP_5XX",
+                  "DESTINATION_BLOCKED",
+                  "SECRET_MISSING",
+                  "KIND_UNAVAILABLE",
+                  "EMAIL_NOT_CONFIGURED",
+                  "EMAIL_REFUSED",
+                  "DAILY_LIMIT",
+                  "RECIPIENT_UNSUBSCRIBED",
+                  "RECIPIENT_NOT_CONFIRMED",
+                  "CONFIG_INVALID",
+                  "INTERNAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "One fixed sentence."
+          },
+          "detail": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "Safe facts: sizes, counts, and for a sheet the `location` of the TEST row."
+          }
+        },
+        "required": [
+          "ok",
+          "code",
+          "message",
+          "detail"
+        ]
+      },
+      "RunDeliveryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "deliveryId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null once the delivery was deleted: the log stays."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email",
+              "webhook",
+              "sheet_row",
+              "folder"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sending",
+              "sent",
+              "failed",
+              "skipped"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "CONNECTION_NEEDS_RECONNECT",
+                  "CAPABILITY_OFF",
+                  "PERMISSION_MISSING",
+                  "NOT_FOUND",
+                  "RATE_LIMITED",
+                  "QUOTA_EXCEEDED",
+                  "TOO_LARGE",
+                  "PROVIDER_ERROR",
+                  "CONNECTION_PAUSED",
+                  "CONNECTION_NOT_FOUND",
+                  "INVALID_INPUT",
+                  "NOT_SUPPORTED",
+                  "ABORTED",
+                  "CONFLICT",
+                  "NOTIFY_REQUIRED",
+                  "ADMIN_CONSENT_REQUIRED",
+                  "OUTCOME_UNKNOWN",
+                  "NETWORK_ERROR",
+                  "TIMEOUT",
+                  "HTTP_4XX",
+                  "HTTP_5XX",
+                  "DESTINATION_BLOCKED",
+                  "SECRET_MISSING",
+                  "KIND_UNAVAILABLE",
+                  "EMAIL_NOT_CONFIGURED",
+                  "EMAIL_REFUSED",
+                  "DAILY_LIMIT",
+                  "RECIPIENT_UNSUBSCRIBED",
+                  "RECIPIENT_NOT_CONFIRMED",
+                  "CONFIG_INVALID",
+                  "INTERNAL"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorText": {
+            "description": "A fixed sentence for the code.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {},
+            "description": "Safe facts only: the destination, sizes, counts. Never content."
+          },
+          "sentAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "An ISO 8601 instant."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextAttemptAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "An ISO 8601 instant."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "deliveryId",
+          "kind",
+          "status",
+          "attempts",
+          "errorCode",
+          "errorText",
+          "detail",
+          "sentAt",
+          "nextAttemptAt",
+          "createdAt"
+        ]
+      },
+      "DeliveryRecipientResponseDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "description": "An ISO 8601 instant."
+          },
+          "unsubscribedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "An ISO 8601 instant."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "address",
+          "confirmedAt",
+          "unsubscribedAt"
+        ]
+      },
+      "ConfirmRecipientDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "description": "An email address."
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "additionalProperties": false
       }
     }
   },

@@ -9,6 +9,7 @@ import { triggerLine, type MailTriggerView } from './mail-triggers.js';
 import { countOlderThan, deleteOlderThan, exportRun, exportRunPdf, parseDays, runsWord, sizeText, type ReportTarget } from './runs.js';
 import { collectInput, missingParameters, parseInputFlags, promptMissing, type CliTaskParameter } from './task-inputs.js';
 import { outputLines, outputsCsv, outputsTable, type CliOutputsPage, type CliRunOutput } from './task-outputs.js';
+import { deliveryLines, findDelivery, runDeliveryLines, type CliDelivery, type CliRunDelivery } from './deliveries.js';
 
 let targetFactory: (() => ReportTarget) | null = null;
 
@@ -122,6 +123,14 @@ async function show(id: string, watch: boolean, asJson: boolean): Promise<void> 
     }
     await new Promise((res) => setTimeout(res, 2_000));
   }
+}
+
+/** The task a ref names: an id, its first characters, or its name. */
+async function findTask(ref: string): Promise<Task> {
+  const list = await consoleApi().get<Task[]>('/tasks');
+  const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
+  if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
+  return matches[0]!;
 }
 
 /** `hexactra tasks …` and `hexactra runs …` over /api/tasks and /api/runs. */
@@ -239,10 +248,7 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--json', 'print JSON')
     .action(async (ref: string, o: { limit: number; csv?: boolean; json?: boolean }) => {
       if (!Number.isInteger(o.limit) || o.limit < 1 || o.limit > 500) throw new Error('--limit is a number from 1 to 500.');
-      const list = await consoleApi().get<Task[]>('/tasks');
-      const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
-      if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
-      const task = matches[0]!;
+      const task = await findTask(ref);
       // The API pages by 100 at most: follow the cursor until enough runs are read.
       let page: CliOutputsPage | null = null;
       let cursor: string | null = null;
@@ -259,6 +265,30 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       if (!page.columns.length) return out('This task has no outputs. Add them to the task in the console (Outputs).');
       if (!page.items.length) return out('No finished run of this task has returned outputs yet.');
       for (const l of outputsTable(page)) out(l);
+    });
+  const deliveries = tasks.command('deliveries').description('What a task sends when a run ends: an email with the PDF report, a signed webhook, a spreadsheet row, files in a folder (set up in the web app or the API)');
+  deliveries
+    .command('list <task>')
+    .description("A task's deliveries, in the order they are sent, with where each goes and whether it is on")
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { json?: boolean }) => {
+      const task = await findTask(ref);
+      const list = await consoleApi().get<CliDelivery[]>(`/tasks/${task.id}/deliveries`);
+      if (o.json) return json(list);
+      for (const l of deliveryLines(list)) out(l);
+    });
+  deliveries
+    .command('test <task> <delivery>')
+    .description('Send a clearly marked TEST with sample values to the delivery\'s destination (an email marked TEST, a row marked TEST, a small file); no run is read or sent')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, deliveryRef: string, o: { json?: boolean }) => {
+      const task = await findTask(ref);
+      const d = findDelivery(await consoleApi().get<CliDelivery[]>(`/tasks/${task.id}/deliveries`), deliveryRef);
+      const r = await consoleApi().post<{ ok: boolean; code: string | null; message: string; detail: Record<string, unknown> }>(`/tasks/${task.id}/deliveries/${d.id}/test`, {});
+      if (o.json) return json(r);
+      out(r.message);
+      if (typeof r.detail.location === 'string') out(`row: ${r.detail.location}`);
+      if (!r.ok) process.exitCode = 1;
     });
   tasks
     .command('delete <id>')
@@ -310,6 +340,17 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--watch', 'follow until it ends')
     .option('--json', 'print JSON')
     .action(async (id: string, o: { watch?: boolean; json?: boolean }) => show(id, Boolean(o.watch), Boolean(o.json)));
+  runs
+    .command('deliveries <id>')
+    .description('What was sent for a run (an email, a webhook, a spreadsheet row, files), with the status and the reason of each; --retry <id> tries one that failed again')
+    .option('--retry <deliveryLogId>', 'retry one entry of the log that failed')
+    .option('--json', 'print JSON')
+    .action(async (id: string, o: { retry?: string; json?: boolean }) => {
+      if (o.retry) await consoleApi().post(`/runs/${id}/deliveries/${o.retry}/retry`, {});
+      const rows = await consoleApi().get<CliRunDelivery[]>(`/runs/${id}/deliveries`);
+      if (o.json) return json(rows);
+      for (const l of runDeliveryLines(rows)) out(l);
+    });
   runs
     .command('watch <id>')
     .description('Follow a run until it ends')

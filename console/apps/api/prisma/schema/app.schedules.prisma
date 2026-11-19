@@ -31,6 +31,8 @@ model TaskSchedule {
   policyRef           String?             @map("policy_ref") @db.VarChar(64)
   /// Preset task parameter values for this schedule's runs (#552): `{ key: value }`. Never a sensitive parameter.
   inputs              Json?
+  /// Which of the task's deliveries (E39.6, #603) this schedule's runs use: a list of `task_deliveries` ids; null follows the task's own.
+  deliveryIds         Json?               @map("delivery_ids")
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 

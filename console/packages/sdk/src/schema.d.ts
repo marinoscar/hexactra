@@ -6737,6 +6737,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A run's masked PDF report, by signed link
+         * @description No session: the signed token in the path is the authority. It names one run and expires 7 days after it was issued (deliveries and the `runs.run.finished` webhook carry it as `reportUrl`). It streams the masked PDF with `Cache-Control: private, no-store` and exposes nothing else. An expired, altered or unknown link, and a run that was deleted, are all `404`.
+         */
+        get: operations["runReportLink_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -8383,6 +8403,180 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's deliveries
+         * @description What is sent when a run of the task ends (E39.6): an email with the PDF report, a signed webhook with the fields, a spreadsheet row, files saved to a folder. In the order they are sent. Each email delivery lists its addresses with where each stands (`own`, `confirmed`, `unconfirmed`, `unsubscribed`). Never a secret.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["taskDeliveries_list"];
+        put?: never;
+        /**
+         * Add a delivery to a task
+         * @description At most 10 per task. Recipients, destinations and file names are fixed here: nothing in a run can add or change one. An email address that is not yours (or one of your connections') must first be confirmed with `POST /delivery-recipients`; a delivery with such an address can be saved with `enabled: false`. A webhook delivery answers its `signingSecret` once; it cannot be read again. 400 `INVALID_DELIVERY` lists the problems (`details.issues`); 409 `RECIPIENT_NOT_CONFIRMED` lists the addresses (`details.addresses`); 422 `RECIPIENT_LIMIT` or `TOO_MANY_DELIVERIES`.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["taskDeliveries_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/deliveries/{deliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a delivery
+         * @description Its log entries stay with their runs, without the link to it. A webhook delivery's signing secret is deleted.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        delete: operations["taskDeliveries_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a delivery
+         * @description The kind never changes. `config` is the whole new configuration. Switching a delivery on, or changing it, re-checks it (addresses confirmed, the connection still yours and allowed).
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        patch: operations["taskDeliveries_update"];
+        trace?: never;
+    };
+    "/api/tasks/{id}/deliveries/{deliveryId}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test
+         * @description Sends a clearly marked TEST with sample values to the delivery's own destination (an email marked TEST, a webhook of type `deliveries.test`, a spreadsheet row whose Run ID reads `TEST-...` and whose location is returned, a small text file in the folder). It reads no run and writes no run's log. A failure is a `200` with `ok: false` and the `code`. At most 10 a minute.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["taskDeliveries_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What was sent for a run
+         * @description The delivery log of one of your runs (E39.6): one entry per delivery with its `status` (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed `errorCode` with a fixed `errorText`, and safe `detail` (sizes, counts, the destination's kind). Never an address, a subject, a body, a cell or a file name.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runDeliveries_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/deliveries/{runDeliveryId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a delivery
+         * @description A delivery that failed, or one stuck pending or sending, gets a fresh set of attempts. The send checks for its own earlier work first (a spreadsheet row, an uploaded file), but an email whose outcome was unknown (`OUTCOME_UNKNOWN`) may arrive twice. 409 `DELIVERY_NOT_RETRYABLE` otherwise.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["runDeliveries_retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/delivery-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The addresses you confirmed
+         * @description Addresses that are not yours that you confirmed as recipients of your run reports, with the time, and whether the recipient stopped the emails.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["deliveryRecipients_list"];
+        put?: never;
+        /**
+         * Confirm an address
+         * @description Your explicit "yes, send my run reports to this address": the web app asks with a dialog naming the address. Recorded with the time. The recipient gets a one-time notice on first use, with a link that stops the emails. Confirming again re-enables a recipient who had stopped them. Your own address and the addresses of your connections need no confirmation. No MCP tool does this.
+         *
+         *     **Requires:** authentication, plus permission `runs:write`.
+         */
+        post: operations["deliveryRecipients_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliveries/unsubscribe/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stop receiving run reports (page)
+         * @description A page with one button. Opening the link changes nothing (mail scanners open links); the button does.
+         */
+        get: operations["deliveryUnsubscribe_show"];
+        put?: never;
+        /**
+         * Stop receiving run reports
+         * @description Disables the address on every delivery of the person who set them up, until that person confirms it again. Idempotent.
+         */
+        post: operations["deliveryUnsubscribe_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -8500,6 +8694,7 @@ export interface components {
              * @example RUN_NOT_PAUSABLE
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
+             * @example REPORT_LINK_INVALID
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -8531,6 +8726,14 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example INVALID_DELIVERY
+             * @example DELIVERY_NOT_FOUND
+             * @example TOO_MANY_DELIVERIES
+             * @example RUN_DELIVERY_NOT_FOUND
+             * @example DELIVERY_NOT_RETRYABLE
+             * @example DELIVERY_TEST_RATE_LIMITED
+             * @example RECIPIENT_NOT_CONFIRMED
+             * @example RECIPIENT_LIMIT
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -9842,6 +10045,11 @@ export interface components {
                     };
                 };
             };
+            deliveries: {
+                maxRecipientsPerTask?: number;
+                maxEmailsPerDay?: number;
+                maxAttachmentMb?: number;
+            };
             mailTriggers: {
                 minPollSeconds?: number;
                 maxTriggersPerUser?: number;
@@ -10105,6 +10313,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            deliveries?: {
+                maxRecipientsPerTask?: number;
+                maxEmailsPerDay?: number;
+                maxAttachmentMb?: number;
             };
             mailTriggers?: {
                 minPollSeconds?: number;
@@ -10374,6 +10587,11 @@ export interface components {
                         tenant?: string;
                     };
                 };
+            };
+            deliveries?: {
+                maxRecipientsPerTask?: number;
+                maxEmailsPerDay?: number;
+                maxAttachmentMb?: number;
             };
             mailTriggers?: {
                 minPollSeconds?: number;
@@ -19822,6 +20040,8 @@ export interface components {
             inputs?: {
                 [key: string]: string;
             } | null;
+            /** @description Which of the task's deliveries this schedule's runs use (E39.6); null (the default) uses all of the task's enabled ones */
+            deliveryIds?: string[] | null;
             /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00" */
             description: string;
             /** @description ISO 8601 timestamp */
@@ -19886,6 +20106,8 @@ export interface components {
             inputs?: {
                 [key: string]: string | number;
             };
+            /** @description Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`. */
+            deliveryIds?: string[] | null;
         };
         UpdateScheduleDto: {
             cron?: string;
@@ -19899,6 +20121,8 @@ export interface components {
             inputs?: {
                 [key: string]: string | number;
             } | null;
+            /** @description Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`. */
+            deliveryIds?: string[] | null;
         };
         ChatPageResponseDto: {
             items: {
@@ -20533,6 +20757,157 @@ export interface components {
                 info: number;
             };
             lastEvaluatedAt: string | null;
+        };
+        DeliveryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            enabled: boolean;
+            /** @enum {string} */
+            when: "always" | "succeeded" | "failed" | "needs_attention";
+            position: number;
+            /** @description The configuration as stored. Never a secret. */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description `email`: where each address stands. Empty for other kinds. */
+            recipients: {
+                address: string;
+                /** @enum {string} */
+                state: "own" | "confirmed" | "unconfirmed" | "unsubscribed";
+            }[];
+            /** @description The connection it uses; `label` is null once the connection was removed. */
+            connection: {
+                /** Format: uuid */
+                id: string;
+                label: string | null;
+            } | null;
+            /** @description Why the system switched it off. */
+            disabledReason: "connection_removed" | null;
+            /** @description `webhook`: a signing secret is stored. Null for other kinds. */
+            webhookSecretConfigured: boolean | null;
+            /** @description An ISO 8601 instant. */
+            createdAt: string;
+            /** @description An ISO 8601 instant. */
+            updatedAt: string;
+        };
+        DeliveryCreatedResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            enabled: boolean;
+            /** @enum {string} */
+            when: "always" | "succeeded" | "failed" | "needs_attention";
+            position: number;
+            /** @description The configuration as stored. Never a secret. */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description `email`: where each address stands. Empty for other kinds. */
+            recipients: {
+                address: string;
+                /** @enum {string} */
+                state: "own" | "confirmed" | "unconfirmed" | "unsubscribed";
+            }[];
+            /** @description The connection it uses; `label` is null once the connection was removed. */
+            connection: {
+                /** Format: uuid */
+                id: string;
+                label: string | null;
+            } | null;
+            /** @description Why the system switched it off. */
+            disabledReason: "connection_removed" | null;
+            /** @description `webhook`: a signing secret is stored. Null for other kinds. */
+            webhookSecretConfigured: boolean | null;
+            /** @description An ISO 8601 instant. */
+            createdAt: string;
+            /** @description An ISO 8601 instant. */
+            updatedAt: string;
+            /** @description `webhook` only, only on creation: the secret to verify the signature with (`whsec_...`). It cannot be read again. */
+            signingSecret: string | null;
+        };
+        CreateDeliveryDto: {
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            /** @description The configuration of the kind (see the description of this route). */
+            config: {
+                [key: string]: unknown;
+            };
+            /** @description Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on. */
+            enabled?: boolean;
+            /**
+             * @description `always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).
+             * @enum {string}
+             */
+            when?: "always" | "succeeded" | "failed" | "needs_attention";
+            position?: number;
+        };
+        UpdateDeliveryDto: {
+            /** @description Default true. A delivery with an address that is not yours or a connection's needs that address confirmed before it can be on. */
+            enabled?: boolean;
+            /**
+             * @description `always` (default), `succeeded`, `failed`, or `needs_attention` (failed, outputs missing, or a confirmed step without success).
+             * @enum {string}
+             */
+            when?: "always" | "succeeded" | "failed" | "needs_attention";
+            position?: number;
+            /** @description The whole new config for the delivery's kind. */
+            config?: {
+                [key: string]: unknown;
+            };
+        };
+        DeliveryTestResponseDto: {
+            ok: boolean;
+            code: ("CONNECTION_NEEDS_RECONNECT" | "CAPABILITY_OFF" | "PERMISSION_MISSING" | "NOT_FOUND" | "RATE_LIMITED" | "QUOTA_EXCEEDED" | "TOO_LARGE" | "PROVIDER_ERROR" | "CONNECTION_PAUSED" | "CONNECTION_NOT_FOUND" | "INVALID_INPUT" | "NOT_SUPPORTED" | "ABORTED" | "CONFLICT" | "NOTIFY_REQUIRED" | "ADMIN_CONSENT_REQUIRED" | "OUTCOME_UNKNOWN" | "NETWORK_ERROR" | "TIMEOUT" | "HTTP_4XX" | "HTTP_5XX" | "DESTINATION_BLOCKED" | "SECRET_MISSING" | "KIND_UNAVAILABLE" | "EMAIL_NOT_CONFIGURED" | "EMAIL_REFUSED" | "DAILY_LIMIT" | "RECIPIENT_UNSUBSCRIBED" | "RECIPIENT_NOT_CONFIRMED" | "CONFIG_INVALID" | "INTERNAL") | null;
+            /** @description One fixed sentence. */
+            message: string;
+            /** @description Safe facts: sizes, counts, and for a sheet the `location` of the TEST row. */
+            detail: {
+                [key: string]: unknown;
+            };
+        };
+        RunDeliveryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            runId: string;
+            /** @description Null once the delivery was deleted: the log stays. */
+            deliveryId: string | null;
+            /** @enum {string} */
+            kind: "email" | "webhook" | "sheet_row" | "folder";
+            /** @enum {string} */
+            status: "pending" | "sending" | "sent" | "failed" | "skipped";
+            attempts: number;
+            errorCode: ("CONNECTION_NEEDS_RECONNECT" | "CAPABILITY_OFF" | "PERMISSION_MISSING" | "NOT_FOUND" | "RATE_LIMITED" | "QUOTA_EXCEEDED" | "TOO_LARGE" | "PROVIDER_ERROR" | "CONNECTION_PAUSED" | "CONNECTION_NOT_FOUND" | "INVALID_INPUT" | "NOT_SUPPORTED" | "ABORTED" | "CONFLICT" | "NOTIFY_REQUIRED" | "ADMIN_CONSENT_REQUIRED" | "OUTCOME_UNKNOWN" | "NETWORK_ERROR" | "TIMEOUT" | "HTTP_4XX" | "HTTP_5XX" | "DESTINATION_BLOCKED" | "SECRET_MISSING" | "KIND_UNAVAILABLE" | "EMAIL_NOT_CONFIGURED" | "EMAIL_REFUSED" | "DAILY_LIMIT" | "RECIPIENT_UNSUBSCRIBED" | "RECIPIENT_NOT_CONFIRMED" | "CONFIG_INVALID" | "INTERNAL") | null;
+            /** @description A fixed sentence for the code. */
+            errorText: string | null;
+            /** @description Safe facts only: the destination, sizes, counts. Never content. */
+            detail: {
+                [key: string]: unknown;
+            };
+            sentAt: string | null;
+            nextAttemptAt: string | null;
+            /** @description An ISO 8601 instant. */
+            createdAt: string;
+        };
+        DeliveryRecipientResponseDto: {
+            address: string;
+            /** @description An ISO 8601 instant. */
+            confirmedAt: string;
+            unsubscribedAt: string | null;
+        };
+        ConfirmRecipientDto: {
+            /**
+             * Format: email
+             * @description An email address.
+             */
+            address: string;
         };
     };
     responses: never;
@@ -42033,6 +42408,43 @@ export interface operations {
             };
         };
     };
+    runReportLink_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The signed token from `reportUrl`. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PDF report (masked). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `REPORT_LINK_INVALID`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     runs_list: {
         parameters: {
             query?: {
@@ -47366,6 +47778,523 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDeliveryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryCreatedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDeliveryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskDeliveries_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryTestResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `DELIVERY_TEST_RATE_LIMITED`. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runDeliveries_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDeliveryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runDeliveries_retry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                runDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDeliveryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryRecipients_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryRecipientResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryRecipients_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmRecipientDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DeliveryRecipientResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryUnsubscribe_show: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An HTML page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    deliveryUnsubscribe_stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An HTML page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

@@ -15,7 +15,11 @@ import { FAILING_AFTER } from '../tasks/task-list.schemas';
 import { TaskSchedulesService } from '../tasks/task-schedules.service';
 import { nextFiring, nextFirings, scheduleProblem } from './cron';
 import { describeCron } from './cron-describe';
+import '../deliveries/deliveries.errors';
 import './schedules.errors';
+
+/** Which of the task's deliveries (E39.6) a schedule's runs use: ids of the task's own deliveries; null or omitted: all of its enabled ones. An empty list: none. */
+const deliveryIdsField = z.array(z.uuid()).max(10).nullable().describe("Which of the task's deliveries (`GET /tasks/{id}/deliveries`) this schedule's runs use. Null or omitted: all of the task's enabled deliveries. An empty list: none. An id that is not one of this task's is 400 `INVALID_DELIVERY`.");
 
 export const createScheduleSchema = z.object({
   taskId: z.uuid(),
@@ -25,6 +29,7 @@ export const createScheduleSchema = z.object({
   concurrency: z.enum(['skip', 'queue']).default('skip'),
   policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; omit or null to follow the task."),
   inputs: taskInputsField.optional().describe("Preset values for the task's parameters (#552). An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`."),
+  deliveryIds: deliveryIdsField.optional(),
 });
 export class CreateScheduleDto extends createZodDto(createScheduleSchema) {}
 // No defaults here: zod 4 applies `.default()` inside `.partial()`, which
@@ -36,6 +41,7 @@ export const updateScheduleSchema = z.object({
   concurrency: z.enum(['skip', 'queue']).optional(),
   policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; null follows the task."),
   inputs: taskInputsField.nullable().optional().describe("Preset values for the task's parameters (#552); null clears them."),
+  deliveryIds: deliveryIdsField.optional(),
 });
 export class UpdateScheduleDto extends createZodDto(updateScheduleSchema) {}
 
@@ -128,14 +134,15 @@ export class SchedulesService {
     if (!task) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
     const timezone = input.timezone ?? (await this.defaults(userId, request)).timezone;
     const next = this.check(input.cron, timezone);
-    const { policyId, inputs: rawInputs, ...fields } = input;
+    const { policyId, inputs: rawInputs, deliveryIds, ...fields } = input;
+    await this.assertDeliveries(userId, input.taskId, deliveryIds);
     // Preset parameter values (#552): checked, and an enabled schedule needs every required one.
     const params = readParameters(task.parameters);
     const presets = rawInputs ? scheduleInputs(params, rawInputs) : null;
     if (input.enabled) assertScheduleInputs(params, presets);
     await this.policies.assertAssignable(userId, policyId);
     await this.taskSchedules.assertRoom(userId, input.taskId);
-    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, timezone, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null, ...(presets && Object.keys(presets).length ? { inputs: presets } : {}) } }));
+    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, timezone, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null, ...(presets && Object.keys(presets).length ? { inputs: presets } : {}), ...(deliveryIds ? { deliveryIds } : {}) } }));
   }
 
   async update(userId: string, id: string, patch: UpdateScheduleDto) {
@@ -146,7 +153,8 @@ export class SchedulesService {
     const timezone = patch.timezone ?? s.timezone;
     const enabled = patch.enabled ?? s.enabled;
     const next = this.check(cron, timezone);
-    const { policyId, inputs: rawInputs, ...fields } = patch;
+    const { policyId, inputs: rawInputs, deliveryIds, ...fields } = patch;
+    await this.assertDeliveries(userId, s.taskId, deliveryIds);
     await this.policies.assertAssignable(userId, policyId);
     // Preset parameter values (#552): an enabled schedule needs a value for every required parameter.
     const task = await db.task.findFirst({ where: { id: s.taskId }, select: { parameters: true } });
@@ -155,9 +163,18 @@ export class SchedulesService {
     if (enabled) assertScheduleInputs(params, presets);
     await db.taskSchedule.updateMany({
       where: { id },
-      data: { ...fields, ...(rawInputs !== undefined ? { inputs: presets && Object.keys(presets).length ? presets : Prisma.DbNull } : {}), ...(policyId !== undefined ? { policyRef: policyId } : {}), nextRunAt: enabled ? next : null, ...(patch.enabled ? { consecutiveFailures: 0 } : {}) },
+      data: { ...fields, ...(rawInputs !== undefined ? { inputs: presets && Object.keys(presets).length ? presets : Prisma.DbNull } : {}), ...(policyId !== undefined ? { policyRef: policyId } : {}), ...(deliveryIds !== undefined ? { deliveryIds: deliveryIds ?? Prisma.DbNull } : {}), nextRunAt: enabled ? next : null, ...(patch.enabled ? { consecutiveFailures: 0 } : {}) },
     });
     return scheduleView(await db.taskSchedule.findFirstOrThrow({ where: { id } }));
+  }
+
+  /** Every id names one of THIS task's deliveries (the owner's): a schedule can only choose among them, never add one. */
+  private async assertDeliveries(userId: string, taskId: string, ids: string[] | null | undefined): Promise<void> {
+    if (!ids?.length) return;
+    const found = await this.db(userId).taskDelivery.count({ where: { taskId, id: { in: [...new Set(ids)] } } });
+    if (found !== new Set(ids).size) {
+      throw new BadRequestException({ code: 'INVALID_DELIVERY', message: 'deliveryIds: every id must be one of the task\'s deliveries', details: { issues: [{ path: 'deliveryIds', message: "not one of the task's deliveries" }] } });
+    }
   }
 
   async remove(userId: string, id: string): Promise<void> {

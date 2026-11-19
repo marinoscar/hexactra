@@ -1,0 +1,109 @@
+// Deliveries after a run (E39.6, #603, epic #581): where a finished run's result goes without the owner doing anything: an email
+// with the PDF report, a signed webhook with the captured fields, a row in a spreadsheet, files saved to a folder.
+//
+//   TaskDelivery   what the owner configured on a task. The recipients, the destination and the file name are fixed here, at setup:
+//                  nothing in a run (its goal, result, outputs, parameters or a page) can add, change or redirect one.
+//   RunDelivery    what happened for one run: one row per (run, delivery), the status, the attempts and a safe error code.
+//                  `@@unique([runId, deliveryId])` is the idempotency anchor: a run is delivered once per configured delivery.
+//   DeliveryRecipient  an address that is not the owner's own, confirmed once by the owner (a dialog naming the address), told once
+//                  that reports are coming, and able to stop them with the unsubscribe link.
+//
+// No secret is stored here: a webhook's signing secret lives in the encrypted credential store (purpose `delivery_webhook`).
+// Content (a subject, a body, a cell, a file name) is never stored on a RunDelivery: `detail` holds safe facts only.
+// Registered in the user-owned data registry (src/deliveries/deliveries.ownership.ts).
+
+model TaskDelivery {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  taskId      String    @map("task_id") @db.Uuid
+  /// `email` | `webhook` | `sheet_row` | `folder`.
+  kind        String    @db.VarChar(20)
+  enabled     Boolean   @default(true)
+  /// When to send: `always` | `succeeded` | `failed` | `needs_attention`.
+  when        String    @default("always") @map("send_when") @db.VarChar(20)
+  /// Per kind, validated by zod on every write (src/deliveries/delivery.schemas.ts). Never a secret.
+  config      Json
+  position    Int       @default(0)
+  /// The connection a `sheet_row` or `folder` delivery (or an `email` one sent from an account) uses: copied out of `config` so that
+  /// Disconnect can list and clear what depends on it. No foreign key: removing the connection clears this column.
+  connectionId String?  @map("connection_id") @db.Uuid
+  /// Why the delivery was switched off by the system (`connection_removed`); null when the owner's own switch is the only one.
+  disabledReason String? @map("disabled_reason") @db.VarChar(40)
+  /// When the owner was last told that this task's deliveries failing (once per task per day).
+  failureNotifiedAt DateTime? @map("failure_notified_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  runDeliveries RunDelivery[]
+
+  @@index([taskId, position])
+  @@index([userId, connectionId])
+  @@map("task_deliveries")
+}
+
+model RunDelivery {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  runId       String    @map("run_id") @db.Uuid
+  /// SetNull when the owner deletes the configuration: the log of what was sent stays with the run.
+  deliveryId  String?   @map("delivery_id") @db.Uuid
+  kind        String    @db.VarChar(20)
+  /// `pending` | `sending` | `sent` | `failed` | `skipped`.
+  status      String    @default("pending") @db.VarChar(20)
+  attempts    Int       @default(0)
+  /// Safe facts only: the destination's label, a provider id, sizes, counts. Never a subject, a body, an address, a cell or a file name.
+  detail      Json?
+  /// A closed code (`CONNECTION_NEEDS_RECONNECT`, `RATE_LIMITED`, `OUTCOME_UNKNOWN`, ...), never a provider's message.
+  errorCode   String?   @map("error_code") @db.VarChar(60)
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz
+  /// When a retryable failure is tried again.
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run      Run           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  delivery TaskDelivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, deliveryId])
+  @@index([runId])
+  @@index([userId, kind, createdAt])
+  @@map("run_deliveries")
+}
+
+/// An address the owner confirmed as a recipient of their reports. The owner's own account address and the addresses of their own
+/// connections need no row.
+model DeliveryRecipient {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// Lower-case.
+  address        String    @db.VarChar(320)
+  /// When the owner confirmed it in the web app.
+  confirmedAt    DateTime  @default(now()) @map("confirmed_at") @db.Timestamptz
+  /// When the one-time "you will receive run reports" notice went out (null: not yet).
+  noticeSentAt   DateTime? @map("notice_sent_at") @db.Timestamptz
+  /// The recipient followed the unsubscribe link: deliveries to this address are skipped until the owner confirms it again.
+  unsubscribedAt DateTime? @map("unsubscribed_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, address])
+  @@map("delivery_recipients")
+}
+
+extend model User {
+  taskDeliveries    TaskDelivery[]
+  runDeliveries     RunDelivery[]
+  deliveryRecipients DeliveryRecipient[]
+}
+
+extend model Task {
+  deliveries TaskDelivery[]
+}
+
+extend model Run {
+  deliveries RunDelivery[]
+}

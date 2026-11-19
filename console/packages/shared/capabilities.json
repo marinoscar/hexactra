@@ -5,7 +5,10 @@
     "POST /api/mcp": "the MCP transport itself",
     "GET /api/mcp": "the MCP transport itself (405)",
     "POST /api/notification-actions": "the notification buttons' token-authenticated channel from the service worker; on every surface the same actions are runs.cancel and inbox.answer",
-    "POST /api/questions/{id}/answer-by-token": "the webhook channel's single-use token answer for a receiver with no session; on every surface the same action is questions.answer"
+    "POST /api/questions/{id}/answer-by-token": "the webhook channel's single-use token answer for a receiver with no session; on every surface the same action is questions.answer",
+    "GET /api/reports/{token}": "the signed link to a run's masked PDF report (E39.6): the token in the path is the authority, for a webhook receiver or the person an email went to; on every surface the same file is the run export (runs.export)",
+    "GET /api/deliveries/unsubscribe/{token}": "the page behind the unsubscribe link in a run report email (E39.6): the signed token is the authority, the recipient has no session; changes nothing until the button",
+    "POST /api/deliveries/unsubscribe/{token}": "the recipient of a run report email stops the emails (E39.6): the signed token is the authority, the recipient has no session; the owner confirming the address again is deliveries.manage"
   },
   "capabilities": [
     {
@@ -102,6 +105,48 @@
       "web": [
         "/tasks/:id"
       ]
+    },
+    {
+      "id": "deliveries.manage",
+      "description": "Choose what is sent when a task's run ends (an email with the PDF report, a signed webhook, a spreadsheet row, files in a folder), send a test, and confirm the email addresses that are not yours",
+      "rest": [
+        "GET /api/tasks/{id}/deliveries",
+        "POST /api/tasks/{id}/deliveries",
+        "PATCH /api/tasks/{id}/deliveries/{deliveryId}",
+        "DELETE /api/tasks/{id}/deliveries/{deliveryId}",
+        "POST /api/tasks/{id}/deliveries/{deliveryId}/test",
+        "GET /api/delivery-recipients",
+        "POST /api/delivery-recipients"
+      ],
+      "cli": [
+        "tasks deliveries list",
+        "tasks deliveries test"
+      ],
+      "mcp": {
+        "none": "A hosted AI app must not add a recipient or a destination: deliveries are set up by the owner, in the web app (and the API for a personal access token). run_status only reports what was sent"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the web app or the API"
+      },
+      "web": {
+        "none": "The editor is E39.10 (#605); until then the API and `hexactra tasks deliveries` are the way to set a delivery up"
+      }
+    },
+    {
+      "id": "deliveries.log",
+      "description": "What was sent for a run, with the status and the reason of each; retry one that failed",
+      "rest": [
+        "GET /api/runs/{id}/deliveries",
+        "POST /api/runs/{id}/deliveries/{runDeliveryId}/retry"
+      ],
+      "cli": "runs deliveries",
+      "mcp": {
+        "none": "run_status and run_wait report a delivery summary (counts by status) on a run; retrying a delivery is the owner's"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the delivery log is on the run page and in the CLI"
+      },
+      "web": "/runs/:id"
     },
     {
       "id": "policies.read",
