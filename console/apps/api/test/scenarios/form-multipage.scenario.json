@@ -1,0 +1,42 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a multi-page form",
+  "description": "Two form pages with ordinary Next and Save buttons: the confirmation gate does not stop a click that commits nothing.",
+  "goal": "Register Person A for the newsletter with the address 12 Example Lane",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["club.example.test"] },
+  "site": {
+    "start": "https://club.example.test/join/1",
+    "state": {},
+    "pages": {
+      "https://club.example.test/join/1": {
+        "title": "Join: your name",
+        "text": "Step 1 of 2. Tell us your name.",
+        "elements": [
+          { "id": "name", "selector": "#name", "tag": "input", "type": "text", "label": "Full name" },
+          { "id": "next", "selector": "#next", "tag": "button", "label": "Next", "on": [{ "goto": "https://club.example.test/join/2" }] }
+        ]
+      },
+      "https://club.example.test/join/2": {
+        "title": "Join: your address",
+        "text": "Step 2 of 2. Where do we write?",
+        "elements": [
+          { "id": "address", "selector": "#address", "tag": "input", "type": "text", "label": "Address" },
+          { "id": "save", "selector": "#save", "tag": "button", "label": "Save details", "on": [{ "set": { "saved": "yes" }, "goto": "https://club.example.test/join/thanks" }] }
+        ]
+      },
+      "https://club.example.test/join/thanks": { "title": "Thanks", "text": "Thanks, {{state.name}}. We will write to {{state.address}}.", "elements": [] }
+    }
+  },
+  "script": [
+    [
+      { "tool": "observe_elements" },
+      { "tool": "type_text", "args": { "selector": "#name", "text": "Person A" } },
+      { "tool": "click", "args": { "selector": "#next" } },
+      { "tool": "type_text", "args": { "selector": "#address", "text": "12 Example Lane" } },
+      { "tool": "click", "args": { "selector": "#save" } },
+      { "tool": "read_text" }
+    ],
+    [{ "tool": "finish", "args": { "success": true, "result": "Registered Person A at 12 Example Lane." } }]
+  ],
+  "expect": { "status": "succeeded", "questions": 0, "endState": { "name": "Person A", "address": "12 Example Lane", "saved": "yes" }, "maxSteps": 12 }
+}

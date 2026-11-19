@@ -1,0 +1,25 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "Stop in the middle of a chunk",
+  "description": "The owner presses Stop after the second action. The rest of the chunk is not carried out (#582): nothing more reaches the browser and the run ends cancelled.",
+  "goal": "Read the first three pages of the catalogue",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["library.example.test"] },
+  "harness": { "stopAfterActions": 2 },
+  "site": {
+    "start": "https://library.example.test/",
+    "state": {},
+    "pages": {
+      "https://library.example.test/": { "title": "Catalogue", "text": "Page 1.", "elements": [{ "id": "next", "selector": "#next", "tag": "a", "role": "link", "label": "Next page", "on": [{ "set": { "pages": "2" } }] }] }
+    }
+  },
+  "script": [
+    [
+      { "tool": "read_text" },
+      { "tool": "click", "args": { "selector": "#next" } },
+      { "tool": "click", "args": { "selector": "#next" } },
+      { "tool": "read_text" },
+      { "tool": "finish", "args": { "success": true, "result": "Read three pages." } }
+    ]
+  ],
+  "expect": { "status": "cancelled", "actionsReachedBrowser": 2, "endState": { "pages": "2" }, "maxSteps": 5 }
+}
