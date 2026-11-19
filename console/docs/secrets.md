@@ -169,6 +169,8 @@ The address is checked when it is saved, when Connect starts and on **every** ca
 - **Where the logins are kept (E37.5).** Shown only when the deployment offers the built-in store (`GET /api/secrets/store/status` answers): *Store in Hexactra* or *Connect Vault*, one active at a time (the user setting `secrets.provider`); switching moves no data. With the store chosen the page shows its own card with **My saved logins** (`/secrets`), the count open to the agent, and no Vault write switch.
 - **Activity.** The newest 100 uses from Hexactra's own audit events: when, the run (a link), the site, what was typed ("Typed the password", "Typed the code") and the outcome. A refusal is a row too ("Refused: the page was not the saved site", "Refused: no saved login for this page"). A link goes to the provider's own activity (`<Vault>/settings/agent-activity`). The login's name is the one the run recorded when it signed in (the fabric does not know it). Below 900 px the table is a stack of cards.
 
+![The Secrets page on a phone](images/secrets-phone.png) ![The Secrets page on a desktop](images/secrets-desktop.png) ![The task form's Saved logins section, with no provider connected](images/secrets-task-form-phone.png)
+
 The administrator's page, `/admin/settings/secrets` (`system_settings:read`; writes `:write`): the deployment kill switch `secrets.agentUse.enabled`, the default Vault (address, client id, write-only client secret, the redirect URI to register) and **counts only**: owners connected, owners who must reconnect, fields typed and refusals in the last 7 days. It never shows a user, a site or a login.
 
 ### On a task, a chat and a run
