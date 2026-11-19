@@ -65,6 +65,8 @@ afterEach(() => {
 describe('connection helpers', () => {
   it('groups the capabilities the way the page shows them', () => {
     expect(capabilitiesText(['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'])).toBe('mail (read, send), calendar (read), documents (read, write)');
+    expect(capabilitiesText(['mail_read', 'mail_modify'])).toBe('mail (read, organize)');
+    expect(capabilitiesText(['mail_read', 'mail_send', 'mail_modify'])).toBe('mail (read, send, organize)');
     expect(capabilitiesText([])).toBe('nothing switched on');
   });
 

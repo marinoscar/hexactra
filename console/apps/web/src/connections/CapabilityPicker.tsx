@@ -2,23 +2,26 @@ import { Box, Checkbox, FormControlLabel, Stack, Typography } from '@mui/materia
 import { useId } from 'react';
 
 import type { Capability } from './api';
-import { GROUPS } from './words';
+import { GROUPS, type GroupDef } from './words';
 
 /**
  * The switches of one account: for Mail, Calendar and Documents, "Read" and "Write" (Send, for mail), each with one line on what
- * the agent could do. Write needs read: ticking Write ticks Read, and unticking Read unticks Write. `granted` marks the ones the
+ * the agent could do. Write (and Mail's Organize) needs read: ticking either ticks Read, and unticking Read unticks them. `granted` marks the ones the
  * provider already allows, so the owner can see which need a new consent.
  */
 export function CapabilityPicker({ value, onChange, granted, providerName }: { value: readonly Capability[]; onChange: (next: Capability[]) => void; granted?: readonly Capability[]; providerName?: string }) {
   const id = useId();
-  const set = (cap: Capability, on: boolean, g: (typeof GROUPS)[number]) => {
+  const set = (cap: Capability, on: boolean, g: GroupDef) => {
     const next = new Set(value);
     if (on) {
       next.add(cap);
-      if (cap === g.write) next.add(g.read);
+      if (cap === g.write || cap === g.modify) next.add(g.read);
     } else {
       next.delete(cap);
-      if (cap === g.read) next.delete(g.write);
+      if (cap === g.read) {
+        next.delete(g.write);
+        if (g.modify) next.delete(g.modify);
+      }
     }
     onChange([...next]);
   };
@@ -31,7 +34,7 @@ export function CapabilityPicker({ value, onChange, granted, providerName }: { v
             {g.name}
           </Typography>
           <Stack aria-labelledby={`${id}-${g.group}`} role="group">
-            {([[g.read, 'Read', g.readWords], [g.write, g.group === 'mail' ? 'Send' : 'Write', g.writeWords]] as const).map(([cap, name, words]) => (
+            {([[g.read, 'Read', g.readWords], [g.write, g.group === 'mail' ? 'Send' : 'Write', g.writeWords], ...(g.modify && g.modifyWords ? [[g.modify, 'Organize', g.modifyWords] as const] : [])] as readonly (readonly [Capability, string, string])[]).map(([cap, name, words]) => (
               <FormControlLabel
                 key={cap}
                 sx={{ alignItems: 'flex-start', ml: 0, minHeight: { xs: 44, sm: 'auto' } }}
