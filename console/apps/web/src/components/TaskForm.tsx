@@ -278,6 +278,17 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
       return { ...f, fields: { ...f.fields, outputs }, errors: rest };
     });
 
+  // One line for the folded deliveries section. While the saved list (or the account names it needs) is still loading it says so: "Nothing is
+  // sent" must never be shown for a task whose deliveries have not been read yet.
+  const deliveriesSummary = deliveries.failed
+    ? 'The deliveries could not be loaded.'
+    : !deliveries.loaded || (canReadConnections && accounts.connections === null && deliveries.drafts.length === 1)
+      ? 'Loading the deliveries…'
+      : deliveries.drafts.length === 0
+        ? 'Nothing is sent when a run ends.'
+        : deliveries.drafts.length === 1
+          ? summarize(deliveries.drafts[0]!, accounts.connections ?? [])
+          : `${deliveries.drafts.length} deliveries after each run`;
   const setConnections = (connections: ConnectionSelection[]) => setFields({ connections });
   const setNeedsBrowser = (needsBrowser: NeedsBrowser) => setFields({ needsBrowser });
 
@@ -573,7 +584,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
           <CollapsedSection
             title="Accounts the agent may use"
             anchor="accounts"
-            summary={summaryLine(fields.connections, accounts.connections)}
+            summary={accounts.connections === null && fields.connections.length > 0 ? 'Loading your accounts…' : summaryLine(fields.connections, accounts.connections)}
             open={accountsOpen}
             onToggle={setAccountsOpen}
           >
@@ -602,7 +613,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
           <CollapsedSection
             title="Where the result goes"
             anchor="deliveries"
-            summary={deliveries.drafts.length === 0 ? 'Nothing is sent when a run ends.' : deliveries.drafts.length === 1 ? summarize(deliveries.drafts[0]!, accounts.connections ?? []) : `${deliveries.drafts.length} deliveries after each run`}
+            summary={deliveriesSummary}
             open={deliveriesOpen}
             onToggle={setDeliveriesOpen}
           >

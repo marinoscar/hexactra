@@ -234,7 +234,7 @@ describe('the accounts section of the task form', () => {
 
   it('edits a saved task: the summary names the accounts, and only a change is sent', async () => {
     const { sent } = mountForm(`/tasks/${TASK_ID}/edit`, PERMS);
-    expect(await screen.findByTestId('accounts-summary')).toHaveTextContent('1 account: Work (read only)');
+    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('1 account: Work (read only)'));
     fireEvent.click(screen.getByRole('button', { name: /Accounts the agent may use/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Read and change: Work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -253,7 +253,7 @@ describe('the accounts section of the task form', () => {
 
   it('keeps the accounts a task has when the list of accounts could not be loaded, and says so', async () => {
     mountForm(`/tasks/${TASK_ID}/edit`, PERMS, { 'GET /connections': () => { throw Object.assign(new Error('down'), { status: 500 }); } });
-    expect(await screen.findByTestId('accounts-summary')).toHaveTextContent('1 account');
+    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent(/^1 account/));
     fireEvent.click(screen.getByRole('button', { name: /Accounts the agent may use/ }));
     expect(await screen.findByText(/Your accounts could not be loaded/)).toBeInTheDocument();
   });
@@ -268,9 +268,21 @@ describe('the deliveries section of the task form is hidden without runs:read an
     expect(screen.queryByRole('button', { name: /Where the result goes/ })).toBeNull();
   });
 
+  it('says it is loading, not that nothing is sent, until the saved deliveries are read', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    const pending = new Promise((r) => (release = r));
+    mountForm(`/tasks/${TASK_ID}/edit`, ['tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'connections:read'], { [`GET /tasks/${TASK_ID}/deliveries`]: () => pending, 'GET /delivery-recipients': [] });
+    await waitFor(() => expect(screen.getByTestId('deliveries-summary')).toHaveTextContent('Loading the deliveries…'));
+    expect(screen.queryByText('Nothing is sent when a run ends.')).toBeNull();
+    release([]);
+    await waitFor(() => expect(screen.getByTestId('deliveries-summary')).toHaveTextContent('Nothing is sent when a run ends.'));
+  });
+
   it('shows the saved deliveries read-only without runs:write', async () => {
     mountForm(`/tasks/${TASK_ID}/edit`, ['tasks:read', 'tasks:write', 'runs:read', 'connections:read'], { [`GET /tasks/${TASK_ID}/deliveries`]: [SAVED], 'GET /delivery-recipients': [] });
-    expect(await screen.findByTestId('deliveries-summary')).toHaveTextContent('Email to 1 person with the PDF report, when it succeeds');
+    // While the saved list is being read the summary says so, never "Nothing is sent".
+    expect(screen.queryByText('Nothing is sent when a run ends.')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('deliveries-summary')).toHaveTextContent('Email to 1 person with the PDF report, when it succeeds'));
     fireEvent.click(screen.getByRole('button', { name: /Where the result goes/ }));
     expect(await screen.findByRole('button', { name: 'Edit' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Add a delivery' })).toBeNull();
