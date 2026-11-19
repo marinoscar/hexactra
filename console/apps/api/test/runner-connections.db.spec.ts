@@ -504,12 +504,12 @@ describe('a crash around a send', () => {
     // The job dies after the message left the mailbox and before its result was recorded.
     let hung!: () => void;
     const reached = new Promise<void>((resolve) => (hung = resolve));
-    const realMail = kit.fake.mail.bind(kit.fake);
+    const realMail = kit.fake.mail!.bind(kit.fake);
     registry.register({
       ...kit.fake,
       provider: 'google',
       mail: (ctx: never) => {
-        const m = realMail(ctx);
+        const m = realMail(ctx)!;
         return {
           ...m,
           send: async (x: never) => {
@@ -520,8 +520,8 @@ describe('a crash around a send', () => {
           },
         };
       },
-      calendar: kit.fake.calendar.bind(kit.fake),
-      documents: kit.fake.documents.bind(kit.fake),
+      calendar: kit.fake.calendar!.bind(kit.fake),
+      documents: kit.fake.documents!.bind(kit.fake),
     } as never);
     const dying = kit.runner(scriptedModel([[call]]), fakeFabric()).advance(r.run.id, r.userId, null);
     dying.catch(() => undefined);
@@ -549,16 +549,16 @@ describe('a crash around a send', () => {
     const registry = app.get(CapabilityProviderRegistry);
     let hung!: () => void;
     const reached = new Promise<void>((resolve) => (hung = resolve));
-    const realMail = kit.fake.mail.bind(kit.fake);
+    const realMail = kit.fake.mail!.bind(kit.fake);
     registry.register({
       ...kit.fake,
       provider: 'google',
       mail: (ctx: never) => {
-        const m = realMail(ctx);
+        const m = realMail(ctx)!;
         return { ...m, send: async (x: never) => (await m.send(x), hung(), new Promise(() => undefined)) };
       },
-      calendar: kit.fake.calendar.bind(kit.fake),
-      documents: kit.fake.documents.bind(kit.fake),
+      calendar: kit.fake.calendar!.bind(kit.fake),
+      documents: kit.fake.documents!.bind(kit.fake),
     } as never);
     const call = SEND(['person-b@example.test'], 'Invoice', 'Here is the invoice.');
     kit.runner(scriptedModel([[call]]), fakeFabric()).advance(r.run.id, r.userId, null).catch(() => undefined);
