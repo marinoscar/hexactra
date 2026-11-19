@@ -5,6 +5,7 @@
 // bootstrap; the stores refuse a write to an unregistered purpose.
 import type { CredentialPurposeDef } from '@marinoscar/platform-api/credentials';
 
+import { CONNECTION_SYSTEM_CREDENTIAL_PURPOSES } from '../../connections/connections.credentials';
 import { FABRIC_CREDENTIAL_PURPOSE } from '../../fabric/fabric.credentials';
 import { SECRETS_VAULT_CLIENT_SYSTEM_PURPOSE } from '../../secrets/secrets.credentials';
 
@@ -21,4 +22,4 @@ export const NOTES_WEBHOOK_CREDENTIAL_PURPOSE: CredentialPurposeDef = {
 };
 
 /** Every purpose this app adds. Append here. */
-export const APP_CREDENTIAL_PURPOSES: readonly CredentialPurposeDef[] = [NOTES_WEBHOOK_CREDENTIAL_PURPOSE, FABRIC_CREDENTIAL_PURPOSE, SECRETS_VAULT_CLIENT_SYSTEM_PURPOSE];
+export const APP_CREDENTIAL_PURPOSES: readonly CredentialPurposeDef[] = [NOTES_WEBHOOK_CREDENTIAL_PURPOSE, FABRIC_CREDENTIAL_PURPOSE, SECRETS_VAULT_CLIENT_SYSTEM_PURPOSE, ...CONNECTION_SYSTEM_CREDENTIAL_PURPOSES];

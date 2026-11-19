@@ -14,7 +14,8 @@ export const credentialsSlice: ApiSlice = {
   register: () => {
     const { registerUserCredentialPurpose } = require('@marinoscar/platform-api/credentials') as typeof import('@marinoscar/platform-api/credentials');
     const { SECRETS_USER_CREDENTIAL_PURPOSES } = require('../../secrets/secrets.credentials') as typeof import('../../secrets/secrets.credentials');
-    for (const purpose of SECRETS_USER_CREDENTIAL_PURPOSES) registerUserCredentialPurpose(purpose);
+    const { CONNECTION_USER_CREDENTIAL_PURPOSES } = require('../../connections/connections.credentials') as typeof import('../../connections/connections.credentials');
+    for (const purpose of [...SECRETS_USER_CREDENTIAL_PURPOSES, ...CONNECTION_USER_CREDENTIAL_PURPOSES]) registerUserCredentialPurpose(purpose);
   },
   modules: () => {
     const { credentialsModules } = require('./credentials.config') as typeof import('./credentials.config');
