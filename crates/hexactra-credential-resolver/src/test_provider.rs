@@ -13,7 +13,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    FieldSummary, ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose,
+    CardGrantSummary, CardSummary, FieldSummary, ItemKind, ItemSummary, MatchKind, SecretField,
+    SecretPurpose,
 };
 
 use crate::{
@@ -37,6 +38,42 @@ pub const FIXTURE_DOB: &str = "1990-03-27";
 pub const FIXTURE_ID_NUMBER: &str = "CANARY-ID-5521-7788";
 pub const FIXTURE_COUNTRY: &str = "Canada";
 pub const FIXTURE_CITY: &str = "Exampleton";
+
+/// The fixture's cards (E37.7): the published test numbers, granted for
+/// [`FIXTURE_MERCHANT`]. `test-card-1` may be typed into the processor frame
+/// [`FIXTURE_PAY_FRAME`], up to 500.00 USD, security code included;
+/// `test-card-2` has no frame, up to 20.00 USD and no security code.
+pub const FIXTURE_CARD_ID: &str = "test-card-1";
+pub const FIXTURE_CARD_2_ID: &str = "test-card-2";
+pub const FIXTURE_MERCHANT: &str = "https://shop.example.test";
+pub const FIXTURE_PAY_FRAME: &str = "https://pay.processor.example.test";
+pub const FIXTURE_CARD_NUMBER: &str = "4242424242424242";
+pub const FIXTURE_CARD_EXP_MONTH: &str = "09";
+pub const FIXTURE_CARD_EXP_YEAR: &str = "2031";
+pub const FIXTURE_CARD_HOLDER: &str = "Person A";
+pub const FIXTURE_CARD_POSTAL: &str = "K1A 0B1";
+pub const FIXTURE_CARD_CVV: &str = "CANARY-CVV-737";
+
+/// One card in the fixture.
+#[derive(Debug, Clone)]
+pub struct TestCard {
+    pub id: String,
+    pub name: String,
+    pub brand: String,
+    pub number: String,
+    pub exp_month: String,
+    pub exp_year: String,
+    pub holder: String,
+    pub postal: String,
+    pub cvv: String,
+    /// The merchant the owner granted (matched by registrable domain).
+    pub merchant: String,
+    /// Exact payment frame origins the grant accepts.
+    pub frames: Vec<String>,
+    pub max_amount: f64,
+    pub currency: String,
+    pub include_security_code: bool,
+}
 
 /// One login in the fixture.
 #[derive(Debug, Clone)]
@@ -80,6 +117,11 @@ pub struct TestCall {
     pub purpose: Option<&'static str>,
     pub client_label: Option<String>,
     pub run_id: Option<String>,
+    /// For a card release: the purchase's amount and currency and the frame
+    /// the fabric found (E37.7).
+    pub amount: Option<String>,
+    pub currency: Option<String>,
+    pub frame_origin: Option<String>,
 }
 
 pub struct TestProvider {
@@ -87,6 +129,7 @@ pub struct TestProvider {
     owner: Option<String>,
     items: Vec<TestItem>,
     identities: Vec<TestIdentity>,
+    cards: Vec<TestCard>,
     failure: Mutex<Option<ProviderError>>,
     calls: Mutex<Vec<TestCall>>,
 }
@@ -104,6 +147,7 @@ impl TestProvider {
             owner: None,
             items: Vec::new(),
             identities: Vec::new(),
+            cards: Vec::new(),
             failure: Mutex::new(None),
             calls: Mutex::new(Vec::new()),
         }
@@ -130,6 +174,44 @@ impl TestProvider {
                 origins: vec![FIXTURE_SITE_ORIGIN.into()],
             })
             .with_identity(Self::fixture_identity())
+            .with_card(Self::fixture_card(FIXTURE_CARD_ID))
+            .with_card(Self::fixture_card(FIXTURE_CARD_2_ID))
+    }
+
+    /// Add a card.
+    pub fn with_card(mut self, card: TestCard) -> Self {
+        self.cards.push(card);
+        self
+    }
+
+    /// One of the fixture's two cards (see [`FIXTURE_CARD_ID`]).
+    pub fn fixture_card(id: &str) -> TestCard {
+        let first = id == FIXTURE_CARD_ID;
+        TestCard {
+            id: id.into(),
+            name: if first { "Everyday card" } else { "Virtual card" }.into(),
+            brand: if first { "visa" } else { "mastercard" }.into(),
+            number: if first {
+                FIXTURE_CARD_NUMBER
+            } else {
+                "5555555555554444"
+            }
+            .into(),
+            exp_month: FIXTURE_CARD_EXP_MONTH.into(),
+            exp_year: FIXTURE_CARD_EXP_YEAR.into(),
+            holder: FIXTURE_CARD_HOLDER.into(),
+            postal: FIXTURE_CARD_POSTAL.into(),
+            cvv: if first { FIXTURE_CARD_CVV } else { "CANARY-CVV-4821" }.into(),
+            merchant: FIXTURE_MERCHANT.into(),
+            frames: if first {
+                vec![FIXTURE_PAY_FRAME.into()]
+            } else {
+                Vec::new()
+            },
+            max_amount: if first { 500.0 } else { 20.0 },
+            currency: "USD".into(),
+            include_security_code: first,
+        }
     }
 
     /// Add an identity item.
@@ -258,6 +340,56 @@ impl TestProvider {
             .any(|o| o.matches_exact(origin))
     }
 
+    /// A card field under the card's merchant grant, with Vault's checks in
+    /// Vault's order (merchant, frame, currency, amount, security code).
+    fn release_card(card: &TestCard, req: &ReleaseRequest) -> Result<SecretValue, ProviderError> {
+        let Some(purchase) = req.purchase.as_ref() else {
+            return Err(ProviderError::Refused("unsupported_purpose".into()));
+        };
+        if req.purpose != SecretPurpose::Purchase || req.origin.scheme() != "https" {
+            return Err(ProviderError::Refused("unsupported_purpose".into()));
+        }
+        let merchant = Origin::from_stored(&card.merchant).map_err(|_| ProviderError::NotFound)?;
+        if req.origin.match_kind(&merchant).is_none() {
+            return Err(ProviderError::OriginMismatch);
+        }
+        if let Some(f) = &purchase.frame_origin {
+            let ok = card
+                .frames
+                .iter()
+                .filter_map(|o| Origin::from_stored(o).ok())
+                .any(|o| o.matches_exact(f));
+            if !ok {
+                return Err(ProviderError::OriginMismatch);
+            }
+        }
+        if purchase.currency != card.currency {
+            return Err(ProviderError::Refused("card_currency_mismatch".into()));
+        }
+        let amount: f64 = purchase
+            .amount
+            .parse()
+            .map_err(|_| ProviderError::Refused("invalid_request".into()))?;
+        if amount > card.max_amount + 1e-9 {
+            return Err(ProviderError::Refused("card_amount_exceeded".into()));
+        }
+        let value = match req.field {
+            SecretField::CardNumber => &card.number,
+            SecretField::ExpMonth => &card.exp_month,
+            SecretField::ExpYear => &card.exp_year,
+            SecretField::HolderName => &card.holder,
+            SecretField::PostalCode => &card.postal,
+            SecretField::SecurityCode => {
+                if !card.include_security_code {
+                    return Err(ProviderError::Refused("security_code_not_granted".into()));
+                }
+                &card.cvv
+            }
+            _ => return Err(ProviderError::Refused("unsupported_field".into())),
+        };
+        Ok(SecretValue::from_string(value.clone()))
+    }
+
     fn log(&self, call: TestCall) {
         self.calls.lock().unwrap().push(call);
     }
@@ -284,8 +416,47 @@ impl SecretsProvider for TestProvider {
             purpose: None,
             client_label: None,
             run_id: None,
+            amount: None,
+            currency: None,
+            frame_origin: None,
         });
         self.check(owner)?;
+        if kind == ItemKind::Card {
+            let mut out: Vec<ItemSummary> = self
+                .cards
+                .iter()
+                .filter(|c| {
+                    Origin::from_stored(&c.merchant)
+                        .ok()
+                        .and_then(|m| origin.match_kind(&m))
+                        .is_some()
+                })
+                .map(|c| ItemSummary {
+                    id: c.id.clone(),
+                    name: c.name.clone(),
+                    username: None,
+                    origins: Vec::new(),
+                    match_kind: MatchKind::Exact,
+                    has_code: false,
+                    updated_at: None,
+                    fields: Vec::new(),
+                    card: Some(CardSummary {
+                        brand: Some(c.brand.clone()),
+                        last4: Some(c.number[c.number.len() - 4..].to_string()),
+                        exp_month: Some(c.exp_month.clone()),
+                        exp_year: Some(c.exp_year.clone()),
+                        grant: Some(CardGrantSummary {
+                            max_amount: format!("{:.2}", c.max_amount),
+                            currency: c.currency.clone(),
+                            includes_security_code: c.include_security_code,
+                            expires_at: None,
+                        }),
+                    }),
+                })
+                .collect();
+            out.sort_by(|a, b| a.id.cmp(&b.id));
+            return Ok(out);
+        }
         if kind == ItemKind::Identity {
             let mut out: Vec<ItemSummary> = self
                 .identities
@@ -314,6 +485,7 @@ impl SecretsProvider for TestProvider {
                                 usable_here: !f.sensitive || allowed,
                             })
                             .collect(),
+                        card: None,
                     }
                 })
                 .collect();
@@ -342,6 +514,7 @@ impl SecretsProvider for TestProvider {
                     has_code: i.code.is_some(),
                     updated_at: Some(DateTime::<Utc>::UNIX_EPOCH),
                     fields: Vec::new(),
+                    card: None,
                 })
             })
             .collect();
@@ -359,8 +532,20 @@ impl SecretsProvider for TestProvider {
             purpose: Some(req.purpose.as_str()),
             client_label: req.client_label.clone(),
             run_id: req.run_id.clone(),
+            amount: req.purchase.as_ref().map(|p| p.amount.clone()),
+            currency: req.purchase.as_ref().map(|p| p.currency.clone()),
+            frame_origin: req
+                .purchase
+                .as_ref()
+                .and_then(|p| p.frame_origin.as_ref().map(|f| f.to_string())),
         });
         self.check(&req.owner)?;
+        if let Some(card) = self.cards.iter().find(|c| c.id == req.item_id) {
+            return Self::release_card(card, &req);
+        }
+        if req.purpose == SecretPurpose::Purchase || req.purchase.is_some() {
+            return Err(ProviderError::NotFound);
+        }
         if let Ok(identity) = self.identity(&req.item_id) {
             if req.purpose != SecretPurpose::Form {
                 return Err(ProviderError::Refused("unsupported_purpose".into()));
@@ -399,6 +584,9 @@ impl SecretsProvider for TestProvider {
             purpose: Some(req.purpose.as_str()),
             client_label: req.client_label.clone(),
             run_id: req.run_id.clone(),
+            amount: None,
+            currency: None,
+            frame_origin: None,
         });
         self.check(&req.owner)?;
         let item = self.item(&req.item_id)?;
@@ -431,6 +619,7 @@ mod tests {
             purpose: SecretPurpose::Login,
             run_id: Some("run-1".into()),
             client_label: Some("Console".into()),
+            purchase: None,
         }
     }
 
@@ -453,12 +642,67 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
-        // Other kinds are not implemented by the fixture.
+        // A card is listed only for a merchant it is granted for (E37.7), and
+        // a lookup never carries the number or the security code.
         assert!(p
-            .lookup(&owner(), &page, ItemKind::Card)
+            .lookup(&owner(), &other, ItemKind::Card)
             .await
             .unwrap()
             .is_empty());
+        let shop = Origin::from_browser_url("https://checkout.shop.example.test/pay").unwrap();
+        let cards = p.lookup(&owner(), &shop, ItemKind::Card).await.unwrap();
+        assert_eq!(cards.len(), 2);
+        let card = cards[0].card.as_ref().unwrap();
+        assert_eq!(card.last4.as_deref(), Some("4242"));
+        assert_eq!(card.grant.as_ref().unwrap().max_amount, "500.00");
+        let json = serde_json::to_string(&cards).unwrap();
+        assert!(!json.contains(FIXTURE_CARD_NUMBER) && !json.contains(FIXTURE_CARD_CVV));
+    }
+
+    fn pay(item: &str, field: SecretField, amount: &str, frame: Option<&str>) -> ReleaseRequest {
+        ReleaseRequest {
+            purpose: SecretPurpose::Purchase,
+            purchase: Some(crate::PurchaseContext {
+                amount: amount.into(),
+                currency: "USD".into(),
+                frame_origin: frame.map(|f| Origin::from_stored(f).unwrap()),
+            }),
+            ..rel(item, field, FIXTURE_MERCHANT)
+        }
+    }
+
+    #[tokio::test]
+    async fn card_release_enforces_the_grant_and_logs_the_purchase_not_a_value() {
+        let p = TestProvider::with_fixture();
+        let v = p
+            .release(pay(FIXTURE_CARD_ID, SecretField::CardNumber, "42.50", Some(FIXTURE_PAY_FRAME)))
+            .await
+            .unwrap();
+        assert!(v.expose(|b| b == FIXTURE_CARD_NUMBER.as_bytes()));
+        let call = p.calls().pop().unwrap();
+        assert_eq!(call.amount.as_deref(), Some("42.50"));
+        assert_eq!(call.currency.as_deref(), Some("USD"));
+        assert_eq!(call.frame_origin.as_deref(), Some(FIXTURE_PAY_FRAME));
+        assert_eq!(call.purpose, Some("purchase"));
+        let refused = |r: Result<SecretValue, ProviderError>| r.err().unwrap();
+        // Amount over the grant, a frame that is not listed, no security code granted.
+        assert_eq!(
+            refused(p.release(pay(FIXTURE_CARD_2_ID, SecretField::CardNumber, "20.01", None)).await),
+            ProviderError::Refused("card_amount_exceeded".into())
+        );
+        assert_eq!(
+            refused(p.release(pay(FIXTURE_CARD_ID, SecretField::CardNumber, "5", Some("https://evil.test"))).await),
+            ProviderError::OriginMismatch
+        );
+        assert_eq!(
+            refused(p.release(pay(FIXTURE_CARD_2_ID, SecretField::SecurityCode, "5", None)).await),
+            ProviderError::Refused("security_code_not_granted".into())
+        );
+        // A card needs a purchase.
+        assert_eq!(
+            refused(p.release(rel(FIXTURE_CARD_ID, SecretField::CardNumber, FIXTURE_MERCHANT)).await),
+            ProviderError::Refused("unsupported_purpose".into())
+        );
     }
 
     #[tokio::test]

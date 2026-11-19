@@ -232,6 +232,10 @@ pub struct ItemSummary {
     /// on the item's allowed list (where its sensitive fields may be typed).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<FieldSummary>,
+    /// What a saved card is (E37.7): brand, last four, expiry and the grant
+    /// it is listed under. Absent for a login and an identity item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<CardSummary>,
 }
 
 /// One field of an identity item as a lookup lists it: what it is called and
@@ -258,6 +262,70 @@ pub enum SelectPart {
     Day,
     Month,
     Year,
+}
+
+/// The grant a card is listed under for the merchant on screen (E37.7): what
+/// the owner allowed in the provider. Never a number or a code.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CardGrantSummary {
+    /// The most a purchase may be, as a decimal with two places (`"500.00"`).
+    pub max_amount: String,
+    /// ISO 4217, upper case.
+    pub currency: String,
+    /// Whether the security code may be released under this grant.
+    pub includes_security_code: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// What a lookup says about a saved card (E37.7): its brand, the last four
+/// digits, the expiry and the merchant grant it is listed under. **Never the
+/// number, never the security code.**
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CardSummary {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brand: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last4: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exp_month: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exp_year: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grant: Option<CardGrantSummary>,
+}
+
+/// One card field a `type_card_field` action types (E37.7). `expiry` is
+/// composed inside the fabric from the two released parts (`MM/YY`) for a
+/// page that has one combined input; it is never returned.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardField {
+    Number,
+    Expiry,
+    ExpMonth,
+    ExpYear,
+    HolderName,
+    PostalCode,
+    SecurityCode,
+}
+
+impl CardField {
+    /// The wire name, for audit events and logs (never a value).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CardField::Number => "number",
+            CardField::Expiry => "expiry",
+            CardField::ExpMonth => "exp_month",
+            CardField::ExpYear => "exp_year",
+            CardField::HolderName => "holder_name",
+            CardField::PostalCode => "postal_code",
+            CardField::SecurityCode => "security_code",
+        }
+    }
 }
 
 /// A point in a page's viewport, in CSS pixels.
@@ -298,6 +366,17 @@ pub struct ProviderSelectedResult {
     pub selected: bool,
 }
 
+/// `result` of `type_card_field`: that the field was typed and, when it was
+/// typed into an embedded payment frame, that frame's origin as the fabric
+/// found it. Never the value, never its length.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CardTypedResult {
+    pub typed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_origin: Option<String>,
+}
+
 /// The failure codes of the provider actions. An operation that fails with
 /// one reports `error: "<code>: <message>"`.
 pub mod provider_error_codes {
@@ -336,6 +415,23 @@ pub mod provider_error_codes {
     /// `select_from_provider`: the target is not a `<select>`, or none of its
     /// options is the stored value.
     pub const NO_OPTION: &str = "no_option";
+    /// `type_card_field`: the purchase is more than the grant's maximum
+    /// (E37.7).
+    pub const AMOUNT_EXCEEDED: &str = "amount_exceeded";
+    /// `type_card_field`: the purchase's currency is not the grant's.
+    pub const CURRENCY_MISMATCH: &str = "currency_mismatch";
+    /// `type_card_field`: the grant does not include the security code.
+    pub const SECURITY_CODE_NOT_GRANTED: &str = "security_code_not_granted";
+    /// `type_card_field`: the merchant's grant has expired.
+    pub const GRANT_EXPIRED: &str = "grant_expired";
+    /// `type_card_field`: the grant's period limit or the card's daily cap of
+    /// releases is reached.
+    pub const LIMIT_REACHED: &str = "limit_reached";
+    /// The provider's card release is switched off.
+    pub const CARDS_DISABLED: &str = "cards_disabled";
+    /// `type_card_field`: the target is in a frame and its origin cannot be
+    /// determined (or is not `https`); nothing was typed.
+    pub const FRAME_UNKNOWN: &str = "frame_unknown";
 }
 
 /// The provider implementations a registration can name.
@@ -521,6 +617,39 @@ pub enum RemoteAction {
         /// Press Enter after typing.
         #[serde(default)]
         submit: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Type one field of a saved card into the target (E37.7), under the
+    /// owner's merchant grant. Like `type_from_provider`, and stricter: the
+    /// page must be `https`; the fabric reads the tab's **top-level** origin
+    /// (the merchant) itself and, when the target is inside an embedded frame
+    /// (a `point` on a payment processor's iframe), that frame's origin too,
+    /// and passes both to the provider with the purchase's `amount` and
+    /// `currency`; it refuses when it cannot determine a frame's origin. The
+    /// caller never names an origin. `field: expiry` composes `MM/YY` from the
+    /// two released parts. A card field is never submitted. Result:
+    /// [`CardTypedResult`]; never the value.
+    TypeCardField {
+        item_id: String,
+        field: CardField,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        point: Option<ViewportPoint>,
+        /// The purchase's amount: a decimal with at most two places.
+        amount: String,
+        /// The purchase's currency: ISO 4217, three letters.
+        currency: String,
+        /// Clear the existing value first.
+        #[serde(default)]
+        clear: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -863,6 +992,35 @@ fn check_text(text: &str) -> Result<(), ActionValidationError> {
     Ok(())
 }
 
+/// The most a purchase may be: 10,000,000.00 (Vault's own ceiling).
+pub const MAX_CARD_AMOUNT: f64 = 10_000_000.0;
+
+/// A purchase's amount: a positive decimal with at most two places and at most
+/// [`MAX_CARD_AMOUNT`] (`"42.50"`, `"7"`).
+pub fn check_amount(amount: &str) -> Result<(), ActionValidationError> {
+    let bad = || ActionValidationError("amount must be a positive decimal with at most two places, at most 10000000.00".into());
+    let (whole, frac) = amount.split_once('.').unwrap_or((amount, ""));
+    let digits = |p: &str| p.bytes().all(|b| b.is_ascii_digit());
+    if whole.is_empty() || whole.len() > 8 || !digits(whole) || frac.len() > 2 || !digits(frac) {
+        return Err(bad());
+    }
+    match amount.parse::<f64>() {
+        Ok(v) if v > 0.0 && v <= MAX_CARD_AMOUNT => Ok(()),
+        _ => Err(bad()),
+    }
+}
+
+/// A currency: three upper-case ASCII letters (ISO 4217).
+pub fn check_currency(currency: &str) -> Result<(), ActionValidationError> {
+    if currency.len() == 3 && currency.bytes().all(|b| b.is_ascii_uppercase()) {
+        Ok(())
+    } else {
+        Err(ActionValidationError(
+            "currency must be three upper-case letters (ISO 4217)".into(),
+        ))
+    }
+}
+
 /// Longest provider item id.
 pub const MAX_ITEM_ID_LEN: usize = 256;
 /// Longest run id, provider id or client label on a provider action.
@@ -932,6 +1090,7 @@ impl RemoteAction {
             RemoteAction::TypeFromProvider { .. } => "type_from_provider",
             RemoteAction::TypeCodeFromProvider { .. } => "type_code_from_provider",
             RemoteAction::SelectFromProvider { .. } => "select_from_provider",
+            RemoteAction::TypeCardField { .. } => "type_card_field",
             RemoteAction::Press { .. } => "press",
             RemoteAction::Scroll { .. } => "scroll",
             RemoteAction::Screenshot { .. } => "screenshot",
@@ -986,6 +1145,7 @@ impl RemoteAction {
                 | RemoteAction::TypeFromProvider { .. }
                 | RemoteAction::TypeCodeFromProvider { .. }
                 | RemoteAction::SelectFromProvider { .. }
+                | RemoteAction::TypeCardField { .. }
         )
     }
 
@@ -1036,6 +1196,32 @@ impl RemoteAction {
             } => {
                 check_item_id(item_id)?;
                 check_provider_meta(provider, run_id, client_label)?;
+                match (selector, point) {
+                    (Some(_), Some(_)) => Err(ActionValidationError(
+                        "give a selector or a point, not both".into(),
+                    )),
+                    (None, None) => Err(ActionValidationError(
+                        "give a selector or a point to type into".into(),
+                    )),
+                    (Some(s), None) => check_selector(s),
+                    (None, Some(p)) => check_point(p.x, p.y),
+                }
+            }
+            RemoteAction::TypeCardField {
+                item_id,
+                selector,
+                point,
+                amount,
+                currency,
+                provider,
+                run_id,
+                client_label,
+                ..
+            } => {
+                check_item_id(item_id)?;
+                check_provider_meta(provider, run_id, client_label)?;
+                check_amount(amount)?;
+                check_currency(currency)?;
                 match (selector, point) {
                     (Some(_), Some(_)) => Err(ActionValidationError(
                         "give a selector or a point, not both".into(),
@@ -3009,6 +3195,23 @@ mod tests {
                 },
                 "select_from_provider",
             ),
+            (
+                json!({"type": "type_card_field", "item_id": "c1", "field": "expiry", "point": {"x": 10, "y": 20}, "amount": "42.50", "currency": "USD"}),
+                RemoteAction::TypeCardField {
+                    item_id: "c1".into(),
+                    field: CardField::Expiry,
+                    selector: None,
+                    point: Some(ViewportPoint { x: 10, y: 20 }),
+                    amount: "42.50".into(),
+                    currency: "USD".into(),
+                    clear: false,
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+                "type_card_field",
+            ),
         ];
         for (wire, action, kind) in cases {
             let parsed: RemoteAction = serde_json::from_value(wire.clone()).unwrap();
@@ -3040,6 +3243,15 @@ mod tests {
             // A part only makes sense for a date of birth; a select needs a selector.
             json!({"type": "select_from_provider", "item_id": "i", "field": "country", "selector": "#c", "part": "day"}),
             json!({"type": "select_from_provider", "item_id": "i", "field": "country", "selector": ""}),
+            // A card field needs a valid amount, a currency and exactly one target.
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "amount": "0", "currency": "USD"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "amount": "12.345", "currency": "USD"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "amount": "-5", "currency": "USD"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "amount": "1e3", "currency": "USD"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "amount": "10000000.01", "currency": "USD"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "amount": "5", "currency": "usd"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "amount": "5", "currency": "USD"}),
+            json!({"type": "type_card_field", "item_id": "c", "field": "number", "selector": "#n", "point": {"x": 1, "y": 1}, "amount": "5", "currency": "USD"}),
         ];
         for wire in bad {
             let a: RemoteAction = serde_json::from_value(wire.clone()).unwrap();
@@ -3067,6 +3279,7 @@ mod tests {
             has_code: true,
             updated_at: Some(Utc::now()),
             fields: Vec::new(),
+            card: None,
         };
         // A login has no `fields` on the wire; an identity item lists labels and flags only.
         assert!(serde_json::to_value(&item).unwrap().get("fields").is_none());

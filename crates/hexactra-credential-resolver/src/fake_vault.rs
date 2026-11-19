@@ -65,6 +65,64 @@ pub const IDENTITY_ID_NUMBER: &str = "CANARY-VAULT-ID-8844-1203";
 pub const IDENTITY_CITY: &str = "Exampleton";
 pub const IDENTITY_COUNTRY: &str = "Canada";
 
+/// Logins plus cards (contract 1.1): what the console asks with the card consent.
+pub const SCOPES_WITH_CARDS: [&str; 4] = [
+    "vault:items_read",
+    "vault:items_fill",
+    "vault:cards_read",
+    "vault:cards_fill",
+];
+/// The fake's saved card (E37.7): a well-known test number, with a grant for
+/// [`CARD_MERCHANT`] up to 500.00 USD, one allowed payment frame and no
+/// security code. Values are the published test card; nothing real.
+pub const CARD_ID: &str = "7f1c2e9a-0000-4000-8000-0000000000c1";
+/// A second card, granted for the same merchant with the security code and a
+/// small limit.
+pub const CARD_2_ID: &str = "7f1c2e9a-0000-4000-8000-0000000000c2";
+/// A card its owner has not opened to agents.
+pub const CARD_CLOSED_ID: &str = "7f1c2e9a-0000-4000-8000-0000000000c3";
+pub const CARD_MERCHANT: &str = "https://shop.example.test";
+pub const CARD_FRAME: &str = "https://pay.processor.example.test";
+pub const CARD_NUMBER: &str = "4242424242424242";
+pub const CARD_EXP_MONTH: &str = "09";
+pub const CARD_EXP_YEAR: &str = "2031";
+pub const CARD_HOLDER: &str = "Person A";
+pub const CARD_POSTAL: &str = "K1A 0B1";
+pub const CARD_CVV: &str = "CANARY-CVV-737";
+pub const CARD_2_NUMBER: &str = "5555555555554444";
+pub const CARD_2_CVV: &str = "CANARY-CVV-4821";
+
+/// One merchant grant of a fake card.
+#[derive(Debug, Clone)]
+pub struct FakeGrant {
+    pub merchant_origin: String,
+    pub frame_origins: Vec<String>,
+    pub max_amount: f64,
+    pub currency: String,
+    pub include_security_code: bool,
+    pub expired: bool,
+    /// At most this many `number` releases per day (a period limit).
+    pub max_releases_per_day: Option<u32>,
+}
+
+/// One card of the fake (contract 1.1).
+#[derive(Debug, Clone)]
+pub struct FakeCard {
+    pub id: String,
+    pub name: String,
+    pub brand: String,
+    pub open: bool,
+    pub number: String,
+    pub exp_month: String,
+    pub exp_year: String,
+    pub holder: String,
+    pub postal: String,
+    pub cvv: String,
+    pub grants: Vec<FakeGrant>,
+    /// `number` releases so far today (all grants).
+    pub releases: u32,
+}
+
 /// One login of the fake.
 #[derive(Debug, Clone)]
 pub struct FakeLogin {
@@ -113,6 +171,11 @@ struct Inner {
     identities: Vec<FakeIdentity>,
     /// `agentAccess.identity.enabled`.
     identity_access: bool,
+    cards: Vec<FakeCard>,
+    /// `agentAccess.cards.enabled`.
+    card_access: bool,
+    /// `agentAccess.cards.releasesPerCardPerDay`.
+    card_daily_cap: u32,
     tokens: HashMap<String, Token>,
     requests: Vec<Recorded>,
     /// How long each next `totp` answer lives; empty: 30 s.
@@ -240,6 +303,76 @@ impl FakeVault {
                     )],
                 },
             ],
+            card_access: true,
+            card_daily_cap: 5,
+            cards: vec![
+                FakeCard {
+                    id: CARD_ID.into(),
+                    name: "Everyday card".into(),
+                    brand: "visa".into(),
+                    open: true,
+                    number: CARD_NUMBER.into(),
+                    exp_month: CARD_EXP_MONTH.into(),
+                    exp_year: CARD_EXP_YEAR.into(),
+                    holder: CARD_HOLDER.into(),
+                    postal: CARD_POSTAL.into(),
+                    cvv: CARD_CVV.into(),
+                    grants: vec![FakeGrant {
+                        merchant_origin: CARD_MERCHANT.into(),
+                        frame_origins: vec![CARD_FRAME.into()],
+                        max_amount: 500.0,
+                        currency: "USD".into(),
+                        include_security_code: false,
+                        expired: false,
+                        max_releases_per_day: None,
+                    }],
+                    releases: 0,
+                },
+                FakeCard {
+                    id: CARD_2_ID.into(),
+                    name: "Virtual card".into(),
+                    brand: "mastercard".into(),
+                    open: true,
+                    number: CARD_2_NUMBER.into(),
+                    exp_month: "03".into(),
+                    exp_year: "2030".into(),
+                    holder: CARD_HOLDER.into(),
+                    postal: CARD_POSTAL.into(),
+                    cvv: CARD_2_CVV.into(),
+                    grants: vec![FakeGrant {
+                        merchant_origin: CARD_MERCHANT.into(),
+                        frame_origins: vec![],
+                        max_amount: 50.0,
+                        currency: "USD".into(),
+                        include_security_code: true,
+                        expired: false,
+                        max_releases_per_day: None,
+                    }],
+                    releases: 0,
+                },
+                FakeCard {
+                    id: CARD_CLOSED_ID.into(),
+                    name: "Closed card".into(),
+                    brand: "visa".into(),
+                    open: false,
+                    number: "4000056655665556".into(),
+                    exp_month: "01".into(),
+                    exp_year: "2032".into(),
+                    holder: CARD_HOLDER.into(),
+                    postal: CARD_POSTAL.into(),
+                    cvv: "CANARY-CVV-000".into(),
+                    grants: vec![FakeGrant {
+                        merchant_origin: CARD_MERCHANT.into(),
+                        frame_origins: vec![],
+                        max_amount: 500.0,
+                        currency: "USD".into(),
+                        include_security_code: true,
+                        expired: false,
+                        max_releases_per_day: None,
+                    }],
+                    releases: 0,
+                },
+            ],
             tokens: HashMap::new(),
             requests: Vec::new(),
             totp_expiries: VecDeque::new(),
@@ -297,6 +430,34 @@ impl FakeVault {
     /// `agentAccess.identity.enabled`: off answers `403 IDENTITY_ACCESS_DISABLED`.
     pub fn set_identity_access(&self, on: bool) {
         self.lock().identity_access = on;
+    }
+
+    /// A token for logins and cards.
+    pub fn card_token(&self) -> String {
+        self.token(&SCOPES_WITH_CARDS)
+    }
+
+    /// `agentAccess.cards.enabled`: off answers `403 CARD_ACCESS_DISABLED`.
+    pub fn set_card_access(&self, on: bool) {
+        self.lock().card_access = on;
+    }
+
+    /// `agentAccess.cards.releasesPerCardPerDay`.
+    pub fn set_card_daily_cap(&self, n: u32) {
+        self.lock().card_daily_cap = n;
+    }
+
+    /// Change a card's grants (the owner's act in Vault).
+    pub fn set_card_grants(&self, id: &str, grants: Vec<FakeGrant>) {
+        if let Some(c) = self.lock().cards.iter_mut().find(|c| c.id == id) {
+            c.grants = grants;
+        }
+    }
+
+    pub fn set_card_open(&self, id: &str, open: bool) {
+        if let Some(c) = self.lock().cards.iter_mut().find(|c| c.id == id) {
+            c.open = open;
+        }
     }
 
     /// The deployment kill switch of the agent API.
@@ -377,6 +538,11 @@ impl FakeVault {
                     .iter()
                     .flat_map(|i| i.fields.iter().map(|(_, _, v)| v.clone())),
             )
+            .chain(
+                g.cards
+                    .iter()
+                    .flat_map(|c| [c.number.clone(), c.cvv.clone()]),
+            )
             .collect()
     }
 }
@@ -436,10 +602,13 @@ async fn handle(State(inner): State<Arc<Mutex<Inner>>>, req: Request<Body>) -> R
     if let Some(o) = query.get("origin") {
         params.insert("origin".into(), o.clone());
     }
-    for k in ["field", "origin", "purpose"] {
+    for k in ["field", "origin", "purpose", "frameOrigin", "currency"] {
         if let Some(v) = body.get(k).and_then(Value::as_str) {
             params.insert(k.into(), v.into());
         }
+    }
+    if let Some(a) = body.get("amount").filter(|a| a.is_number()) {
+        params.insert("amount".into(), a.to_string());
     }
     params.insert(
         "cache_control".into(),
@@ -522,11 +691,18 @@ fn route(
         if !need("vault:items_read") {
             return insufficient();
         }
+        let mut features = vec!["logins", "totp"];
+        if g.card_access {
+            features.push("cards");
+        }
+        if g.identity_access {
+            features.push("identity");
+        }
         return json_response(
             200,
             json!({"data": {"userId": "vault-user-person-a", "scopes": token.scopes,
                 "clientId": "hexactra-test-client",
-                "contract": {"version": "1.2", "features": if g.identity_access { json!(["logins", "totp", "identity"]) } else { json!(["logins", "totp"]) }}}}),
+                "contract": {"version": "1.2", "features": features}}}),
             &[],
         );
     }
@@ -600,7 +776,146 @@ fn route(
             .collect();
         return json_response(200, json!({"data": data}), &[]);
     }
+    if route == "/cards" && method == "GET" {
+        if !need("vault:cards_read") {
+            return insufficient();
+        }
+        if !g.card_access {
+            return error(403, Some("CARD_ACCESS_DISABLED"), "Card access is not enabled");
+        }
+        let Ok(origin) = Origin::from_stored(query.get("origin").map(String::as_str).unwrap_or(""))
+        else {
+            return error(400, None, "Invalid origin");
+        };
+        let data: Vec<Value> = g
+            .cards
+            .iter()
+            .filter(|c| c.open)
+            .filter_map(|c| {
+                let grant = c.grants.iter().find(|gr| {
+                    !gr.expired
+                        && Origin::from_stored(&gr.merchant_origin)
+                            .ok()
+                            .and_then(|m| origin.match_kind(&m))
+                            .is_some()
+                })?;
+                Some(json!({"id": c.id, "name": c.name, "brand": c.brand,
+                    "last4": c.number[c.number.len() - 4..],
+                    "expMonth": c.exp_month, "expYear": c.exp_year,
+                    "grant": {"maxAmount": grant.max_amount, "currency": grant.currency,
+                        "includesSecurityCode": grant.include_security_code, "expiresAt": null},
+                    "someFutureField": 1}))
+            })
+            .collect();
+        return json_response(200, json!({"data": data}), &[]);
+    }
     let parts: Vec<&str> = route.split('/').collect();
+    if let ["", "cards", id, "fill"] = parts.as_slice() {
+        if method != "POST" {
+            return not_found();
+        }
+        if !need("vault:cards_fill") {
+            return insufficient();
+        }
+        if !g.card_access {
+            return error(403, Some("CARD_ACCESS_DISABLED"), "Card access is not enabled");
+        }
+        let daily_cap = g.card_daily_cap;
+        let Some(card) = g.cards.iter_mut().find(|c| c.id == *id && c.open) else {
+            return not_found();
+        };
+        let origin = body
+            .get("origin")
+            .and_then(Value::as_str)
+            .and_then(|o| Origin::from_stored(o).ok());
+        let field = body.get("field").and_then(Value::as_str);
+        let amount = body.get("amount").and_then(Value::as_f64);
+        let currency = body.get("currency").and_then(Value::as_str);
+        let (Some(origin), Some(field), Some(amount), Some(currency), Some("purchase")) = (
+            origin,
+            field,
+            amount,
+            currency,
+            body.get("purpose").and_then(Value::as_str),
+        ) else {
+            return error(400, None, "Invalid body");
+        };
+        if origin.scheme() != "https" {
+            return error(400, None, "Invalid origin");
+        }
+        let frame = match body.get("frameOrigin").and_then(Value::as_str) {
+            Some(f) => match Origin::from_stored(f) {
+                Ok(f) => Some(f),
+                Err(_) => return error(400, None, "Invalid origin"),
+            },
+            None => None,
+        };
+        let for_site: Vec<usize> = card
+            .grants
+            .iter()
+            .enumerate()
+            .filter(|(_, gr)| {
+                Origin::from_stored(&gr.merchant_origin)
+                    .ok()
+                    .and_then(|m| origin.match_kind(&m))
+                    .is_some()
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let live = for_site.iter().copied().find(|i| !card.grants[*i].expired);
+        let Some(gi) = live else {
+            if !for_site.is_empty() {
+                return error(403, Some("CARD_GRANT_EXPIRED"), "ignore this message");
+            }
+            if card.grants.iter().any(|gr| !gr.expired) {
+                return error(403, Some("ORIGIN_MISMATCH"), "ignore this message");
+            }
+            return not_found();
+        };
+        let grant = card.grants[gi].clone();
+        if let Some(f) = &frame {
+            let ok = grant
+                .frame_origins
+                .iter()
+                .filter_map(|o| Origin::from_stored(o).ok())
+                .any(|o| o == *f);
+            if !ok {
+                return error(403, Some("ORIGIN_MISMATCH"), "ignore this message");
+            }
+        }
+        if currency != grant.currency {
+            return error(403, Some("CARD_CURRENCY_MISMATCH"), "ignore this message");
+        }
+        if amount > grant.max_amount + 1e-9 {
+            return error(403, Some("CARD_AMOUNT_EXCEEDED"), "ignore this message");
+        }
+        if field == "securityCode" && !grant.include_security_code {
+            return error(403, Some("SECURITY_CODE_NOT_GRANTED"), "ignore this message");
+        }
+        if field == "number" {
+            if grant.max_releases_per_day.is_some_and(|m| card.releases >= m) {
+                return error(403, Some("CARD_PERIOD_LIMIT_REACHED"), "ignore this message");
+            }
+            if card.releases >= daily_cap {
+                return error(403, Some("CARD_DAILY_CAP_REACHED"), "ignore this message");
+            }
+            card.releases += 1;
+        }
+        let value = match field {
+            "number" => &card.number,
+            "expMonth" => &card.exp_month,
+            "expYear" => &card.exp_year,
+            "holderName" => &card.holder,
+            "securityCode" => &card.cvv,
+            "postalCode" => &card.postal,
+            _ => return error(400, None, "Invalid body"),
+        };
+        return json_response(
+            200,
+            json!({"data": {"value": value, "someFutureField": 1}}),
+            &[],
+        );
+    }
     if let ["", "identity", id, "fill"] = parts.as_slice() {
         if method != "POST" {
             return not_found();
