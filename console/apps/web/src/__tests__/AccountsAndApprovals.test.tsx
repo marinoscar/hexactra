@@ -133,7 +133,7 @@ describe('the three-way choice', () => {
   it('shows how many tools an MCP account has switched on when the API says', () => {
     render(
       <MemoryRouter>
-        <AccountChoices connections={[{ ...conn({ id: 'mcp-1', provider: 'mcp', label: 'Notes server' }), enabledToolCount: 3 } as Connection]} selections={[]} onChange={() => undefined} />
+        <AccountChoices connections={[{ ...conn({ id: 'mcp-1', provider: 'mcp', label: 'Notes server', capabilities: [] }), mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes server', tools: { total: 5, enabled: 3, needsReview: 1 }, toolsFetchedAt: null } } as Connection]} selections={[]} onChange={() => undefined} />
       </MemoryRouter>,
     );
     expect(screen.getByText('3 tools')).toBeInTheDocument();

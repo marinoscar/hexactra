@@ -50,7 +50,8 @@ export const isUsable = (c: Pick<Connection, 'status'>): boolean => c.status ===
 export function choiceBlocked(c: Connection, choice: AccessChoice, current: AccessChoice): string | null {
   if (choice === 'none') return null;
   if (!isUsable(c)) return current === choice ? null : c.status === 'paused' ? 'Paused: resume it first.' : 'It needs to be connected again first.';
-  if (choice === 'read_write' && !canChange(c)) return 'No "change" permission is switched on for this account.';
+  // An MCP server has tools, not capabilities: the owner's per-tool decision (read or write) is what `read_write` unlocks.
+  if (choice === 'read_write' && c.provider !== 'mcp' && !canChange(c)) return 'No "change" permission is switched on for this account.';
   return null;
 }
 

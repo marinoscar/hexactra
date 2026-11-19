@@ -438,8 +438,20 @@ const connectionsList = (_url, _body, referer) => {
   return [
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000003', provider: 'microsoft', label: 'Outlook', accountEmail: 'person.m@example.test', accountName: 'Person M', capabilities: ['calendar_read', 'calendar_write'], granted: ['calendar_read', 'calendar_write'], status: 'needs_reconnect', statusReason: 'GRANT_REVOKED', lastUsedAt: iso(-9 * 86_400_000) },
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000001', provider: 'google', label: 'Work', accountEmail: 'person.a@example.test', accountName: 'Person A', capabilities: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], granted: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], defaultFor: ['mail', 'calendar'], status: 'active', lastUsedAt: iso(-3_600_000) },
+    { ...connectionBase, id: 'c0000000-0000-4000-8000-0000000000a1', provider: 'mcp', label: 'Work notes', accountEmail: 'mcp.example.test', accountName: 'Notes server', capabilities: [], mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes server', tools: { total: 3, enabled: 1, needsReview: 2 }, toolsFetchedAt: iso(-3_600_000) } },
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000002', provider: 'google', label: 'Personal', accountEmail: 'person.b@example.test', capabilities: ['mail_read'], granted: ['mail_read'], status: 'paused', lastUsedAt: null },
   ];
+};
+/** An MCP server's tools (E39.9): one the owner switched on, one that changed after they decided, one that is new. */
+const mcpTool = (over) => ({ title: null, description: 'Does a thing.', parameters: [], hints: { readOnly: null, destructive: null, idempotent: null, openWorld: null }, suggested: 'write', mode: 'off', review: null, ...over });
+const mcpCatalog = {
+  tools: [
+    mcpTool({ id: 'a0000000-0000-4000-8000-000000000002', name: 'add_note', title: 'Add a note', description: 'Adds a note to the list. The server changed this description after you decided.', parameters: [{ name: 'title', type: 'string', required: true }, { name: 'body', type: 'string', required: false }], review: 'changed' }),
+    mcpTool({ id: 'a0000000-0000-4000-8000-000000000001', name: 'search_notes', title: 'Search notes', description: 'Search the notes by a word or phrase.', parameters: [{ name: 'query', type: 'string', required: true }], hints: { readOnly: true, destructive: null, idempotent: true, openWorld: null }, suggested: 'read', mode: 'read' }),
+    mcpTool({ id: 'a0000000-0000-4000-8000-000000000003', name: 'wipe_notes_and_everything_else_in_the_workspace', description: 'Deletes every note. A very long description that keeps going to check that the row wraps at every width and never scrolls the page sideways, however long the words are.', hints: { readOnly: false, destructive: true, idempotent: null, openWorld: null }, review: 'new' }),
+  ],
+  needsReview: 2,
+  fetchedAt: iso(-3_600_000),
 };
 const connectionProviders = [
   { provider: 'google', displayName: 'Google', ready: true, reason: null, accountTypes: [{ id: 'personal', label: 'Personal Gmail account', supported: true, note: 'Works while the Google project is published; in testing mode Google ends the sign-in after about a week.' }, { id: 'workspace', label: 'Google Workspace account', supported: true, note: "Your organization's administrator may have to allow the app first." }] },
@@ -585,6 +597,9 @@ export const RESPONSES = {
   'GET /connections': connectionsList,
   'GET /connections/providers': connectionProviders,
   'GET /connections/admin/apps': adminConnectionApps,
+  'GET /connections/mcp/status': { enabled: true, restricted: false },
+  'GET /connections/admin/mcp': { enabled: true, allowedHosts: ['*.example.test'], blockedHosts: ['blocked.example.test'] },
+  'GET /connections/c0000000-0000-4000-8000-0000000000a1/tools': mcpCatalog,
   'GET /secrets/status': secretsStatus,
   'GET /secrets/activity': secretsActivity,
   'GET /secrets/reach': secretsReach,

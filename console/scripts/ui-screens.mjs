@@ -164,6 +164,30 @@ export const ROUTES = [
   ['settings-connections-connect', '/settings/connections', { viewport: true, action: pressButton('Connect an account') }],
   ['settings-connections-result', '/settings/connections?connect=connected&connection=c0000000-0000-4000-8000-000000000001&missing=calendar_write'],
   ['admin-connections', '/admin/settings/connections'],
+  // MCP servers (E39.9): the add dialog with the bearer token field, and the tool review (a changed tool, a new one, a switched-on one).
+  ['settings-connections-mcp-add', '/settings/connections', {
+    viewport: true,
+    action: async (page) => {
+      // From `sm` up it is a header button; on a phone the header's "More" menu holds it.
+      const direct = page.getByRole('button', { name: 'Add an MCP server' });
+      if (await direct.count()) await direct.first().click({ timeout: 5_000 });
+      else {
+        await page.locator('main').getByRole('button', { name: 'More' }).click({ timeout: 5_000 });
+        await page.getByRole('menuitem', { name: 'Add an MCP server' }).click({ timeout: 5_000 });
+      }
+      await page.getByRole('radio', { name: 'Bearer token' }).click({ timeout: 5_000 });
+      await page.waitForTimeout(300);
+    },
+  }],
+  ['settings-connections-mcp-tools', '/settings/connections', {
+    viewport: true,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Actions for Work notes' }).click({ timeout: 5_000 });
+      await page.getByRole('menuitem', { name: 'Tools' }).click({ timeout: 5_000 });
+      await page.getByRole('dialog', { name: 'Tools of Work notes' }).waitFor({ timeout: 5_000 });
+      await page.waitForTimeout(300);
+    },
+  }],
   // The task form's "Saved logins" section while no provider is connected (the switch disabled with its reason; `task-new` shows it available).
   ['task-new-saved-logins-unavailable', '/tasks/new?state=not_connected'],
   ['settings-danger-zone', '/settings/danger-zone'],

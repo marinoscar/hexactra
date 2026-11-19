@@ -21,6 +21,7 @@ import { ConnectionError, notFound } from './connections.errors';
 import { ConnectionApps } from './connection-apps.service';
 import { ConnectionProviderRegistry } from './connection-provider.registry';
 import { ConnectionTokenStore } from './connection-token.store';
+import type { TokenSet } from './provider';
 
 /** How long a refresh may hold the database lease (a refresh is one HTTP call with a 10 s deadline). */
 export const REFRESH_LEASE_MS = 30_000;
@@ -37,10 +38,19 @@ export interface AccessTokenOptions {
 
 const LIVE = ['active', 'paused'] as const;
 
+/**
+ * Refreshes the grant of a provider whose app and endpoints are not a deployment-wide adapter (an MCP server signs in with a client it
+ * registered itself, at the server's own authorization server). Registered once, at start up, by the feature that owns the provider.
+ * Throws `OAuthClientError` exactly as an adapter's `refresh` does, so the rules below (a refused grant needs a reconnect, an
+ * unreachable server changes nothing) apply unchanged.
+ */
+export type ExternalRefresher = (row: Connection, refreshToken: string) => Promise<TokenSet>;
+
 @Injectable()
 export class ConnectionTokensService {
   private readonly log = new Logger(ConnectionTokensService.name);
   private readonly inflight = new Map<string, Promise<string>>();
+  private readonly external = new Map<string, ExternalRefresher>();
 
   /** The wall clock; tests replace it. */
   clock: () => number = Date.now;
@@ -54,6 +64,11 @@ export class ConnectionTokensService {
     private readonly apps: ConnectionApps,
     private readonly events: ConnectionEvents,
   ) {}
+
+  /** E39.9: a provider that refreshes by its own means (`mcp`). */
+  registerRefresher(provider: string, refresher: ExternalRefresher): void {
+    this.external.set(provider, refresher);
+  }
 
   /**
    * A valid access token for the owner's connection, refreshing (once, however many callers ask) when fewer than two minutes
@@ -130,10 +145,11 @@ export class ConnectionTokensService {
       const again = await this.freshAccess(row);
       if (again) return again;
     }
-    if (!isProviderId(row.provider)) throw new ConnectionError('CONNECTION_UNAVAILABLE', 'This provider is not available.', { reason: 'not_installed' });
-    const adapter = this.registry.get(row.provider);
-    const app = adapter ? await this.apps.app(row.provider, { ignoreSwitch: true }) : null;
-    if (!adapter || !app) {
+    const external = this.external.get(row.provider);
+    if (!external && !isProviderId(row.provider)) throw new ConnectionError('CONNECTION_UNAVAILABLE', 'This provider is not available.', { reason: 'not_installed' });
+    const adapter = !external && isProviderId(row.provider) ? this.registry.get(row.provider) : undefined;
+    const app = adapter && isProviderId(row.provider) ? await this.apps.app(row.provider, { ignoreSwitch: true }) : null;
+    if (!external && (!adapter || !app)) {
       await this.recordError(row.id, adapter ? 'APP_NOT_CONFIGURED' : 'NOT_INSTALLED');
       throw new ConnectionError('CONNECTION_UNAVAILABLE', 'This provider is not available.', { reason: adapter ? 'not_configured' : 'not_installed' });
     }
@@ -145,7 +161,7 @@ export class ConnectionTokensService {
 
     let tokens;
     try {
-      tokens = await adapter.refresh({ app, refreshToken });
+      tokens = external ? await external(row, refreshToken) : await adapter!.refresh({ app: app!, refreshToken });
     } catch (e) {
       throw await this.refreshFailed(userId, row, e);
     }

@@ -4,6 +4,7 @@ import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { ConnectionCapabilities } from '../connections/connection-capabilities.service';
+import { McpRunService } from '../connections/mcp/mcp-run.service';
 import { ASK_TOPICS } from '../approvals/approval-match';
 import { FabricClient } from '../fabric/fabric.client';
 import { MemoryContext } from '../memories/memory-context';
@@ -73,6 +74,8 @@ export class GoalRunnerService {
     @Optional() public connections?: ConnectionCapabilities,
     /** The run's PDF report, for `file_upload` (E39.7). */
     @Optional() public traces?: RunTraceService,
+    /** The owner's MCP servers (E39.9): absent without the connections module, and then no MCP tool is offered. */
+    @Optional() public mcp?: McpRunService,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -98,6 +101,7 @@ export class GoalRunnerService {
       secrets: this.secrets,
       connections: this.connections,
       traces: this.traces,
+      mcp: this.mcp,
       clock: () => this.clock(),
       log: this.log,
     };

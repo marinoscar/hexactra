@@ -125,10 +125,30 @@ describe('hexactra connections', () => {
     expect(calls.every((c) => c.method === 'GET')).toBe(true);
   });
 
+  it('lists an MCP server with how many tools are on, and shows its tools and what awaits review', async () => {
+    const MCP: ConnectionView = { ...WORK, id: '66666666-6666-4666-8666-666666666666', provider: 'mcp', label: 'Notes', accountEmail: 'mcp.example.test', capabilities: [], granted: [], defaultFor: [], mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes', tools: { total: 3, enabled: 1, needsReview: 2 } } };
+    const tools = [
+      { id: 'a', name: 'search_notes', title: 'Search notes', description: 'x', suggested: 'read', mode: 'read', review: null },
+      { id: 'b', name: 'add_note', title: null, description: 'x', suggested: 'write', mode: 'off', review: 'changed' },
+    ];
+    const calls = fakeApi({ 'GET /connections': [MCP, WORK], [`GET /connections/${MCP.id}/tools`]: { tools, needsReview: 2 }, [`POST /connections/${MCP.id}/tools/refresh`]: { tools, needsReview: 2 } });
+    const list = await run('connections', 'list');
+    expect(list).toContain('1 of 3 tools on, 2 to review');
+    const text = await run('connections', 'tools', 'notes');
+    expect(text).toContain('read   search_notes');
+    expect(text).toContain('[changed: review in the web app]');
+    expect(text).toContain('2 tools to review');
+    await run('connections', 'tools', 'Notes', '--refresh');
+    expect(calls.at(-1)).toMatchObject({ method: 'POST', path: `/connections/${MCP.id}/tools/refresh` });
+    await expect(run('connections', 'tools', 'Work')).rejects.toThrow(/not an MCP server/);
+    // The CLI never changes a tool: that is decided on the screen that shows what the tool says it does.
+    expect(calls.every((c) => c.method !== 'PATCH')).toBe(true);
+  });
+
   it('there is no connect command: it needs a browser', () => {
     const program = new Command();
     connectionsCommand(program);
     const names = program.commands.find((c) => c.name() === 'connections')!.commands.map((c) => c.name());
-    expect(names.sort()).toEqual(['list', 'pause', 'resume', 'rm', 'test']);
+    expect(names.sort()).toEqual(['list', 'pause', 'resume', 'rm', 'test', 'tools']);
   });
 });

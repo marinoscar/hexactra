@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.90.0",
+  "version": "1.91.0",
   "private": true,
   "engines": {
     "node": ">=24"
@@ -53,6 +53,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@prisma/client-runtime-utils": "^7.8.0",
+    "ajv": "^8.18.0",
     "cron": "^4.4.0",
     "fastify": "^5",
     "jpeg-js": "^0.4.4",
@@ -74,7 +75,6 @@
     "@types/node": "^22.15.32",
     "@types/pdfmake": "^0.3.3",
     "@types/supertest": "^7.2.0",
-    "ajv": "^8.18.0",
     "jest": "^30.4.2",
     "jest-mock-extended": "^4.0.1",
     "prisma": "^7.8.0",

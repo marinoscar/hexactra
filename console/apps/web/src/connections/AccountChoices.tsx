@@ -17,11 +17,8 @@ export interface AccountChoicesProps {
 
 const CHOICES: AccessChoice[] = ['none', 'read', 'read_write'];
 
-/** An MCP connection's enabled tool count, when the API sends it (E39.9). */
-const toolCountOf = (c: Connection): number | null => {
-  const n = (c as Connection & { enabledToolCount?: unknown }).enabledToolCount;
-  return typeof n === 'number' ? n : null;
-};
+/** An MCP connection's enabled tool count (E39.9), or null for an account. */
+const toolCountOf = (c: Connection): number | null => (c.provider === 'mcp' ? (c.mcp?.tools.enabled ?? null) : null);
 
 export function AccountChoices({ connections, selections, onChange, disabled = false }: AccountChoicesProps) {
   return (

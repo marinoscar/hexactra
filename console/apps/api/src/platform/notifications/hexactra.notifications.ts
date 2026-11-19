@@ -29,6 +29,8 @@ export const RUN_CARD_AMOUNT_MISMATCH_EVENT = 'runs.card_amount_mismatch';
 export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 /** A connected account (Google, Microsoft) stopped working and must be connected again (E39.2): once per episode. */
 export const CONNECTION_NEEDS_RECONNECT_EVENT = 'connections.needs_reconnect';
+/** An MCP server changed a tool the owner had enabled, or offered a new one (E39.9): those tools are off until the owner reviews them. */
+export const CONNECTION_MCP_TOOLS_CHANGED_EVENT = 'connections.mcp_tools_changed';
 /** A delivery after a run failed for good (E39.6): once per task per day. Names the kind and the reason, never an address, a subject or a file name. */
 export const DELIVERY_FAILED_EVENT = 'deliveries.failed';
 /** A mail trigger needs the owner (E39.8): its account must be connected again, it keeps failing, it skipped unverified senders or hit its daily limit. Once per episode or day. */
@@ -126,6 +128,14 @@ const connectionNeedsReconnect: BrowserNotificationTemplate = (d) => ({
   body: trim(`${str(d, 'label') || 'A connected account'} no longer works, so agents cannot use it. Connect it again in Settings → Connections.`, 180),
   link: '/settings/connections',
 });
+const connectionMcpToolsChanged: BrowserNotificationTemplate = (d) => {
+  const n = Number((d as { count?: unknown }).count) || 1;
+  return {
+    title: 'An MCP server changed its tools',
+    body: trim(`The connection ${str(d, 'label') || 'to an MCP server'} changed ${n} tool${n === 1 ? '' : 's'}. ${n === 1 ? 'It is' : 'They are'} off until you review ${n === 1 ? 'it' : 'them'} in Settings → Connections.`, 180),
+    link: '/settings/connections',
+  };
+};
 const deliveryFailed: BrowserNotificationTemplate = (d) => ({
   title: 'A delivery after a run failed',
   body: trim(str(d, 'line') || 'A result could not be sent. Open the run to see why.', 180),
@@ -309,6 +319,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
   },
   {
     event: {
+      key: CONNECTION_MCP_TOOLS_CHANGED_EVENT,
+      label: 'An MCP server changed its tools',
+      description: 'When an MCP server you connected changes the description or schema of a tool you enabled, or offers a new tool: those tools are switched off until you review them.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: connectionMcpToolsChanged,
+  },
+  {
+    event: {
       key: DELIVERY_FAILED_EVENT,
       label: 'A delivery after a run failed',
       description: 'When the email, row, file or webhook that a task sends after a run could not be delivered (for instance because a connected account needs reconnecting). At most once a day for each task.',
@@ -383,6 +403,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_SAVED_LOGIN_EVENT) return { tag: runId ? `saved-login-${runId}`.slice(0, 64) : 'saved-login', urgency: 'normal' };
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === CONNECTION_NEEDS_RECONNECT_EVENT) return { tag: `connection-${str(data, 'connectionId') || 'reconnect'}`.slice(0, 64), urgency: 'normal' };
+  if (event.key === CONNECTION_MCP_TOOLS_CHANGED_EVENT) return { tag: `connection-tools-${str(data, 'connectionId') || 'changed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === DELIVERY_FAILED_EVENT) return { tag: `delivery-${str(data, 'taskId') || 'failed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === MAIL_TRIGGER_ATTENTION_EVENT) return { tag: `mail-trigger-${str(data, 'triggerId') || 'attention'}-${str(data, 'kind')}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };

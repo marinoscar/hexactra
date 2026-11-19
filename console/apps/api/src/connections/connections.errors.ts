@@ -17,6 +17,10 @@ registerErrorCode({ code: 'CONNECTION_FILE_NOT_FOUND', status: 404, description:
 registerErrorCode({ code: 'CONNECTION_PERMISSION_MISSING', status: 409, description: 'The provider did not grant the permission this needs: add it with the incremental consent (`PATCH /api/connections/{id}`), or pick the file in the picker.' });
 registerErrorCode({ code: 'CONNECTION_PICKER_UNAVAILABLE', status: 409, description: "The file picker cannot be opened for this connection. `details.reason`: `not_google`, `no_documents` (the Documents switch is off) or `not_configured` (the administrator's Google app has no project)." });
 registerErrorCode({ code: 'CONNECTION_DEFAULT_NEEDS_CAPABILITY', status: 422, description: 'A connection can be the default for a group only while one of its capabilities is switched on.' });
+registerErrorCode({ code: 'CONNECTION_MCP_URL_REFUSED', status: 422, description: 'The MCP server address is not allowed. `details.reason` (closed): `invalid_url`, `scheme_not_allowed`, `userinfo_not_allowed`, `query_not_allowed`, `port_not_allowed`, `private_target`, `unresolvable`, `host_not_allowed`, `host_blocked`.' });
+registerErrorCode({ code: 'CONNECTION_MCP_EXISTS', status: 409, description: 'The caller already has a connection to this MCP server address.' });
+registerErrorCode({ code: 'CONNECTION_MCP_AUTH_REQUIRED', status: 409, description: 'The MCP server wants a sign-in the request did not give (or no longer accepts it). `details.oauth` is true when the server advertises OAuth.' });
+registerErrorCode({ code: 'CONNECTION_MCP_PROTOCOL', status: 502, description: 'The server did not answer in the MCP protocol this console speaks (Streamable HTTP, revisions 2025-03-26 and later).' });
 
 export type ConnectionErrorCode =
   | 'CONNECTION_NOT_FOUND'
@@ -32,7 +36,11 @@ export type ConnectionErrorCode =
   | 'CONNECTION_FILE_NOT_FOUND'
   | 'CONNECTION_PERMISSION_MISSING'
   | 'CONNECTION_PICKER_UNAVAILABLE'
-  | 'CONNECTION_DEFAULT_NEEDS_CAPABILITY';
+  | 'CONNECTION_DEFAULT_NEEDS_CAPABILITY'
+  | 'CONNECTION_MCP_URL_REFUSED'
+  | 'CONNECTION_MCP_EXISTS'
+  | 'CONNECTION_MCP_AUTH_REQUIRED'
+  | 'CONNECTION_MCP_PROTOCOL';
 
 const STATUS: Record<ConnectionErrorCode, HttpStatus> = {
   CONNECTION_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -49,6 +57,10 @@ const STATUS: Record<ConnectionErrorCode, HttpStatus> = {
   CONNECTION_PERMISSION_MISSING: HttpStatus.CONFLICT,
   CONNECTION_PICKER_UNAVAILABLE: HttpStatus.CONFLICT,
   CONNECTION_DEFAULT_NEEDS_CAPABILITY: HttpStatus.UNPROCESSABLE_ENTITY,
+  CONNECTION_MCP_URL_REFUSED: HttpStatus.UNPROCESSABLE_ENTITY,
+  CONNECTION_MCP_EXISTS: HttpStatus.CONFLICT,
+  CONNECTION_MCP_AUTH_REQUIRED: HttpStatus.CONFLICT,
+  CONNECTION_MCP_PROTOCOL: HttpStatus.BAD_GATEWAY,
 };
 
 /**
