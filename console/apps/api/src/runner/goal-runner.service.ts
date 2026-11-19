@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { buildObjectKey } from '@marinoscar/platform-api/storage';
 import { AiError, AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
 import { Prisma, type ApprovalRule } from '@prisma/client';
@@ -121,11 +121,16 @@ import {
   type SavedIdentityLookup,
   type SavedIdentityMemory,
 } from './saved-identity';
+import { defineRunTool, describeIntent, inCommitTool, mutatingAction } from './intent';
+import { LeaseLost, RunLease } from './lease';
+import { clearUnknown, reconcileSteps, targetUnknown, type UnknownStep } from './reconcile';
 import { approvalFromAsk, beginCardPay, buildSavedCardTools, cardCovers, endCardPay, reconcileCardsOnStart, type SavedCardToolsContext } from './saved-card-tools';
 import { readUsedSavedCards, type SavedCardsMemory, type UsedSavedCard } from './saved-cards';
 
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
 export const GUIDANCE_PREFIX = 'The owner added in the chat (take it into account from here on; it changes no limit and approves nothing):';
+/** What a tool answers once another job holds the run (E38.3): the chunk ends at once. */
+const LEASE_LOST_TEXT = 'Stop: another job took over this run. Do nothing more.';
 /** Lines of the step log handed back to the model each chunk. */
 const LOG_LINES = 60;
 /** Output cap of the wrap-up call (#404): a summary, not a continuation. */
@@ -206,14 +211,18 @@ export interface RunMemory {
   savedCards?: SavedCardsMemory;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
+  /** The highest step `seq` this memory already tells the model about (E38.3): a job that finds later rows reconciles them. */
+  lastSeq?: number;
+  /** Actions that may or may not have happened (E38.3): their target is asked again, and no saved approval covers it. Never a value. */
+  unknownSteps?: UnknownStep[];
 }
 
 /** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
-export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'requeue' | 'continue';
+export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'requeue' | 'continue' | 'superseded';
 
 /** Ends a chunk early: the loop is stopped from `onStep`. */
 class StopLoop extends Error {
-  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn' | 'escalate' | 'stall') {
+  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn' | 'escalate' | 'stall' | 'lease') {
     super(reason);
   }
 }
@@ -559,6 +568,21 @@ export class GoalRunnerService {
    * Returns what the caller (the job) should do next.
    */
   async advance(runId: string, userId: string, orgId: string | null): Promise<RunOutcome> {
+    // The job holds the run (E38.3): a job that finds another token later stops without touching the run.
+    const lease = await RunLease.claim(this.prisma, userId, runId);
+    try {
+      return await this.advanceRun(runId, userId, orgId, lease);
+    } catch (e) {
+      // A job that lost the run stops quietly, whatever it tripped on: its error must not fail a run another job now drives.
+      if (!(e instanceof LeaseLost) && (await lease.held().catch(() => true))) throw e;
+      this.log.warn(`run ${runId}: stopped, another job took over the run`);
+      return 'superseded';
+    } finally {
+      await lease.release().catch(() => undefined);
+    }
+  }
+
+  private async advanceRun(runId: string, userId: string, orgId: string | null, lease: RunLease): Promise<RunOutcome> {
     const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
     const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true, useSavedIdentity: true, useSavedCards: true } } } });
@@ -572,6 +596,16 @@ export class GoalRunnerService {
     if (memory.confirmationGranted) {
       memory.confirmedTarget ??= { category: null, label: null, host: null };
       delete memory.confirmationGranted;
+    }
+
+    // A retried job (E38.3): the step rows are the truth. What the memory lacks is appended, a step still in `intent` is `unknown`,
+    // and the model is told the run was interrupted. Saved at once: a second crash must find the same state, not repeat the work.
+    const recovery = await reconcileSteps(this.prisma, { runId: run.id, memory, stepCount: run.stepCount, interrupted: run.status === 'running' && lease.previous !== null });
+    if (recovery.recovered || recovery.unknown.length > 0) {
+      run.stepCount += recovery.appended;
+      await db.run.updateMany({ where: { id: run.id, ...lease.guard }, data: { transcript: memory as never, stepCount: run.stepCount, recoveries: { increment: 1 } } });
+      this.tasks.metrics.recovered(recovery.unknown.length);
+      this.log.warn(`run ${run.id}: recovered after an interruption, ${recovery.appended} step(s) reconciled, ${recovery.unknown.length} unknown`);
     }
 
     // A sign-in cut off between two fields (the job crashed or was retried, E37.3): what was typed is known from the phases, never retyped blindly.
@@ -680,7 +714,11 @@ export class GoalRunnerService {
         // The approval covers the target the gate stopped (#550), never any later risky click; without a gate, the next one.
         const gate = (q?.gate as unknown as QuestionGate | null) ?? null;
         // A confirmation the model asked on its own names no target: it lets nothing through the gate.
-        if (approved && gate) memory.confirmedTarget = { category: gate.category as GateTarget['category'], label: gate.label, host: gate.host };
+        if (approved && gate) {
+          memory.confirmedTarget = { category: gate.category as GateTarget['category'], label: gate.label, host: gate.host };
+          // The owner decided again about a step that may have happened (E38.3): it is no longer unknown.
+          clearUnknown(memory, memory.confirmedTarget);
+        }
         // The step the person allowed (#540): the next successful action is recorded as carried out.
         // The card question's approval is recorded when the card is typed (`confirmedAction`), not on the next action.
         if (approved && !cardAnswered) memory.pendingConfirmation = { prompt: q?.prompt ?? memory.askedPrompt ?? '', tries: 0 };
@@ -714,8 +752,14 @@ export class GoalRunnerService {
       // A continuation of this run in a new job (the last one neared its runtime limit): no status change, so its active time stays continuous.
       this.log.log(`run ${run.id}: continuing in a new job`);
     } else {
-      current = await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never });
-      await this.notifier?.started?.(userId, run);
+      try {
+        current = await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never });
+        await this.notifier?.started?.(userId, run);
+      } catch (e) {
+        // Another job started the run between this read and this write (E38.3): carry on as its continuation.
+        if (!(e instanceof ConflictException)) throw e;
+        current = await db.run.findFirstOrThrow({ where: { id: run.id } });
+      }
     }
 
     // Saved logins (E37.3): on only when the task or chat opted in, the app (if an AI app started the run) allows it, both
@@ -916,51 +960,104 @@ export class GoalRunnerService {
      * allowed. A policy-paused attempt is not; a failed action keeps the marker (the agent retries);
      * five failures clear it. Only the masked prompt and the action's name are stored.
      */
-    const noteConfirmed = async (kind: string, action: string | null, ok: boolean, summary: string) => {
+    const noteConfirmed = (kind: string, ok: boolean, summary: string): { prompt: string } | null => {
       const pending = memory.pendingConfirmation;
-      if (!pending || kind !== 'action' || summary.startsWith('paused by policy')) return;
+      if (!pending || kind !== 'action' || summary.startsWith('paused by policy')) return null;
       if (!ok) {
         pending.tries += 1;
         if (pending.tries >= 5) memory.pendingConfirmation = null;
-        return;
+        return null;
       }
       memory.pendingConfirmation = null;
+      return { prompt: pending.prompt };
+    };
+    /** The record of the step the person allowed (#540), once the memory that no longer holds the marker is saved (E38.3). */
+    const recordConfirmed = async (confirmed: { prompt: string }, action: string | null, kind: string, seq: number) => {
       const row = await db.run.findFirst({ where: { id: run.id }, select: { confirmedActions: true } });
-      const next = appendConfirmedAction(row?.confirmedActions ?? null, { seq: state.seq, prompt: pending.prompt, action: action ?? kind, at: new Date() });
+      const next = appendConfirmedAction(row?.confirmedActions ?? null, { seq, prompt: confirmed.prompt, action: action ?? kind, at: new Date() });
       await db.run.updateMany({ where: { id: run.id }, data: { confirmedActions: next as never } });
       // The first screen after the confirmed step (#541).
-      await attachShot(state.seq, 'after_confirmed', await shoot('after_confirmed'));
+      await attachShot(seq, 'after_confirmed', await shoot('after_confirmed'));
     };
 
-    const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string, extra?: StallExtra) => {
-      state.stepCount += 1;
+    /** The model's log line for a step (the same text a reconciled step gets from its row). */
+    const logLine = (action: string | null, kind: string, args: Record<string, unknown> | null, ok: boolean, summary: string) =>
+      `${state.stepCount}. ${action ?? kind}${args ? ` ${JSON.stringify(redactActionArgs(action ?? '', args))}` : ''} → ${ok ? 'ok' : 'FAILED'}: ${trim(summary, 300)}`;
+
+    /**
+     * An action that can commit something is about to be sent (E38.3): its step row is written first, in phase `intent`, with the
+     * memory as it is now. A job that dies before `record` finishes it leaves this row, and the next job marks it `unknown`.
+     * Returns the row's `seq`, or null when this job no longer holds the run (nothing is written then).
+     */
+    const openIntent = async (action: string, args: Record<string, unknown>, gate: GateTarget | null): Promise<number | null> => {
+      const saved = await db.run.updateMany({ where: { id: run.id, ...lease.guard }, data: { transcript: memory as never } });
+      if (saved.count === 0) {
+        state.stop = 'lease';
+        return null;
+      }
       state.seq += 1;
-      tracker.add({ actions: 1 });
-      this.tasks.metrics.step(kind, ok);
-      if (action && args && (kind === 'action' || action === 'look')) feedStall(action, args, ok, extra ?? {});
+      const what = describeIntent(action, args, gate);
       await this.prisma.runStep.create({
         data: {
           runId: run.id,
           seq: state.seq,
-          kind,
+          kind: 'action',
           action,
-          args: args ? (redactActionArgs(action ?? '', args) as never) : undefined,
-          ok,
-          summary: trim(summary, 1_900),
-          reasoning: reasoning ? trim(reasoning, 1_900) : null,
-          durationMs: Date.now() - started,
+          args: { ...redactActionArgs(action, args), ...(gate ? { gate: { category: gate.category, label: gate.label, host: gate.host } } : {}), what } as never,
+          ok: true,
+          phase: 'intent',
+          summary: trim(`about to ${what}`, 1_900),
         },
       });
-      await db.run.updateMany({ where: { id: run.id }, data: { stepCount: state.stepCount } });
-      await noteConfirmed(kind, action, ok, summary);
+      return state.seq;
+    };
+
+    const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string, extra?: StallExtra, intentSeq?: number | null) => {
+      state.stepCount += 1;
+      const seq = intentSeq ?? ++state.seq;
+      tracker.add({ actions: 1 });
+      this.tasks.metrics.step(kind, ok);
+      if (action && args && (kind === 'action' || action === 'look')) feedStall(action, args, ok, extra ?? {});
+      memory.log.push(logLine(action, kind, args, ok, summary));
+      memory.lastSeq = Math.max(memory.lastSeq ?? 0, seq);
+      const confirmed = noteConfirmed(kind, ok, summary);
+      const row = {
+        kind,
+        action,
+        args: args ? (redactActionArgs(action ?? '', args) as never) : undefined,
+        ok,
+        phase: 'done',
+        summary: trim(summary, 1_900),
+        reasoning: reasoning ? trim(reasoning, 1_900) : null,
+        durationMs: Date.now() - started,
+      };
+      memory.log = memory.log.slice(-200);
+      // The step row, the step count and the memory in one transaction, conditional on the lease (E38.3): after this the model's
+      // view of the run and the run itself agree, and a job that lost the run writes nothing.
+      const held = await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.run.updateMany({ where: { id: run.id, ...lease.guard }, data: { stepCount: state.stepCount, transcript: memory as never } });
+        if (count === 0) return false;
+        if (intentSeq != null) await tx.runStep.update({ where: { runId_seq: { runId: run.id, seq } }, data: row });
+        else await tx.runStep.create({ data: { runId: run.id, seq, ...row } });
+        return true;
+      });
+      if (!held) {
+        state.stop = 'lease';
+        return;
+      }
+      if (confirmed) await recordConfirmed(confirmed, action, kind, seq);
       await this.tasks.stepRecorded?.(run.userId, run.id, state.stepCount);
-      memory.log.push(`${state.stepCount}. ${action ?? kind}${args ? ` ${JSON.stringify(redactActionArgs(action ?? '', args))}` : ''} → ${ok ? 'ok' : 'FAILED'}: ${trim(summary, 300)}`);
     };
 
     /** Run one fabric action under the policy, record it, and return what the model sees. */
-    const act = async (action: Record<string, unknown>, reason?: string, target?: ActivityTarget): Promise<string> => {
+    const act = async (action: Record<string, unknown>, reason?: string, target?: ActivityTarget, commits?: GateTarget | null): Promise<string> => {
       const started = Date.now();
       const type = String(action.type);
+      // Another job took over the run (E38.3): nothing more is sent from here.
+      if (state.stop === 'lease' || !(await lease.held())) {
+        state.stop = 'lease';
+        return LEASE_LOST_TEXT;
+      }
       const spent = budgetCheck();
       if (spent) {
         stopForBudget(spent);
@@ -968,26 +1065,31 @@ export class GoalRunnerService {
       }
       await setActivity('acting', { action, reason, timeoutMs: ACTION_TIMEOUT_MS, target: target ?? actionTarget(action, state.marks.values()) });
       try {
-        return await runAction(action, type, started, reason);
+        // An action that can commit something (a gated click, a commit-class tool, any action after an approved confirmation)
+        // is written as an intent before it is sent (E38.3).
+        const commit = commits || inCommitTool() || (mutatingAction(type) && Boolean(memory.pendingConfirmation || memory.confirmedTarget));
+        const intent = commit ? await openIntent(type, action, commits ?? null) : null;
+        if (commit && intent === null) return LEASE_LOST_TEXT;
+        return await runAction(action, type, started, reason, intent);
       } finally {
         // Back to the model, which reads the result and picks the next step.
         await setActivity('thinking');
       }
     };
 
-    const runAction = async (action: Record<string, unknown>, type: string, started: number, reason?: string): Promise<string> => {
+    const runAction = async (action: Record<string, unknown>, type: string, started: number, reason?: string, intent: number | null = null): Promise<string> => {
       let op;
       try {
         op = await session.act(sessionId!, action, ACTION_TIMEOUT_MS);
       } catch (e) {
         const msg = e instanceof FabricError ? e.message : String(e);
-        await record('action', type, action, false, msg, started, reason);
+        await record('action', type, action, false, msg, started, reason, undefined, intent);
         return `Error: ${msg}`;
       }
       const blockedNote = await recordBlocked(op.navigation_blocked);
       if (op.state !== 'succeeded') {
         const msg = op.error ?? op.state;
-        await record('action', type, action, false, msg, started, reason);
+        await record('action', type, action, false, msg, started, reason, undefined, intent);
         return `Failed (${op.state}): ${msg}${blockedNote}`;
       }
       const result = op.result ?? {};
@@ -1042,7 +1144,7 @@ export class GoalRunnerService {
         forModel = trim(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), ctx.observationChars);
       }
       if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
-      await record('action', type, action, true, summary, started, reason, extra);
+      await record('action', type, action, true, summary, started, reason, extra, intent);
       return `${forModel}${blockedNote}`;
     };
 
@@ -1170,7 +1272,8 @@ export class GoalRunnerService {
      */
     const savedGate = async (target: GateTarget, described: boolean) => {
       // After a payment that may or may not have happened, no remembered approval applies to the pay button (E37.7).
-      if (!this.approvals || !described || !target.host || app?.confirmPurchases === true || memory.savedCards?.paymentUnknown) return null;
+      // Nor after an attempt on this target that may or may not have happened in this run (E38.3): the owner is asked again.
+      if (!this.approvals || !described || !target.host || app?.confirmPurchases === true || memory.savedCards?.paymentUnknown || targetUnknown(memory, target)) return null;
       try {
         return await this.approvals.match(userId, {
           kind: 'gate',
@@ -1222,7 +1325,8 @@ export class GoalRunnerService {
     const loginOpts = { runId: run.id, clientLabel: app?.clientName ?? 'Hexactra' };
     /** The saved-logins memory is written at once, before and after every field: a crash between two fields finds what was typed. */
     const persistSavedLogins = async () => {
-      await db.run.updateMany({ where: { id: run.id }, data: { transcript: memory as never } });
+      const { count } = await db.run.updateMany({ where: { id: run.id, ...lease.guard }, data: { transcript: memory as never } });
+      if (count === 0) state.stop = 'lease';
     };
     const originOf = (url: string | null): string | null => {
       try {
@@ -1759,7 +1863,7 @@ export class GoalRunnerService {
           if (target && !approved(target) && !rule) return refuseGated('click', { selector }, target, reason);
           const seqBefore = state.seq;
           const cardPay = rule ? false : await beginCardPay(cardPayCtx, target);
-          const out = await act({ type: 'click', selector }, reason);
+          const out = await act({ type: 'click', selector }, reason, undefined, target);
           if (rule) await allowedByRule(rule, seqBefore, 'click');
           else spend(target);
           if (cardPay) await endCardPay(cardPayCtx, await lastStepOk(seqBefore));
@@ -1830,7 +1934,7 @@ export class GoalRunnerService {
           if (target && !approved(target) && !rule) return refuseGated('click_at', { mark: n }, target, reason);
           const seqBefore = state.seq;
           const cardPay = rule ? false : await beginCardPay(cardPayCtx, target);
-          const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason, { x: mark.x, y: mark.y, w: mark.w, h: mark.h });
+          const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason, { x: mark.x, y: mark.y, w: mark.w, h: mark.h }, target);
           if (rule) await allowedByRule(rule, seqBefore, 'click_at');
           else spend(target);
           if (cardPay) await endCardPay(cardPayCtx, await lastStepOk(seqBefore));
@@ -1856,7 +1960,7 @@ export class GoalRunnerService {
           if (target && !approved(target) && !rule) return refuseGated('click_at', { x, y }, target, reason);
           const seqBefore = state.seq;
           const cardPay = rule ? false : await beginCardPay(cardPayCtx, target);
-          const out = await act({ type: 'click_at', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}), ...(modifiers.length ? { modifiers } : {}) }, reason);
+          const out = await act({ type: 'click_at', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}), ...(modifiers.length ? { modifiers } : {}) }, reason, undefined, target);
           if (rule) await allowedByRule(rule, seqBefore, 'click_at');
           else spend(target);
           if (cardPay) await endCardPay(cardPayCtx, await lastStepOk(seqBefore));
@@ -2058,8 +2162,10 @@ export class GoalRunnerService {
             }),
           ]
         : []),
-      defineTool({
+      defineRunTool({
         name: 'type_handoff_secret',
+        // Typing a secret can submit a payment or a sign-in: it is intent-recorded before the fabric types it (E38.3).
+        commits: true,
         description:
           'Type the secret (code or password) the person gave through request_human into an input. You never see the value. ' +
           'For a sensitive task value shown in the goal as [provided: <name>], pass that name as parameter; otherwise null.',
@@ -2081,18 +2187,24 @@ export class GoalRunnerService {
             memory.secretHandoffId = null;
           }
           let op;
+          if (state.stop === 'lease' || !(await lease.held())) {
+            state.stop = 'lease';
+            return LEASE_LOST_TEXT;
+          }
+          const intent = inCommitTool() ? await openIntent('type', { selector, secret: '' }, null) : null;
+          if (inCommitTool() && intent === null) return LEASE_LOST_TEXT;
           await setActivity('acting', { action: { type: 'type', selector, secret: '', submit }, target: actionTarget({ selector }, state.marks.values()) });
           try {
             // The fabric types the value itself: the console never sees it.
             op = await session.typeSecret(sessionId!, { handoffId, selector, clear: true, submit });
           } catch {
-            await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started, undefined, { secret: true });
+            await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started, undefined, { secret: true }, intent);
             return 'The secret is no longer available; ask the person again if needed.';
           } finally {
             await setActivity('thinking');
           }
           const ok = op.state === 'succeeded';
-          await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started, undefined, { secret: true });
+          await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started, undefined, { secret: true }, intent);
           return ok ? 'Typed the secret.' : `Failed: ${op.error ?? op.state}`;
         },
       }),
@@ -2272,7 +2384,7 @@ export class GoalRunnerService {
         memory.stallHandoffs = (memory.stallHandoffs ?? 0) + 1;
         const spec = questionSpecSchema.parse({ kind: 'other', input: 'takeover', prompt: stallHandoffPrompt(signal.reason, lastActions(stall)) });
         if (await askPerson(spec, Date.now())) {
-          await this.saveMemory(userId, run.id, memory, used.drain());
+          await this.saveMemory(userId, run.id, memory, used.drain(), lease);
           return pauseForPerson();
         }
       }
@@ -2315,7 +2427,7 @@ export class GoalRunnerService {
       } catch (e) {
         this.log.warn(`run ${run.id}: the wrap-up call failed: ${e instanceof Error ? e.message : String(e)}`);
       }
-      await this.saveMemory(userId, run.id, memory, used.drain());
+      await this.saveMemory(userId, run.id, memory, used.drain(), lease);
       const done = state.finished as { success: boolean; result: string } | null;
       if (done?.success) {
         await closeRun('succeeded', { result: done.result, stopReason });
@@ -2347,7 +2459,7 @@ export class GoalRunnerService {
       memory.log.push(`The owner is asked to enter ${typeNow.label}. When they have, type it into ${typeNow.selector} with type_handoff_secret (no parameter) and carry on with the form.`);
       const spec = questionSpecSchema.parse({ kind: 'other', input: 'secret', prompt: `Enter your ${typeNow.label} for the form on ${hostOf(typeNow.origin) ?? typeNow.origin}. The agent types it into the page; it is never shown to the agent or stored.` });
       if (await askPerson(spec, Date.now())) {
-        await this.saveMemory(userId, run.id, memory, used.drain());
+        await this.saveMemory(userId, run.id, memory, used.drain(), lease);
         return pauseForPerson();
       }
     }
@@ -2363,7 +2475,7 @@ export class GoalRunnerService {
       memory.askingParam = p.key;
       const spec = questionSpecSchema.parse({ kind: 'other', input: 'secret', prompt: `Enter ${p.label} for this run. The agent types it into the page; it is never shown to the agent or stored.` });
       if (await askPerson(spec, Date.now())) {
-        await this.saveMemory(userId, run.id, memory, used.drain());
+        await this.saveMemory(userId, run.id, memory, used.drain(), lease);
         return pauseForPerson();
       }
       memory.askingParam = null;
@@ -2504,11 +2616,13 @@ export class GoalRunnerService {
         }
       } catch (e) {
         if (!(e instanceof StopLoop)) {
-          await this.saveMemory(userId, run.id, memory, used.drain());
+          await this.saveMemory(userId, run.id, memory, used.drain(), lease);
           throw e;
         }
       }
-      await this.saveMemory(userId, run.id, memory, used.drain());
+      // Another job took over the run in the middle of the chunk (E38.3): this job writes nothing more.
+      if (state.stop === 'lease') throw new LeaseLost(run.id);
+      await this.saveMemory(userId, run.id, memory, used.drain(), lease);
       await sendOverNotice();
 
       const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
@@ -2543,7 +2657,7 @@ export class GoalRunnerService {
       if (stalled) {
         const out = await respondToStall(stalled);
         if (out) return out;
-        await this.saveMemory(userId, run.id, memory, used.drain());
+        await this.saveMemory(userId, run.id, memory, used.drain(), lease);
       }
       // steps_exhausted, or a budget warning: another chunk.
     }
@@ -2565,6 +2679,8 @@ export class GoalRunnerService {
   /** The owner's answer as a step of the trace (#541): after the run's last step; not an action. Never fails the run. */
   private async recordAnswer(runId: string, questionId: string | null, facts: Parameters<typeof answerSummary>[0]): Promise<void> {
     try {
+      // Once per question: a retried job that folds the same answer again (it died before the run left `waiting_human`) adds no second step (E38.3).
+      if (questionId && (await this.prisma.runStep.count({ where: { runId, kind: 'handoff', action: 'answered', questionId } })) > 0) return;
       const last = await this.prisma.runStep.aggregate({ where: { runId }, _max: { seq: true } });
       await this.prisma.runStep.create({
         data: { runId, seq: (last._max.seq ?? 0) + 1, kind: 'handoff', action: 'answered', ok: facts.completed, summary: answerSummary(facts), durationMs: 0, ...(questionId ? { questionId } : {}) },
@@ -2574,12 +2690,13 @@ export class GoalRunnerService {
     }
   }
 
-  private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: UsageDelta) {
+  /** Saves the memory and the usage of the chunk, conditional on the lease: a job that lost the run throws `LeaseLost` and writes nothing (E38.3). */
+  private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: UsageDelta, lease: RunLease) {
     memory.log = memory.log.slice(-200);
     this.tasks.metrics.tokens(usage.inputTokens, usage.outputTokens);
     this.tasks.metrics.modelCalls(usage.modelCalls);
-    await this.prisma.forUser({ userId }).run.updateMany({
-      where: { id: runId },
+    const { count } = await this.prisma.forUser({ userId }).run.updateMany({
+      where: { id: runId, ...lease.guard },
       data: {
         transcript: memory as never,
         inputTokens: { increment: usage.inputTokens },
@@ -2591,6 +2708,7 @@ export class GoalRunnerService {
         ...(usage.costKnown ? {} : { costKnown: false }),
       },
     });
+    if (count === 0) throw new LeaseLost(runId);
   }
 
   private async finish(

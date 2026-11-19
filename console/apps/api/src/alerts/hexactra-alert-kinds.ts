@@ -26,8 +26,16 @@ export interface AlertSources {
   expensiveRuns(overUsd: number, since: Date): Promise<ExpensiveRun[]>;
   /** Saved approvals (#554) used at least `minUses` times since `since`, busiest first. Optional: a source that predates #554 has none. */
   busyApprovals?(minUses: number, since: Date): Promise<BusyApproval[]>;
+  /** Runs created since `since` that were recovered at least `minRecoveries` times after an interruption (E38.3), most recovered first. Optional. */
+  recoveredRuns?(minRecoveries: number, since: Date): Promise<RecoveredRun[]>;
   /** Saved card payments (E37.7) per user since `since`: how many cards were typed (`number` released) and the largest declared amount. Optional. */
   cardUsage?(since: Date): Promise<CardUsage[]>;
+}
+
+/** A run whose job was interrupted again and again (E38.3): which run and how many times; never a step or a page. */
+export interface RecoveredRun extends AlertRunRef {
+  userId: string;
+  recoveries: number;
 }
 
 /** One user's saved-card payments in a window: counts and the largest declared amount; never a card, a merchant or a value. */
@@ -134,6 +142,8 @@ export const HEXACTRA_ALERT_KINDS = {
   APPROVAL_BUSY: 'hexactra_approval_busy',
   /** E37.7. The starter rule's key is `hexactra.card_use`. */
   CARD_USE: 'hexactra_card_use',
+  /** E38.3. The starter rule's key is `hexactra.run_recovered`. */
+  RUN_RECOVERED: 'hexactra_run_recovered',
 } as const;
 
 const hostOfflineConfig = z.object({ includeDraining: z.boolean().default(false) });
@@ -323,8 +333,32 @@ export const cardUseKind: AlertRuleKind<z.infer<typeof cardUseConfig>> = {
   describe: (rule) => `More than ${rule.config.maxUses} saved-card payments of one user within ${rule.config.windowHours} h${rule.config.maxAmount !== null ? `, or one above ${rule.config.maxAmount}` : ''}`,
 };
 
+const recoveredConfig = z.object({
+  /** Recoveries of one run that fire the alert: more than three by default. */
+  minRecoveries: z.number().int().min(1).max(100).default(4),
+  windowHours: z.number().int().min(1).max(168).default(24),
+});
+export const runRecoveredKind: AlertRuleKind<z.infer<typeof recoveredConfig>> = {
+  id: HEXACTRA_ALERT_KINDS.RUN_RECOVERED,
+  label: 'Run keeps being interrupted',
+  description: "A run's job was interrupted and the run carried on from its last recorded step more than a few times: a worker that keeps dying, a deploy loop or a run that crashes the runner.",
+  configSchema: recoveredConfig,
+  async evaluate(ctx, rule) {
+    const { minRecoveries, windowHours } = rule.config;
+    const since = new Date(ctx.now.getTime() - windowHours * 3_600_000);
+    const runs = (await need().recoveredRuns?.(minRecoveries, since)) ?? [];
+    return runs.map((r) => ({
+      labels: { 'run.id': r.runId, 'user.id': r.userId },
+      value: r.recoveries,
+      breached: true,
+      summary: `${rule.name}: ${describeRun(r)} was recovered after an interruption ${r.recoveries} times (limit ${minRecoveries - 1})`,
+    }));
+  },
+  describe: (rule) => `One run recovered ${rule.config.minRecoveries} or more times after an interruption (runs of the last ${rule.config.windowHours} h)`,
+};
+
 // Run retention keeps runs for these kinds' windows: a new kind that reads `runs` joins the list.
-const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE];
+const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, HEXACTRA_ALERT_KINDS.RUN_RECOVERED];
 if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_KINDS.some((k) => !RUN_READERS.includes(k))) {
   throw new Error('RUN_READING_ALERT_KINDS (run-alert-kinds.ts) must list exactly the alert kinds that read runs');
 }
@@ -336,6 +370,7 @@ registerAlertRuleKind(runStalledKind);
 registerAlertRuleKind(runCostSpikeKind);
 registerAlertRuleKind(approvalBusyKind);
 registerAlertRuleKind(cardUseKind);
+registerAlertRuleKind(runRecoveredKind);
 
 /**
  * The rules the console creates once (by key); admins tune them at
@@ -353,4 +388,6 @@ export const HEXACTRA_ALERT_RULES = [
   { key: 'hexactra.approval_busy', name: 'Saved approval used a lot', kind: HEXACTRA_ALERT_KINDS.APPROVAL_BUSY, severity: 'warning', config: { maxUses: 20, windowHours: 24 }, forSeconds: 0, enabled: true },
   // E37.7: saved cards are the highest-risk secret: more than five payments a day in one account, or a payment above the threshold the administrator sets.
   { key: 'hexactra.card_use', name: 'Saved card used a lot', kind: HEXACTRA_ALERT_KINDS.CARD_USE, severity: 'warning', config: { maxUses: 5, maxAmount: null, windowHours: 24 }, forSeconds: 0, enabled: true },
+  // E38.3: a run whose job keeps dying: more than three recoveries of one run in a day.
+  { key: 'hexactra.run_recovered', name: 'Run keeps being interrupted', kind: HEXACTRA_ALERT_KINDS.RUN_RECOVERED, severity: 'warning', config: { minRecoveries: 4, windowHours: 24 }, forSeconds: 0, enabled: true },
 ] as const;
