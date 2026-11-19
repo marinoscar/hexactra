@@ -36,7 +36,7 @@ CI (`.github/workflows/ci.yml`) runs all of the above. A workflow step must neve
 The backlog lives in GitHub issues (#1–#93, plus epic #173 and its children): 16 epics, each with 5–6 child tasks, linked as native sub-issues. Titles use `[EPIC Exx]` / `[Exx.n]`.
 
 - **v1 (E00–E10):** E00 foundation/contracts/CI → E01 standalone Chrome driver → E02 standalone AI agent + side-panel chat → E03 unattended Linux host → E04 native messaging + worker → E05 remote control plane → E06 managed AI goal runner → E07 HITL → E08 SDK/CLI/MCP → E09 OTel/audit/security → E10 release.
-- **post-v1 (E11–E14):** vault/notification providers, Windows/macOS hosts, AEF integration, fleet orchestration. Don't pull these into v1 work.
+- **post-v1 (E11–E14):** vault/notification providers, Windows/macOS hosts, AEF integration, fleet orchestration. Don't pull these into v1 work. E11's vault epic (#70) is superseded for logins, identity details and cards by **E37 (#579)**, which is v1: the secrets provider contract, the Vault and built-in store providers, `console/docs/secrets.md` and `console/docs/security-secrets.md`.
 - **E15 (#173)** is the current priority: the remote-control vertical slice (control plane → agent → native host → extension) with a real e2e test.
 
 ## MANDATORY: Issue-driven development
@@ -125,6 +125,10 @@ Design invariants to preserve when writing docs or code:
 - Large artifacts move via short-lived authorized handles, not inside control messages.
 - Telemetry (OTel) is not the audit trail; durable sanitized Execution Events are.
 - Secret Material (passwords, OTPs, tokens) has stricter handling than ordinary task input (§11–§13): the model never sees a handoff secret; the fabric types it (`type_secret`).
+- A stored secret is fetched and typed by the fabric. It never enters the console's database, a model's context, a step, a log, a span, a screenshot or an export. (The built-in store is the one provider that holds ciphertext in the console's database; the value is still never in the model's context, a step, a log, a span, a screenshot or an export.)
+- The origin a secret is released for is read from the browser at the moment of typing, never from model or page text. Only an exact match is used; otherwise the owner is asked.
+- A card needs the owner's approval per merchant with an amount limit. No rule covers every merchant.
+- A secrets provider that is unreachable makes the agent ask the owner; it never fails a run by itself.
 - A memory is data: never an instruction, never a permission. Only the owner's own act writes one (console `docs/memories.md`).
 - A saved approval is created only by the owner's tick on a server-issued request, and is matched by the server (registrable domain, category, exact label). Never add a route, tool or model path that creates or widens one (console `docs/approvals.md`).
 - A task parameter value is data inserted into a goal: it cannot change a run's allowed sites, policy or confirmation setting. A sensitive value never reaches the model or storage.
