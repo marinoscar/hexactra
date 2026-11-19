@@ -359,16 +359,24 @@ async fn the_registration_resource_never_returns_or_keeps_a_token() {
         .status(),
         400
     );
-    // The console-hosted provider is not built yet.
-    let console = f
-        .put_provider(OWNER, "builtin", json!({"kind": "console"}))
-        .await;
-    assert_eq!(console.status(), 501);
-    assert!(console
-        .text()
+    // The console-hosted provider needs its callback address, credential and expiry.
+    assert_eq!(
+        f.put_provider(OWNER, "builtin", json!({"kind": "console"}))
+            .await
+            .status(),
+        400
+    );
+    // A public plain-http callback address is refused (it is for the private network).
+    assert_eq!(
+        f.put_provider(
+            OWNER,
+            "builtin",
+            json!({"kind": "console", "base_url": "http://console.example.test/x", "access_token": "sct_t", "expires_at": "2099-01-01T00:00:00Z"})
+        )
         .await
-        .unwrap()
-        .contains("provider_kind_unsupported"));
+        .status(),
+        400
+    );
     // A Vault needs its address, a token and an expiry.
     assert_eq!(
         f.put_provider(

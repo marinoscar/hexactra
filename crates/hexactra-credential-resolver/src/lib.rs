@@ -21,6 +21,7 @@
 //! credentials. Nothing used it, and "return the whole credential" is exactly
 //! what this contract forbids, so it was removed rather than built beside.
 
+pub mod console;
 #[cfg(any(test, feature = "test-provider"))]
 pub mod fake_vault;
 pub mod http;
@@ -36,6 +37,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
+pub use console::ConsoleProvider;
 pub use hexactra_core::remote::{ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose};
 pub use origin::{Origin, OriginError};
 pub use value::SecretValue;
