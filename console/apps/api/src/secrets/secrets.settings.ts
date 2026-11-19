@@ -103,9 +103,13 @@ export type SecretsProviderId = (typeof SECRETS_PROVIDER_IDS)[number];
 export const secretsUserSettingsSchema = z.object({
   provider: z.enum(SECRETS_PROVIDER_IDS).optional().describe('Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.'),
   agentUse: z.object({ enabled: z.boolean().describe('Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default.') }),
+  defaultUseSavedLogins: z
+    .boolean()
+    .optional()
+    .describe('New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch.'),
 });
 export type SecretsUserSettings = z.infer<typeof secretsUserSettingsSchema>;
-export const secretsUserSettingsPatchSchema = z.object({ provider: z.enum(SECRETS_PROVIDER_IDS).optional(), agentUse: z.object({ enabled: z.boolean() }).partial().optional() });
+export const secretsUserSettingsPatchSchema = z.object({ provider: z.enum(SECRETS_PROVIDER_IDS).optional(), agentUse: z.object({ enabled: z.boolean() }).partial().optional(), defaultUseSavedLogins: z.boolean().optional() });
 type SecretsUserPatch = z.infer<typeof secretsUserSettingsPatchSchema>;
 
 /** The owner's switch as stored in their settings document (off when never set). */
@@ -119,20 +123,26 @@ export function secretsProviderOf(doc: unknown): SecretsProviderId {
   return v === 'builtin' ? 'builtin' : 'vault';
 }
 
+/** Whether new tasks and chats start with saved logins on, as stored in the owner's settings document (off when never set). */
+export function secretsDefaultUseSavedLoginsOf(doc: unknown): boolean {
+  return (doc as { secrets?: { defaultUseSavedLogins?: unknown } } | null | undefined)?.secrets?.defaultUseSavedLogins === true;
+}
+
 export const SECRETS_USER_SETTINGS = {
   key: 'secrets',
-  description: 'Secrets: whether the agent may use your saved logins and one-time codes (off by default).',
+  description: 'Secrets: whether the agent may use your saved logins and one-time codes (off by default), and whether new tasks and chats start with them on (off by default).',
   schema: secretsUserSettingsSchema,
   patchSchema: secretsUserSettingsPatchSchema,
-  defaults: { agentUse: { enabled: false } },
+  defaults: { agentUse: { enabled: false }, defaultUseSavedLogins: false },
   merge: (current: SecretsUserSettings | undefined, patch: SecretsUserPatch | null | undefined): SecretsUserSettings | undefined => {
     if (patch === null) return undefined;
     if (patch === undefined) return current;
     const enabled = patch.agentUse?.enabled ?? current?.agentUse?.enabled ?? false;
+    const useByDefault = patch.defaultUseSavedLogins ?? current?.defaultUseSavedLogins ?? false;
     const provider = patch.provider ?? current?.provider;
-    // Defaults are never stored: `vault` and "off".
-    const next: SecretsUserSettings = { agentUse: { enabled }, ...(provider === 'builtin' ? { provider } : {}) };
-    return enabled || next.provider ? next : undefined;
+    // Defaults are never stored: `vault`, "off" and "off".
+    if (!enabled && !useByDefault && provider !== 'builtin') return undefined;
+    return { agentUse: { enabled }, ...(useByDefault ? { defaultUseSavedLogins: true } : {}), ...(provider === 'builtin' ? { provider } : {}) };
   },
 } satisfies Omit<UserSettingsNamespace<'secrets', SecretsUserSettings, SecretsUserPatch>, never> & { defaults: SecretsUserSettings };
 

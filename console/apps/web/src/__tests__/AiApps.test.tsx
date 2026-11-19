@@ -30,7 +30,7 @@ vi.setConfig({ testTimeout: 20_000 });
 configure({ asyncUtilTimeout: 5_000 });
 
 const CLIENT = 'aaaaaaaa-1111-4111-8111-111111111111';
-const LIMITS: AppLimits = { policyId: null, allowedPolicyIds: [], allowedDomains: [], maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: null, confirmPurchases: true, confirmSensitiveActions: true, paused: false };
+const LIMITS: AppLimits = { policyId: null, allowedPolicyIds: [], allowedDomains: [], maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: null, confirmPurchases: true, confirmSensitiveActions: true, allowSavedLogins: false, paused: false };
 const APP: ConnectedApp = {
   clientId: CLIENT,
   grantId: 'bbbbbbbb-2222-4222-8222-222222222222',
@@ -179,6 +179,16 @@ describe('an AI app\'s page', () => {
     fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: 'Save limits' }));
     await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { confirmSensitiveActions: false } }));
+  });
+
+  it('saved logins (E37.3): off by default, saved as allowSavedLogins', async () => {
+    restore = mockViewport(1440);
+    const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses());
+    const toggle = await screen.findByRole('switch', { name: 'Let it sign in with my saved logins' });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Save limits' }));
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { allowSavedLogins: true } }));
   });
 
   it('shows the consent text of each scope, the limits, and the app\'s runs (scoped by clientId)', async () => {

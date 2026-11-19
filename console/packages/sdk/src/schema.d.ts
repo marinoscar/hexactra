@@ -8947,6 +8947,19 @@ export interface components {
                     };
                 };
             };
+            secrets?: {
+                /**
+                 * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
+                 * @enum {string}
+                 */
+                provider?: "vault" | "builtin";
+                agentUse: {
+                    /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
+                    enabled: boolean;
+                };
+                /** @description New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch. */
+                defaultUseSavedLogins?: boolean;
+            };
             memories?: {
                 /** @description Let the agent suggest memories for you to approve. On by default. */
                 suggest: boolean;
@@ -8964,17 +8977,6 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
-            };
-            secrets?: {
-                /**
-                 * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
-                 * @enum {string}
-                 */
-                provider?: "vault" | "builtin";
-                agentUse: {
-                    /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
-                    enabled: boolean;
-                };
             };
             notifications?: {
                 [key: string]: {
@@ -9041,6 +9043,19 @@ export interface components {
                     };
                 };
             };
+            secrets?: {
+                /**
+                 * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
+                 * @enum {string}
+                 */
+                provider?: "vault" | "builtin";
+                agentUse: {
+                    /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
+                    enabled: boolean;
+                };
+                /** @description New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch. */
+                defaultUseSavedLogins?: boolean;
+            };
             memories?: {
                 /** @description Let the agent suggest memories for you to approve. On by default. */
                 suggest: boolean;
@@ -9058,17 +9073,6 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
-            };
-            secrets?: {
-                /**
-                 * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
-                 * @enum {string}
-                 */
-                provider?: "vault" | "builtin";
-                agentUse: {
-                    /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
-                    enabled: boolean;
-                };
             };
             notifications?: {
                 [key: string]: {
@@ -9137,6 +9141,14 @@ export interface components {
                     };
                 } | null;
             } | null;
+            secrets?: {
+                /** @enum {string} */
+                provider?: "vault" | "builtin";
+                agentUse?: {
+                    enabled?: boolean;
+                };
+                defaultUseSavedLogins?: boolean;
+            } | null;
             memories?: {
                 /** @description Let the agent suggest memories for you to approve. On by default. */
                 suggest?: boolean;
@@ -9153,13 +9165,6 @@ export interface components {
             } | null;
             approvals?: {
                 paused?: boolean;
-            } | null;
-            secrets?: {
-                /** @enum {string} */
-                provider?: "vault" | "builtin";
-                agentUse?: {
-                    enabled?: boolean;
-                };
             } | null;
             notifications?: {
                 [key: string]: {
@@ -9183,6 +9188,20 @@ export interface components {
             security: {
                 jwtAccessTtlMinutes: number;
                 refreshTtlDays: number;
+            };
+            secrets: {
+                agentUse: {
+                    /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
+                    enabled: boolean;
+                };
+                vault?: {
+                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
+                    baseUrl?: string | null;
+                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
+                    clientId?: string | null;
+                    /** @description Vault host names exempt from the private-address check (https is still required). */
+                    allowedHosts?: string[];
+                };
             };
             mcp: {
                 elicitation: boolean;
@@ -9263,20 +9282,6 @@ export interface components {
                 maxOutputTokens: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
-            };
-            secrets: {
-                agentUse: {
-                    /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
-                    enabled: boolean;
-                };
-                vault?: {
-                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
-                    baseUrl?: string | null;
-                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
-                    clientId?: string | null;
-                    /** @description Vault host names exempt from the private-address check (https is still required). */
-                    allowedHosts?: string[];
-                };
             };
             storage: {
                 provider: string;
@@ -9428,6 +9433,20 @@ export interface components {
             version: number;
         };
         UpdateSystemSettingsDto: {
+            secrets?: {
+                agentUse: {
+                    /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
+                    enabled: boolean;
+                };
+                vault?: {
+                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
+                    baseUrl?: string | null;
+                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
+                    clientId?: string | null;
+                    /** @description Vault host names exempt from the private-address check (https is still required). */
+                    allowedHosts?: string[];
+                };
+            };
             mcp?: {
                 elicitation: boolean;
                 advertiseStepUpTools: boolean;
@@ -9507,20 +9526,6 @@ export interface components {
                 maxOutputTokens: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
-            };
-            secrets?: {
-                agentUse: {
-                    /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
-                    enabled: boolean;
-                };
-                vault?: {
-                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
-                    baseUrl?: string | null;
-                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
-                    clientId?: string | null;
-                    /** @description Vault host names exempt from the private-address check (https is still required). */
-                    allowedHosts?: string[];
-                };
             };
             storage?: {
                 provider: string;
@@ -9679,6 +9684,19 @@ export interface components {
             };
         };
         PatchSystemSettingsDto: {
+            secrets?: {
+                agentUse?: {
+                    enabled?: boolean;
+                };
+                vault?: {
+                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
+                    baseUrl?: string | null;
+                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
+                    clientId?: string | null;
+                    /** @description Vault host names exempt from the private-address check (https is still required). */
+                    allowedHosts?: string[];
+                };
+            };
             mcp?: {
                 elicitation?: boolean;
                 advertiseStepUpTools?: boolean;
@@ -9757,19 +9775,6 @@ export interface components {
                 maxOutputTokens?: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd?: number | null;
-            };
-            secrets?: {
-                agentUse?: {
-                    enabled?: boolean;
-                };
-                vault?: {
-                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
-                    baseUrl?: string | null;
-                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
-                    clientId?: string | null;
-                    /** @description Vault host names exempt from the private-address check (https is still required). */
-                    allowedHosts?: string[];
-                };
             };
             storage?: {
                 provider?: string;
@@ -10261,6 +10266,19 @@ export interface components {
                         };
                     };
                 };
+                secrets?: {
+                    /**
+                     * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
+                     * @enum {string}
+                     */
+                    provider?: "vault" | "builtin";
+                    agentUse: {
+                        /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
+                        enabled: boolean;
+                    };
+                    /** @description New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch. */
+                    defaultUseSavedLogins?: boolean;
+                };
                 memories?: {
                     /** @description Let the agent suggest memories for you to approve. On by default. */
                     suggest: boolean;
@@ -10278,17 +10296,6 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
-                };
-                secrets?: {
-                    /**
-                     * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
-                     * @enum {string}
-                     */
-                    provider?: "vault" | "builtin";
-                    agentUse: {
-                        /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
-                        enabled: boolean;
-                    };
                 };
                 notifications?: {
                     [key: string]: {
@@ -14977,6 +14984,8 @@ export interface components {
                 confirmPurchases: boolean;
                 /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
                 confirmSensitiveActions: boolean;
+                /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
+                allowSavedLogins: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -15070,6 +15079,8 @@ export interface components {
                 confirmPurchases: boolean;
                 /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
                 confirmSensitiveActions: boolean;
+                /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
+                allowSavedLogins: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -15100,6 +15111,8 @@ export interface components {
             confirmPurchases: boolean;
             /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
             confirmSensitiveActions: boolean;
+            /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
+            allowSavedLogins: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -15112,6 +15125,7 @@ export interface components {
             dailyCostLimitUsd?: number | null;
             confirmPurchases?: boolean;
             confirmSensitiveActions?: boolean;
+            allowSavedLogins?: boolean;
             paused?: boolean;
         };
         TaskDetailResponseDto: {
@@ -15137,6 +15151,13 @@ export interface components {
              */
             maxMinutes: number;
             confirmRiskyActions: boolean;
+            /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
+            useSavedLogins: boolean;
+            /**
+             * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
+             * @enum {string}
+             */
+            unattendedPayments: "ask" | "allow";
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -15283,6 +15304,13 @@ export interface components {
                  */
                 maxMinutes: number;
                 confirmRiskyActions: boolean;
+                /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
+                useSavedLogins: boolean;
+                /**
+                 * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
+                 * @enum {string}
+                 */
+                unattendedPayments: "ask" | "allow";
                 /**
                  * @deprecated
                  * @description Deprecated: see `policyId`
@@ -15433,6 +15461,13 @@ export interface components {
              */
             maxMinutes: number;
             confirmRiskyActions: boolean;
+            /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
+            useSavedLogins: boolean;
+            /**
+             * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
+             * @enum {string}
+             */
+            unattendedPayments: "ask" | "allow";
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -15622,6 +15657,14 @@ export interface components {
                 /** @description Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API. */
                 sensitive?: boolean;
             }[];
+            /** @description Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected. */
+            useSavedLogins?: boolean;
+            /**
+             * @description What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.
+             * @default ask
+             * @enum {string}
+             */
+            unattendedPayments?: "ask" | "allow";
             /** @description Schedules created with the task, in the same transaction: one invalid schedule and nothing is created. */
             schedules?: {
                 /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
@@ -15666,6 +15709,13 @@ export interface components {
              */
             maxMinutes: number;
             confirmRiskyActions: boolean;
+            /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
+            useSavedLogins: boolean;
+            /**
+             * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
+             * @enum {string}
+             */
+            unattendedPayments: "ask" | "allow";
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -15784,6 +15834,13 @@ export interface components {
                 /** @description Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API. */
                 sensitive?: boolean;
             }[];
+            /** @description Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected. */
+            useSavedLogins?: boolean;
+            /**
+             * @description What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.
+             * @enum {string}
+             */
+            unattendedPayments?: "ask" | "allow";
         };
         ReplaceTaskSchedulesDto: {
             schedules: {
@@ -15834,6 +15891,13 @@ export interface components {
              */
             maxMinutes: number;
             confirmRiskyActions: boolean;
+            /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
+            useSavedLogins: boolean;
+            /**
+             * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
+             * @enum {string}
+             */
+            unattendedPayments: "ask" | "allow";
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -16245,6 +16309,17 @@ export interface components {
             costKnown: boolean;
             /** @description How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`. */
             confirmedActions: number;
+            /** @description The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page. */
+            usedSavedLogins: {
+                /** @description The secrets provider that held the login (`vault`) */
+                provider: string;
+                /** @description The saved login's name as the owner gave it ("Shop login"), never its username, password or code */
+                itemName: string;
+                /** @description The site the login was used on (`https://shop.example.test`) */
+                origin: string;
+                /** @description When it was first used in this run */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -16410,6 +16485,17 @@ export interface components {
                 costKnown: boolean;
                 /** @description How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`. */
                 confirmedActions: number;
+                /** @description The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page. */
+                usedSavedLogins: {
+                    /** @description The secrets provider that held the login (`vault`) */
+                    provider: string;
+                    /** @description The saved login's name as the owner gave it ("Shop login"), never its username, password or code */
+                    itemName: string;
+                    /** @description The site the login was used on (`https://shop.example.test`) */
+                    origin: string;
+                    /** @description When it was first used in this run */
+                    at: string;
+                }[];
                 /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
                 inputs?: {
                     key: string;
@@ -16885,6 +16971,17 @@ export interface components {
                 /** @description When it was carried out */
                 at: string;
             }[];
+            /** @description The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page. */
+            usedSavedLogins: {
+                /** @description The secrets provider that held the login (`vault`) */
+                provider: string;
+                /** @description The saved login's name as the owner gave it ("Shop login"), never its username, password or code */
+                itemName: string;
+                /** @description The site the login was used on (`https://shop.example.test`) */
+                origin: string;
+                /** @description When it was first used in this run */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -17115,6 +17212,17 @@ export interface components {
                 /** @description The action carried out (click, click_at, key, …) */
                 action: string;
                 /** @description When it was carried out */
+                at: string;
+            }[];
+            /** @description The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page. */
+            usedSavedLogins: {
+                /** @description The secrets provider that held the login (`vault`) */
+                provider: string;
+                /** @description The saved login's name as the owner gave it ("Shop login"), never its username, password or code */
+                itemName: string;
+                /** @description The site the login was used on (`https://shop.example.test`) */
+                origin: string;
+                /** @description When it was first used in this run */
                 at: string;
             }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
@@ -17945,6 +18053,8 @@ export interface components {
                 allowedDomains: string[];
                 /** @description Ask the owner before a purchase or another step that is hard to undo */
                 confirmRiskyActions: boolean;
+                /** @description Let the chat's runs sign in from the owner's saved logins (E37.3); off by default */
+                useSavedLogins: boolean;
                 /** @description ISO 8601 timestamp */
                 lastMessageAt: string;
                 /** @description ISO 8601 timestamp */
@@ -17995,6 +18105,8 @@ export interface components {
             allowedDomains: string[];
             /** @description Ask the owner before a purchase or another step that is hard to undo */
             confirmRiskyActions: boolean;
+            /** @description Let the chat's runs sign in from the owner's saved logins (E37.3); off by default */
+            useSavedLogins: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -18016,6 +18128,8 @@ export interface components {
             allowedDomains?: string[];
             /** @description Ask the owner before a purchase or another step that is hard to undo. On by default in a chat. */
             confirmRiskyActions?: boolean;
+            /** @description Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected. */
+            useSavedLogins?: boolean;
         };
         ChatDetailResponseDto: {
             /** Format: uuid */
@@ -18038,6 +18152,8 @@ export interface components {
             allowedDomains: string[];
             /** @description Ask the owner before a purchase or another step that is hard to undo */
             confirmRiskyActions: boolean;
+            /** @description Let the chat's runs sign in from the owner's saved logins (E37.3); off by default */
+            useSavedLogins: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -18093,6 +18209,8 @@ export interface components {
             allowedDomains?: string[];
             /** @description Ask the owner before a purchase or another step that is hard to undo. On by default in a chat. */
             confirmRiskyActions?: boolean;
+            /** @description Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected. */
+            useSavedLogins?: boolean;
         };
         ChatMessageResponseDto: {
             /** Format: uuid */
@@ -18130,6 +18248,8 @@ export interface components {
             policyId: string | null;
             allowedDomains: string[];
             confirmRiskyActions: boolean;
+            /** @description The chat's saved-logins switch (E37.3), carried over to the task */
+            useSavedLogins: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */

@@ -79,6 +79,7 @@ export function limitsOf(row: SettingsRow | null): AppLimits {
     dailyCostLimitUsd: row.dailyCostLimitUsd === null ? null : Number(row.dailyCostLimitUsd),
     confirmPurchases: row.confirmPurchases,
     confirmSensitiveActions: row.confirmSensitiveActions,
+    allowSavedLogins: row.allowSavedLogins,
     paused: row.paused,
   };
 }
@@ -313,6 +314,7 @@ export class ConnectedAppsService {
       dailyCostLimitUsd: next.dailyCostLimitUsd === null ? null : new Prisma.Decimal(next.dailyCostLimitUsd),
       confirmPurchases: next.confirmPurchases,
       confirmSensitiveActions: next.confirmSensitiveActions,
+      allowSavedLogins: next.allowSavedLogins,
       paused: next.paused,
     };
     const saved = row
@@ -326,7 +328,7 @@ export class ConnectedAppsService {
       credentialKind: 'jwt',
       clientId,
       outcome: 'ok',
-      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}) },
+      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}) },
     });
     return clampLimits(limitsOf(saved), ceilings);
   }

@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "e0d0ed7130feaf60"
+    "outputSchema": "38e755f1076a9752"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "ece43dc511caead0"
+    "outputSchema": "0b048ea3583e201f"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ba6a4bcb152ad3e3",
-    "outputSchema": "aafabca309d1d4a7"
+    "outputSchema": "c9f4e272dc2a4a82"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "e0d0ed7130feaf60"
+    "outputSchema": "38e755f1076a9752"
   },
   {
     "name": "run_export",
@@ -117,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "323e8c40a2c0aee4",
-    "outputSchema": "de3bdef4d2d1d3bd"
+    "outputSchema": "cd168fee8bf52977"
   },
   {
     "name": "task_update",
@@ -132,7 +132,7 @@
       "openWorldHint": false
     },
     "inputSchema": "002f97188a7f88b0",
-    "outputSchema": "8507e7f457d51f58"
+    "outputSchema": "545db719bc35a122"
   },
   {
     "name": "task_run",
@@ -147,7 +147,7 @@
       "openWorldHint": true
     },
     "inputSchema": "c1aba3cd46e48851",
-    "outputSchema": "e0d0ed7130feaf60"
+    "outputSchema": "38e755f1076a9752"
   },
   {
     "name": "schedule_create",
@@ -192,7 +192,7 @@
       "openWorldHint": false
     },
     "inputSchema": "f822a505f1af2ccd",
-    "outputSchema": "992c1f9a1d167523"
+    "outputSchema": "063f769a3165fb8f"
   },
   {
     "name": "task_resume",
@@ -207,7 +207,7 @@
       "openWorldHint": false
     },
     "inputSchema": "f822a505f1af2ccd",
-    "outputSchema": "992c1f9a1d167523"
+    "outputSchema": "063f769a3165fb8f"
   },
   {
     "name": "schedules_list",
@@ -852,7 +852,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "e0d0ed7130feaf60"
+    "outputSchema": "38e755f1076a9752"
   },
   {
     "name": "question_card_answer",

@@ -2,12 +2,6 @@
 
 ## Unreleased
 
-- **Built-in secrets store** (#594, epic E37). Someone who runs Hexactra without a separate Vault still gets saved logins: the console embeds Vault's own packages (`@marinoscar/vault-*`) and offers them to the agent as a second provider, `builtin`, under the same rules as the remote Vault (per-login opt-in, exact origin, one field per call, one identical not-found, an audit row per use, a kill switch).
-  - Off by default (`SECRETS_STORE_ENABLED`); with it on and no valid `SECRETS_STORE_KEY` the API refuses to start. Values are ciphertext under a per-owner data key wrapped by that key; a database dump cannot be decrypted without it. Rotation re-wraps data keys (`POST /api/admin/secrets-store/rewrap`, job `secrets.store.maintain`); Doctor `secrets.store_key`.
-  - The fabric calls back to an owner-bound internal route (`/api/internal/secrets-store/v1`, not reachable with a session, a personal access token or an AI app's token, closed at the public proxy); the Rust `ConsoleProvider` is its client.
-  - Settings -> Secrets: choose "Store in Hexactra" or "Connect Vault"; Vault's own pages mount at `/secrets` ("My saved logins"). Logins only; no role can read another owner's values.
-  - New tables (the Vault domain schema and `secrets_store_data_keys`, `secrets_store_callback_tokens`): run `npm run prisma:migrate`. Docs: `console/docs/secrets.md`, `console/docs/decisions/secrets-embedding.md`.
-
 - **E32 close-out: documentation and client parity** (#432).
   - MCP: new tools `schedule_preview`, `task_pause` and `task_resume`; `task_create` accepts `schedules[]`; `runs_list` is paged.
   - CLI: `runs delete <id>` and `runs delete --older-than <days>`, `tasks pause` and `tasks resume`; the TUI's run list loads more with `m`.

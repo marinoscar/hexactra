@@ -56,6 +56,8 @@ export interface SnapshotAppLimits {
   clientName: string | null;
   allowedDomains: string[];
   confirmPurchases: boolean;
+  /** The owner allowed this app's runs to sign in from saved logins (E37.3); false when absent. */
+  allowSavedLogins: boolean;
   policyId: string | null;
   allowedPolicyIds: string[];
   appliedPolicyId: string | null;
@@ -74,6 +76,7 @@ export function readAppLimits(value: unknown): SnapshotAppLimits | null {
     clientName: typeof v.clientName === 'string' ? v.clientName : null,
     allowedDomains: v.allowedDomains.filter((d): d is string => typeof d === 'string'),
     confirmPurchases: v.confirmPurchases !== false,
+    allowSavedLogins: v.allowSavedLogins === true,
     policyId: typeof v.policyId === 'string' ? v.policyId : null,
     allowedPolicyIds: Array.isArray(v.allowedPolicyIds) ? v.allowedPolicyIds.filter((d): d is string => typeof d === 'string') : [],
     appliedPolicyId: typeof v.appliedPolicyId === 'string' ? v.appliedPolicyId : null,

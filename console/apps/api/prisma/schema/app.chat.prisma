@@ -53,6 +53,8 @@ model Conversation {
   allowedDomains      String[]     @default([]) @map("allowed_domains")
   /// Ask the owner before a purchase or another step that is hard to undo. On by default in a chat.
   confirmRiskyActions Boolean      @default(true) @map("confirm_risky_actions")
+  /// Let the chat's runs sign in from the owner's saved logins (E37.3): an opt-in, off by default (new chats start from the owner's `secrets.defaultUseSavedLogins`).
+  useSavedLogins Boolean           @default(false) @map("use_saved_logins")
   /// The highest `seq` of an owner message the turn engine has taken up (#484).
   answeredSeq   Int                @default(0) @map("answered_seq")
   /// Held while a turn is working on this chat, so two turns never run at once; a crashed turn's lease expires.

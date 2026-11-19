@@ -2,6 +2,8 @@
 // the database and a plain number (USD, at most 6 decimal places) on the wire.
 import type { Prisma } from '@prisma/client';
 
+import { readUsedSavedLogins, type UsedSavedLogin } from '../runner/saved-logins';
+
 /** How far back a task's `spend30d` looks. */
 export const SPEND_WINDOW_DAYS = 30;
 
@@ -21,20 +23,22 @@ export function runClientView(run: { clientId?: string | null; clientName?: stri
 }
 
 type ClientColumns = 'clientId' | 'clientName' | 'grantId' | 'appLimits';
-type WithClient<T> = T extends { clientId: unknown } ? { client: RunClientView | null } : unknown;
+type WithClient<T> = (T extends { clientId: unknown } ? { client: RunClientView | null } : unknown) & (T extends { usedSavedLogins: unknown } ? { usedSavedLogins: UsedSavedLogin[] } : unknown);
 
 /**
  * A run as the API returns it: `costUsd` as a number, and (#464) the app that
  * started it as `client { id, name, verified }` in place of its columns (the
  * grant and the limits that applied stay server-side).
  */
-export function withCost<T extends { costUsd: Prisma.Decimal }>(run: T): Omit<T, 'costUsd' | ClientColumns> & { costUsd: number } & WithClient<T> {
+export function withCost<T extends { costUsd: Prisma.Decimal }>(run: T): Omit<T, 'costUsd' | ClientColumns | 'usedSavedLogins'> & { costUsd: number } & WithClient<T> {
   const out: Record<string, unknown> = { ...run, costUsd: Number(run.costUsd) };
+  // The saved logins the run signed in with (E37.3): a list, never null.
+  if ('usedSavedLogins' in run) out.usedSavedLogins = readUsedSavedLogins((run as { usedSavedLogins?: unknown }).usedSavedLogins);
   if ('clientId' in run || 'clientName' in run) {
     out.client = runClientView(run as { clientId?: string | null; clientName?: string | null });
     for (const k of ['clientId', 'clientName', 'grantId', 'appLimits']) delete out[k];
   }
-  return out as Omit<T, 'costUsd' | ClientColumns> & { costUsd: number } & WithClient<T>;
+  return out as Omit<T, 'costUsd' | ClientColumns | 'usedSavedLogins'> & { costUsd: number } & WithClient<T>;
 }
 
 /** What a task spent over the last 30 days. */

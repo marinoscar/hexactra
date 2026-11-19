@@ -33,9 +33,9 @@ Each one is filed on `marinoscar/vault`.
 
 ## Database: fragments, migrations, the lock
 
-- `vault-db sync --names after-host` installs `prisma/fragments/vault.{secrets,media,backups}.prisma`, eleven migrations named `2026111913000N_vault_<slug>` (after the console's own newest migration, so a fresh database runs them in order), `prisma/vault.lock`, and merges the two raw-SQL indexes and the eleven migrations into `prisma/platform.lock`. `platform db compose` then composes them as `app.vault.*` beside the console's fragments; the `User` and `StorageObject` back-relations come in as `extend model` blocks. `npm run db:check` now runs `platform db check && vault-db check`, so `npm run platform:check` covers both locks.
+- `vault-db sync --names after-host` installs `prisma/fragments/vault.{secrets,media,backups}.prisma`, eleven migrations named `202611191402NN_vault_<slug>` (after the console's own newest migration at the time of the merge, so a fresh database runs them in order), `prisma/vault.lock`, and merges the two raw-SQL indexes and the eleven migrations into `prisma/platform.lock`. `platform db compose` then composes them as `app.vault.*` beside the console's fragments; the `User` and `StorageObject` back-relations come in as `extend model` blocks. `npm run db:check` now runs `platform db check && vault-db check`, so `npm run platform:check` covers both locks.
 - The tables exist in every deployment (the schema is composed statically), whether the slice is on or not. **Every model is registered in the user-owned data registry and the user-data manifest without importing the packages** (`store.ownership.ts`), so the platform conformance suite passes with the slice off and a package upgrade that adds a table is caught by `test/secrets-store.packages.spec.ts`.
-- The console's own tables are `secrets_store_data_keys` and `secrets_store_callback_tokens` (migrations `20261119140000` and `20261119140100`, after the Vault ones).
+- The console's own tables are `secrets_store_data_keys` and `secrets_store_callback_tokens` (migrations `20261119140300` and `20261119140301`, after the Vault ones).
 - Unmounted slices leave unused tables (backups, media, card grants): accepted; dropping them would fork the package's migration history.
 
 ## Cost
