@@ -5,6 +5,7 @@ import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
 import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_STILL_PAUSED_EVENT, RUN_CARD_AMOUNT_MISMATCH_EVENT, RUN_CARD_USED_EVENT, RUN_SAVED_APPROVALS_EVENT, RUN_SAVED_LOGIN_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
+import { RunReportLinks } from './run-report-link';
 import { outputsView } from './task-outputs';
 import { FINAL_WINDOW_MS, canSnooze } from './reminder-schedule';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
@@ -20,6 +21,8 @@ export interface RunRef {
   /** The run's outputs as stored and the definitions it started with (E39.5): a finished run's webhook carries them, masked. */
   outputs?: unknown;
   outputsSpec?: unknown;
+  /** Whether every output was returned and valid (E39.5); null for a run without outputs. */
+  outputsComplete?: boolean | null;
 }
 
 /**
@@ -37,6 +40,7 @@ export class RunNotifier {
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly webhooks?: WebhooksService,
     @Optional() private readonly actions?: RunActionTokens,
+    @Optional() private readonly reportLinks?: RunReportLinks,
   ) {}
 
   private async hook(event: string, userId: string, data: Record<string, unknown>): Promise<void> {
@@ -130,7 +134,14 @@ export class RunNotifier {
     await this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
     // The outputs the run returned (E39.5), masked like every view: a sensitive value is `[hidden]`. Additive.
     const outputs = outputsView(run.outputsSpec, run.outputs);
-    await this.hook(RUN_FINISHED_WEBHOOK, userId, { ...this.runData(run, status), result: (result ?? '').slice(0, 2000) || null, ...(outputs ? { outputs } : {}) });
+    // Additive (E39.6): `outputsComplete`, the run's page, and a signed link to the masked PDF (7 days, this run only).
+    await this.hook(RUN_FINISHED_WEBHOOK, userId, {
+      ...this.runData(run, status),
+      result: (result ?? '').slice(0, 2000) || null,
+      ...(outputs ? { outputs, outputsComplete: run.outputsComplete ?? null } : {}),
+      runUrl: this.url(run.conversationId ? `/chat/${run.conversationId}` : `/runs/${run.id}`),
+      ...(this.reportLinks ? { reportUrl: this.reportLinks.url(userId, run.id) } : {}),
+    });
   }
 
   /**
