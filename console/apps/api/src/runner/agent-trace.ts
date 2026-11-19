@@ -297,8 +297,12 @@ export class AgentTrace {
     })) as AiDefinedTool[];
   }
 
-  private async runTool(tool: AiDefinedTool, args: never, ctx: never): Promise<unknown> {
-    const name = tool.tool.name;
+  private runTool(tool: AiDefinedTool, args: never, ctx: never): Promise<unknown> {
+    return this.toolCall(tool.tool.name, () => (tool.execute as (a: never, c: never) => Promise<unknown>)(args, ctx));
+  }
+
+  /** One tool call: opens its `execute_tool <name>` span and times it (the `TelemetryPort` of the harness). */
+  async toolCall<T>(name: string, fn: () => Promise<T>): Promise<T> {
     const entry: PendingTool = { name, start: Date.now() };
     let active = this.currentContext;
     if (this.recording) {
@@ -308,7 +312,7 @@ export class AgentTrace {
     }
     this.chunkToolCalls += 1;
     try {
-      return await context.with(active.setValue(TOOL_KEY, entry), () => (tool.execute as (a: never, c: never) => Promise<unknown>)(args, ctx));
+      return await context.with(active.setValue(TOOL_KEY, entry), fn);
     } catch (e) {
       entry.thrown = true;
       throw e;
