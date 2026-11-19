@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 
 import { OAuthClientModule } from '../oauth-client';
-import { FABRIC_SECRETS_REGISTRY, UnwiredFabricSecretsRegistry } from './fabric-secrets-registry';
+import { FabricModule } from '../fabric/fabric.module';
+import { FABRIC_SECRETS_REGISTRY, FabricSessionSecretsRegistry } from './fabric-secrets-registry';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar } from './secrets-provider.registrar';
 import { SecretsController } from './secrets.controller';
@@ -22,14 +23,13 @@ import { VaultTokenService } from './vault-token.service';
  * switches (`secrets.agentUse.enabled`, the deployment's and the owner's), `GET /api/secrets/status` and a Doctor
  * line. Mounted only with the credentials and notifications slices (app.module.ts).
  *
- * `FABRIC_SECRETS_REGISTRY` is bound to `UnwiredFabricSecretsRegistry` until the fabric's secrets-provider resource
- * (E37.1, #590) exists on `main`: replace the `useClass` here with the adapter over the fabric client.
+ * `FABRIC_SECRETS_REGISTRY` is bound to `FabricSessionSecretsRegistry`: the fabric's secrets-provider resource (E37.1, #590).
  */
 @Module({
-  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule],
+  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
   controllers: [SecretsController],
   providers: [
-    { provide: FABRIC_SECRETS_REGISTRY, useClass: UnwiredFabricSecretsRegistry },
+    { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricSessionSecretsRegistry },
     SecretsPolicyService,
     SecretsEvents,
     VaultApiClient,
