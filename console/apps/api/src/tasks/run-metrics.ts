@@ -109,6 +109,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     attributes: { format: { kind: 'enum', values: RUN_EXPORT_FORMAT_LABELS }, screenshots: { kind: 'enum', values: ['embed', 'none'] } },
   },
   {
+    key: 'runsRecovered',
+    name: 'app.runs.recovered',
+    kind: 'counter',
+    unit: '{run}',
+    description: 'Times a run was recovered after its job was interrupted (a crash, a deploy, a lost lease), by whether a step may or may not have happened (`unknown_steps`: 0 or 1+). No run or user in a label.',
+    attributes: { unknown_steps: { kind: 'enum', values: ['0', '1+'] } },
+  },
+  {
     key: 'secretsCardUses',
     name: 'app.secrets.card_uses',
     kind: 'counter',
@@ -140,6 +148,11 @@ export class RunMetrics {
   /** A saved-card use or refusal (E37.7). */
   cardUse(outcome: (typeof CARD_USE_OUTCOMES)[number]): void {
     this.metrics?.add('secretsCardUses' as never, 1, { outcome });
+  }
+
+  /** A run recovered after an interruption (E38.3): whether any step was left `unknown`. */
+  recovered(unknownSteps: number): void {
+    this.metrics?.add('runsRecovered' as never, 1, { unknown_steps: unknownSteps > 0 ? '1+' : '0' });
   }
 
   handoff(): void {

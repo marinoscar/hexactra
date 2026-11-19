@@ -17,14 +17,18 @@ export { GOAL_RUN_JOB, GOAL_RUN_REASONS, HANDOFF_CHECK_JOB, enqueueGoalRun, type
 /**
  * `browser.goal.run`: drives one run until it finishes or waits for a
  * person. Server-only (no node result schema): it holds the user's AI key
- * path and the fabric service token. One attempt: a run is not idempotent
- * (it clicks things), so a failure is recorded on the run, not retried.
+ * path and the fabric service token. A failure the job reports is recorded on
+ * the run and never retried. A job whose worker DIES (a crash, a deploy, a lost
+ * lease) is retried by the queue (E38.3): the run keeps its progress after every
+ * action, the retried job reconciles from the step rows (`reconcile.ts`), a step
+ * that may have happened is never repeated, and a job that finds another job
+ * holding the run stops without writing (`lease.ts`).
  */
 @Injectable()
 export class GoalRunHandler implements JobHandler, OnModuleInit {
   readonly type = GOAL_RUN_JOB;
   readonly label = 'Run a browser goal';
-  readonly profile = { maxRuntimeMs: GOAL_RUN_MAX_RUNTIME_MS, maxAttempts: 1 };
+  readonly profile = { maxRuntimeMs: GOAL_RUN_MAX_RUNTIME_MS, maxAttempts: 3 };
   private readonly log = new Logger(GoalRunHandler.name);
 
   constructor(
