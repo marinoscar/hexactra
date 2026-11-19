@@ -26,7 +26,7 @@ export type RegistrationResult =
   | 'not_enabled'
   | 'not_connected'
   | 'needs_reconnect'
-  /** The Vault or the fabric could not be reached (or the fabric path is not wired yet): try again. */
+  /** The Vault or the fabric could not be reached (or no fabric connection is configured): try again. */
   | 'unavailable';
 
 /** Replace the fabric's token when fewer than this remain. */

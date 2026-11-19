@@ -8,8 +8,10 @@
 //!
 //! This crate is the contract and nothing else: the trait, its request and
 //! error types, [`Origin`], [`SecretValue`], a hardened [`http`] client builder
-//! for provider implementations, and (behind the `test-provider` feature, and
-//! in this crate's own tests) a fixed-fixture [`test_provider::TestProvider`].
+//! for provider implementations, the remote [`VaultProvider`] (issue #591: the
+//! owner's Vault over its agent credential API) and (behind the
+//! `test-provider` feature, and in this crate's own tests) a fixed-fixture
+//! [`test_provider::TestProvider`] and an HTTP [`fake_vault::FakeVault`].
 //! The control plane (`hexactra-control`) holds the per-owner registry and
 //! runs the actions.
 //!
@@ -19,11 +21,14 @@
 //! credentials. Nothing used it, and "return the whole credential" is exactly
 //! what this contract forbids, so it was removed rather than built beside.
 
+#[cfg(any(test, feature = "test-provider"))]
+pub mod fake_vault;
 pub mod http;
 mod origin;
 #[cfg(any(test, feature = "test-provider"))]
 pub mod test_provider;
 mod value;
+pub mod vault;
 
 use std::fmt;
 use std::time::Duration;
@@ -34,6 +39,7 @@ use chrono::{DateTime, Utc};
 pub use hexactra_core::remote::{ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose};
 pub use origin::{Origin, OriginError};
 pub use value::SecretValue;
+pub use vault::VaultProvider;
 
 /// Whose items a provider may touch: the console's user id of the session's
 /// owner. Not secret.
