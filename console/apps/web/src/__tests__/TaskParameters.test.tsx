@@ -312,7 +312,9 @@ describe('the Parameters section of the task form', () => {
     const { sent } = mount(`/tasks/${TASK_ID}/edit`);
     await screen.findByRole('form', { name: 'Edit task' });
     expect(row('Amount')).toBeInTheDocument();
-    expect(within(row('Recipient phone')).getByRole('radio', { name: 'From a memory' })).toBeChecked();
+    // "From a memory" is offered only once the memories have loaded (useMemoryOptions: null while loading), which is a
+    // separate request that starts when the form mounts: wait for it rather than racing the form's first render.
+    expect(await within(row('Recipient phone')).findByRole('radio', { name: 'From a memory' })).toBeChecked();
     expect(within(row('Account last 4')).getByRole('radio', { name: 'Always use this value' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     fireEvent.click(within(row('Amount')).getByRole('switch', { name: 'Required' }));
