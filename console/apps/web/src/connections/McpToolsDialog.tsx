@@ -99,7 +99,7 @@ export function McpToolsDialog({ open, api, connection, canWrite, onClose, onCha
             </Alert>
           )}
           {review.length > 0 && (
-            <Alert severity="warning" role="status">
+            <Alert severity="warning" role="status" sx={{ overflowWrap: "anywhere" }}>
               {review.length === 1 ? '1 tool is' : `${review.length} tools are`} new or changed since you last decided. {review.length === 1 ? 'It is' : 'They are'} off until you choose: {review.map((t) => t.title ?? t.name).join(', ')}.
             </Alert>
           )}
