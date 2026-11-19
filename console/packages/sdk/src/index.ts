@@ -25,6 +25,8 @@ export type TaskPage = Schema<'TaskPageResponseDto'>;
 export type TaskWithSummary = Schema<'TaskWithSummaryResponseDto'>;
 /** A task's run statistics (`GET /api/tasks/{id}/stats`). */
 export type TaskStats = Schema<'TaskStatsResponseDto'>;
+/** What a task's finished runs returned (`GET /api/tasks/{id}/outputs`): the columns, the runs newest first with their values by key, and the next cursor. */
+export type TaskOutputsPage = Schema<'TaskOutputsPageResponseDto'>;
 /** A page of runs: what `GET /api/runs?envelope=1` returns in `data`. */
 export type RunPage = Schema<'RunPageResponseDto'>;
 /** Which runs: the filter of `GET /api/runs`, `GET /api/runs/counts` and a delete by filter. */
@@ -102,6 +104,11 @@ export interface TasksClient {
   update(id: string, body: Schema<'UpdateTaskDto'>): Promise<Schema<'TaskResponseDto'>>;
   /** Run a task now; `policyId` runs it under another policy for this run only. */
   run(id: string, options?: { policyId?: PolicyRef }): Promise<Schema<'RunResponseDto'>>;
+  /**
+   * What the task's finished runs returned (E39.5): `columns` are the task's outputs, `items` the runs newest first with their `values`
+   * by key (a sensitive value reads `[hidden]`). Pass `nextCursor` back as `cursor`; `null` is the end. 404 for a task that is not yours.
+   */
+  outputs(id: string, query?: { limit?: number; cursor?: string }): Promise<TaskOutputsPage>;
   /** Pause every schedule of the task ("disable" it): it still runs when started by hand, the API or MCP. 409 `NO_SCHEDULES` without one. */
   pauseSchedules(id: string): Promise<Schema<'TaskSchedulesChangedResponseDto'>>;
   /** Resume every schedule of the task; `skipped` lists the schedules that could not be resumed. */
@@ -174,6 +181,7 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     create: (body) => data(api.POST('/api/tasks', { body })) as never,
     update: (id, body) => data(api.PATCH('/api/tasks/{id}', { params: { path: { id } }, body })) as never,
     run: (id, o) => data(api.POST('/api/tasks/{id}/runs', { params: { path: { id } }, body: o?.policyId ? { policyId: o.policyId } : {} } as never)) as never,
+    outputs: (id, query) => data(api.GET('/api/tasks/{id}/outputs', { params: { path: { id }, query: { ...query } } } as never)) as never,
     pauseSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/pause', { params: { path: { id } } })) as never,
     resumeSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/resume', { params: { path: { id } } })) as never,
   };

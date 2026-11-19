@@ -6276,6 +6276,28 @@ export interface paths {
         patch: operations["tasks_update"];
         trace?: never;
     };
+    "/api/tasks/{id}/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The outputs of a task's last runs
+         * @description What the task's finished runs returned (E39.5): `columns` are the task's outputs, `items` the runs, newest first, each with its `values` by key (the labels and types the run started with; a sensitive value is `[hidden]`). Keyset paged: pass `nextCursor` back as `cursor`. 404 `TASK_NOT_FOUND` for a task that is not yours.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["tasks_outputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/schedules": {
         parameters: {
             query?: never;
@@ -8101,6 +8123,13 @@ export interface components {
              * @example SAVE_DISABLED
              * @example SAVE_UNAVAILABLE
              * @example SAVE_REFUSED
+             * @example INVALID_OUTPUTS
+             * @example INVALID_GOAL
+             * @example INVALID_PARAMETERS
+             * @example UNKNOWN_INPUT
+             * @example INVALID_INPUT
+             * @example SENSITIVE_INPUT
+             * @example SCHEDULE_INPUTS_MISSING
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -8120,12 +8149,6 @@ export interface components {
              * @example POLICY_IMPORT_INVALID
              * @example POLICY_IMPORT_UNSUPPORTED_VERSION
              * @example POLICY_IMPORT_TOO_LARGE
-             * @example INVALID_GOAL
-             * @example INVALID_PARAMETERS
-             * @example UNKNOWN_INPUT
-             * @example INVALID_INPUT
-             * @example SENSITIVE_INPUT
-             * @example SCHEDULE_INPUTS_MISSING
              * @example APP_PAUSED
              * @example APP_RUN_LIMIT
              * @example APP_COST_LIMIT
@@ -15512,6 +15535,21 @@ export interface components {
                 /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
                 sensitive?: boolean;
             }[] | null;
+            /** @description The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none */
+            outputs: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
+                sensitive?: boolean;
+            }[] | null;
             /** @description What the task's runs spent in the last 30 days */
             spend30d: {
                 /** @description Runs created in the last 30 days */
@@ -15669,6 +15707,21 @@ export interface components {
                     /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
                     sensitive?: boolean;
                 }[] | null;
+                /** @description The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none */
+                outputs: {
+                    /** @description snake_case, unique in the task */
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                    required: boolean;
+                    /** @description choice: the options */
+                    options?: string[];
+                    /** @description What to look for; the agent reads it */
+                    help?: string;
+                    /** @description Masked in every view and export, and never sent to an AI app */
+                    sensitive?: boolean;
+                }[] | null;
                 /** @description What the task's runs spent in the last 30 days */
                 spend30d: {
                     /** @description Runs created in the last 30 days */
@@ -15759,6 +15812,57 @@ export interface components {
             /** @description Tasks that match `q`, `filter` and `policyId`, on every page */
             total: number;
         };
+        TaskOutputsPageResponseDto: {
+            /** @description The task's outputs now, in order, then any key an older run reported that the task no longer has (labels as that run knew them): one column each */
+            columns: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
+                sensitive?: boolean;
+            }[];
+            /** @description Runs of the task that have finished, newest first */
+            items: {
+                /** Format: uuid */
+                runId: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                finishedAt: string | null;
+                outputsComplete: boolean | null;
+                /** @description By key. A column the run did not have is absent; a sensitive value is `[hidden]` */
+                values: {
+                    [key: string]: {
+                        key: string;
+                        label: string;
+                        /** @enum {string} */
+                        type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                        required: boolean;
+                        sensitive: boolean;
+                        /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
+                        value: (string | number | boolean | {
+                            amount: number;
+                            /** @description ISO 4217, or null when the page gave none */
+                            currency: string | null;
+                        }) | null;
+                        /** @description The value was returned and valid (an optional output left empty is ok) */
+                        ok: boolean;
+                        /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
+                        note: string | null;
+                    };
+                };
+            }[];
+            /** @description Pass it as `cursor` to read the next page; null on the last page. Opaque. */
+            nextCursor: string | null;
+        };
         TaskWithSummaryResponseDto: {
             /** Format: uuid */
             id: string;
@@ -15828,6 +15932,21 @@ export interface components {
                     pattern?: string;
                 };
                 /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[] | null;
+            /** @description The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none */
+            outputs: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[] | null;
             /** @description What the task's runs spent in the last 30 days */
@@ -15987,6 +16106,30 @@ export interface components {
                 /** @description Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API. */
                 sensitive?: boolean;
             }[];
+            /** @description The values the agent must return when it finishes, by name. Stored on each run (`GET /runs/{id}` `outputs`) and listed per task (`GET /tasks/{id}/outputs`). Runs started from the task use these definitions; a schedule, the API and MCP cannot redefine them. An empty list removes them. */
+            outputs?: {
+                /** @description snake_case, unique in the task, 1 to 40 characters (lower-case letters, digits, `_`). Derived from the label when omitted. */
+                key?: string;
+                /** @description What a person reads: "Confirmation number". */
+                label: string;
+                /**
+                 * @description text, number, money, date, datetime, boolean, url or choice.
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                /**
+                 * @description The agent must give a value; if it cannot find one it is asked again, twice at most, and then the run ends with the output marked "not found".
+                 * @default true
+                 */
+                required?: boolean;
+                /** @description choice: 2 to 50 options. */
+                options?: string[];
+                /** @description What to look for, one line. The agent reads it. */
+                help?: string;
+                /** @description Masked wherever a person or an export sees it, and never sent to an AI app. The value is still stored. */
+                sensitive?: boolean;
+            }[];
             /** @description Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected. */
             useSavedLogins?: boolean;
             /** @description Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details. */
@@ -16091,6 +16234,21 @@ export interface components {
                 /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
                 sensitive?: boolean;
             }[] | null;
+            /** @description The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none */
+            outputs: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
+                sensitive?: boolean;
+            }[] | null;
             /** @description What the task's runs spent in the last 30 days */
             spend30d: {
                 /** @description Runs created in the last 30 days */
@@ -16175,6 +16333,30 @@ export interface components {
                     pattern?: string;
                 };
                 /** @description Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API. */
+                sensitive?: boolean;
+            }[];
+            /** @description The values the agent must return when it finishes, by name. Stored on each run (`GET /runs/{id}` `outputs`) and listed per task (`GET /tasks/{id}/outputs`). Runs started from the task use these definitions; a schedule, the API and MCP cannot redefine them. An empty list removes them. */
+            outputs?: {
+                /** @description snake_case, unique in the task, 1 to 40 characters (lower-case letters, digits, `_`). Derived from the label when omitted. */
+                key?: string;
+                /** @description What a person reads: "Confirmation number". */
+                label: string;
+                /**
+                 * @description text, number, money, date, datetime, boolean, url or choice.
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                /**
+                 * @description The agent must give a value; if it cannot find one it is asked again, twice at most, and then the run ends with the output marked "not found".
+                 * @default true
+                 */
+                required?: boolean;
+                /** @description choice: 2 to 50 options. */
+                options?: string[];
+                /** @description What to look for, one line. The agent reads it. */
+                help?: string;
+                /** @description Masked wherever a person or an export sees it, and never sent to an AI app. The value is still stored. */
                 sensitive?: boolean;
             }[];
             /** @description Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected. */
@@ -16284,6 +16466,21 @@ export interface components {
                     pattern?: string;
                 };
                 /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[] | null;
+            /** @description The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none */
+            outputs: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[] | null;
             /** @description What the task's runs spent in the last 30 days */
@@ -16726,6 +16923,27 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
             }[] | null;
+            /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
+            outputsComplete: boolean | null;
+            /** @description What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs. */
+            outputs?: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                sensitive: boolean;
+                /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
+                value: (string | number | boolean | {
+                    amount: number;
+                    /** @description ISO 4217, or null when the page gave none */
+                    currency: string | null;
+                }) | null;
+                /** @description The value was returned and valid (an optional output left empty is ok) */
+                ok: boolean;
+                /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
+                note: string | null;
+            }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */
@@ -16948,6 +17166,27 @@ export interface components {
                     /** @enum {string} */
                     source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
                 }[] | null;
+                /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
+                outputsComplete: boolean | null;
+                /** @description What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs. */
+                outputs?: {
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                    required: boolean;
+                    sensitive: boolean;
+                    /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
+                    value: (string | number | boolean | {
+                        amount: number;
+                        /** @description ISO 4217, or null when the page gave none */
+                        currency: string | null;
+                    }) | null;
+                    /** @description The value was returned and valid (an optional output left empty is ok) */
+                    ok: boolean;
+                    /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
+                    note: string | null;
+                }[] | null;
                 /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
                 memoryIds: string[];
                 /** @description ISO 8601 timestamp */
@@ -17071,6 +17310,27 @@ export interface components {
                     activeMs: number;
                 };
             };
+            /** @description What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed. */
+            outputs?: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                sensitive: boolean;
+                /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
+                value: (string | number | boolean | {
+                    amount: number;
+                    /** @description ISO 4217, or null when the page gave none */
+                    currency: string | null;
+                }) | null;
+                /** @description The value was returned and valid (an optional output left empty is ok) */
+                ok: boolean;
+                /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
+                note: string | null;
+            }[] | null;
+            /** @description Whether every output was returned and valid; null when the run has no outputs or has not finished */
+            outputsComplete?: boolean | null;
             /** @description The agent policy the run ran under, as snapshotted at its start; null before its first step */
             policy: {
                 id: string;
@@ -17483,6 +17743,27 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
             }[] | null;
+            /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
+            outputsComplete: boolean | null;
+            /** @description What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs. */
+            outputs?: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                sensitive: boolean;
+                /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
+                value: (string | number | boolean | {
+                    amount: number;
+                    /** @description ISO 4217, or null when the page gave none */
+                    currency: string | null;
+                }) | null;
+                /** @description The value was returned and valid (an optional output left empty is ok) */
+                ok: boolean;
+                /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
+                note: string | null;
+            }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */
@@ -17771,6 +18052,27 @@ export interface components {
                 value: string;
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
+            }[] | null;
+            /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
+            outputsComplete: boolean | null;
+            /** @description What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs. */
+            outputs?: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                sensitive: boolean;
+                /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
+                value: (string | number | boolean | {
+                    amount: number;
+                    /** @description ISO 4217, or null when the page gave none */
+                    currency: string | null;
+                }) | null;
+                /** @description The value was returned and valid (an optional output left empty is ok) */
+                ok: boolean;
+                /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
+                note: string | null;
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
@@ -18890,6 +19192,21 @@ export interface components {
                     pattern?: string;
                 };
                 /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[];
+            /** @description The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping. */
+            outputs: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[];
         };
@@ -39298,6 +39615,61 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["TaskResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    tasks_outputs: {
+        parameters: {
+            query?: {
+                /** @description Runs to return, 1 to 100. Default 20. */
+                limit?: number;
+                /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskOutputsPageResponseDto"];
                     };
                 };
             };
