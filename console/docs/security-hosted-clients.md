@@ -1,6 +1,6 @@
 # Threat model: hosted AI clients (ChatGPT, Claude) on the console
 
-The console's MCP endpoint lets hosted assistants (ChatGPT, Claude) drive the owner's browsers, with the owner's full powers within the scopes they consented to (VISION §27). This page names what is at stake, who might attack it, where the trust boundaries are, and which control answers each threat, with the test that proves it. Operators: [the public-exposure runbook](runbooks/public-exposure.md).
+The console's MCP endpoint lets hosted assistants (ChatGPT, Claude) drive the owner's browsers, with the owner's full powers within the scopes they consented to (VISION §27). This page names what is at stake, who might attack it, where the trust boundaries are, and which control answers each threat, with the test that proves it. Operators: [the public-exposure runbook](runbooks/public-exposure.md). Saved logins, identity details and cards the agent uses without seeing them have a threat model of their own: [security-secrets.md](security-secrets.md) (the rows below on saved logins, details and cards are the part of it that concerns hosted AI apps).
 
 ## Assets
 
