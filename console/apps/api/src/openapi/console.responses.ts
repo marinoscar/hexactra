@@ -320,7 +320,18 @@ export class RunDetailResponseDto extends createZodDto(
   }),
 ) {}
 
-const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'memory', 'form']).describe('`form` (#552): a task run\'s missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one');
+const questionInput = z
+  .enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'memory', 'form', 'save_login'])
+  .describe('`form` (#552): a task run\'s missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it');
+const saveLoginCard = z
+  .object({
+    site: z.string().describe('The host of the sign-in page'),
+    domain: z.string().describe('Its registrable domain: the unit "Never for this site" is remembered at'),
+    name: z.string().describe('The name the agent suggests; the owner edits it on the card'),
+    username: z.string().describe('The username the owner typed (the password is never shown, returned or stored by the console)'),
+    valueExpiresAt: z.string().describe('When the fabric stops holding the password: after it the card says it is too late to save'),
+  })
+  .describe('save_login (E37.4b): what the card shows');
 const memoryProposal = z
   .object({
     kind: z.enum(['person', 'account', 'preference', 'fact']),
@@ -362,6 +373,8 @@ export const questionAnswerResponseSchema = z.object({
   ruleId: z.uuid().optional().describe('The saved approval this answer created or found ("Don\'t ask again", #555)'),
   fields: z.record(z.string(), z.string()).optional().describe('form: the values given, masked'),
   memoryId: z.uuid().optional().describe('memory (#553): the memory the approved proposal saved'),
+  neverForSite: z.boolean().optional().describe('save_login (E37.4b): declined with "Never for this site"'),
+  savedAs: z.string().optional().describe('save_login (E37.4b): the name the login was saved under'),
   channel: z.string().optional(),
   by: z.string().optional().describe('Who answered, e.g. user:<id>'),
   answeredAt: iso,
@@ -400,6 +413,7 @@ export const questionResponseSchema = z.object({
   client: runClientSchema.nullable().describe('The AI app that asked; null when no app did'),
   blocking: z.boolean().describe('False for a question no run waits on: a memory proposal (#553)'),
   proposal: memoryProposal.nullable(),
+  saveLogin: saveLoginCard.nullable(),
   conversationId: z.uuid().nullable().describe('The chat a memory proposal came from (#553)'),
 });
 export class QuestionResponseDto extends createZodDto(questionResponseSchema) {}
@@ -431,8 +445,9 @@ export const inboxItemResponseSchema = z.object({
   viewerUrl: z.string().nullable(),
   createdAt: iso,
   expiresAt: iso,
-  blocking: z.boolean().describe('False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group'),
+  blocking: z.boolean().describe('False for a memory proposal (#553) and "Save this login?" (E37.4b): no run waits on it; the Inbox lists it in its own group'),
   proposal: memoryProposal.nullable(),
+  saveLogin: saveLoginCard.nullable(),
 });
 export class InboxItemResponseDto extends createZodDto(inboxItemResponseSchema) {}
 

@@ -211,12 +211,22 @@ export interface RunMemory {
   savedIdentity?: SavedIdentityMemory;
   /** Saved cards (E37.7): the references handed out, the page last looked up, the declared charge, the owner's approval and the phases of a payment. Never a card value. */
   savedCards?: SavedCardsMemory;
+  /** "Save this login?" (E37.4b): the sign-in cards the fabric keeps a password for, and the sign-in the agent typed from one. Ids and an origin; never the password. */
+  saveLogin?: SaveLoginMemory;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
   /** The highest step `seq` this memory already tells the model about (E38.3): a job that finds later rows reconciles them. */
   lastSeq?: number;
   /** Actions that may or may not have happened (E38.3): their target is asked again, and no saved approval covers it. Never a value. */
   unknownSteps?: UnknownStep[];
+}
+
+/** What a run remembers about offering to save a sign-in the owner typed by hand (E37.4b). */
+export interface SaveLoginMemory {
+  /** The `credentials` handoffs opened with `offer_save`: the fabric keeps their password for the provider (the newest five). */
+  offerable?: string[];
+  /** The sign-in the agent typed from one of them: its handoff and the page's origin as the fabric reported it when the password was typed. */
+  signIn?: { handoffId: string; origin: string; offered: boolean } | null;
 }
 
 /** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
@@ -255,6 +265,7 @@ When you need the person:
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
   2c. If the saved_cards tool is available and you must pay at a shop, never type a card yourself: read the total on the checkout page, call saved_cards, then declare_charge with that exact amount, its currency and what is being bought, then pay_with_saved_card with the card's reference and where each field is (a selector; x and y for a field inside an embedded payment frame), then press the pay button, then read the amount on the confirmation page and call confirm_charge. You never see a card number, an expiry or a code. The owner approves each shop and amount; if a tool says a card is not allowed here, or is refused, stop and tell the owner: do not try another card, amount or shop. If the page asks for verification from the owner's bank (a frame or page from the card issuer, a banking-app prompt, 3-D Secure), do not type, click or answer inside it: call request_human with kind "verification", input "none" and the prompt "Your bank wants you to confirm this payment in your banking app", then continue when the page moves on. A code the bank sends by text is asked for like any code (step 4).
   3. Without a usable saved login: Ask for the username and password together, in one request: kind "login", input "credentials", with a prompt that names the site ("Sign in to Bank of America"). When the answer comes, type the username with type_text and the password with type_handoff_secret (you never see secret values), then submit.
+  3b. If propose_saving_login is available: after you typed the owner's sign-in from step 3 and can SEE that you are signed in (the sign-in page is gone and their account shows), call it once with a short name for the login (the site or account, such as "Example Bank"). The owner decides on a card and the run does not wait; do not mention it or ask about it. Never call it when the sign-in failed, when the page still asks for a password, or for a login you did not type from their sign-in card.
   4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
   5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
   6. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
@@ -811,6 +822,10 @@ export class GoalRunnerService {
       if (!savedCardsOn && (memory.chunks ?? 0) === 0) memory.log.push('(Saved cards are not available for this run: the owner pays or enters a card themselves, so ask them.)');
     }
 
+    // Offering to save a sign-in the owner types by hand (E37.4b): on only with saved logins on and a Vault that can save one (the
+    // write scope, contract 1.3). The `credentials` cards then ask the fabric to keep the typed password, and `propose_saving_login` exists.
+    const saveLoginOn = savedLoginsOn && this.secrets ? await this.secrets.saveLoginSupported(userId) : false;
+
     let sessionId = run.sessionId;
     if (!sessionId) {
       try {
@@ -1208,7 +1223,13 @@ export class GoalRunnerService {
           denyLabel: spec.denyLabel,
           risk: spec.risk,
           rememberLabel: spec.rememberLabel,
+          // The fabric keeps the typed password for ten minutes after the answer, so the owner can be offered to save it (E37.4b).
+          ...(spec.input === 'credentials' && saveLoginOn ? { offerSave: true } : {}),
         });
+        if (spec.input === 'credentials' && saveLoginOn) {
+          const sv = (memory.saveLogin ??= {});
+          sv.offerable = [...(sv.offerable ?? []), created.id].slice(-5);
+        }
         state.handoffId = created.id;
         state.handoffExpiresAt = created.expiresAt;
         questionId = await this.mirror(userId, run.id, sessionId!, created, spec);
@@ -1260,6 +1281,20 @@ export class GoalRunnerService {
     };
     /** The host of the active tab, as the fabric reports it (#550): never the model's words. Not an action. */
     const currentHost = async (): Promise<string | null> => hostOf(await currentUrl());
+    /**
+     * Whether the page shows a password field now (E37.4b): a visible `input[type=password]` means the sign-in form is still
+     * there, so a sign-in the agent just typed has not succeeded. One fabric `evaluate`, outside `act`, so it is not an action.
+     * True when the page cannot be asked (nothing is offered on a doubt).
+     */
+    const passwordFieldShown = async (): Promise<boolean> => {
+      try {
+        const script = "/* hexactra:password-shown */(()=>{try{return [...document.querySelectorAll('input[type=password]')].some(e=>{const r=e.getBoundingClientRect();const s=getComputedStyle(e);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'})}catch(_){return true}})()";
+        const op = await session.act(sessionId!, { type: 'evaluate', script, await_promise: false }, ACTION_TIMEOUT_MS);
+        return op.state !== 'succeeded' || op.result?.value !== false;
+      } catch {
+        return true;
+      }
+    };
 
     /**
      * The confirmation gate (#550): whether a click on this target must wait for a person. Decided by what is
@@ -2185,6 +2220,27 @@ export class GoalRunnerService {
             }),
           ]
         : []),
+      ...(saveLoginOn
+        ? [
+            defineTool({
+              name: 'propose_saving_login',
+              description:
+                "After you typed the owner's sign-in (the one they gave through request_human, input credentials) and can see that you are signed in, offer to save that login in their vault so the next run does not ask. The owner decides on a card; the run does not wait. " +
+                'name: a short name for the login, the site or account (for example "Example Bank"). At most once per sign-in. Never when the sign-in failed or the page still asks for a password.',
+              parameters: z.object({ name: z.string().min(1).max(120) }),
+              execute: async ({ name }) => {
+                const sign = memory.saveLogin?.signIn;
+                if (!sign) return 'Nothing to offer: you did not type a sign-in the owner gave you through request_human (kind login, input credentials).';
+                if (sign.offered) return 'Already offered for this sign-in.';
+                // The page must have left the sign-in form: a visible password field means the sign-in has not succeeded (or failed).
+                if (await passwordFieldShown()) return 'The page still shows a password field, so the sign-in has not succeeded yet. Check the page; if it failed, do not offer to save it.';
+                sign.offered = true;
+                const out = await this.secrets!.proposeSaveLogin(userId, { handoffId: sign.handoffId, origin: sign.origin, name, from: { runId: run.id, conversationId: run.conversationId } });
+                return out.message;
+              },
+            }),
+          ]
+        : []),
       defineRunTool({
         name: 'type_handoff_secret',
         // Typing a secret can submit a payment or a sign-in: it is intent-recorded before the fabric types it (E38.3).
@@ -2228,6 +2284,12 @@ export class GoalRunnerService {
           }
           const ok = op.state === 'succeeded';
           await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started, undefined, { secret: true }, intent);
+          // The owner's own sign-in was typed (E37.4b): remember which one and the page it was typed on, as the fabric reports it (never
+          // the model's words), so `propose_saving_login` can offer to save exactly it.
+          if (ok && !parameter && memory.saveLogin?.offerable?.includes(handoffId)) {
+            const origin = originOf(await currentUrl());
+            if (origin) memory.saveLogin.signIn = { handoffId, origin, offered: false };
+          }
           return ok ? 'Typed the secret.' : `Failed: ${op.error ?? op.state}`;
         },
       }),

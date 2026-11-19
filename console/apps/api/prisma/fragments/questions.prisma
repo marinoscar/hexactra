@@ -21,6 +21,8 @@ enum QuestionInput {
   form
   /// A memory the agent proposes (#553): answered only in the signed-in web and app; the answer writes the memory.
   memory
+  /// "Save this login?" (E37.4b): the sign-in the owner typed by hand, offered to their secrets provider; answered only in the signed-in web and app.
+  save_login
 
   @@map("question_input")
 }

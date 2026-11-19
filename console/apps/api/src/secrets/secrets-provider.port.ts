@@ -50,7 +50,7 @@ export type SecretField =
   | 'security_code';
 
 /** Why a value is released; recorded for the owner. */
-export type SecretPurpose = 'login' | 'signup' | 'password_change' | 'mfa' | 'form' | 'purchase';
+export type SecretPurpose = 'login' | 'signup' | 'password_change' | 'mfa' | 'form' | 'purchase' | 'save_login';
 
 /** `exact`: one of the item's origins equals the page's. `site`: same registrable domain only; never fillable. */
 export type MatchKind = 'exact' | 'site';
@@ -202,6 +202,10 @@ export type SecretsErrorCode =
   | 'cards_disabled'
   | 'frame_unknown'
   | 'target_not_password'
+  /** Saving a login (E37.4b): the owner already has a secret with that name. */
+  | 'name_taken'
+  /** Saving a login: the fabric no longer holds the password (saved, expired, restarted): too late. */
+  | 'secret_unavailable'
   | 'unsupported'
   | 'timed_out'
   | 'cancelled'
@@ -230,6 +234,8 @@ export const SECRETS_ERROR_CODES: readonly SecretsErrorCode[] = [
   'cards_disabled',
   'frame_unknown',
   'target_not_password',
+  'name_taken',
+  'secret_unavailable',
   'unsupported',
   'timed_out',
   'cancelled',

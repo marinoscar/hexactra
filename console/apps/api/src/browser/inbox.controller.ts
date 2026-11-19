@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import { HandoffAnswers } from './handoff-answers';
 import { InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
-import { QuestionsService } from '../questions/questions.service';
+import { QuestionsService, isOwnerCardInput, saveLoginCardOf, type SaveLoginCard } from '../questions/questions.service';
 import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable } from '../questions/questions.contract';
 import { RequestClientService } from '../connected-apps/request-client';
 
@@ -56,6 +56,8 @@ export interface InboxItem {
   blocking: boolean;
   /** memory (#553): the proposed memory. */
   proposal: MemoryProposal | null;
+  /** save_login (E37.4b): the card of "Save this login?"; null for every other input. */
+  saveLogin: SaveLoginCard | null;
 }
 
 /**
@@ -79,7 +81,7 @@ export class InboxController {
   async list(@CurrentUser('id') userId: string, @Req() req?: object): Promise<InboxItem[]> {
     // An MCP client (an AI app, or the console's own MCP tools) never sees a memory proposal (#553).
     const hideMemory = (await this.clients?.resolve(req))?.origin === 'mcp';
-    const rows = (await this.questions.pendingWithRuns(userId)).filter((q) => !(hideMemory && q.input === 'memory'));
+    const rows = (await this.questions.pendingWithRuns(userId)).filter((q) => !(hideMemory && isOwnerCardInput(q.input)));
     return rows.map((q) => {
       const options = (q.options as unknown as QuestionOption[] | null) ?? null;
       return {
@@ -107,6 +109,7 @@ export class InboxController {
         expiresAt: q.expiresAt.toISOString(),
         blocking: q.blocking,
         proposal: q.input === 'memory' ? ((q.proposal as unknown as MemoryProposal | null) ?? null) : null,
+        saveLogin: saveLoginCardOf(q),
       };
     });
   }

@@ -3,7 +3,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-import { ACTIVITY_FIELDS } from './secrets-activity';
+import { ACTIVITY_FIELDS, ACTIVITY_PURPOSES } from './secrets-activity';
 
 export const activityItemSchema = z.object({
   id: z.string().uuid(),
@@ -13,7 +13,8 @@ export const activityItemSchema = z.object({
   site: z.string().nullable().describe('The host of the page, never a path or query.'),
   loginName: z.string().nullable().describe("The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username."),
   field: z.enum(ACTIVITY_FIELDS).nullable().describe('Which field was typed. Never its value.'),
-  outcome: z.string().describe('A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...).'),
+  purpose: z.enum(ACTIVITY_PURPOSES).nullable().describe('Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup.'),
+  outcome: z.string().describe('A closed code: `typed`, `selected`, `saved`, `ok`, or why nothing was typed or saved (`origin_mismatch`, `not_found`, `name_taken`, `disabled`, `rate_limited`, ...).'),
   refused: z.boolean().describe('Nothing was typed: the fabric or the provider refused or failed.'),
   matches: z.number().int().nullable().describe('For a lookup: how many logins matched the page.'),
   amount: z.string().nullable().describe('A card field (E37.7): the amount the agent declared for the purchase, a decimal with two places. Null for anything else.'),

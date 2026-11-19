@@ -89,9 +89,17 @@ export function needsSignedIn(q: Pick<RuleQuestion, 'input' | 'risk' | 'fields'>
  */
 export const MEMORY_ANSWER_CHANNELS: readonly string[] = ['web', 'android_app', 'inbox'];
 
-/** Whether `channel` may record this answer to `q`. Declining is allowed everywhere, but for a memory proposal. */
+/**
+ * The only channels a "Save this login?" card (E37.4b) is answered on, saved, declined or "never for this site": the signed-in
+ * web app (its chat card, the Inbox, the question page) and the Android app. A notification button, a webhook, the CLI, the REST
+ * API under another name, an MCP client or a hosted AI app never answers one: saving a login writes to the owner's vault.
+ */
+export const SAVE_LOGIN_ANSWER_CHANNELS: readonly string[] = ['web', 'android_app', 'inbox'];
+
+/** Whether `channel` may record this answer to `q`. Declining is allowed everywhere, but for a memory proposal and a "Save this login?" card. */
 export function mayAnswerOn(channel: string, q: Pick<RuleQuestion, 'input' | 'risk' | 'fields'>, outcome: 'completed' | 'cancelled' = 'completed'): boolean {
   if (q.input === 'memory') return MEMORY_ANSWER_CHANNELS.includes(channelId(channel));
+  if (q.input === 'save_login') return SAVE_LOGIN_ANSWER_CHANNELS.includes(channelId(channel));
   if (outcome === 'cancelled') return true;
   const rule = CHANNEL_RULES[channelId(channel)];
   return !rule || rule.signedIn || !needsSignedIn(q);

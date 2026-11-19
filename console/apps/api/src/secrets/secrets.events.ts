@@ -18,6 +18,11 @@ export const SECRETS_AUDIT = {
   needsReconnect: 'secrets.vault.needs_reconnect',
   defaultClientSaved: 'secrets.vault.default_client_saved',
   defaultClientRemoved: 'secrets.vault.default_client_removed',
+  // "Save this login?" (E37.4b): the offer, the save (the fabric sent the password to the provider) and "Never for this site". Never a value.
+  loginOffered: 'secrets.login.offered',
+  loginSaved: 'secrets.login.saved',
+  loginSaveFailed: 'secrets.login.save_failed',
+  loginNeverForSite: 'secrets.login.never_for_site',
 } as const;
 
 /** The host (and port) of an address, for a log or an audit line: never the path, query or userinfo. */
@@ -40,9 +45,9 @@ export class SecretsEvents {
   ) {}
 
   /** One audit event. A failure to record it never fails the operation. */
-  async audit(userId: string | null, action: string, targetId: string, meta: Record<string, unknown>, orgId: string | null = null): Promise<void> {
+  async audit(userId: string | null, action: string, targetId: string, meta: Record<string, unknown>, orgId: string | null = null, targetType = 'secrets_connection'): Promise<void> {
     try {
-      await this.prisma.auditEvent.create({ data: { actorUserId: userId, action, targetType: 'secrets_connection', targetId, orgId, meta: meta as Prisma.InputJsonValue } });
+      await this.prisma.auditEvent.create({ data: { actorUserId: userId, action, targetType, targetId, orgId, meta: meta as Prisma.InputJsonValue } });
     } catch (e) {
       this.log.warn(`secrets: the audit record ${action} could not be written: ${e instanceof Error ? e.name : 'error'}`);
     }

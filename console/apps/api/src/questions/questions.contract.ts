@@ -9,11 +9,12 @@ export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choic
 /**
  * The inputs only the server creates: `memory` (#553), a memory the agent
  * proposes and the owner saves or declines on its card; `form` (#552), the
- * missing parameter values of a task run, asked at once before it starts.
+ * missing parameter values of a task run, asked at once before it starts;
+ * `save_login` (E37.4b), "Save this login?" after the owner signed in by hand.
  * Never accepted from a question spec (`POST /api/questions`, `request_human`,
  * an external agent).
  */
-export const SERVER_QUESTION_INPUTS = ['memory', 'form'] as const;
+export const SERVER_QUESTION_INPUTS = ['memory', 'form', 'save_login'] as const;
 export type AskableInputType = (typeof QUESTION_INPUTS)[number];
 export type QuestionInputType = AskableInputType | (typeof SERVER_QUESTION_INPUTS)[number];
 
@@ -85,6 +86,7 @@ export type QuestionConstraints = z.infer<typeof questionConstraintsSchema>;
 const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstraints)[]> = {
   none: [],
   memory: [],
+  save_login: [],
   takeover: [],
   secret: [],
   credentials: [],
@@ -299,6 +301,48 @@ export const memoryProposalAnswerSchema = z
   .strict();
 export type MemoryProposalAnswer = z.infer<typeof memoryProposalAnswerSchema>;
 
+// ---- "Save this login?" (E37.4b) ----
+
+/** How long the fabric holds the typed password after the owner gave it (its `SECRET_TTL`): the proposal cannot be answered later. */
+export const SAVE_LOGIN_VALUE_TTL_MS = 10 * 60_000;
+/** The longest name a saved login may have (the fabric's and Vault's limit). */
+export const SAVE_LOGIN_NAME_MAX = 200;
+
+const saveLoginName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(SAVE_LOGIN_NAME_MAX)
+  .refine((v) => !/[\u0000-\u001f\u007f]/.test(v), 'One line of text');
+
+/**
+ * The sign-in the owner typed by hand, offered to their secrets provider (stored on the question, shown on its card). Never the
+ * password: that is in the fabric's memory only. `handoffId` is the fabric's handoff that holds it (an id, not a secret).
+ */
+export const saveLoginProposalSchema = z
+  .object({
+    /** The host of the sign-in page, as the card says it ("example.test"). */
+    site: z.string().trim().min(1).max(255),
+    /** `scheme://host[:port]` of the sign-in page, as the fabric reported it: the login is bound to exactly this origin. */
+    origin: z.string().trim().min(1).max(300),
+    /** The registrable domain, the unit "Never for this site" is remembered at. */
+    domain: z.string().trim().min(1).max(255),
+    /** The name the agent suggests; the owner edits it on the card. */
+    name: saveLoginName,
+    /** The username the owner typed: shown on the card (it is not secret). */
+    username: z.string().trim().min(1).max(200),
+    handoffId: z.uuid(),
+    provider: z.enum(['vault']),
+    /** When the fabric stops holding the password: the card is "too late" after it. */
+    valueExpiresAt: z.string().min(1).max(40),
+  })
+  .strict();
+export type SaveLoginProposal = z.infer<typeof saveLoginProposalSchema>;
+
+/** What the owner saves from the card: the name, edited. */
+export const saveLoginAnswerSchema = z.object({ name: saveLoginName }).strict();
+export type SaveLoginAnswer = z.infer<typeof saveLoginAnswerSchema>;
+
 /** An answer as a person (or a channel on their behalf) sends it. */
 export const questionAnswerSchema = z
   .object({
@@ -317,6 +361,10 @@ export const questionAnswerSchema = z
     fields: z.record(z.string().min(1).max(80), z.union([z.string().max(TEXT_MAX_LENGTH), z.number().finite()])).optional(),
     /** memory (#553): the memory as the owner saves it, edited on the card; omitted, the proposal is saved as proposed. */
     memory: memoryProposalAnswerSchema.optional(),
+    /** save_login (E37.4b): Save, with the name as the owner edited it. */
+    saveLogin: saveLoginAnswerSchema.optional(),
+    /** save_login: "Never for this site", sent with a declined answer: the registrable domain is not offered again. */
+    neverForSite: z.literal(true).optional(),
   })
   .strict();
 export type QuestionAnswerInput = z.infer<typeof questionAnswerSchema>;
@@ -333,6 +381,10 @@ export interface NormalizedAnswer {
   fields?: Record<string, string>;
   /** memory: what the owner saves. */
   memory?: MemoryProposalAnswer;
+  /** save_login: the name the login is saved under. */
+  saveLogin?: SaveLoginAnswer;
+  /** save_login: declined with "Never for this site". */
+  neverForSite?: boolean;
 }
 
 /** The stored and returned response. Never carries a secret value. */
@@ -349,6 +401,10 @@ export interface QuestionResponse {
   fields?: Record<string, string>;
   /** memory (#553): the memory the answer saved. */
   memoryId?: string;
+  /** save_login (E37.4b): declined with "Never for this site". */
+  neverForSite?: boolean;
+  /** save_login: the name the login was saved under (not the password, which the console never holds). */
+  savedAs?: string;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -378,7 +434,12 @@ function onStep(value: number, base: number, step: number): boolean {
  * question (`cancelled`) carries no value.
  */
 export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'constraints'> & { rememberLabel?: string | null }, a: QuestionAnswerInput): NormalizedAnswer {
-  if (a.outcome === 'cancelled') return { outcome: 'cancelled' };
+  if (a.saveLogin !== undefined && q.input !== 'save_login') throw new AnswerInvalidError('saveLogin is only for a "Save this login?" card');
+  if (a.neverForSite !== undefined) {
+    if (q.input !== 'save_login') throw new AnswerInvalidError('neverForSite is only for a "Save this login?" card');
+    if (a.outcome !== 'cancelled') throw new AnswerInvalidError('"Never for this site" is a declined answer');
+  }
+  if (a.outcome === 'cancelled') return { outcome: 'cancelled', ...(a.neverForSite ? { neverForSite: true } : {}) };
   if (a.memory !== undefined && q.input !== 'memory') throw new AnswerInvalidError('memory is only for a memory proposal');
   if (a.secret !== undefined && q.input !== 'credentials') throw new AnswerInvalidError('secret is only for a sign-in (credentials)');
   if (a.remember !== undefined && !q.rememberLabel) throw new AnswerInvalidError('This question offered no "remember me" option');
@@ -399,6 +460,11 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
       // The memory itself is checked where it is written (the secret check, the label rule, the limit).
       if (a.value !== undefined) fail('A memory proposal is answered with memory, not value');
       return { outcome: 'completed', ...(a.memory ? { memory: a.memory } : {}) };
+    case 'save_login': {
+      if (a.value !== undefined) fail('A "Save this login?" answer uses saveLogin, not value');
+      if (!a.saveLogin) fail('Give the name to save the login under');
+      return { outcome: 'completed', saveLogin: a.saveLogin };
+    }
     case 'none':
     case 'takeover':
       if (a.value !== undefined) fail(`A ${q.input} question takes no value`);
@@ -473,6 +539,8 @@ export function toResponse(input: QuestionInputType, a: NormalizedAnswer, meta: 
     valueWithheld: withheld,
     ...(a.remember !== undefined ? { remember: a.remember } : {}),
     ...(a.fields !== undefined ? { fields: a.fields } : {}),
+    ...(a.neverForSite ? { neverForSite: true } : {}),
+    ...(a.saveLogin ? { savedAs: a.saveLogin.name } : {}),
     ...(meta.channel ? { channel: meta.channel } : {}),
     ...(meta.by ? { by: meta.by } : {}),
     answeredAt: meta.answeredAt.toISOString(),

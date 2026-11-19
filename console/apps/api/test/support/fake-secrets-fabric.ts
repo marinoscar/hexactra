@@ -129,6 +129,23 @@ interface Handoff {
   prompt?: string;
   options?: unknown;
   response?: Record<string, unknown>;
+  /** Created with `offer_save` (E37.4b): the fabric keeps the typed password after `type_secret` types it. */
+  offerSave?: boolean;
+  /** The password the person gave, until a `type_secret` action consumes it: the only place it lives besides the page. */
+  secret?: string;
+  /** The copy kept for saving the sign-in, with the time the fabric stops holding it (`expiresAt`, ms since the epoch). */
+  offer?: { password: string; expiresAt: number };
+}
+
+/** One save-login call the fake fabric received (never the password). */
+export interface SaveCall {
+  owner: string;
+  provider: string;
+  handoffId: string;
+  name: string;
+  origin: string;
+  runId?: string;
+  clientLabel?: string;
 }
 
 export function fakeSecretsFabric(url: string) {
@@ -147,6 +164,8 @@ export function fakeSecretsFabric(url: string) {
      * A point not listed is the page itself. Keys are `x,y`.
      */
     frames: {} as Record<string, string | null>,
+    /** Whether a visible password field is on the page (E37.4b): the sign-in form is still there. */
+    passwordShown: false,
   };
   /** Every screenshot taken, with whether the cover was drawn and what the marks said. */
   const shots: { screen: string; covered: boolean; hasValues: boolean; markTexts: string[] }[] = [];
@@ -174,7 +193,15 @@ export function fakeSecretsFabric(url: string) {
     crashOn: null as string | null,
     /** Selectors that name something other than a password field: the fabric refuses a login's password there (E37.10), before the provider is asked. */
     notPassword: [] as string[],
+    /** Where a save goes (E37.4b): the fake Vault's address and the access token the fabric would hold for the owner. Without it the save only records the call. */
+    vault: null as null | { baseUrl: string; token: string },
+    /** How long the fabric holds the password after the person answered (the real one: ten minutes). */
+    offerTtlMs: 10 * 60_000,
+    /** Fail the next save with this HTTP status and code (the fabric's `{ error }`). */
+    failSave: null as null | { status: number; code: string },
   };
+  /** Every save-login call, oldest first (E37.4b). */
+  const saves: SaveCall[] = [];
 
   const failure = (mode: FailMode, op: string) => {
     const text =
@@ -188,6 +215,36 @@ export function fakeSecretsFabric(url: string) {
       return { id: '00000000-0000-4000-8000-0000000000c1' };
     }
     if (method === 'DELETE' && path.startsWith('/v1/sessions/')) return undefined;
+    // "Save this login?" (E37.4b): the fabric sends the password it still holds to the provider's create route.
+    const save = /^\/v1\/secrets-providers\/([^/]+)\/([^/]+)\/save-login$/.exec(path);
+    if (save && method === 'POST') {
+      const b = opts.body!;
+      const call: SaveCall = { owner: decodeURIComponent(save[1]!), provider: decodeURIComponent(save[2]!), handoffId: String(b.handoff_id), name: String(b.name), origin: String(b.origin), ...(b.run_id ? { runId: String(b.run_id) } : {}), ...(b.client_label ? { clientLabel: String(b.client_label) } : {}) };
+      saves.push(call);
+      const gone = () => new FabricError('api', 'the password is no longer held', 409, 'secret_unavailable');
+      const h = handoffs.get(call.handoffId);
+      if (!h || !h.offerSave) throw new FabricError('api', 'handoff not found', 404, 'not_found');
+      if (state.failSave) throw new FabricError('api', state.failSave.code, state.failSave.status, state.failSave.code);
+      if (!h.offer || h.offer.expiresAt <= Date.now()) throw gone();
+      const password = h.offer.password;
+      if (!state.vault) {
+        delete h.offer;
+        return { saved: true, item_id: 'saved-1' };
+      }
+      // Taken out while the call runs (one save at a time); put back unless it was saved.
+      const offer = h.offer;
+      delete h.offer;
+      const res = await fetch(`${state.vault.baseUrl}/api/agent/v1/credentials`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${state.vault.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: call.name, username: h.response?.value, origin: call.origin, purpose: 'save_login', password }),
+      });
+      if (res.status === 201) return { saved: true, item_id: ((await res.json()) as { data: { id: string } }).data.id };
+      h.offer = offer;
+      if (res.status === 409) throw new FabricError('api', 'name_taken', 409, 'name_taken');
+      if (res.status === 401) throw new FabricError('api', 'unauthorized', 502, 'unauthorized');
+      throw new FabricError('api', 'refused', 422, 'refused');
+    }
     const reg = /^\/v1\/secrets-providers\/([^/]+)\/([^/]+)$/.exec(path);
     if (reg && method === 'PUT') {
       registrations.push({ owner: decodeURIComponent(reg[1]!), provider: decodeURIComponent(reg[2]!), kind: String(opts.body?.kind) });
@@ -200,6 +257,15 @@ export function fakeSecretsFabric(url: string) {
         return { id: 'op', state: 'succeeded', result: { type: 'object', value: targets.get(where.selector ?? `${where.x},${where.y}`) ?? null } };
       }
       actions.push(action);
+      // The agent types the person's password (E37.4b): the page gets it, and the fabric keeps a copy only for a handoff opened with `offer_save`.
+      if (action.type === 'type_secret') {
+        const h = handoffs.get(String(action.handoff_id));
+        if (!h?.secret) return { id: 'op', state: 'failed', error: 'secret_unavailable: the secret was already used or expired' };
+        page.fields[String(action.selector)] = h.secret;
+        if (h.offerSave && h.input === 'credentials') h.offer = { password: h.secret, expiresAt: (h.response?.answeredAtMs as number | undefined ?? Date.now()) + state.offerTtlMs };
+        delete h.secret;
+        return { id: 'op', state: 'succeeded', result: {} };
+      }
       if (action.type === 'tabs') return { id: 'op', state: 'succeeded', result: { tabs: [{ id: 1, active: true, url: page.url, title: 'Sign in' }] } };
       const origin = new URL(page.url).origin;
       const meta = { runId: action.run_id as string | undefined, clientLabel: action.client_label as string | undefined };
@@ -213,6 +279,7 @@ export function fakeSecretsFabric(url: string) {
       }
       if (action.type === 'evaluate') {
         const script = String(action.script);
+        if (script.startsWith('/* hexactra:password-shown */')) return { id: 'op', state: 'succeeded', result: { type: 'boolean', value: page.passwordShown } };
         if (script.startsWith('/* hexactra:filled-among */')) {
           const sels = JSON.parse(/const sels = (\[.*?\]);/.exec(script)![1]!) as string[];
           const filled = JSON.parse(/const filled = (\[.*?\]);/.exec(script)![1]!) as string[];
@@ -357,14 +424,19 @@ export function fakeSecretsFabric(url: string) {
     if (method === 'POST' && path.endsWith('/handoffs')) {
       const id = randomUUID();
       const body = opts.body!;
-      handoffs.set(id, { id, status: 'pending', input: String(body.input), kind: String(body.kind), prompt: body.prompt as string, options: body.choices });
+      handoffs.set(id, { id, status: 'pending', input: String(body.input), kind: String(body.kind), prompt: body.prompt as string, options: body.choices, ...(body.offer_save === true ? { offerSave: true } : {}) });
       return { handoff: { id } };
     }
     // The broker answers a handoff through the fabric (`QuestionsService.answer`).
     if (method === 'POST' && /\/v1\/handoffs\/[^/]+\/respond$/.test(path)) {
       const h = handoffs.get(path.split('/')[3]!);
       if (!h) return {};
-      Object.assign(h, { status: 'completed', response: { outcome: opts.body!.outcome, value: opts.body!.value, value_withheld: false } });
+      Object.assign(h, {
+        status: 'completed',
+        response: { outcome: opts.body!.outcome, value: opts.body!.value, value_withheld: typeof opts.body!.secret === 'string', answeredAtMs: Date.now() },
+        // A sign-in's password travels in this call only and is held here, as the fabric holds it.
+        ...(typeof opts.body!.secret === 'string' ? { secret: opts.body!.secret } : {}),
+      });
       return {};
     }
     if (method === 'POST' && /\/v1\/handoffs\/[^/]+\/cancel$/.test(path)) return {};
@@ -377,7 +449,7 @@ export function fakeSecretsFabric(url: string) {
   const typed = () => providerCalls.filter((c) => c.op !== 'lookup');
   /** Answer the handoff the way the fabric reports a finished one. */
   const answer = (h: Handoff, response: Record<string, unknown>) => Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false, ...response } });
-  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer, shots, covers, coverPoints };
+  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer, shots, covers, coverPoints, saves };
 }
 
 export type SecretsFabric = ReturnType<typeof fakeSecretsFabric>;

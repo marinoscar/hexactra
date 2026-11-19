@@ -106,6 +106,8 @@ function formHasSensitive(q) {
 
 /** Whether the answer is a secret or approves a risky action: only a channel that signs the person in may record it. */
 function needsSignedIn(q) {
+  // "Save this login?" (E37.4b) writes to the owner's vault: only where the console signs the person in.
+  if (q.input === 'save_login') return true;
   if (q.input === 'form') return formHasSensitive(q);
   return q.input === 'secret' || q.input === 'credentials' || (q.input === 'confirm' && q.risk !== 'low');
 }
@@ -139,6 +141,8 @@ function isPublicAnswer(q) {
  */
 function chatAnswerMode(q) {
   if (q.input === 'secret' || q.input === 'credentials') return 'secret';
+  // A memory proposal and "Save this login?" are answered only in Hexactra, signed in.
+  if (q.input === 'memory' || q.input === 'save_login') return 'signed_in';
   if (q.input === 'takeover') return 'takeover';
   if (q.input === 'none') return 'acknowledge';
   // A task run's form (#552) is filled in Hexactra, or relayed field by field with inbox_answer.
@@ -156,6 +160,7 @@ function answerLabel(q, answer) {
   };
   if (q.input === 'secret') return 'A secret (not shown)';
   if (q.input === 'credentials') return 'A sign-in (not shown)';
+  if (q.input === 'save_login') return 'Saved';
   if (q.input === 'form') return 'Provided';
   if (Array.isArray(answer.values)) return answer.values.map(label).join(', ');
   if (answer.value === undefined || answer.value === null) return q.input === 'takeover' ? 'Done' : 'Acknowledged';

@@ -7,7 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { readUsedSavedLogins } from '../runner/saved-logins';
 import { PrismaService } from '../prisma/prisma.service';
-import { ACTIVITY_FIELDS, SECRETS_ACTIVITY_KEEP_DAYS, isRefusal, sanitizeSecretsEvent, type SanitizedActivity } from './secrets-activity';
+import { ACTIVITY_FIELDS, ACTIVITY_PURPOSES, SECRETS_ACTIVITY_KEEP_DAYS, isRefusal, sanitizeSecretsEvent, type SanitizedActivity } from './secrets-activity';
 
 /** The newest uses the page lists. */
 export const ACTIVITY_PAGE_SIZE = 100;
@@ -24,6 +24,8 @@ export interface ActivityItem {
   /** The saved login's name, as the run recorded it when it signed in (E37.3); null when the run is gone or did not record this site. */
   loginName: string | null;
   field: (typeof ACTIVITY_FIELDS)[number] | null;
+  /** Why the value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (the owner's typed password sent to the provider to be saved, E37.4b). */
+  purpose: (typeof ACTIVITY_PURPOSES)[number] | null;
   outcome: string;
   /** The fabric refused or failed: nothing was typed. */
   refused: boolean;
@@ -148,6 +150,7 @@ export class SecretsActivityService {
       site: r.site,
       loginName: r.event === 'release' ? nameOf(r.runId, r.site) : null,
       field: (r.field as ActivityItem['field']) ?? null,
+      purpose: (r.purpose as ActivityItem['purpose']) ?? null,
       outcome: r.outcome,
       refused: isRefusal(r.outcome),
       matches: r.matches,
@@ -188,7 +191,7 @@ export class SecretsActivityService {
       this.prisma.secretsConnection.count({ where: { provider: 'vault', status: 'connected' } }),
       this.prisma.secretsConnection.count({ where: { provider: 'vault', status: 'needs_reconnect' } }),
       this.prisma.secretsActivity.count({ where: { event: 'release', outcome: { in: ['typed', 'selected'] }, occurredAt: { gte: since } } }),
-      this.prisma.secretsActivity.count({ where: { outcome: { notIn: ['typed', 'selected', 'ok'] }, occurredAt: { gte: since } } }),
+      this.prisma.secretsActivity.count({ where: { outcome: { notIn: ['typed', 'selected', 'ok', 'saved'] }, occurredAt: { gte: since } } }),
     ]);
     return { deploymentEnabled, usersConnected: connected, usersNeedingReconnect: reconnect, usesThisWeek: uses, refusalsThisWeek: refusals };
   }
