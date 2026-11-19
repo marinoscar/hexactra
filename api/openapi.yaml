@@ -1868,6 +1868,7 @@ components:
       - passkey
       - login
       - confirmation
+      - verification
       - other
     HandoffList:
       type: object
