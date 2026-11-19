@@ -281,6 +281,8 @@ export class RunDeleteService {
         // Saved approvals (#554) outlive the run: the last use and the use history forget it.
         await tx.approvalRule.updateMany({ where: { userId, lastUsedRunId: { in: goneIds } }, data: { lastUsedRunId: null } });
         await tx.approvalRuleUse.updateMany({ where: { runId: { in: goneIds }, rule: { userId } }, data: { runId: null } });
+        // What the agent did with saved secrets (E37.4) outlives the run: the row forgets which run it was.
+        await tx.secretsActivity.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
       }
       return {
         ids: goneIds,

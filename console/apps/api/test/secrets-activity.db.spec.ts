@@ -10,6 +10,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { SecretsActivityIngestHandler, SecretsActivityIngestTask } from '../src/secrets/secrets-activity.jobs';
 import { SecretsActivityService } from '../src/secrets/secrets-activity.service';
 import { SecretsPolicyService } from '../src/secrets/secrets-policy.service';
+import { RunDeleteService } from '../src/tasks/run-delete.service';
 
 const stamp = `${Date.now()}`;
 const MARKER = `MARKER-secret-value-${randomUUID()}`;
@@ -137,6 +138,17 @@ describe('ingest', () => {
     expect(await service.purge()).toBeGreaterThanOrEqual(1);
     expect(await prisma.secretsActivity.count({ where: { userId: u.userId, occurredAt: old } })).toBe(0);
     expect(await prisma.secretsActivity.count({ where: { userId: u.userId } })).toBe(105);
+  });
+
+  it('outlives a deleted run: the row stays and forgets the run', async () => {
+    const u = await login('act-rundel');
+    const run = await prisma.run.create({ data: { userId: u.userId, goal: 'Sign in', status: 'succeeded' } as never, select: { id: true } });
+    await service.ingest([ev(u.userId, 'secrets.release', { field: 'password', item_id: 'rd-1', run_id: run.id, released: true, purpose: 'login' })]);
+    expect((await get<{ items: { runId: string | null }[] }>(u, '/api/secrets/activity')).data.items[0]!.runId).toBe(run.id);
+    await app.get(RunDeleteService, { strict: false }).deleteOne(u.userId, run.id);
+    const after = await get<{ items: { runId: string | null }[] }>(u, '/api/secrets/activity');
+    expect(after.data.items).toHaveLength(1);
+    expect(after.data.items[0]!.runId).toBeNull();
   });
 
   it('is deleted with the user', async () => {
