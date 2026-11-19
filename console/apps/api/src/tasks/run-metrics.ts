@@ -69,6 +69,15 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     attributes: { status: { kind: 'enum', values: STATUSES } },
   },
   {
+    key: 'runStopLatency',
+    name: 'app.runs.stop_latency_ms',
+    kind: 'histogram',
+    unit: 'ms',
+    description: 'How long a run took to end after its owner pressed Stop (E38.1), from the request to the terminal status.',
+    buckets: [250, 500, 1000, 2000, 3000, 5000, 10000, 30000, 60000],
+    attributes: { status: { kind: 'enum', values: STATUSES } },
+  },
+  {
     key: 'runInputTokensPerCall',
     name: 'app.runs.input_tokens_per_call',
     kind: 'histogram',
@@ -193,6 +202,11 @@ export class RunMetrics {
 
   modelCalls(n: number): void {
     if (n > 0) this.metrics?.add('runModelCalls', n);
+  }
+
+  /** Milliseconds from Stop to the end of the run (E38.1); never a run, goal or user as a label. */
+  stopLatency(status: string, ms: number): void {
+    if (ms >= 0) this.metrics?.record('runStopLatency', ms, { status });
   }
 
   /** The input size of one model call; never a run, task or user id as a label. */

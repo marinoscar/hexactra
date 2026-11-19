@@ -77712,6 +77712,18 @@
           "cancelRequested": {
             "type": "boolean"
           },
+          "cancelRequestedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+          },
           "stepCount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -78434,6 +78446,7 @@
           "result",
           "error",
           "cancelRequested",
+          "cancelRequestedAt",
           "stepCount",
           "activity",
           "inputTokens",
@@ -78640,6 +78653,18 @@
                 },
                 "cancelRequested": {
                   "type": "boolean"
+                },
+                "cancelRequestedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
                 },
                 "stepCount": {
                   "type": "integer",
@@ -79363,6 +79388,7 @@
                 "result",
                 "error",
                 "cancelRequested",
+                "cancelRequestedAt",
                 "stepCount",
                 "activity",
                 "inputTokens",
@@ -80960,6 +80986,18 @@
           "cancelRequested": {
             "type": "boolean"
           },
+          "cancelRequestedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+          },
           "stepCount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -82004,6 +82042,7 @@
           "result",
           "error",
           "cancelRequested",
+          "cancelRequestedAt",
           "stepCount",
           "activity",
           "inputTokens",
@@ -82206,6 +82245,18 @@
           },
           "cancelRequested": {
             "type": "boolean"
+          },
+          "cancelRequestedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
           },
           "stepCount": {
             "type": "integer",
@@ -82948,6 +82999,7 @@
           "result",
           "error",
           "cancelRequested",
+          "cancelRequestedAt",
           "stepCount",
           "activity",
           "inputTokens",

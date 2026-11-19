@@ -6,7 +6,7 @@ import { FABRIC_CREDENTIAL_PURPOSE, FABRIC_TOKEN_NAME, FABRIC_URL_NAME } from '.
 import { readSseEvents } from './sse';
 
 /** Why a fabric call failed. */
-export type FabricErrorKind = 'not_configured' | 'unreachable' | 'unauthorized' | 'api';
+export type FabricErrorKind = 'not_configured' | 'unreachable' | 'unauthorized' | 'api' | 'aborted';
 
 /** A failed fabric call. `message` never carries the token. */
 export class FabricError extends Error {
@@ -32,6 +32,8 @@ export interface FabricRequest {
   timeoutMs?: number;
   /** Retry network errors and 5xx (GET only by default). */
   retries?: number;
+  /** Aborts the request (Stop, E38.1): the call fails with a `FabricError` of kind `aborted`, never retried. */
+  signal?: AbortSignal;
 }
 
 /** A host as `GET /v1/hosts` reports it (the fields the console uses). */
@@ -57,6 +59,11 @@ export interface FabricHost {
 
 const CONFIG_TTL_MS = 10_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
+
+/** The request's deadline, plus the caller's abort signal when it has one. */
+function timeout(ms: number, signal?: AbortSignal): AbortSignal {
+  return signal ? AbortSignal.any([AbortSignal.timeout(ms), signal]) : AbortSignal.timeout(ms);
+}
 
 /**
  * The console's client for the Hexactra Fabric `/v1` API (api/openapi.yaml).
@@ -112,9 +119,10 @@ export class FabricClient {
           method,
           headers,
           body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-          signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+          signal: timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, opts.signal),
         });
       } catch (e) {
+        if (opts.signal?.aborted) throw new FabricError('aborted', 'The request was cancelled');
         if (attempt < retries) {
           await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
           continue;
