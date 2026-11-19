@@ -6134,7 +6134,7 @@ export interface paths {
         };
         /**
          * List your connected accounts
-         * @description Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.
+         * @description Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `mail_modify`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.
          *
          *     **Requires:** authentication, plus permission `connections:read`.
          */
@@ -15531,9 +15531,9 @@ export interface components {
             accountEmail: string;
             accountName: string | null;
             /** @description The switches that are on. */
-            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-            granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             defaultFor: ("mail" | "calendar" | "docs")[];
             /** @enum {string} */
             status: "active" | "paused" | "needs_reconnect" | "revoked";
@@ -15573,7 +15573,7 @@ export interface components {
              */
             provider: "google" | "microsoft";
             /** @description What the account may be used for. A write capability brings its read capability. */
-            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description What you call it ("Work", "Personal"). Defaults to the provider and the account. */
             label?: string;
             /** @description The account to pre-select at the provider (the email). Connecting the same account again updates its connection. */
@@ -15590,9 +15590,9 @@ export interface components {
             accountEmail: string;
             accountName: string | null;
             /** @description The switches that are on. */
-            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-            granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             defaultFor: ("mail" | "calendar" | "docs")[];
             /** @enum {string} */
             status: "active" | "paused" | "needs_reconnect" | "revoked";
@@ -15619,9 +15619,9 @@ export interface components {
                 accountEmail: string;
                 accountName: string | null;
                 /** @description The switches that are on. */
-                capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
                 /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-                granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
                 defaultFor: ("mail" | "calendar" | "docs")[];
                 /** @enum {string} */
                 status: "active" | "paused" | "needs_reconnect" | "revoked";
@@ -15642,7 +15642,7 @@ export interface components {
         UpdateConnectionDto: {
             label?: string;
             /** @description The full set of switches. Turning one off is immediate; adding one the provider has not granted starts an incremental consent (`consent.authorizeUrl`). */
-            capabilities?: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities?: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description The groups (`mail`, `calendar`, `docs`) this account is the default for. At most one default per provider and group: it is taken from the other account. */
             defaultFor?: ("mail" | "calendar" | "docs")[];
             /** @description A path on this console to return to after the consent (default `/settings/connections`). */
@@ -15651,7 +15651,7 @@ export interface components {
         TestConnectionResponseDto: {
             results: {
                 /** @enum {string} */
-                capability: "mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
+                capability: "mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
                 ok: boolean;
                 /** @description A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
                 code: string | null;
