@@ -77,7 +77,7 @@ describe('request history settings (E40.4)', () => {
     const step = await prisma.runStep.create({ data: { runId: run.id, seq: 1, kind: 'handoff', action: 'answered', ok: true, summary: 'The owner answered', questionId: oldAnswered.id } });
     expect(await prisma.chatMessage.count({ where: { conversationId: conv.id, kind: 'request' } })).toBe(4);
 
-    const totals = await handler.purge('test-job');
+    const totals = await handler.purge(`test-job-${stamp}`);
     expect(totals.keepDays).toBe(7);
     const left = new Set((await prisma.question.findMany({ where: { runId: run.id }, select: { id: true } })).map((q) => q.id));
     expect(left).toEqual(new Set([recent.id, pending.id]));
@@ -85,11 +85,11 @@ describe('request history settings (E40.4)', () => {
     expect(records.map((m) => (m.meta as { questionId: string }).questionId).sort()).toEqual([recent.id, pending.id].sort());
     // The run keeps its step: the summary stays, the link is cleared.
     expect(await prisma.runStep.findUniqueOrThrow({ where: { id: step.id } })).toMatchObject({ summary: 'The owner answered', questionId: null });
-    expect(await prisma.auditEvent.count({ where: { action: REQUEST_HISTORY_AUDIT_ACTION, targetId: 'test-job' } })).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { action: REQUEST_HISTORY_AUDIT_ACTION, targetId: `test-job-${stamp}` } })).toBe(1);
 
     // A shorter limit, set by an administrator, takes the recent one too; a pending one stays.
     await setQuestions(admin, { historyKeepDays: 1 });
-    await handler.purge('test-job-2');
+    await handler.purge(`test-job-2-${stamp}`);
     expect((await prisma.question.findMany({ where: { runId: run.id }, select: { id: true } })).map((q) => q.id)).toEqual([pending.id]);
   });
 
