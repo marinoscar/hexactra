@@ -1,5 +1,7 @@
 import type { AnyContext } from './run-context';
 import type { RunnerTool } from './tool-def';
+import type { ToolFamily } from './tool-family';
+import { toolFamilyOf } from './tool-family-of';
 
 /**
  * The tools a run may be offered. A toolset registers its tools once; each round `list(ctx)` is what the model sees: the registered tools
@@ -8,6 +10,29 @@ import type { RunnerTool } from './tool-def';
  */
 export class ToolRegistry<C extends AnyContext = AnyContext> {
   private readonly tools: RunnerTool<C>[] = [];
+  private readonly familyList: ToolFamily<C>[] = [];
+
+  /** Adds a family descriptor (E41.2). A second family with the same id is a programming error. A tool whose family has none is offered as before. */
+  registerFamily(family: ToolFamily<C>): this {
+    if (this.familyList.some((f) => f.id === family.id)) throw new Error(`family "${family.id}" is registered twice`);
+    this.familyList.push(family);
+    return this;
+  }
+
+  registerFamilies(families: readonly ToolFamily<C>[]): this {
+    for (const f of families) this.registerFamily(f);
+    return this;
+  }
+
+  /** The registered families with at least one tool offered this round, by rank, then registration order. Deterministic. */
+  families(ctx: C): ToolFamily<C>[] {
+    const offered = new Set(this.list(ctx).map(toolFamilyOf));
+    return this.familyList
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => offered.has(f.id))
+      .sort((a, b) => a.f.rank - b.f.rank || a.i - b.i)
+      .map(({ f }) => f);
+  }
 
   /** Adds a tool. A second tool of the same name is a programming error. */
   register(tool: RunnerTool<C>): this {

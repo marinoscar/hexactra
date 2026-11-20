@@ -42,6 +42,7 @@ import { definitive, FAIL_TARGET, targetOf, targetSchema, type CardHelpers, type
 export function payWithSavedCard(ctx: SavedCardToolsContext, { sc, refuse, usableLookup, askOwner, rememberedApproval }: CardHelpers) {
   return defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'pay_with_saved_card',
     description:
       'Type a saved card into the checkout form, after declare_charge: the system types the number, then the expiry, the name and the postal code, and the security code last, with real input; you never see them. `ref` comes from saved_cards. For each field the form has, give where it is: a selector, or x and y for a field inside an embedded payment frame (a card number box that is part of another site\'s frame). `expiry` is one combined MM/YY input; use exp_month and exp_year when they are separate. number is required; give security_code only if the form asks for it and saved_cards says it is allowed; null for the rest. Typing the card commits nothing: pressing the pay button does. Pressing it needs the owner\'s approval, which the system has recorded for this amount.',

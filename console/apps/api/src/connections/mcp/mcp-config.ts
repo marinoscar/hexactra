@@ -27,7 +27,7 @@ export const mcpConfigSchema = z
   .object({
     url: z.string().max(2000),
     auth: z.object({ kind: z.enum(MCP_AUTH_KINDS), header: headerName.optional() }).strict(),
-    server: z.object({ name: z.string().max(200).nullable(), version: z.string().max(100).nullable() }).optional(),
+    server: z.object({ name: z.string().max(200).nullable(), version: z.string().max(100).nullable(), instructions: z.string().max(300).nullable().optional() }).optional(),
     protocolVersion: z.string().max(20).nullable().optional(),
     toolsFetchedAt: z.string().max(40).nullable().optional(),
     oauth: mcpOAuthMetaSchema.optional(),

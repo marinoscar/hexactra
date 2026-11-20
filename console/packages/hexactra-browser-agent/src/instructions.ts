@@ -1,30 +1,19 @@
-// The browser agent's system instructions (E38.5), composed from sections: the order and the words are the prompt, so a change here is a
-// change of what the agent does and needs its own issue. A tool may contribute a usage note (`RunnerTool.usage`); the harness appends the
-// notes after the sections in registration order, so the text stays byte-identical between rounds.
-import { composeInstructions } from '@marinoscar/hexactra-agent';
+// The agent's system instructions (E38.5; tool families E41.2), composed from parts: a neutral identity, the families of tools offered with
+// the rule for choosing between them, each family's own how-to (`families.ts`), then the general sections below and the tools' usage notes.
+// The order and the words are the prompt, so a change here is a change of what the agent does and needs its own issue. The text is
+// byte-identical between rounds of a run.
+import { composeInstructions, type ToolFamily } from '@marinoscar/hexactra-agent';
 
-/** The sections, in order. `askTopics` is the fixed list of topics a confirmation the agent asks on its own may name (#555). */
-export function browserInstructionSections(askTopics: readonly string[]): string[] {
+/** Who the agent is: family-neutral (E41.2). */
+export const IDENTITY = 'You act for the owner, with their full authority, to reach their goal. You have several kinds of tools, listed below: use the one that fits each part of the goal, the way a capable assistant would.';
+
+/** The general sections, in order: asking the person, values in the goal, the owner, when done. `askTopics` is the fixed list of topics a confirmation the agent asks on its own may name (#555). */
+export function generalSections(askTopics: readonly string[]): string[] {
   return [
-    // who
-    `You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.`,
-    // see
-    `How to see:
-- A round may start with a screenshot of the page, with interactive elements boxed and numbered, and their positions listed. Use it to understand the layout, what is visible, and what changed.
-- observe_elements lists interactive elements with CSS selectors; read_text reads the page text. Use them for exact targets and content.
-- look takes a fresh screenshot (screen "desktop" shows the whole computer screen). It ends your turn; the next turn starts with the image.`,
-    // act
-    `How to act (choose what works, as a person would):
-- By element: click and type_text with selectors, or click_mark with a number from the screenshot.
-- By position, with real mouse and keyboard events: click_at, hover_at, drag, scroll_at, type_keys, key. Use them for canvas, custom widgets, hover menus, sliders, drag and drop, and whenever a selector click does nothing.
-- run_javascript runs any JavaScript in the page and returns its value: read state, fill complex forms, call the page's own functions, or get past a stubborn widget.
-- Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
-- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
-- Check the result of each action before the next one. If something does not work, try another way before giving up.`,
     // person
     `When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
-- Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
+- On a website: signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
   1. If the site is already signed in, skip the sign-in.
   2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
@@ -52,7 +41,7 @@ export function browserInstructionSections(askTopics: readonly string[]): string
   ];
 }
 
-/** The instructions of a browser run: the sections, then the usage notes of the tools offered. */
-export function browserInstructions(askTopics: readonly string[], usageNotes: readonly string[] = []): string {
-  return composeInstructions(browserInstructionSections(askTopics), usageNotes);
+/** The instructions of a run: the identity, the families offered (in rank order) and their how-to, the general sections, the usage notes. */
+export function browserInstructions(askTopics: readonly string[], parts: { families: readonly ToolFamily<never>[]; usageNotes?: readonly string[] }): string {
+  return composeInstructions({ identity: IDENTITY, families: parts.families, sections: generalSections(askTopics), usageNotes: parts.usageNotes ?? [] });
 }

@@ -20,6 +20,7 @@ import { RunNotifier } from '../tasks/run-notifier';
 import { RunTraceService } from '../tasks/run-trace.service';
 import { TasksService } from '../tasks/tasks.service';
 import { AgentTrace } from './agent-trace';
+import { browserFamilies } from '@marinoscar/hexactra-browser-agent/families';
 import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
 import { LeaseLost, RunLease } from './lease';
 import type { RunOutcome } from '@marinoscar/hexactra-agent';
@@ -37,8 +38,8 @@ export { answerLine, requestHumanSpec, type RequestHumanArgs } from '@marinoscar
 export { pausedFor } from './host/paused-for';
 export type { RunMemory, SaveLoginMemory, RunOutcome } from './host/run-memory';
 
-/** The browser agent's system instructions: the sections of `browser/instructions.ts`, with the owner's fixed ask topics. */
-export const INSTRUCTIONS = browserInstructions(ASK_TOPICS);
+/** The instructions of a run with the browser and the desktop only (no account, no added tool, no usage note): the owner's fixed ask topics. */
+export const INSTRUCTIONS = browserInstructions(ASK_TOPICS, { families: browserFamilies });
 
 /**
  * The goal runner: an AI tool loop that drives a browser toward a run's goal, pausing for people through handoffs (E38.5). This service

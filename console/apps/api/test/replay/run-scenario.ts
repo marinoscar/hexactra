@@ -7,13 +7,13 @@ import { builtinPolicy } from '../../src/policies/builtin-policies';
 import { NO_MASKING, type BrowserExt, type BrowserMemory } from '@marinoscar/hexactra-browser-agent/context';
 import { ScreenshotWindow } from '@marinoscar/hexactra-browser-agent/context-settings';
 import { riskGate, siteGate } from '@marinoscar/hexactra-browser-agent/gates';
-import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
 import { domainAllowed } from '@marinoscar/hexactra-browser-agent/policy';
-import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
+import { assembleRoundInput, observeRound, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
 import {
   BudgetTracker,
   type BudgetSpec,
   computeEffectiveBudget,
+  FIRST_ROUND_HINT,
   GatePipeline,
   readStallState,
   reconcileSteps,
@@ -34,7 +34,8 @@ import { FakeApprovals, FakeRunStore, FakeTelemetry } from '@marinoscar/hexactra
 import { connectionGate } from '../../src/runner/host/gates/connection-gate';
 import { DEFAULT_CONNECTION_READ_LIMITS } from '../../src/runner/host/connections/memory';
 import { registerRunTools } from '../../src/runner/host/run-tools';
-import { mcpTools } from '../../src/runner/host/tools/connections/mcp';
+import { mcpToolset } from '../../src/runner/host/tools/connections/mcp';
+import { runContextLines, runInstructions } from '../../src/runner/host/toolbox-line';
 import { scenarioAccounts, type ScenarioAccounts } from './connections';
 import { checkInvariants } from './invariants';
 import { OwnerQuestions, OwnerScript, type AskedQuestion } from './owner';
@@ -191,7 +192,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
   const registry = registerRunTools<never>({
     needsBrowser: scenario.needsBrowser,
     connections: accounts !== null,
-    mcp: accounts ? ((await mcpTools(accounts.deps, 'user-1', accounts.list)) as unknown as RunnerTool<never>[]) : [],
+    ...(accounts ? await mcpToolset(accounts.deps, 'user-1', accounts.list).then((m) => ({ mcp: m.tools as unknown as RunnerTool<never>[], mcpFamilies: m.families as never })) : { mcp: [] }),
   });
   // `gates_off` replaces both gates with ones that allow everything, as a broken change to them would.
   const openGates = [
@@ -280,13 +281,15 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
     });
     memory.tier = ctx.tier;
     const profile: LoopProfile<typeof ctx> = {
-      instructions: browserInstructions(ASK_TOPICS, registry.usageNotes(ctx as never)),
+      // What a run reads, built as the host builds it (E41.2): the families offered, the toolbox line, the family-neutral first hint.
+      instructions: runInstructions(registry, ctx as never, ASK_TOPICS),
       registry: registry as never,
       pipeline: pipeline as never,
       visionNotes: VISION_NOTES,
       observe: (c) => observeRound(c as never),
       assembleInput: assembleRoundInput,
-      contextLines: (c) => [sitesLine(c as never)],
+      contextLines: (c) => runContextLines(registry, c as never),
+      firstRoundHint: () => FIRST_ROUND_HINT,
       summarizeGuidance: (note) => note,
       aboutOwner: '',
     };

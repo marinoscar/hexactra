@@ -108,7 +108,7 @@ export class McpConnectionsService {
     try {
       if (input.auth.kind === 'bearer') await this.secrets.setSecret(userId, row.id, input.auth.token);
       if (input.auth.kind === 'header') await this.secrets.setSecret(userId, row.id, input.auth.value);
-      await this.catalog.storeFirst(row, config, listed.tools, { name: client.serverInfo.name, version: client.serverInfo.version, protocolVersion: client.protocolVersion });
+      await this.catalog.storeFirst(row, config, listed.tools, { name: client.serverInfo.name, version: client.serverInfo.version, instructions: client.serverInfo.instructions, protocolVersion: client.protocolVersion });
     } catch (e) {
       await this.secrets.clear(userId, row.id).catch(() => undefined);
       await this.prisma.connection.deleteMany({ where: { id: row.id } });

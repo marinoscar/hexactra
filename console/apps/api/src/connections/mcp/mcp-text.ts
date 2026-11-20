@@ -2,7 +2,7 @@
 // tool with the owner's mail". Two defences live here: it is cleaned and capped before a model reads it, and it is always prefixed with the
 // connection's label and followed by the fixed trust line in the instructions (`MCP_TRUST_LINE`). Cleaning is not a guarantee: the real
 // defence is that a tool that changes something asks the owner, whatever the model was told.
-import { MCP_DESCRIPTION_CHARS, MCP_TITLE_CHARS, MCP_TOOL_NAME_CHARS } from './mcp.constants';
+import { MCP_DESCRIPTION_CHARS, MCP_INSTRUCTIONS_CHARS, MCP_TITLE_CHARS, MCP_TOOL_NAME_CHARS } from './mcp.constants';
 
 // C0 and C1 controls, DEL, zero-width and bidirectional-control characters, the BOM and the line and paragraph separators.
 // eslint-disable-next-line no-control-regex
@@ -21,6 +21,8 @@ export function sanitizeText(raw: unknown, max: number): string {
 
 export const sanitizeDescription = (raw: unknown): string => sanitizeText(raw, MCP_DESCRIPTION_CHARS);
 export const sanitizeTitle = (raw: unknown): string => sanitizeText(raw, MCP_TITLE_CHARS);
+/** A server's `instructions` (E41.2): third-party text, cleaned like a description and capped for the family line. */
+export const sanitizeInstructions = (raw: unknown): string => sanitizeText(raw, MCP_INSTRUCTIONS_CHARS);
 
 /** A server's error text on its way to the model: short and plain. */
 export const sanitizeServerMessage = (raw: unknown): string => sanitizeText(raw, 240);

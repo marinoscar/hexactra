@@ -44,6 +44,8 @@ export interface FakeMcpOptions {
   callStatus?: number;
   /** Answer every POST with this redirect. */
   redirectTo?: string;
+  /** Answer `initialize` with these `instructions` (E41.2). */
+  instructions?: string;
   /** Answer `initialize` with this server name. */
   serverName?: string;
   /** Act as its own OAuth authorization server too (metadata, dynamic registration, token, revocation); the MCP endpoint then needs its access token. */
@@ -216,7 +218,7 @@ export class FakeMcpServer {
         const asked = String(body.params?.protocolVersion ?? '');
         const version = versions.includes(asked) ? asked : versions[0]!;
         const headers = this.opts.session ? { 'mcp-session-id': `session-${++this.sessions}` } : undefined;
-        return ok({ protocolVersion: version, capabilities: { tools: { listChanged: false } }, serverInfo: { name: this.opts.serverName ?? 'Fake Notes Server', version: '1.0.0' } }, headers);
+        return ok({ protocolVersion: version, capabilities: { tools: { listChanged: false } }, serverInfo: { name: this.opts.serverName ?? 'Fake Notes Server', version: '1.0.0' }, ...(this.opts.instructions !== undefined ? { instructions: this.opts.instructions } : {}) }, headers);
       }
       case 'notifications/initialized':
         return void res.writeHead(202).end();

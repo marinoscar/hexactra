@@ -88,6 +88,7 @@ async function usableLogin(ctx: HostContext, action: string, args: Record<string
 export const savedLoginTools = [
   defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'saved_logins',
     description:
       'List the logins the owner saved for the page now on screen: none, or `{ ref, name, username, exact, hasCode }` each. Only a login marked exact may be used. Call it first on a sign-in page. A username is not secret; passwords and codes are never shown.',
@@ -122,6 +123,7 @@ export const savedLoginTools = [
   }),
   defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'sign_in_with_saved_login',
     description:
       "Sign in with a login the owner saved, on the page now on screen: types its username and password into the fields you name with real keystrokes. You never see either. `ref` comes from saved_logins and must be marked exact. When the site asks for the username and the password on separate pages, pass one selector per call and null for the other. `submit` presses Enter after the last field typed. `password_selector` must name the password field itself (an input of type password): a saved password is not typed into any other field. A password is typed at most once per run: if the site rejects it, ask the owner.",
@@ -183,6 +185,7 @@ export const savedLoginTools = [
   }),
   defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'type_saved_code',
     description:
       'Type the one-time authenticator code of a saved login into the field you name, fresh at that moment; you never see it. Only for a login marked hasCode, and only when the page asks for an authenticator-app code (never a code sent by text message or email). `ref` comes from saved_logins and must be exact. `submit` presses Enter after typing.',

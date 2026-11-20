@@ -135,12 +135,37 @@ Phases, the counters (`app.runs.recovered`) and the alert rule: [runs.md, Crash 
 4. **Decide `commits`.** `true` when the tool can do something irreversible (a click that passes the risk gate, typing a secret, later sending mail or a provider fill): its first action is intent-recorded.
 5. **Decide the gates** (`gated`). A tool that opens a URL names the `site` gate and builds `{ url, refusal }`; a tool that acts on a target the page describes names the `risk` gate. A new kind of check is a new `Gate` (`name`, `check(ctx, request, call)` returning `allow`, `refuse(text, step)` or `ask(question)`), defined in a package and registered in the host's pipeline (`host/build-context.ts`).
 6. **Decide `available(ctx)`** when the tool must be hidden (vision off, no desktop, a connection not enabled for this run). The registry offers tools in **registration order and never sorts them**: the order is part of the stable prefix.
-7. **Add a usage note** (`usage`) only if the tool needs words in the instructions; notes are appended after the sections in registration order, so the instructions stay byte-identical between rounds. No tool contributes one today.
+7. **Add a usage note** (`usage`) only if the tool needs words in the instructions; notes are appended after the sections in registration order, so the instructions stay byte-identical between rounds. Today the connection tools (`CONNECTION_USAGE` on `connections_list`), the first MCP tool (`MCP_TRUST_LINE`) and a few host tools contribute one.
+8. **Name its family** (`family`): `browser`, `desktop`, `accounts`, `mcp:<connectionId>`, `human`, `control`, `secrets` or `memory`. A tool of a new kind gets a new family (below).
 8. **Register it**: in the toolset's composer (`packages/hexactra-browser-agent/src/tools/index.ts`, or the host's `build-context.ts` for an app family), in the position it should be offered. Rebuild the packages (`npm run build:packages`) before the app sees it.
 9. **Test it alone** against a fake context: `fakeBrowserRun()` (`@marinoscar/hexactra-browser-agent/testing`) for a browser tool, `fakeRun()` (`@marinoscar/hexactra-agent/testing`) for a generic one; see `packages/hexactra-browser-agent/test/browser-tools.spec.ts`. Test the refusal, the success and what the step row says.
 10. **Update the snapshot deliberately.** `apps/api/test/runner-characterisation.db.spec.ts` pins the tool list (names, descriptions, JSON schemas), the model input of each round, the fabric actions, the step rows and the final run row. A new tool changes the first: `npx jest --config ./test/jest.config.js --testRegex 'runner-characterisation\.db\.spec\.ts$' -u` from `apps/api`, and read the diff.
 11. **MCP parity.** The MCP tools (`apps/api/src/mcp/mcp.tools.ts`) are a separate surface that is not touched by a runner tool. Decide whether the capability also needs an MCP tool and a row in [parity.md](parity.md); if so, follow the MCP rules in `AGENTS.md`.
 12. **Secrets.** A tool that types or reads something sensitive records its step with `{ secret: true }` (not fed to the stall detector), never puts a value in the step, the memory or its answer, and masks what it reads back through `ReadMasking`.
+
+## Tool families and how the agent chooses (E41.2)
+
+The agent picks a tool by capability, not by habit. Each kind of tool is a **family**: a descriptor in the harness (`ToolFamily`, `packages/hexactra-agent/src/tool-family.ts`) with an id, a title, a sentence on when to use it, a rank, optional how-to sections, and an optional `toolbox(ctx)` line. A tool names its family in `RunnerTool.family` (`group` is the deprecated alias; `toolFamilyOf` reads `family ?? group`).
+
+| Family | Rank | Where | What the model reads |
+|---|---|---|---|
+| `accounts` | 10 | `accountsFamily`, `apps/api/src/runner/host/tools/connections/index.ts` | "The owner's accounts": Google and Microsoft mail, calendar and files; the toolbox names each account and what it may do |
+| `mcp:<connectionId>` | 20 | `mcpFamilies`, `tools/connections/mcp.ts` | the owner's label, and the server's own `instructions` (cleaned, at most 300 characters, under `MCP_TRUST_LINE`) or its first tool titles |
+| `browser` | 50 | `browserFamily`, `packages/hexactra-browser-agent/src/families.ts` | "The browser", with the "How to see" and "How to act" sections |
+| `desktop` | 60 | `desktopFamily` (same file) | "The desktop", with the "Outside the page" bullet |
+| `human`, `control`, `secrets`, `memory` | | no descriptor | covered by the general sections |
+
+What a run reads (`runInstructions` and `runContextLines`, `apps/api/src/runner/host/toolbox-line.ts`, shared with the scenario kit):
+
+1. **The instructions**: a family-neutral identity ("You act for the owner, with their full authority, …"), **Your tools** (one line per family that has at least one tool offered, by rank: `ToolRegistry.families(ctx)`), the fixed **routing rule** (`ROUTING_RULE`: use an account or an added tool when one can do the job; the browser for what is on a website; mix them; do not look up again what is known; ask when two could do it), each offered family's own sections, then the general sections (asking the person, values, the owner, when done) and the tool notes. A run that never opens a browser reads no browser how-to.
+2. **The round's context lines**: `Allowed sites: …` only when a browser tool is offered, then the **toolbox line**, identical in every round: `Tools you have: The owner's accounts, Notes, The browser, The desktop. Accounts: c1 "Work" (Google, read and change: read mail, send mail, …). Added tools: "Notes" (2 tools).` The account is named without calling `connections_list`, and nothing beyond what `connections_list` shows (no token, no address).
+3. **The first round** says "Nothing has been done yet. Choose the tool that fits the goal." (`FIRST_ROUND_HINT`, `LoopProfile.firstRoundHint`).
+
+The tool order is unchanged: the connection and MCP tools are registered after the browser core tools, as before, which keeps the prompt cache and isolates the effect of the text.
+
+**Adding a family.** Write one `ToolFamily` (id, title, `whenToUse`, rank, sections if it needs a how-to, `toolbox` if the run should name something), set `family` on its tools, register both in `registerRunTools` (`apps/api/src/runner/host/run-tools.ts`), add a fake for the scenario kit and a routing scenario that shows the agent choosing it. No prompt rewriting is needed.
+
+**Third-party text.** An MCP server's `instructions` (from `initialize`, kept in the connection's `config.server.instructions`) is cleaned like a tool description and capped, appears only in its family line and never changes the tools offered, the gates or the run's sites (`test/scenarios/routing/mcp-instructions-injection.scenario.json`).
 
 ## Connection tools, the connection gate and runs without a browser (E39.7)
 

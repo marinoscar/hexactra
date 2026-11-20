@@ -5,6 +5,7 @@ export * from './context';
 export * from './context-settings';
 export * from './fresh-start';
 export * from './gates';
+export * from './families';
 export * from './instructions';
 export * from './page';
 export * from './policy';

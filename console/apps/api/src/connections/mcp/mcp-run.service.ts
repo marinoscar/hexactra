@@ -19,7 +19,7 @@ import { readMcpConfig } from './mcp-config';
 import { redactArgs, redactSecrets, wasRedacted } from './mcp-redact';
 import { normalizeResult } from './mcp-result';
 import { McpSecretStore } from './mcp-secrets';
-import { sanitizeDescription, sanitizeServerMessage, sanitizeTitle } from './mcp-text';
+import { sanitizeDescription, sanitizeInstructions, sanitizeServerMessage, sanitizeTitle } from './mcp-text';
 import { MCP_CALL_TIMEOUT_MS, MCP_MAX_TOOLS_PER_RUN, type McpToolMode } from './mcp.constants';
 
 export interface McpRunTool {
@@ -33,6 +33,8 @@ export interface McpRunTool {
   inputSchema: Record<string, unknown>;
   hash: string;
   mode: Exclude<McpToolMode, 'off'>;
+  /** What the server said it is for (`initialize`'s `instructions`, E41.2), cleaned and capped when stored; null when it gave none. Third-party text. */
+  serverInstructions: string | null;
 }
 
 export type McpCallOutcome =
@@ -95,7 +97,7 @@ export class McpRunService {
       for (const t of row.mcpTools) {
         const mode = t.mode === 'read' ? 'read' : t.mode === 'write' ? 'write' : null;
         if (!mode || (mode === 'write' && sel.access !== 'read_write')) continue;
-        out.push({ connectionId: row.id, connectionLabel: row.label, name: t.name, title: t.title ? sanitizeTitle(t.title) || null : null, description: sanitizeDescription(t.description), inputSchema: t.inputSchema as Record<string, unknown>, hash: t.hash, mode });
+        out.push({ connectionId: row.id, connectionLabel: row.label, name: t.name, title: t.title ? sanitizeTitle(t.title) || null : null, description: sanitizeDescription(t.description), inputSchema: t.inputSchema as Record<string, unknown>, hash: t.hash, mode, serverInstructions: sanitizeInstructions(readMcpConfig(row.config)?.server?.instructions ?? '') || null });
         if (out.length >= MCP_MAX_TOOLS_PER_RUN) return out;
       }
     }

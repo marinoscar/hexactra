@@ -32,8 +32,10 @@ export type GateRequestFn<C extends AnyContext, P extends z.ZodTypeAny> = (ctx: 
 export interface RunnerTool<C extends AnyContext = AnyContext, P extends z.ZodTypeAny = z.ZodTypeAny> {
   /** The name the model calls it by. Permanent once runs exist: a rename changes what a model has learned. */
   name: string;
-  /** `browser`, `desktop`, `human`, `control`, `secrets`, later `connection:<id>`: lets a policy or a task switch a family on and off. */
+  /** Deprecated: `family` supersedes it (E41.2). Kept for what reads it; `toolFamilyOf` uses `family ?? group`. */
   group: string;
+  /** The tool's family (E41.2): `browser`, `desktop`, `accounts`, `mcp:<connectionId>`, `human`, `control`, `secrets`, `memory`. A registered `ToolFamily` with this id describes it to the model. */
+  family?: string;
   description: string;
   parameters: P;
   /**

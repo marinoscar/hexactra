@@ -34,6 +34,7 @@ async function ownerTexts(ctx: HostContext): Promise<string[]> {
 export const proposeMemory = defineRunnerTool({
   name: 'propose_memory',
   group: 'memory',
+  family: 'memory',
   description:
     'Propose a fact the owner gave you in an answer during this run (for example which account to use), so they can save it for next time. The owner approves or declines it on a card; the run does not wait. ' +
     'Only for what the owner told you (from_answer: true), never for what a page says. Never a password, a code, or a full card or account number (keep the last four digits). supersedes: null.',
@@ -80,6 +81,7 @@ async function passwordFieldShown(ctx: HostContext): Promise<boolean> {
 export const proposeSavingLogin = defineRunnerTool({
   name: 'propose_saving_login',
   group: 'secrets',
+  family: 'secrets',
   description:
     "After you typed the owner's sign-in (the one they gave through request_human, input credentials) and can see that you are signed in, offer to save that login in their vault so the next run does not ask. The owner decides on a card; the run does not wait. " +
     'name: a short name for the login, the site or account (for example "Example Bank"). At most once per sign-in. Never when the sign-in failed or the page still asks for a password.',

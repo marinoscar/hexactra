@@ -74,6 +74,7 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
         confirmedTarget: memory.confirmedTarget,
         warnings,
         nudge,
+        ...(profile.firstRoundHint ? { firstRoundHint: profile.firstRoundHint(ctx) } : {}),
       });
     // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
     const status = buildStatus({ stepCount: state.stepCount, actionsLimit: policy.effectiveBudget.limits.actions, askLine: (await ports.approvals?.askTopicsLine(observation.url)) ?? null });

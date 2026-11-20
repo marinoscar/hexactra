@@ -1,8 +1,9 @@
 // The tools a run is offered, in the order the model has always been offered them (E41.1, #698). One function, called by the host
 // (`build-context.ts`) and by the scenario kit (`test/replay/run-scenario.ts`), so what a scenario measures is what a run gets.
+import { browserFamilies } from '@marinoscar/hexactra-browser-agent/families';
 import { browserTools } from '@marinoscar/hexactra-browser-agent/tools';
-import { ToolRegistry, type AnyContext, type RunnerTool } from '@marinoscar/hexactra-agent';
-import { connectionTools } from './tools/connections';
+import { ToolRegistry, type AnyContext, type RunnerTool, type ToolFamily } from '@marinoscar/hexactra-agent';
+import { accountsFamily, connectionTools } from './tools/connections';
 
 export interface RunToolsOptions<C extends AnyContext> {
   /** A task that never opens a browser (E39.7) is offered no browser tool: only the question tool, the connections and `finish`. */
@@ -16,11 +17,15 @@ export interface RunToolsOptions<C extends AnyContext> {
   savedCards?: readonly RunnerTool<C>[] | null;
   /** The run lists a connection and the deployment has the connections module (E39.7). */
   connections: boolean;
-  /** The tools of the owner's MCP servers the run lists (E39.9), already built. */
+  /** The tools of the owner's MCP servers the run lists (E39.9), already built, and one family per server (E41.2). */
   mcp: readonly RunnerTool<C>[];
+  mcpFamilies?: readonly ToolFamily<C>[];
 }
 
-/** Registers the run's tools on a new registry, in the fixed order (part of the stable prefix the provider caches). */
+/**
+ * Registers the run's tools on a new registry, in the fixed order (part of the stable prefix the provider caches), and the tool families that
+ * describe them (E41.2): the owner's accounts, each MCP server, the browser and the desktop. Only a family with a tool offered is shown.
+ */
 export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): ToolRegistry<C> {
   const registry = new ToolRegistry<C>();
   const noBrowser = o.needsBrowser === 'never';
@@ -37,5 +42,6 @@ export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): T
   // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.
   registry.registerAll(o.mcp);
   registry.register(browserTools.finish as unknown as RunnerTool<C>);
+  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[])]);
   return registry;
 }

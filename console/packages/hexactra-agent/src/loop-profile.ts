@@ -42,4 +42,6 @@ export interface LoopProfile<C extends AnyContext = AnyContext> {
   wrapUpNote?(ctx: C): string;
   /** The memory block about the owner (#553): information for the model, after the goal. '' without memories. */
   aboutOwner: string;
+  /** What the first round says after "Nothing has been done yet." (E41.2): family-neutral. Absent: the default sentence. */
+  firstRoundHint?(ctx: C): string;
 }

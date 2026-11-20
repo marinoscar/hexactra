@@ -1,6 +1,7 @@
 // What the model reads each round (#406). The input is built so that the provider's prompt cache holds: the stable prefix (the goal,
 // the owner's memories, the context, the progress log) comes first, in an order that never changes; what changes every round (the
 // steps used, the owner's ask rules for the page) goes last, after the screenshots.
+import { DEFAULT_FIRST_ROUND_HINT } from './tool-family';
 import type { GateTarget } from './types';
 
 export interface RoundText {
@@ -20,6 +21,8 @@ export interface RoundText {
   warnings: readonly string[];
   /** The nudge a stall queued for this round. */
   nudge?: string;
+  /** What the first round says after "Nothing has been done yet." (E41.2). Absent: the sentence every run read before tool families. */
+  firstRoundHint?: string;
 }
 
 /** The round's text: the stable prefix and the lines that belong with it. Pure. */
@@ -29,7 +32,7 @@ export function buildRoundText(r: RoundText): string {
     r.aboutOwner,
     r.context ? `Earlier in this conversation (context only, already done):\n${r.context}` : '',
     ...r.contextLines,
-    r.log.length ? `Progress so far (latest last):\n${r.log.slice(-r.logLines).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
+    r.log.length ? `Progress so far (latest last):\n${r.log.slice(-r.logLines).join('\n')}` : `Nothing has been done yet. ${r.firstRoundHint ?? DEFAULT_FIRST_ROUND_HINT}`,
     r.confirmedTarget
       ? r.confirmedTarget.category
         ? `The person approved one step: pressing '${r.confirmedTarget.label ?? ''}' (${r.confirmedTarget.category}). Any other commitment needs its own confirmation.`

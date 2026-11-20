@@ -250,7 +250,9 @@ A run may read at most `connectionReadMessages` messages (default 25) and `conne
 
 ### Runs without a browser
 
-`Task.needsBrowser` (`auto`, `always`, `never`; default `auto`). With `auto`, a run that has connections opens its browser **at the first browser tool call** (the browser tools are still offered); a run that ends without one never allocates a node, and "no node available" is reported only when a browser is needed. A run with no connection is a browser job and opens it at the start, as before. `always` opens it at the start; `never` offers no browser tool.
+`Task.needsBrowser` (`auto`, `always`, `never`; default `auto`). With `auto`, a run that has connections opens its browser **at the first browser tool call** (the browser tools are still offered); a run that ends without one never allocates a node, and "no node available" is reported only when a browser is needed. A run with no connection is a browser job and opens it at the start, as before. `always` opens it at the start; `never` offers no browser tool, and the run reads no browser how-to and no "Allowed sites" line.
+
+Whatever `needsBrowser` says, the agent chooses by capability (E41.2, [runner.md, Tool families](runner.md#tool-families-and-how-the-agent-chooses-e412)): its instructions list the families of tools it has ("The owner's accounts" before "The browser") with one rule for choosing, and every round names the run's accounts and what each may do (`Accounts: c1 "Work" (Google, read and change: read mail, send mail, …)`), so it does not open a website to do what an account's tool does.
 
 ### What the chat does
 

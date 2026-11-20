@@ -39,6 +39,10 @@
       "types": "./dist/context-settings.d.ts",
       "default": "./dist/context-settings.js"
     },
+    "./families": {
+      "types": "./dist/families.d.ts",
+      "default": "./dist/families.js"
+    },
     "./instructions": {
       "types": "./dist/instructions.d.ts",
       "default": "./dist/instructions.js"

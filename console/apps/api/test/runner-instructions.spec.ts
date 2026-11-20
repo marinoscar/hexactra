@@ -7,7 +7,7 @@ describe("the browser agent's instructions for a sign-in", () => {
   const signIn = INSTRUCTIONS.slice(INSTRUCTIONS.indexOf('When you need the person:'));
 
   it('tells it to sign in itself and not to send the person to the browser', () => {
-    expect(signIn).toContain('Signing in is your job, not theirs.');
+    expect(signIn).toContain('On a website: signing in is your job, not theirs.');
     expect(signIn).toContain('Do not ask them to sign in in the browser.');
   });
 
