@@ -1,3 +1,4 @@
+import { recordRequestInChat } from './chat-request-record';
 import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question, type Task } from '@prisma/client';
@@ -130,6 +131,7 @@ export class TaskRunStarter {
       return { run: r, question: q };
     });
     this.log.log(`run ${run.id}: waiting for ${resolved.missing.length} value(s) before it starts`);
+    await recordRequestInChat(this.prisma, question, this.log);
     await this.events.emit({ type: 'question.asked', questionId: question.id, ownerUserId: userId, runId: run.id, input: 'form', kind: 'other', status: 'pending' });
     await this.tasks.events?.publish({ type: 'run.status', runId: run.id, ownerUserId: userId, status: 'waiting_human' });
     await this.notifier?.needsYou(userId, { ...run, handoffId: null }, question.prompt, 'other', 'form', expiresAt).catch((e: unknown) => this.log.warn(`run ${run.id}: could not notify: ${e instanceof Error ? e.message : String(e)}`));

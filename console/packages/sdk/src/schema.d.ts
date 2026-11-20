@@ -20634,10 +20634,10 @@ export interface components {
                     /** @enum {string} */
                     role: "user" | "assistant" | "system";
                     /**
-                     * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).
+                     * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                      * @enum {string}
                      */
-                    kind: "text" | "clarify" | "run" | "result" | "task_draft";
+                    kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
                     /** @description The start of the newest message, on one line */
                     text: string;
                 } | null;
@@ -20797,10 +20797,10 @@ export interface components {
                 /** @enum {string} */
                 role: "user" | "assistant" | "system";
                 /**
-                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).
+                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                  * @enum {string}
                  */
-                kind: "text" | "clarify" | "run" | "result" | "task_draft";
+                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
                 /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
                 text: string;
                 /** @description The run a `run` or `result` message is about */
@@ -20866,10 +20866,10 @@ export interface components {
             /** @enum {string} */
             role: "user" | "assistant" | "system";
             /**
-             * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).
+             * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
              * @enum {string}
              */
-            kind: "text" | "clarify" | "run" | "result" | "task_draft";
+            kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
             /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
             text: string;
             /** @description The run a `run` or `result` message is about */

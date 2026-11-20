@@ -25,6 +25,7 @@ import { ChatResults } from './chat-results.service';
 import { ChatTaskDraftService } from './chat-task-draft.service';
 import { ChatService } from './chat.service';
 import { transcriptLine } from './chat-transcript';
+import { withRequestOutcomes } from '../questions/chat-request-record';
 
 export { transcriptLine } from './chat-transcript';
 
@@ -157,9 +158,9 @@ export class ChatTurnService {
     return [`Previous job: ${last.goal.slice(0, 1500)}`, `${ended}${detail ? `: ${detail.slice(0, 3000)}` : '.'}`, ...confirmed].join('\n');
   }
 
-  /** What the model reads: the end of the thread and whether a run is live. Built from messages only, never from a question's answer. */
+  /** What the model reads: the end of the thread and whether a run is live. Built from messages, plus each request's outcome words (E40.1), never a question's answer value. */
   async buildInput(userId: string, conversationId: string, connectionsLine = ''): Promise<string> {
-    const rows = await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { seq: true, role: true, kind: true, text: true, meta: true } });
+    const rows = await withRequestOutcomes(this.prisma, await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { seq: true, role: true, kind: true, text: true, meta: true } }));
     const live = await this.liveRun(userId, conversationId);
     // Owner messages already passed to a run, so the model does not pass one twice (#490).
     const passed = new Set((await this.prisma.runGuidance.findMany({ where: { conversationId, messageSeq: { in: rows.map((r) => r.seq) } }, select: { messageSeq: true } })).map((g) => g.messageSeq));

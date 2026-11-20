@@ -30,6 +30,8 @@ enum ChatMessageKind {
   task_draft
   /// The agent proposes a memory (#553): `meta.questionId` is the proposal, answered on its card.
   memory
+  /// A request a chat's run made of the owner (E40.1, #685): `meta.questionId`; the outcome is read from the question, never a value.
+  request
 
   @@map("chat_message_kind")
 }

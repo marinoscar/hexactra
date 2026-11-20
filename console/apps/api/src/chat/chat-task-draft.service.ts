@@ -11,6 +11,7 @@ import { prepareParameters } from '../tasks/task-params';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
 import { ChatService, titleFromMessage } from './chat.service';
 import { transcriptLine } from './chat-transcript';
+import { withRequestOutcomes } from '../questions/chat-request-record';
 
 /** A task drafted from a chat: what `POST /tasks` takes, for the owner to review before saving. */
 export interface ChatTaskDraft {
@@ -180,7 +181,7 @@ export class ChatTaskDraftService {
 
   /** What the model reads: the end of the thread, oldest first. */
   async buildInput(conversationId: string, memories: readonly DraftMemory[] = []): Promise<string> {
-    const rows = await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { role: true, kind: true, text: true, meta: true } });
+    const rows = await withRequestOutcomes(this.prisma, await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { role: true, kind: true, text: true, meta: true } }));
     // The owner's memories by label and value names only: the draft names one as a default, it never copies a value from here.
     const known = memories.length ? ['Memories (label: value names):', ...memories.map((m) => `- ${m.label}: ${m.attributes.join(', ')}`), ''] : [];
     return [...known, 'Conversation, oldest first:', ...rows.reverse().map(transcriptLine)].join('\n');

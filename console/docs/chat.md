@@ -68,6 +68,8 @@ When the agent needs you, the request is a card in the thread, not only an Inbox
 
 The Inbox still lists a chat run's request, with **Answer in chat**. Scheduled, API and MCP runs use the Inbox as before.
 
+**The thread keeps every request (E40.1, #685).** When a chat's run asks, a `request` message is added to the thread (`kind: request`, `meta.questionId`, `meta.input`, `meta.questionKind`) with the masked prompt. It stays after the request is answered, declined or expired, and after a reload: a small card with what was asked, its outcome (**Provided**, **Allowed**, **Denied**, **Declined**, **Done**, **Expired**) and a **Details** link to `/inbox/q/:id`. The outcome is read from the question when the thread is served (`meta.outcome`, from `withRequestOutcomes` in `apps/api/src/questions/chat-request-record.ts`); the message itself never holds an answer, so a code, a password or a typed value is never in `chat_messages`. A waiting request is checked again every few seconds until it settles. The model's view of the thread reads it as `[run asked the owner] <prompt> -> provided`, so a follow-up knows the information was given without seeing it. Suggestions (memories, "Save this login?") keep their own cards and are not recorded this way. When request history is deleted after its retention period (E40.4), the card reads **No longer kept**.
+
 ## Secrets
 
 - A secret typed into a request card goes to the fabric handoff. The fabric types it into the page (`type_secret`). It is **not** stored in `chat_messages`, not logged, and no model receives it.

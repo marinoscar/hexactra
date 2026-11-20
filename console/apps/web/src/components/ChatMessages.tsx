@@ -9,6 +9,7 @@ import { formatTime, useProfileTimeZone } from '../ui';
 import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
 import type { RunFrame } from './useRunFrame';
+import { ChatRequestRecord } from './ChatRequestRecord';
 import { MemoryProposalCard } from './MemoryProposalCard';
 import { SaveLoginCard } from './SaveLoginCard';
 
@@ -155,6 +156,8 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
         <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} onSaveAsTask={cards.onSaveAsTask} saving={cards.savingTask} />
       ) : message.kind === 'task_draft' ? (
         <DraftCard message={message} onReview={cards.onReviewDraft} />
+      ) : message.kind === 'request' ? (
+        <ChatRequestRecord message={message} />
       ) : message.kind === 'memory' && typeof (message.meta as { questionId?: unknown } | null)?.questionId === 'string' ? (
         (message.meta as { card?: unknown }).card === 'save_login' ? (
           <SaveLoginCard questionId={(message.meta as { questionId: string }).questionId} />
