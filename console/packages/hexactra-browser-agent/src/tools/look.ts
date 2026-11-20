@@ -6,6 +6,7 @@ import type { BrowserContext } from '../context';
 export const look = defineRunnerTool({
   name: 'look',
   group: 'browser',
+  family: 'browser',
   description:
     'Take a fresh screenshot and end this turn; the next turn starts with the image. screen "page" shows the tab with numbered interactive elements; "desktop" shows the whole computer screen (native dialogs, file pickers, other windows).',
   parameters: z.object({ screen: z.enum(['page', 'desktop']), reason: z.string().max(500) }),

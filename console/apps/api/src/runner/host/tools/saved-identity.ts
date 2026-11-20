@@ -85,6 +85,7 @@ async function detailNotAllowed(ctx: HostContext, action: string, args: Record<s
 export const savedIdentityTools = [
   defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'saved_identity',
     description:
       'List the personal details the owner saved that a form on the page now on screen may ask for (a name, a date of birth, an ID number, an address, a phone number): none, or `{ ref, name, fields: [{ key, label, sensitive, usableHere }] }` per saved item. Labels only: you never see a value, not even its length. Call it on a form that asks for personal details.',
@@ -113,6 +114,7 @@ export const savedIdentityTools = [
   }),
   defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'fill_from_identity',
     description:
       "Fill one field of a saved detail into the input or select you name, on the page now on screen: the system types it (or chooses the matching option) with real input. You never see the value. `ref` and `field` (the key) come from saved_identity. For a date of birth in three selects, pass `part` (day, month or year) for each; otherwise null. Not for passwords or codes. Filling a field commits nothing: submitting the form does.",

@@ -141,3 +141,14 @@ describe('the browser toolset as offered to the model', () => {
     expect(browserTools.typeSecret.commits).toBe(true);
   });
 });
+
+describe('tool families (E41.2)', () => {
+  it('every tool of the toolset names its family', () => {
+    const all = [...browserTools.core, browserTools.typeSecret, browserTools.finish];
+    expect(all.filter((t) => !t.family).map((t) => t.name)).toEqual([]);
+    const byFamily = (f: string) => all.filter((t) => t.family === f).map((t) => t.name);
+    expect(byFamily('human')).toEqual(['request_human']);
+    expect(byFamily('control')).toEqual(['finish']);
+    expect(byFamily('desktop')).toEqual(['desktop_click', 'desktop_type', 'desktop_key', 'desktop_scroll', 'desktop_drag']);
+  });
+});

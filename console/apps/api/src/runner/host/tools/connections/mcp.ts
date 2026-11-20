@@ -19,7 +19,7 @@ import { labelSlug, modelToolName } from '../../../../connections/mcp/mcp-text';
 import { MCP_TRUST_LINE } from '../../../../connections/mcp/mcp.constants';
 import type { McpRunTool } from '../../../../connections/mcp/mcp-run.service';
 import type { SnapshotConnection } from '../../../../policies/policy-snapshot';
-import { clip, defineRunnerTool, LEASE_LOST_TEXT, type RunnerTool } from '@marinoscar/hexactra-agent';
+import { clip, defineRunnerTool, LEASE_LOST_TEXT, type RunnerTool, type ToolFamily } from '@marinoscar/hexactra-agent';
 import { ATTR } from '../../../trace-attributes';
 import type { HostContext } from '../../context';
 import type { HostDeps } from '../../deps';
@@ -158,6 +158,7 @@ function build(def: McpRunTool, name: string, parameters: z.ZodTypeAny, first: b
   const common = {
     name,
     group: `connection:${def.connectionId}`,
+    family: mcpFamilyId(def.connectionId),
     description: describe(def),
     parameters,
     strict: false as const,
@@ -178,16 +179,51 @@ function build(def: McpRunTool, name: string, parameters: z.ZodTypeAny, first: b
   }) as unknown as RunnerTool<HostContext>;
 }
 
+/** The family id of an MCP server's tools (E41.2): one family per server. */
+export const mcpFamilyId = (connectionId: string): string => `mcp:${connectionId}`;
+
+/**
+ * One family per MCP server the run is offered tools of (E41.2): the owner's label as the title, the server's own `instructions` (third-party
+ * text: cleaned and capped when stored, and only ever in this line, under `MCP_TRUST_LINE`) or, when it gave none, the first tool titles.
+ */
+export function mcpFamilies(defs: readonly McpRunTool[]): ToolFamily<HostContext>[] {
+  const byServer = new Map<string, McpRunTool[]>();
+  for (const d of defs) byServer.set(d.connectionId, [...(byServer.get(d.connectionId) ?? []), d]);
+  return [...byServer.values()].map((tools) => {
+    const first = tools[0]!;
+    const names = tools.slice(0, 5).map((t) => clip(t.title || t.name, 60));
+    const own = first.serverInstructions?.trim();
+    return {
+      id: mcpFamilyId(first.connectionId),
+      title: first.connectionLabel,
+      whenToUse: own || `Tools the owner added from "${first.connectionLabel}": ${names.join(', ')}${tools.length > 5 ? ', …' : ''}.`,
+      rank: 20,
+      toolbox: () => `"${first.connectionLabel}" (${tools.length} tool${tools.length === 1 ? '' : 's'})`,
+    };
+  });
+}
+
+/** The tools of the MCP connections a run lists and their families (E41.2). */
+export async function mcpToolset(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<{ tools: RunnerTool<HostContext>[]; families: ToolFamily<HostContext>[] }> {
+  const { tools, defs } = await buildMcp(d, userId, list);
+  return { tools, families: mcpFamilies(defs) };
+}
+
 /**
  * The tools of the MCP connections a run lists, in the order of the list and then by name, at most 40. A tool whose schema cannot be both
  * offered to a model and checked here is left out. Empty without the connections module, with the deployment switch off, or with none.
  */
 export async function mcpTools(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<RunnerTool<HostContext>[]> {
+  return (await buildMcp(d, userId, list)).tools;
+}
+
+async function buildMcp(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<{ tools: RunnerTool<HostContext>[]; defs: McpRunTool[] }> {
   const chosen = list.filter((c) => c.provider === 'mcp');
-  if (!d.mcp || chosen.length === 0) return [];
+  if (!d.mcp || chosen.length === 0) return { tools: [], defs: [] };
   const defs = await d.mcp.toolsFor(userId, chosen.map((c) => ({ connectionId: c.connectionId, access: c.access })));
   const taken = new Set<string>();
   const out: RunnerTool<HostContext>[] = [];
+  const used: McpRunTool[] = [];
   for (const def of defs) {
     if (!schemaUsable(def.hash, def.inputSchema)) continue;
     let parameters: z.ZodTypeAny;
@@ -198,7 +234,8 @@ export async function mcpTools(d: Pick<HostDeps, 'mcp'>, userId: string, list: r
       continue;
     }
     out.push(build(def, modelToolName(labelSlug(def.connectionLabel), def.name, taken), parameters, out.length === 0));
+    used.push(def);
   }
-  return out;
+  return { tools: out, defs: used };
 }
 

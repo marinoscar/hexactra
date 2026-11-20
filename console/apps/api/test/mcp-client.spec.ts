@@ -28,8 +28,16 @@ describe('initialise and revision negotiation', () => {
     const init = s.received.find((r) => r.body?.method === 'initialize')!;
     expect(init.body?.params).toMatchObject({ protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'hexactra-console' } });
     expect(c.protocolVersion).toBe('2025-11-25');
-    expect(c.serverInfo).toEqual({ name: 'Fake Notes Server', version: '1.0.0' });
+    expect(c.serverInfo).toEqual({ name: 'Fake Notes Server', version: '1.0.0', instructions: null });
     expect(s.received.some((r) => r.body?.method === 'notifications/initialized')).toBe(true);
+  });
+
+  it("keeps the server's instructions (E41.2), cleaned and capped at 300 characters", async () => {
+    const s = await serve({ tools: [tool('a')], instructions: `Notes for the owner.\u0000 <b>Use</b> create_note. ${'x'.repeat(400)}` });
+    const c = await connect(s);
+    expect(c.serverInfo.instructions!.startsWith('Notes for the owner.')).toBe(true);
+    expect(c.serverInfo.instructions).not.toContain('\u0000');
+    expect(c.serverInfo.instructions!.length).toBeLessThanOrEqual(300);
   });
 
   it('accepts an older revision the server speaks, and sends it on every later request', async () => {

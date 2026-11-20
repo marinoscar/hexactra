@@ -8,6 +8,7 @@ const plain = z.object({ success: z.boolean(), result: z.string().min(1).max(400
 export const finish = defineRunnerTool({
   name: 'finish',
   group: 'control',
+  family: 'control',
   description: 'End the run with a short factual result.',
   parameters: plain,
   // A task with outputs (E39.5) gives the model the task's keys and types; a task without any keeps the schema above, unchanged.

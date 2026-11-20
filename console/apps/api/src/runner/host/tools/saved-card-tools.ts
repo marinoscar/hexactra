@@ -46,6 +46,7 @@ export function buildSavedCardTools(ctx: SavedCardToolsContext): RunnerTool<Host
 
   const saved_cards = defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'saved_cards',
     description:
       'List the payment cards the owner allowed at the shop now on screen: none, or `{ ref, name, brand, last4, limit, expires, securityCode }` per card. You never see a card number, an expiry or a code, and you never type one yourself. Call it on the shop\'s checkout page before paying.',
@@ -78,6 +79,7 @@ export function buildSavedCardTools(ctx: SavedCardToolsContext): RunnerTool<Host
 
   const declare_charge = defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'declare_charge',
     description:
       "Say what you are about to pay, BEFORE typing a card: the exact total you read on the page (a decimal such as 42.50), its currency (ISO 4217, such as USD) and what is being bought. The system records it, shows it to the owner in the approval and checks it against the owner's limit. The shop is the page now on screen. Nothing is typed without it.",
@@ -116,6 +118,7 @@ export function buildSavedCardTools(ctx: SavedCardToolsContext): RunnerTool<Host
   /** The question the owner answers before a card is typed at a shop. */
   const confirm_charge = defineRunnerTool({
     group: 'secrets',
+    family: 'secrets',
     name: 'confirm_charge',
     description:
       'After paying, report the amount the confirmation page says was charged (a decimal such as 42.50) and its currency. The system compares it with the amount you declared and tells the owner if they differ. Read it from the page: do not repeat the declared amount from memory.',

@@ -207,9 +207,9 @@ describe('the input builder and the instructions: the stable prefix', () => {
   });
 
   it('composes the instructions from sections, and adds the tools usage notes after them, deterministically', () => {
-    expect(composeInstructions(['A', 'B'])).toBe('A\n\nB');
-    expect(composeInstructions(['A', 'B'], ['use x first', 'then y'])).toBe('A\n\nB\n\nTool notes:\n- use x first\n- then y');
-    expect(composeInstructions(['A'], ['n'])).toBe(composeInstructions(['A'], ['n']));
+    expect(composeInstructions({ identity: 'A', families: [], sections: ['B'] })).toBe('A\n\nB');
+    expect(composeInstructions({ identity: 'A', families: [], sections: ['B'], usageNotes: ['use x first', 'then y'] })).toBe('A\n\nB\n\nTool notes:\n- use x first\n- then y');
+    expect(composeInstructions({ identity: 'A', families: [], sections: [], usageNotes: ['n'] })).toBe(composeInstructions({ identity: 'A', families: [], sections: [], usageNotes: ['n'] }));
   });
 
   it('offers the tools of the registry in registration order, hides the ones that are not available, and collects usage notes', () => {

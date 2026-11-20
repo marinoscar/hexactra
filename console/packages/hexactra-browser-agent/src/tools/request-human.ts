@@ -13,6 +13,7 @@ function withScopes<T extends object>(ctx: BrowserContext, r: T | null): (T & { 
 export const requestHuman = defineRunnerTool({
   name: 'request_human',
   group: 'human',
+  family: 'human',
   description:
     'Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). ' +
     'For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. ' +

@@ -10,6 +10,7 @@ import { markCenter } from '../vision';
 export const click = defineRunnerTool({
   name: 'click',
   group: 'browser',
+  family: 'browser',
   description: 'Click the element matching a CSS selector.',
   parameters: z.object({ selector: z.string().max(2000), reason: z.string().max(500) }),
   gated: {
@@ -26,6 +27,7 @@ export const click = defineRunnerTool({
 export const clickMark = defineRunnerTool({
   name: 'click_mark',
   group: 'browser',
+  family: 'browser',
   description: 'Click the element numbered n on the latest page screenshot, with a real mouse click at its center.',
   parameters: z.object({ n: z.number().int().min(1), double: z.boolean(), reason: z.string().max(500) }),
   gated: {
@@ -52,6 +54,7 @@ export const clickMark = defineRunnerTool({
 export const clickAt = defineRunnerTool({
   name: 'click_at',
   group: 'browser',
+  family: 'browser',
   description: 'Real mouse click at viewport coordinates (CSS pixels, as on the page screenshot). button left/middle/right; double for a double click; modifiers alt, ctrl, meta, shift.',
   parameters: z.object({
     x: z.number().int().min(0),

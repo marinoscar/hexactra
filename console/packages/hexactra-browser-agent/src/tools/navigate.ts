@@ -8,6 +8,7 @@ import { SITE_GATE, type SiteRequest } from '../gates/site-gate';
 export const navigate = defineRunnerTool({
   name: 'navigate',
   group: 'browser',
+  family: 'browser',
   description: 'Open any URL in the current tab.',
   parameters: z.object({ url: z.string().max(8000), reason: z.string().max(500) }),
   gated: {
@@ -25,6 +26,7 @@ export const navigate = defineRunnerTool({
 export const goBack = defineRunnerTool({
   name: 'go_back',
   group: 'browser',
+  family: 'browser',
   description: 'Go back one page.',
   parameters: z.object({}),
   execute: (ctx: BrowserContext) => act(ctx, { type: 'back' }),
@@ -33,6 +35,7 @@ export const goBack = defineRunnerTool({
 export const tabs = defineRunnerTool({
   name: 'tabs',
   group: 'browser',
+  family: 'browser',
   description: 'List the open tabs (id, title, URL, which is active).',
   parameters: z.object({}),
   execute: (ctx: BrowserContext) => act(ctx, { type: 'tabs' }),
@@ -41,6 +44,7 @@ export const tabs = defineRunnerTool({
 export const switchTab = defineRunnerTool({
   name: 'switch_tab',
   group: 'browser',
+  family: 'browser',
   description: 'Make a tab (by id from tabs) the active one; later actions use it.',
   parameters: z.object({ tab_id: z.number().int() }),
   execute: (ctx: BrowserContext, { tab_id }) => act(ctx, { type: 'activate_tab', tab_id }),
@@ -49,6 +53,7 @@ export const switchTab = defineRunnerTool({
 export const newTab = defineRunnerTool({
   name: 'new_tab',
   group: 'browser',
+  family: 'browser',
   description: 'Open a new tab, optionally at a URL, and make it active.',
   parameters: z.object({ url: z.string().max(8000).nullable() }),
   gated: {

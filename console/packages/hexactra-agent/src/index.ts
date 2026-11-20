@@ -26,6 +26,7 @@ export * from './text';
 export * from './tiers';
 export * from './tool-def';
 export * from './tool-family-of';
+export * from './tool-family';
 export * from './types';
 export { inCommitTool, mutatingAction, describeIntent, runAsCommit } from './intent';
 export * from './time';

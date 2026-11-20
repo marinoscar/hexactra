@@ -5,17 +5,16 @@ import { randomUUID } from 'node:crypto';
 import { ASK_TOPICS } from '../../approvals/approval-match';
 import { readAppLimits } from '../../policies/policy-snapshot';
 import { readRunInputs } from '../../tasks/task-params.schemas';
-import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
+import { assembleRoundInput, observeRound, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
 import type { BrowserHooks, BrowserState } from '@marinoscar/hexactra-browser-agent/context';
 import { ScreenshotWindow } from '@marinoscar/hexactra-browser-agent/context-settings';
 import { siteGate } from '@marinoscar/hexactra-browser-agent/gates';
 import { riskGate } from '@marinoscar/hexactra-browser-agent/gates';
-import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
 import { currentUrl, currentUrlOf } from '@marinoscar/hexactra-browser-agent/page';
 import { domainAllowed } from '@marinoscar/hexactra-browser-agent/policy';
 import { instructionsWithOutputs, outputsHandle, outputsNudge, outputsWrapUpNote } from '../outputs';
 import { readOutputs } from '../../tasks/task-outputs.schemas';
-import { BudgetTracker, GatePipeline, type LoopProfile, type Ports } from '@marinoscar/hexactra-agent';
+import { BudgetTracker, FIRST_ROUND_HINT, GatePipeline, type LoopProfile, type Ports } from '@marinoscar/hexactra-agent';
 import { createRunLoop, type RunLoop } from '@marinoscar/hexactra-agent/engine';
 import { guidanceSummary } from '../trace';
 import { readUsedSavedCards } from '../saved-cards';
@@ -27,7 +26,8 @@ import { openFabricSession } from './browser-session';
 import { BrowserError } from '@marinoscar/hexactra-browser-agent/browser-port';
 import { connectionGate } from './gates/connection-gate';
 import { registerRunTools } from './run-tools';
-import { mcpTools } from './tools/connections/mcp';
+import { runContextLines, runInstructions } from './toolbox-line';
+import { mcpToolset } from './tools/connections/mcp';
 import { DEFAULT_CONNECTION_READ_LIMITS } from './connections/memory';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from '../goal-run.enqueue';
 import type { HostContext, HostExt } from './context';
@@ -204,20 +204,22 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     savedIdentity: flags.savedIdentity ? savedIdentityTools : null,
     savedCards: flags.savedCards ? buildSavedCardTools(cardCtx) : null,
     connections: s.connections.list.length > 0 && Boolean(d.connections),
-    mcp: s.connections.list.length > 0 ? await mcpTools(d, userId, s.connections.list) : [],
+    ...(s.connections.list.length > 0 ? await mcpToolset(d, userId, s.connections.list).then((m) => ({ mcp: m.tools, mcpFamilies: m.families })) : { mcp: [] }),
   });
 
   // A run an email started (E39.8): a reference to the message, never its content.
   const mailLines = await mailContextLines(d, userId, run.context, registry.get('mail_read') !== undefined);
   const profile: LoopProfile<HostContext> = {
     // The shared instructions, then (for a task with outputs) the list of what to return: the same text every round (the stable prefix, #406).
-    instructions: instructionsWithOutputs(browserInstructions(ASK_TOPICS, registry.usageNotes(ctx)), readOutputs(run.outputsSpec)),
+    instructions: instructionsWithOutputs(runInstructions(registry, ctx, ASK_TOPICS), readOutputs(run.outputsSpec)),
     registry,
     pipeline: new GatePipeline<HostContext>([siteGate as never, riskGate as never, connectionGate as never]),
     visionNotes: VISION_NOTES,
     observe: (c) => observeRound(c as never),
     assembleInput: assembleRoundInput,
-    contextLines: (c) => [sitesLine(c as never), ...mailLines],
+    // The allowed sites (with a browser only), the toolbox line (E41.2), then the email that started the run.
+    contextLines: (c) => runContextLines(registry, c, mailLines),
+    firstRoundHint: () => FIRST_ROUND_HINT,
     summarizeGuidance: guidanceSummary,
     aboutOwner: await aboutOwner(d, userId, run, memory.context),
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),

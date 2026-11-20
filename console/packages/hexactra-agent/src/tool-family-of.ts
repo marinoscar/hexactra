@@ -1,4 +1,4 @@
-// The family of a tool (E41.1, #698): the one place that maps a tool to the family the scenario kit, the trace and the metrics name. Tool
+// The family of a tool (E41.1, #698; `family` E41.2): the one place that maps a tool to the family the scenario kit, the trace and the metrics name. Tool
 // families (E41.2) add `RunnerTool.family`; until a tool sets one, its `group` decides: the owner's accounts are `connection`, an MCP server
 // is `connection:<id>`, everything else is its group.
 

@@ -624,6 +624,13 @@ describe('runs without a browser', () => {
     await kit.runner(modelN, fabricN).advance(never.run.id, never.userId, null);
     expect(fabricN.sessions()).toBe(0);
     expect(modelN.offered[0]!.filter((n) => !CONNECTION_TOOLS.includes(n))).toEqual(['request_human', 'finish']);
+    // Tool families (E41.2): no browser how-to, no browser line and no "Allowed sites" line; the account is named in the toolbox line.
+    expect(modelN.requests[0]!.instructions).not.toContain('How to see');
+    expect(modelN.requests[0]!.instructions).not.toContain('The browser:');
+    expect(modelN.requests[0]!.instructions).toContain("- The owner's accounts: ");
+    expect(modelN.inputs[0]).not.toContain('Allowed sites');
+    expect(modelN.inputs[0]).toContain("Tools you have: The owner's accounts.");
+    expect(modelN.inputs[0]).toContain('Accounts: c1 \\"Work\\" (Google, read only: read mail');
   });
 
   it('still opens a browser at the start for a run without connections', async () => {

@@ -112,7 +112,7 @@ export function scenarioAccounts(connections: readonly ScenarioConnection[]): Sc
         return [...c.tools]
           .sort((a, b) => a.name.localeCompare(b.name))
           .filter((t) => s.access === 'read_write' || t.effect === 'read')
-          .map((t): McpRunTool => ({ connectionId: idOf(c.ref), connectionLabel: c.label, name: t.name, title: null, description: t.description, inputSchema: t.inputSchema, hash: hashOf(c.ref, t.name), mode: t.effect }));
+          .map((t): McpRunTool => ({ connectionId: idOf(c.ref), connectionLabel: c.label, name: t.name, title: null, description: t.description, inputSchema: t.inputSchema, hash: hashOf(c.ref, t.name), mode: t.effect, serverInstructions: c.instructions ?? null }));
       }),
     check: async (_userId, connectionId, name, expect) => {
       const t = toolOf(connectionId, name);

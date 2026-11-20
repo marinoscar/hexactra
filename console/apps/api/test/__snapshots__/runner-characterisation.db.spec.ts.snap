@@ -173,7 +173,9 @@ exports[`goal runner characterisation (E38.5) offers every tool, one of each is 
 
 Allowed sites: any.
 
-Nothing has been done yet. Start by navigating or observing the page.
+Tools you have: The browser, The desktop.
+
+Nothing has been done yet. Choose the tool that fits the goal.
 
 Continue toward the goal.",
               "type": "text",
@@ -230,7 +232,19 @@ Steps used: 0 of 60.",
         "Looking; the screenshot comes with the next turn.",
       ],
       "request": {
-        "instructions": "You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.
+        "instructions": "You act for the owner, with their full authority, to reach their goal. You have several kinds of tools, listed below: use the one that fits each part of the goal, the way a capable assistant would.
+
+Your tools:
+- The browser: A real Chrome browser signed in as the owner. Use it for anything that lives on a website and that no account or added tool covers.
+- The desktop: The screen, mouse and keyboard of the computer the browser runs on. Use it only for what is outside the page: native file pickers, system dialogs, permission prompts.
+
+How to choose a tool:
+- First ask what the goal needs: something from the owner's accounts or added tools (mail, calendar, files, a service they connected), something on a website, or both.
+- When one of the owner's accounts or added tools can do the job, or a part of it, use it. Do not open a website to do what a tool does: it is slower and can fail.
+- Use the browser when the job is on a website, when no tool covers it, or when a tool failed and a page can finish it.
+- Mix them when the goal needs both: get from each what it does best, and carry results across (facts as text, pictures and reports as attachments).
+- Do not look up again what the goal or the earlier context already states.
+- When two accounts or tools could do it and the owner did not say which, ask.
 
 How to see:
 - A round may start with a screenshot of the page, with interactive elements boxed and numbered, and their positions listed. Use it to understand the layout, what is visible, and what changed.
@@ -242,12 +256,13 @@ How to act (choose what works, as a person would):
 - By position, with real mouse and keyboard events: click_at, hover_at, drag, scroll_at, type_keys, key. Use them for canvas, custom widgets, hover menus, sliders, drag and drop, and whenever a selector click does nothing.
 - run_javascript runs any JavaScript in the page and returns its value: read state, fill complex forms, call the page's own functions, or get past a stubborn widget.
 - Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
-- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 - Check the result of each action before the next one. If something does not work, try another way before giving up.
+
+- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 
 When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
-- Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
+- On a website: signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
   1. If the site is already signed in, skip the sign-in.
   2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
@@ -1296,6 +1311,8 @@ When done, or when the goal is impossible, call finish with a short, factual res
 
 Allowed sites: any.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 1. elements {"max_elements":80} → ok: 2 interactive elements
 2. text {"max_chars":6000} → ok: read 16 characters
@@ -1374,6 +1391,8 @@ Steps used: 29 of 60.",
 
 Allowed sites: any.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 1. elements {"max_elements":80} → ok: 2 interactive elements
 2. text {"max_chars":6000} → ok: read 16 characters
@@ -1449,6 +1468,8 @@ Steps used: 30 of 60.",
               "text": "Goal: Check every control of the page
 
 Allowed sites: any.
+
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. elements {"max_elements":80} → ok: 2 interactive elements
@@ -2266,6 +2287,8 @@ exports[`goal runner characterisation (E38.5) pins a budget that ends a run: the
 
 Allowed sites: any.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 (No page screenshot this round: no screenshots in this fake)
 
@@ -2278,7 +2301,19 @@ Steps used: 0 of 60.",
         "at  — ",
       ],
       "request": {
-        "instructions": "You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.
+        "instructions": "You act for the owner, with their full authority, to reach their goal. You have several kinds of tools, listed below: use the one that fits each part of the goal, the way a capable assistant would.
+
+Your tools:
+- The browser: A real Chrome browser signed in as the owner. Use it for anything that lives on a website and that no account or added tool covers.
+- The desktop: The screen, mouse and keyboard of the computer the browser runs on. Use it only for what is outside the page: native file pickers, system dialogs, permission prompts.
+
+How to choose a tool:
+- First ask what the goal needs: something from the owner's accounts or added tools (mail, calendar, files, a service they connected), something on a website, or both.
+- When one of the owner's accounts or added tools can do the job, or a part of it, use it. Do not open a website to do what a tool does: it is slower and can fail.
+- Use the browser when the job is on a website, when no tool covers it, or when a tool failed and a page can finish it.
+- Mix them when the goal needs both: get from each what it does best, and carry results across (facts as text, pictures and reports as attachments).
+- Do not look up again what the goal or the earlier context already states.
+- When two accounts or tools could do it and the owner did not say which, ask.
 
 How to see:
 - A round may start with a screenshot of the page, with interactive elements boxed and numbered, and their positions listed. Use it to understand the layout, what is visible, and what changed.
@@ -2290,12 +2325,13 @@ How to act (choose what works, as a person would):
 - By position, with real mouse and keyboard events: click_at, hover_at, drag, scroll_at, type_keys, key. Use them for canvas, custom widgets, hover menus, sliders, drag and drop, and whenever a selector click does nothing.
 - run_javascript runs any JavaScript in the page and returns its value: read state, fill complex forms, call the page's own functions, or get past a stubborn widget.
 - Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
-- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 - Check the result of each action before the next one. If something does not work, try another way before giving up.
+
+- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 
 When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
-- Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
+- On a website: signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
   1. If the site is already signed in, skip the sign-in.
   2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
@@ -3340,6 +3376,8 @@ When done, or when the goal is impossible, call finish with a short, factual res
 
 Allowed sites: any.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 (No page screenshot this round: no screenshots in this fake)
 1. navigate {"url":"https://shop.example.test/a"} → ok: at [invalid url] — 
@@ -3593,7 +3631,9 @@ exports[`goal runner characterisation (E38.5) pins the refusals: a site outside 
 
 Allowed sites: shop.example.test.
 
-Nothing has been done yet. Start by navigating or observing the page.
+Tools you have: The browser, The desktop.
+
+Nothing has been done yet. Choose the tool that fits the goal.
 
 Continue toward the goal.",
               "type": "text",
@@ -3622,7 +3662,19 @@ Steps used: 0 of 60.",
         "Refused: a button labelled 'Pay now' is a payment step. Call request_human with kind "confirmation" describing exactly what will happen, then try again.",
       ],
       "request": {
-        "instructions": "You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.
+        "instructions": "You act for the owner, with their full authority, to reach their goal. You have several kinds of tools, listed below: use the one that fits each part of the goal, the way a capable assistant would.
+
+Your tools:
+- The browser: A real Chrome browser signed in as the owner. Use it for anything that lives on a website and that no account or added tool covers.
+- The desktop: The screen, mouse and keyboard of the computer the browser runs on. Use it only for what is outside the page: native file pickers, system dialogs, permission prompts.
+
+How to choose a tool:
+- First ask what the goal needs: something from the owner's accounts or added tools (mail, calendar, files, a service they connected), something on a website, or both.
+- When one of the owner's accounts or added tools can do the job, or a part of it, use it. Do not open a website to do what a tool does: it is slower and can fail.
+- Use the browser when the job is on a website, when no tool covers it, or when a tool failed and a page can finish it.
+- Mix them when the goal needs both: get from each what it does best, and carry results across (facts as text, pictures and reports as attachments).
+- Do not look up again what the goal or the earlier context already states.
+- When two accounts or tools could do it and the owner did not say which, ask.
 
 How to see:
 - A round may start with a screenshot of the page, with interactive elements boxed and numbered, and their positions listed. Use it to understand the layout, what is visible, and what changed.
@@ -3634,12 +3686,13 @@ How to act (choose what works, as a person would):
 - By position, with real mouse and keyboard events: click_at, hover_at, drag, scroll_at, type_keys, key. Use them for canvas, custom widgets, hover menus, sliders, drag and drop, and whenever a selector click does nothing.
 - run_javascript runs any JavaScript in the page and returns its value: read state, fill complex forms, call the page's own functions, or get past a stubborn widget.
 - Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
-- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 - Check the result of each action before the next one. If something does not work, try another way before giving up.
+
+- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 
 When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
-- Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
+- On a website: signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
   1. If the site is already signed in, skip the sign-in.
   2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
@@ -4688,6 +4741,8 @@ When done, or when the goal is impossible, call finish with a short, factual res
 
 Allowed sites: shop.example.test.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
 2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
@@ -4740,55 +4795,7 @@ Steps used: 5 of 60.",
 
 Allowed sites: shop.example.test.
 
-Progress so far (latest last):
-1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
-2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
-3. navigate {"url":"nullalert(1)"} → FAILED: refused by policy: site not allowed
-4. new_tab {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
-5. click {"selector":"#pay","category":"payment","label":"Pay now"} → FAILED: paused by policy: needs a person's confirmation (payment: a button labelled 'Pay now')
-Stalled: 4 actions failed in a row.
-
-Continue toward the goal.
-
-Screenshots follow, oldest first; the last one is the current screen.",
-              "type": "text",
-            },
-            {
-              "detail": "high",
-              "type": "image",
-              "url": "<image>",
-            },
-            {
-              "detail": "high",
-              "type": "image",
-              "url": "<image>",
-            },
-            {
-              "text": "Attached: a screenshot of the page (800×600) at https://shop.example.test/checkout — Form. Coordinates are CSS pixels of the viewport, as click_at takes them. Numbered boxes mark interactive elements (click_mark n).
-
-Steps used: 5 of 60.",
-              "type": "text",
-            },
-          ],
-          "role": "user",
-          "type": "message",
-        },
-      ],
-      "outputs": [],
-      "request": {
-        "instructions": "same instructions",
-        "maxSteps": 10,
-      },
-      "tools": "same tools",
-    },
-    {
-      "input": [
-        {
-          "content": [
-            {
-              "text": "Goal: Buy the item
-
-Allowed sites: shop.example.test.
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
@@ -4840,6 +4847,8 @@ Steps used: 5 of 60.",
 
 Allowed sites: shop.example.test.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
 2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
@@ -4847,8 +4856,6 @@ Progress so far (latest last):
 4. new_tab {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
 5. click {"selector":"#pay","category":"payment","label":"Pay now"} → FAILED: paused by policy: needs a person's confirmation (payment: a button labelled 'Pay now')
 Stalled: 4 actions failed in a row.
-Stalled: no action in 3 rounds in a row.
-Escalated to the Frontier tier (stuck: no action in 3 rounds in a row).
 
 Continue toward the goal.
 
@@ -4891,6 +4898,8 @@ Steps used: 5 of 60.",
               "text": "Goal: Buy the item
 
 Allowed sites: shop.example.test.
+
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
@@ -4944,6 +4953,8 @@ Steps used: 5 of 60.",
 
 Allowed sites: shop.example.test.
 
+Tools you have: The browser, The desktop.
+
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
 2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
@@ -4995,6 +5006,62 @@ Steps used: 5 of 60.",
               "text": "Goal: Buy the item
 
 Allowed sites: shop.example.test.
+
+Tools you have: The browser, The desktop.
+
+Progress so far (latest last):
+1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
+2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
+3. navigate {"url":"nullalert(1)"} → FAILED: refused by policy: site not allowed
+4. new_tab {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
+5. click {"selector":"#pay","category":"payment","label":"Pay now"} → FAILED: paused by policy: needs a person's confirmation (payment: a button labelled 'Pay now')
+Stalled: 4 actions failed in a row.
+Stalled: no action in 3 rounds in a row.
+Escalated to the Frontier tier (stuck: no action in 3 rounds in a row).
+
+Continue toward the goal.
+
+Screenshots follow, oldest first; the last one is the current screen.",
+              "type": "text",
+            },
+            {
+              "detail": "high",
+              "type": "image",
+              "url": "<image>",
+            },
+            {
+              "detail": "high",
+              "type": "image",
+              "url": "<image>",
+            },
+            {
+              "text": "Attached: a screenshot of the page (800×600) at https://shop.example.test/checkout — Form. Coordinates are CSS pixels of the viewport, as click_at takes them. Numbered boxes mark interactive elements (click_mark n).
+
+Steps used: 5 of 60.",
+              "type": "text",
+            },
+          ],
+          "role": "user",
+          "type": "message",
+        },
+      ],
+      "outputs": [],
+      "request": {
+        "instructions": "same instructions",
+        "maxSteps": 10,
+      },
+      "tools": "same tools",
+    },
+    {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Goal: Buy the item
+
+Allowed sites: shop.example.test.
+
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
@@ -5051,58 +5118,7 @@ Steps used: 5 of 60.",
 
 Allowed sites: shop.example.test.
 
-Progress so far (latest last):
-1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
-2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
-3. navigate {"url":"nullalert(1)"} → FAILED: refused by policy: site not allowed
-4. new_tab {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
-5. click {"selector":"#pay","category":"payment","label":"Pay now"} → FAILED: paused by policy: needs a person's confirmation (payment: a button labelled 'Pay now')
-Stalled: 4 actions failed in a row.
-Stalled: no action in 3 rounds in a row.
-Escalated to the Frontier tier (stuck: no action in 3 rounds in a row).
-Stalled: no action in 3 rounds in a row.
-
-Continue toward the goal.
-
-Screenshots follow, oldest first; the last one is the current screen.",
-              "type": "text",
-            },
-            {
-              "detail": "high",
-              "type": "image",
-              "url": "<image>",
-            },
-            {
-              "detail": "high",
-              "type": "image",
-              "url": "<image>",
-            },
-            {
-              "text": "Attached: a screenshot of the page (800×600) at https://shop.example.test/checkout — Form. Coordinates are CSS pixels of the viewport, as click_at takes them. Numbered boxes mark interactive elements (click_mark n).
-
-Steps used: 5 of 60.",
-              "type": "text",
-            },
-          ],
-          "role": "user",
-          "type": "message",
-        },
-      ],
-      "outputs": [],
-      "request": {
-        "instructions": "same instructions",
-        "maxSteps": 10,
-      },
-      "tools": "same tools",
-    },
-    {
-      "input": [
-        {
-          "content": [
-            {
-              "text": "Goal: Buy the item
-
-Allowed sites: shop.example.test.
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
@@ -5156,6 +5172,63 @@ Steps used: 5 of 60.",
               "text": "Goal: Buy the item
 
 Allowed sites: shop.example.test.
+
+Tools you have: The browser, The desktop.
+
+Progress so far (latest last):
+1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
+2. navigate {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
+3. navigate {"url":"nullalert(1)"} → FAILED: refused by policy: site not allowed
+4. new_tab {"url":"https://elsewhere.example.test/"} → FAILED: refused by policy: site not allowed
+5. click {"selector":"#pay","category":"payment","label":"Pay now"} → FAILED: paused by policy: needs a person's confirmation (payment: a button labelled 'Pay now')
+Stalled: 4 actions failed in a row.
+Stalled: no action in 3 rounds in a row.
+Escalated to the Frontier tier (stuck: no action in 3 rounds in a row).
+Stalled: no action in 3 rounds in a row.
+
+Continue toward the goal.
+
+Screenshots follow, oldest first; the last one is the current screen.",
+              "type": "text",
+            },
+            {
+              "detail": "high",
+              "type": "image",
+              "url": "<image>",
+            },
+            {
+              "detail": "high",
+              "type": "image",
+              "url": "<image>",
+            },
+            {
+              "text": "Attached: a screenshot of the page (800×600) at https://shop.example.test/checkout — Form. Coordinates are CSS pixels of the viewport, as click_at takes them. Numbered boxes mark interactive elements (click_mark n).
+
+Steps used: 5 of 60.",
+              "type": "text",
+            },
+          ],
+          "role": "user",
+          "type": "message",
+        },
+      ],
+      "outputs": [],
+      "request": {
+        "instructions": "same instructions",
+        "maxSteps": 10,
+      },
+      "tools": "same tools",
+    },
+    {
+      "input": [
+        {
+          "content": [
+            {
+              "text": "Goal: Buy the item
+
+Allowed sites: shop.example.test.
+
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
@@ -5208,6 +5281,8 @@ Steps used: 6 of 60.",
               "text": "Goal: Buy the item
 
 Allowed sites: shop.example.test.
+
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. navigate {"url":"https://shop.example.test/item"} → ok: at [invalid url] — 
@@ -5758,7 +5833,9 @@ exports[`goal runner characterisation (E38.5) pins the saved login and saved ide
 
 Allowed sites: any.
 
-Nothing has been done yet. Start by navigating or observing the page.
+Tools you have: The browser, The desktop.
+
+Nothing has been done yet. Choose the tool that fits the goal.
 
 Continue toward the goal.",
               "type": "text",
@@ -5797,7 +5874,19 @@ Fill each field the form asks for with fill_from_identity(ref, field, selector),
         "Looking; the screenshot comes with the next turn.",
       ],
       "request": {
-        "instructions": "You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.
+        "instructions": "You act for the owner, with their full authority, to reach their goal. You have several kinds of tools, listed below: use the one that fits each part of the goal, the way a capable assistant would.
+
+Your tools:
+- The browser: A real Chrome browser signed in as the owner. Use it for anything that lives on a website and that no account or added tool covers.
+- The desktop: The screen, mouse and keyboard of the computer the browser runs on. Use it only for what is outside the page: native file pickers, system dialogs, permission prompts.
+
+How to choose a tool:
+- First ask what the goal needs: something from the owner's accounts or added tools (mail, calendar, files, a service they connected), something on a website, or both.
+- When one of the owner's accounts or added tools can do the job, or a part of it, use it. Do not open a website to do what a tool does: it is slower and can fail.
+- Use the browser when the job is on a website, when no tool covers it, or when a tool failed and a page can finish it.
+- Mix them when the goal needs both: get from each what it does best, and carry results across (facts as text, pictures and reports as attachments).
+- Do not look up again what the goal or the earlier context already states.
+- When two accounts or tools could do it and the owner did not say which, ask.
 
 How to see:
 - A round may start with a screenshot of the page, with interactive elements boxed and numbered, and their positions listed. Use it to understand the layout, what is visible, and what changed.
@@ -5809,12 +5898,13 @@ How to act (choose what works, as a person would):
 - By position, with real mouse and keyboard events: click_at, hover_at, drag, scroll_at, type_keys, key. Use them for canvas, custom widgets, hover menus, sliders, drag and drop, and whenever a selector click does nothing.
 - run_javascript runs any JavaScript in the page and returns its value: read state, fill complex forms, call the page's own functions, or get past a stubborn widget.
 - Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
-- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 - Check the result of each action before the next one. If something does not work, try another way before giving up.
+
+- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
 
 When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
-- Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
+- On a website: signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
   1. If the site is already signed in, skip the sign-in.
   2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
@@ -7604,6 +7694,8 @@ When done, or when the goal is impossible, call finish with a short, factual res
               "text": "Goal: Fill the form
 
 Allowed sites: any.
+
+Tools you have: The browser, The desktop.
 
 Progress so far (latest last):
 1. saved_logins {} → ok: looked up saved logins: 2 matches, 1 exact

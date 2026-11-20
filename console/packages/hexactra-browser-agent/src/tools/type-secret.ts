@@ -6,6 +6,7 @@ import type { BrowserContext } from '../context';
 export const typeHandoffSecret = defineRunnerTool({
   name: 'type_handoff_secret',
   group: 'human',
+  family: 'browser',
   // Typing a secret can submit a payment or a sign-in: it is intent-recorded before the fabric types it (E38.3).
   commits: true,
   description:

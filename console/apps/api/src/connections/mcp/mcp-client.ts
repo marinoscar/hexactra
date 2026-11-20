@@ -12,7 +12,7 @@
 // but what the caller passes (the caller redacts).
 import { OutboundHttpError, type OutboundHttp } from '../../oauth-client';
 import { MCP_CALL_TIMEOUT_MS, MCP_CLIENT_NAME, MCP_CLIENT_VERSIONS, MCP_MAX_LIST_PAGES, MCP_MAX_RESPONSE_BYTES, MCP_MAX_TOOLS } from './mcp.constants';
-import { sanitizeServerMessage } from './mcp-text';
+import { sanitizeInstructions, sanitizeServerMessage } from './mcp-text';
 import { toDescriptor, type McpToolDescriptor } from './mcp-tools';
 import { McpUrlError, type McpUrlRefusal } from './mcp-url';
 
@@ -63,6 +63,8 @@ export interface McpClientOptions {
 export interface McpServerInfo {
   name: string | null;
   version: string | null;
+  /** What the server says it is for (`initialize`'s `instructions`, E41.2), cleaned and capped; null when it gave none. */
+  instructions: string | null;
 }
 
 /** A `tools/call` result as the server sent it, checked only for its shape. */
@@ -118,7 +120,7 @@ export class McpClient {
   private sessionId: string | null = null;
   private version: string | null = null;
   private readonly deadline: number;
-  private info: McpServerInfo = { name: null, version: null };
+  private info: McpServerInfo = { name: null, version: null, instructions: null };
   /** How many requests the server made of this client that were refused (a well-behaved server makes none). */
   refusedServerRequests = 0;
 
@@ -202,7 +204,8 @@ export class McpClient {
       this.version = version;
       this.sessionId = res.headers['mcp-session-id'] ?? null;
       const si = isRecord(result) && isRecord(result.serverInfo) ? result.serverInfo : null;
-      this.info = { name: typeof si?.name === 'string' ? sanitizeServerMessage(si.name).slice(0, 200) || null : null, version: typeof si?.version === 'string' ? sanitizeServerMessage(si.version).slice(0, 100) || null : null };
+      const instructions = isRecord(result) && typeof result.instructions === 'string' ? sanitizeInstructions(result.instructions) || null : null;
+      this.info = { name: typeof si?.name === 'string' ? sanitizeServerMessage(si.name).slice(0, 200) || null : null, version: typeof si?.version === 'string' ? sanitizeServerMessage(si.version).slice(0, 100) || null : null, instructions };
       await this.send('POST', { jsonrpc: '2.0', method: 'notifications/initialized' });
       return;
     }

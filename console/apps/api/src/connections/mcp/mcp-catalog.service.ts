@@ -127,12 +127,12 @@ export class McpCatalogService {
     } finally {
       await client.close();
     }
-    await this.store(row, config, listed.tools, { name: client.serverInfo.name, version: client.serverInfo.version, protocolVersion: client.protocolVersion, skipped: listed.skipped });
+    await this.store(row, config, listed.tools, { name: client.serverInfo.name, version: client.serverInfo.version, instructions: client.serverInfo.instructions, protocolVersion: client.protocolVersion, skipped: listed.skipped });
     return this.list(userId, connectionId);
   }
 
   /** Stores a first listing for a connection that has just been created (no review flags: everything is new to the owner). */
-  async storeFirst(row: Connection, config: McpConfig, tools: McpToolDescriptor[], server: { name: string | null; version: string | null; protocolVersion: string | null }): Promise<void> {
+  async storeFirst(row: Connection, config: McpConfig, tools: McpToolDescriptor[], server: { name: string | null; version: string | null; instructions?: string | null; protocolVersion: string | null }): Promise<void> {
     await this.store(row, config, tools, { ...server, skipped: 0 });
   }
 
@@ -142,7 +142,7 @@ export class McpCatalogService {
     return toConnectionError(e, row.label);
   }
 
-  private async store(row: Connection, config: McpConfig, fetched: McpToolDescriptor[], server: { name: string | null; version: string | null; protocolVersion: string | null; skipped: number }): Promise<void> {
+  private async store(row: Connection, config: McpConfig, fetched: McpToolDescriptor[], server: { name: string | null; version: string | null; instructions?: string | null; protocolVersion: string | null; skipped: number }): Promise<void> {
     const firstListing = !config.toolsFetchedAt;
     const current = await this.prisma.connectionMcpTool.findMany({ where: { connectionId: row.id } });
     const plan = planRefresh(
@@ -151,7 +151,7 @@ export class McpCatalogService {
       firstListing,
     );
     const fields = (t: McpToolDescriptor) => ({ title: t.title, description: t.description, inputSchema: t.inputSchema as Prisma.InputJsonValue, annotations: t.annotations as Prisma.InputJsonValue, hash: t.hash, suggested: suggestedMode(t.annotations) });
-    const next: McpConfig = { ...config, server: { name: server.name, version: server.version }, protocolVersion: server.protocolVersion, toolsFetchedAt: new Date().toISOString() };
+    const next: McpConfig = { ...config, server: { name: server.name, version: server.version, instructions: server.instructions ?? null }, protocolVersion: server.protocolVersion, toolsFetchedAt: new Date().toISOString() };
     await this.prisma.$transaction(async (tx) => {
       for (const c of plan.create) await tx.connectionMcpTool.create({ data: { connectionId: row.id, name: c.tool.name, ...fields(c.tool), mode: 'off', review: c.review } });
       for (const u of plan.update) await tx.connectionMcpTool.update({ where: { connectionId_name: { connectionId: row.id, name: u.tool.name } }, data: { ...fields(u.tool), ...(u.disable ? { mode: 'off' } : {}), review: u.review } });

@@ -27,6 +27,8 @@ export const MCP_MAX_TOOLS = 500;
 /** What a tool's description may be in the model's tool list, and its title anywhere it is shown to the model. */
 export const MCP_DESCRIPTION_CHARS = 500;
 export const MCP_TITLE_CHARS = 100;
+/** The most of a server's own `instructions` (from `initialize`) a run's family line carries (E41.2). */
+export const MCP_INSTRUCTIONS_CHARS = 300;
 /** A description is kept as the server sent it up to this length (shown to the owner as plain text). */
 export const MCP_STORED_DESCRIPTION_CHARS = 4_000;
 /** At most this many MCP tools are offered to the model in one run. */
