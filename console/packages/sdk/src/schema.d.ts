@@ -10273,6 +10273,12 @@ export interface components {
                 jwtAccessTtlMinutes: number;
                 refreshTtlDays: number;
             };
+            questions: {
+                /** @description Answered, declined and expired requests (and their record in a chat) are deleted this many days after they ended. A request still waiting is never deleted. Default 7. */
+                historyKeepDays: number;
+                /** @description How long a question waits for an answer when the agent or the caller set no time. Then it expires and the run goes on without it. Default 60. Approvals of a connected account and the details to start a task keep 24 hours. */
+                defaultWaitMinutes: number;
+            };
             secrets: {
                 agentUse: {
                     /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
@@ -10548,6 +10554,12 @@ export interface components {
             version: number;
         };
         UpdateSystemSettingsDto: {
+            questions?: {
+                /** @description Answered, declined and expired requests (and their record in a chat) are deleted this many days after they ended. A request still waiting is never deleted. Default 7. */
+                historyKeepDays: number;
+                /** @description How long a question waits for an answer when the agent or the caller set no time. Then it expires and the run goes on without it. Default 60. Approvals of a connected account and the details to start a task keep 24 hours. */
+                defaultWaitMinutes: number;
+            };
             secrets?: {
                 agentUse: {
                     /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
@@ -10830,6 +10842,12 @@ export interface components {
             };
         };
         PatchSystemSettingsDto: {
+            questions?: {
+                /** @description Answered, declined and expired requests (and their record in a chat) are deleted this many days after they ended. A request still waiting is never deleted. Default 7. */
+                historyKeepDays?: number;
+                /** @description How long a question waits for an answer when the agent or the caller set no time. Then it expires and the run goes on without it. Default 60. Approvals of a connected account and the details to start a task keep 24 hours. */
+                defaultWaitMinutes?: number;
+            };
             secrets?: {
                 agentUse?: {
                     enabled?: boolean;

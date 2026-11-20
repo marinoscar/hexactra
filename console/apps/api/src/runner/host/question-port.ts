@@ -42,11 +42,14 @@ export function questionPort(c: QuestionContext): QuestionPort {
       // approve, or any question of a run that has no browser yet. The run waits on it, and its answer resumes the run through its own id.
       if (!needsBrowser(spec) && (spec.action || !c.sessionId())) {
         if (!c.d.questions) throw new Error('questions are not available here');
-        const q = await c.d.questions.create({ id: c.userId }, spec.action ? { ...spec, timeoutMs: QUESTION_TIMEOUT.maxMs } : spec, { askedBy: `run:${c.runId}`, runId: c.runId });
+        const q = await c.d.questions.create({ id: c.userId }, spec.action ? { ...spec, timeoutMs: QUESTION_TIMEOUT.maxMs, timeoutDefaulted: false } : spec, { askedBy: `run:${c.runId}`, runId: c.runId });
         return { handoffId: null, expiresAt: new Date(q.expiresAt), questionId: q.id };
       }
       if (!c.sessionId() && c.ensureSession) await c.ensureSession();
+      // The fabric's handoff lives as long as the question waits (E40.4): the agent's own time, or the administrator's default.
+      const timeoutMs = c.d.questions ? await c.d.questions.resolveTimeoutMs(spec) : spec.timeoutMs;
       const created = await c.session.openHandoff(c.sessionId(), {
+        timeoutMs,
         kind: spec.kind,
         prompt: spec.prompt,
         input: spec.input,

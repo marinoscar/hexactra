@@ -1,3 +1,4 @@
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import AutoDeleteOutlinedIcon from '@mui/icons-material/AutoDeleteOutlined';
 import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
@@ -126,6 +127,14 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         description: 'The apps your users connect their Google and Microsoft accounts through: client ids, secrets, redirect URIs and a switch for each provider.',
         Icon: LinkOutlinedIcon,
         path: '/admin/settings/connections',
+        permission: 'system_settings:read',
+      },
+      // Request history (E40.4): the `questions` namespace of the system settings document.
+      {
+        title: 'Request history',
+        description: 'How long the history of what agents asked is kept (7 days by default), and how long a question waits for an answer.',
+        Icon: HistoryOutlinedIcon,
+        path: '/admin/settings/request-history',
         permission: 'system_settings:read',
       },
     ],
