@@ -5,6 +5,7 @@ import { readAppLimits } from '../../policies/policy-snapshot';
 import { fabricAllowedSites } from '@marinoscar/hexactra-browser-agent/policy';
 import type { FabricSession } from '../fabric-session';
 import { chooseHost } from '../host-choice';
+import { freshStart } from './fresh-start';
 import type { HostDeps } from './deps';
 
 /** What opening a session needs of the run row. */
@@ -14,6 +15,9 @@ export interface SessionRun {
   hostId: string | null;
   hostFallback: boolean;
   appLimits?: unknown;
+  trigger?: string | null;
+  conversationId?: string | null;
+  createdAt?: Date;
   task?: { allowedDomains: string[] } | null;
   conversation?: { allowedDomains: string[] } | null;
 }
@@ -21,7 +25,7 @@ export interface SessionRun {
 export type OpenedSession = { kind: 'ok'; sessionId: string; note: string | null } | { kind: 'fail'; error: string };
 
 /** Creates the run's browser session. A failure is a message the run reports (`error`); nothing is thrown. */
-export async function openFabricSession(d: HostDeps, session: FabricSession, run: SessionRun, opts: { ownerId?: string }): Promise<OpenedSession> {
+export async function openFabricSession(d: HostDeps, session: FabricSession, run: SessionRun, opts: { ownerId?: string; resumed?: boolean }): Promise<OpenedSession> {
   try {
     const hosts = run.hostId ? await d.fabric.hosts() : [];
     const choice = chooseHost(hosts, run.hostId, run.hostFallback);
@@ -30,7 +34,10 @@ export async function openFabricSession(d: HostDeps, session: FabricSession, run
     // The browser enforces the run's allowed sites too (#508), so a page cannot leave them on its own.
     const sites = fabricAllowedSites(run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [], readAppLimits(run.appLimits)?.allowedDomains ?? []);
     const sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}`, allowedDomains: sites, ...(opts.ownerId ? { ownerId: opts.ownerId } : {}) });
-    return { kind: 'ok', sessionId, note: choice.note ?? null };
+    // A new chat or task starts with a fresh browser (E40.5); a follow-up or a resumed run keeps it.
+    const fresh = await freshStart(d, session, run, sessionId, { resumed: opts.resumed ?? false });
+    const note = [choice.note, fresh].filter(Boolean).join(' ') || null;
+    return { kind: 'ok', sessionId, note };
   } catch (e) {
     return { kind: 'fail', error: `No browser available: ${e instanceof Error ? e.message : String(e)}` };
   }
