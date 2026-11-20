@@ -11,7 +11,8 @@ export const typeHandoffSecret = defineRunnerTool({
   description:
     'Type the secret (code or password) the person gave through request_human into an input. You never see the value. ' +
     'For a sensitive task value shown in the goal as [provided: <name>], pass that name as parameter; otherwise null.',
-  parameters: z.object({ selector: z.string().max(2000), submit: z.boolean(), parameter: z.string().max(80).nullable().optional() }),
+  // Every property is required and the optional one is nullable: OpenAI's strict function calling refuses an optional property (#675).
+  parameters: z.object({ selector: z.string().max(2000), submit: z.boolean(), parameter: z.string().max(80).nullable() }),
   execute: async (ctx: BrowserContext, { selector, submit, parameter }) => {
     const started = Date.now();
     const { memory, state } = ctx;

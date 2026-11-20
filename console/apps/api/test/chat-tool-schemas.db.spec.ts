@@ -9,6 +9,7 @@ import { ChatTurnService } from '../src/chat/chat-turn.service';
 import { ChatService } from '../src/chat/chat.service';
 import { attributesFromPairs } from '../src/memories/memory-attribute-pairs';
 import { createApp } from '../src/main';
+import { finishParameters } from '../src/runner/outputs';
 import { proposeMemory } from '../src/runner/host/tools/propose';
 import { jsonSchemaOf, strictViolations } from './helpers/strict-schema';
 
@@ -75,6 +76,15 @@ describe('the chat tools against strict function calling', () => {
     const { z } = jest.requireActual<typeof import('zod')>('zod');
     const record = z.object({ attributes: z.record(z.string().min(1), z.string()) });
     expect(strictViolations('t', jsonSchemaOf(record)).join('\n')).toMatch(/additionalProperties: false|propertyNames/);
+  });
+});
+
+describe('the runner finish tool with task outputs', () => {
+  it('is strict-valid for every output type, so a task with outputs cannot make the model call fail', () => {
+    const types = ['text', 'number', 'money', 'date', 'datetime', 'boolean', 'url', 'choice'] as const;
+    const spec = types.map((type, i) => ({ key: `field_${i}`, label: `Field ${i}`, type, required: i % 2 === 0, sensitive: false, ...(type === 'choice' ? { options: ['a', 'b'] } : {}) }));
+    expect(strictViolations('finish', jsonSchemaOf(finishParameters(spec as never)))).toEqual([]);
+    expect(strictViolations('finish', jsonSchemaOf(finishParameters([])))).toEqual([]);
   });
 });
 

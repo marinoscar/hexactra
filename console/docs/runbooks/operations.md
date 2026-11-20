@@ -384,7 +384,7 @@ const { Client } = require("pg");
 '
 ```
 
-The two causes seen so far, both a tool schema the provider's strict function calling refuses (`invalid_function_parameters`): a free-form object field (`z.record`) in a tool's parameters (#675: `propose_memory.attributes`; use a list of name/value pairs), and a field that is not required. The provider names only the first bad tool, so fix every one the guard test (`chat-tool-schemas.db.spec.ts`) lists, not just the one named.
+The two causes seen so far, both a tool schema the provider's strict function calling refuses (`invalid_function_parameters`): a free-form object field (`z.record`) in a tool's parameters (#675: `propose_memory.attributes`; use a list of name/value pairs), and a field that is not required. A run that fails at step 0 with the same code is the same class: the run's error line carries the code and the field (`AI_INVALID_REQUEST (invalid_function_parameters, tools[N].parameters)`), and `docker logs hexactra-api-1 | grep 'the model call failed'` shows the facts (#679). The provider names only the first bad tool, so fix every one the guard test (`chat-tool-schemas.db.spec.ts`) lists, not just the one named.
 
 The provider's own log lists only requests it processed, so a 400 is not in the OpenAI dashboard; the `providerRequestId` in the API log is what to quote to the provider's support. The chat uses the owner's default model (Settings, AI), not the model tiers of the agent policies, so a run can work while the chat does not.
 

@@ -1255,6 +1255,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
             "required": [
               "selector",
               "submit",
+              "parameter",
             ],
             "type": "object",
           },
@@ -3302,6 +3303,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
             "required": [
               "selector",
               "submit",
+              "parameter",
             ],
             "type": "object",
           },
@@ -4645,6 +4647,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
             "required": [
               "selector",
               "submit",
+              "parameter",
             ],
             "type": "object",
           },
@@ -6923,6 +6926,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
             "required": [
               "selector",
               "submit",
+              "parameter",
             ],
             "type": "object",
           },
