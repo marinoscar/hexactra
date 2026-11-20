@@ -190,6 +190,8 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
+  // The job a `start_run` queued is not run here: removed, so no later spec's worker picks it up (only the tool call is measured).
+  await prisma.run.deleteMany({ where: { conversationId: chat.id, status: 'queued' } });
   const first = calls[0] ?? null;
   const result: ChatFrontResult = { scenario, tool: first?.tool ?? 'none', args: first?.args ?? null, calls, failures: [], pendingFailures: [], pass: false };
   result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect)];

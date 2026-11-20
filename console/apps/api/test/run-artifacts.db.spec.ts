@@ -130,6 +130,8 @@ describe('what the next job is told the previous one saved (E41.4)', () => {
     const ai = { forUser: () => ({ runTools }) } as unknown as AiService;
     await new ChatTurnService(kit.prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), ai).run(r.chat.id, r.userId, null);
     const run = await kit.prisma.run.findFirstOrThrow({ where: { conversationId: r.chat.id, id: { not: r.prev.id } } });
+    // Not run here: removed so no later spec's worker picks its job up.
+    await kit.prisma.run.delete({ where: { id: run.id } });
     expect((run.transcript as { context: string }).context).toContain('The previous job saved: a screenshot of its final screen (attach it with run "previous"); screenshot of step 2; a PDF report.');
   });
 });
