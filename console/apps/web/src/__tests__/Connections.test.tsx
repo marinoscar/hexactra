@@ -103,7 +103,14 @@ describe('the words', () => {
     expect(outcomeBanner('connected', 'Work', [])).toEqual({ severity: 'success', text: 'Connected Work.' });
     expect(outcomeBanner('connected', 'Work', ['calendar_read']).text).toMatch(/did not allow: Read calendar\. Those are off/);
     expect(outcomeBanner('denied', null, []).severity).toBe('info');
-    expect(outcomeBanner('state_invalid', null, []).text).toMatch(/could not be completed/);
+    // Each way a callback fails reads differently, so the owner (and the person helping) can tell them apart (#670).
+    expect(outcomeBanner('state_invalid', null, []).text).toMatch(/no longer valid/);
+    expect(outcomeBanner('binding_invalid', null, []).text).toMatch(/different browser or app/);
+    expect(outcomeBanner('exchange_failed', null, []).text).toMatch(/client secret and redirect address/);
+    expect(outcomeBanner('refused', null, []).text).toMatch(/refused the request/);
+    expect(outcomeBanner('something_new', null, []).text).toMatch(/could not be completed/);
+    const failures = ['state_invalid', 'binding_invalid', 'exchange_failed', 'refused', 'something_new'].map((o) => outcomeBanner(o, null, []).text);
+    expect(new Set(failures).size).toBe(failures.length);
     expect(outcomeBanner('account_mismatch', null, []).text).toMatch(/different account/);
     // Told apart from a decline: an administrator's approval is needed (E39.4).
     expect(outcomeBanner('admin_consent_required', null, [])).toMatchObject({ severity: 'warning' });

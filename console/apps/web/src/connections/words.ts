@@ -121,6 +121,14 @@ export function outcomeBanner(outcome: string, label: string | null, missing: re
       return { severity: 'error', text: 'You have the most connections allowed. Remove one first.' };
     case 'provider_unavailable':
       return { severity: 'error', text: 'This provider is not available on this deployment right now. Ask your administrator.' };
+    case 'binding_invalid':
+      return { severity: 'error', text: 'The sign-in came back to a different browser or app than the one that started it. Start it again and finish it in the same one.' };
+    case 'state_invalid':
+      return { severity: 'error', text: 'That sign-in link is no longer valid. Start again.' };
+    case 'refused':
+      return { severity: 'error', text: 'The provider refused the request. Start again; if it keeps failing, ask your administrator.' };
+    case 'exchange_failed':
+      return { severity: 'error', text: "The provider did not accept the sign-in. Ask your administrator to check the app's client secret and redirect address (the reason is in the audit log), then connect again." };
     default:
       return { severity: 'error', text: 'The connection could not be completed. Start again; if it keeps failing, ask your administrator.' };
   }
