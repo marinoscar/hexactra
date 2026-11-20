@@ -20,5 +20,10 @@ export function transcriptLine(m: Pick<ChatMessage, 'role' | 'kind' | 'text' | '
   if (m.kind === 'task_draft') return `[task drafted] ${text}`;
   // A memory proposal (#553): the card waits for the owner; whether it was saved is not the model's to claim.
   if (m.kind === 'memory') return (m.meta as { card?: unknown } | null)?.card === 'save_login' ? `[login save offered] ${text}` : `[memory proposed] ${text}`;
+  // A request a run made of the owner (E40.1): the outcome only (`meta.outcome`, filled by `withRequestOutcomes`), never a value.
+  if (m.kind === 'request') {
+    const outcome = (m.meta as { outcome?: unknown } | null)?.outcome;
+    return `[run asked the owner] ${text}${typeof outcome === 'string' ? ` -> ${outcome}` : ''}`;
+  }
   return `[${m.role}] ${text}`;
 }

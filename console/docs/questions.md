@@ -106,7 +106,7 @@ The rule table is code: `CHANNEL_RULES` in `apps/api/src/questions/channels/chan
 
 ## In a chat
 
-A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is a card in the thread, with the same form as the Inbox and the same route (`POST /api/questions/:id/answer`, channel `web`). The Inbox still lists it, with **Answer in chat**, and its notifications open the chat. Nothing else changes: it is one question, the rules in the table above apply, and a secret typed into the card goes to the fabric, never into a chat message.
+A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is a card in the thread, with the same form as the Inbox and the same route (`POST /api/questions/:id/answer`, channel `web`). The Inbox still lists it, with **Answer in chat**, and its notifications open the chat. Nothing else changes: it is one question, the rules in the table above apply, and a secret typed into the card goes to the fabric, never into a chat message. The thread keeps a record of the request and its outcome after it settles, never its value ([chat.md](chat.md), "Requests in the chat", E40.1).
 
 ## The web form
 

@@ -95727,9 +95727,11 @@
                             "clarify",
                             "run",
                             "result",
-                            "task_draft"
+                            "task_draft",
+                            "memory",
+                            "request"
                           ],
-                          "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`)."
+                          "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                         },
                         "text": {
                           "type": "string",
@@ -96216,9 +96218,11 @@
                     "clarify",
                     "run",
                     "result",
-                    "task_draft"
+                    "task_draft",
+                    "memory",
+                    "request"
                   ],
-                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`)."
+                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                 },
                 "text": {
                   "type": "string",
@@ -96461,9 +96465,11 @@
               "clarify",
               "run",
               "result",
-              "task_draft"
+              "task_draft",
+              "memory",
+              "request"
             ],
-            "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`)."
+            "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
           },
           "text": {
             "type": "string",

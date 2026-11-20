@@ -1,3 +1,4 @@
+import { recordRequestInChat } from './chat-request-record';
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
@@ -246,6 +247,7 @@ export class QuestionsService {
       },
     });
     await this.emit('question.asked', q);
+    await recordRequestInChat(this.prisma, q, this.log);
     return toQuestionView(q);
   }
 
@@ -354,6 +356,7 @@ export class QuestionsService {
       },
     });
     await this.emit('question.asked', q);
+    await recordRequestInChat(this.prisma, q, this.log);
     return toQuestionView(q);
   }
 
