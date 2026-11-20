@@ -15,7 +15,8 @@ export function strictViolations(tool: string, schema: Schema, path = ''): strin
   if (isObject) {
     if (schema.additionalProperties !== false) out.push(`${here}: an object must set additionalProperties: false (a free-form record or map does not)`);
     const keys = Object.keys(schema.properties ?? {});
-    if (!Array.isArray(schema.required)) out.push(`${here}: an object needs a "required" list`);
+    // An object with no properties needs no list: observe_elements, go_back and tabs have always been sent this way and accepted.
+    if (keys.length > 0 && !Array.isArray(schema.required)) out.push(`${here}: an object needs a "required" list`);
     for (const k of keys) if (!(schema.required ?? []).includes(k)) out.push(`${here}.${k}: every property must be required (optional ones are nullable)`);
     for (const k of keys) out.push(...strictViolations(tool, schema.properties![k]!, `${path}.${k}`));
   }

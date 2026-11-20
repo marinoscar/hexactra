@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { AiError } from '@marinoscar/platform-api/ai';
+import { AiError, aiErrorLogDetails } from '@marinoscar/platform-api/ai';
 import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 
 import { FabricClient } from '../fabric/fabric.client';
@@ -11,6 +11,7 @@ import { RunEvents } from '../tasks/run-events';
 import { FabricSession } from './fabric-session';
 import { GOAL_RUN_JOB, GOAL_RUN_MAX_RUNTIME_MS, HANDOFF_CHECK_JOB, enqueueGoalRun, enqueueGoalRunContinuation, type GoalRunPayload } from './goal-run.enqueue';
 import { GoalRunnerService } from './goal-runner.service';
+import { providerWhy } from '../platform/ai/provider-why';
 
 export { GOAL_RUN_JOB, GOAL_RUN_REASONS, HANDOFF_CHECK_JOB, enqueueGoalRun, type GoalRunPayload, type GoalRunReason } from './goal-run.enqueue';
 
@@ -53,7 +54,11 @@ export class GoalRunHandler implements JobHandler, OnModuleInit {
       if (outcome === 'continue') await enqueueGoalRunContinuation(this.jobs, { runId: p.runId, userId: p.userId, orgId: p.orgId ?? job.orgId ?? null });
     } catch (e) {
       // Record the failure on the run so the user sees why; never retried.
-      const message = e instanceof AiError ? `${e.code}: ${e.message}` : e instanceof Error ? e.message : String(e);
+      // What the provider objected to, as identifiers (#675): the run's line says `AI_INVALID_REQUEST (invalid_function_parameters, tools[3].parameters)`, and the server log
+      // carries the facts the platform keeps off the message (status, code, type, field, request id; for a rejected request its redacted, capped message).
+      if (e instanceof AiError) this.log.warn(`run ${p.runId}: the model call failed (${e.code}) ${aiErrorLogDetails(e)}`.trimEnd());
+      const why = e instanceof AiError ? providerWhy(e) : '';
+      const message = e instanceof AiError ? `${e.code}${why ? ` (${why})` : ''}: ${e.message}` : e instanceof Error ? e.message : String(e);
       await this.prisma.forUser({ userId: p.userId }).run.updateMany({
         where: { id: p.runId, status: { in: ['queued', 'running', 'waiting_human'] } },
         data: { status: 'failed', error: message.slice(0, 1_900), stopReason: e instanceof AiError && /^No model selected/.test(e.message) ? 'no_model' : 'error', finishedAt: new Date() },

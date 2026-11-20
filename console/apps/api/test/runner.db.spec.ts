@@ -1234,6 +1234,13 @@ describe('the goal runner enforces budgets (#404)', () => {
     expect(await g.db.run.findFirstOrThrow({ where: { id: g.run.id } })).toMatchObject({ status: 'failed', stopReason: 'error', error: 'boom' });
     await fail(h.run.id, h.userId, new AiError('AI_INVALID_REQUEST', 'No model selected.'));
     expect(await h.db.run.findFirstOrThrow({ where: { id: h.run.id } })).toMatchObject({ status: 'failed', stopReason: 'no_model' });
+
+    // #675: a provider's 400 names its code and the field, as identifiers; its message and the request id never reach the run's line.
+    const k = await budgetRun(`stop-handler-provider-${stamp}@example.test`, {});
+    await fail(k.run.id, k.userId, new AiError('AI_INVALID_REQUEST', 'OpenAI rejected the request as invalid.', { details: { status: 400, providerCode: 'invalid_function_parameters', param: 'tools[27].parameters', providerRequestId: 'req_secretish' }, cause: new Error('Invalid schema sk-live-555') }));
+    const failed = await k.db.run.findFirstOrThrow({ where: { id: k.run.id } });
+    expect(failed).toMatchObject({ status: 'failed', stopReason: 'error', error: 'AI_INVALID_REQUEST (invalid_function_parameters, tools[27].parameters): OpenAI rejected the request as invalid.' });
+    expect(JSON.stringify(failed)).not.toMatch(/sk-live-555|req_secretish/);
   });
 
   it('alerts count budget stops from stop_reason, and legacy rows from their error text', async () => {

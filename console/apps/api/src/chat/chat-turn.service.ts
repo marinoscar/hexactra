@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ConnectionCapabilities } from '../connections/connection-capabilities.service';
 import { MemoryContext } from '../memories/memory-context';
 import { attributePairs, attributesFromPairs } from '../memories/memory-attribute-pairs';
+import { providerWhy } from '../platform/ai/provider-why';
 import { MemoryProposals } from '../memories/memory-proposals.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
@@ -436,17 +437,6 @@ export class ChatTurnService {
     else await this.chats.append(c.id, { role: 'assistant', kind: 'text', text: state.stopped ? 'Stopping the run.' : (state.said ?? 'Tell me what you would like me to do in the browser.') });
     this.log.debug(`chat ${c.id}: answered`);
   }
-}
-
-const SAFE_ID = /^[A-Za-z0-9_.[\]-]{1,80}$/;
-
-/**
- * The provider's own short error code and the request field it objected to (`invalid_function_parameters`, `tools[3].parameters`), when the
- * error carries them. Identifiers only: a value that is not one is left out, and the provider's message never comes here (#675).
- */
-export function providerWhy(e: AiError): string {
-  const d = (e.getResponse() as { details?: Record<string, unknown> }).details ?? {};
-  return [d.providerCode, d.param].filter((v): v is string => typeof v === 'string' && SAFE_ID.test(v)).join(', ');
 }
 
 /** Why the AI did not answer, in words for the owner. Never the provider's raw message: it can carry request details. */

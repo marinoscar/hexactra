@@ -20,6 +20,7 @@ import { GoalRunnerService } from '../src/runner/goal-runner.service';
 import { RunSecretsService } from '../src/secrets/run-secrets.service';
 import { TasksService } from '../src/tasks/tasks.service';
 import { fakeSecretsFabric, FIXTURE, type SecretsFabric } from './support/fake-secrets-fabric';
+import { strictViolations } from './helpers/strict-schema';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -261,6 +262,10 @@ describe('goal runner characterisation (E38.5)', () => {
     ]);
     const runner = runnerOf(fabric, s.ai, { secrets: seamOf({ identity: true, cards: true, saveLogin: true }), proposals });
     const outcomes = [await runner.advance(run.id, userId, null)];
+    // Every strict tool the runner offers is a schema OpenAI's strict function calling accepts (#675): one refused tool fails the whole model call, and a run with it.
+    const offered = (s.rounds[0]?.tools ?? []) as { name: string; strict?: boolean; parameters: never }[];
+    expect(offered.length).toBeGreaterThan(30);
+    expect(offered.filter((t) => t.strict !== false).flatMap((t) => strictViolations(t.name, t.parameters))).toEqual([]);
     expect(await record(run.id, s.rounds, fabric, outcomes)).toMatchSnapshot();
   });
 
