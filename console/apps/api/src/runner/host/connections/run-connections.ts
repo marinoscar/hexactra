@@ -1,6 +1,6 @@
 // Which connections a run may use (E39.7), fixed when the run starts. A run has the connections its task lists, or (for a run that is not a
-// task's) the chat that started it, each `read` or `read_write`; nothing is available by default, and an AI app's run gets none unless the
-// owner allowed connections for that app. The list is written onto the policy snapshot at the first advance, so a later change of the
+// task's) the chat that started it, each `read` or `read_write`. A task lists its own (none until it does); a chat has what the owner's default or the owner gave it
+// (#680); an AI app's run gets none unless the owner allowed connections for that app. The list is written onto the policy snapshot at the first advance, so a later change of the
 // task, the chat or the connection's switches never alters a live run (the hub still re-reads the connection's state at every call).
 import { capabilitiesOf } from '../../../connections/connection-view';
 import { isConnectionAccess } from '../../../connections/agent-connections';

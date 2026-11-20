@@ -36,6 +36,7 @@ import { AUTH_WORDS } from '../connections/mcpWords';
 import { CapabilitiesDialog, DefaultsDialog, RenameDialog, TestDialog } from '../connections/ConnectionDialogs';
 import { GROUPS, GROUP_NAME, PROVIDER_NAME, STATUS_WORDS, levelOf, outcomeBanner, reasonWords, type Outcome } from '../connections/words';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, toast, useApiAction, useConfirm } from '../ui';
+import { NewChatAccountsSetting } from '../connections/NewChatAccounts';
 
 const RETURN_TO = '/settings/connections';
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -352,12 +353,13 @@ export function ConnectionsPage() {
         </Alert>
       )}
       <ErrorBanner error={action.error} onClose={action.clearError} onRetry={connections && connections.length === 0 ? () => void load() : undefined} />
+      {canWrite && <NewChatAccountsSetting />}
       {connections === null && <ListSkeleton />}
       {connections !== null && all.length === 0 && (
         <EmptyState
           Icon={LinkOutlinedIcon}
           title="No accounts connected yet"
-          body="A connection lets Hexactra use one of your Google or Microsoft accounts for mail, calendar or documents. Nothing uses a connection until a task or a chat is told to, and you choose what each account may do."
+          body="A connection lets Hexactra use one of your Google or Microsoft accounts for mail, calendar or documents. A new chat can use your accounts straight away (you choose that under New chats, and can turn it off); a task has to be told to. You choose what each account may do."
           action={canWrite ? { key: 'connect', label: 'Connect an account', Icon: AddIcon, onClick: () => setConnecting(true) } : undefined}
         />
       )}

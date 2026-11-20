@@ -151,3 +151,20 @@ export const reauthMcp = (api: PlatformApiClient, id: string, auth: McpAuthInput
 
 export const getAdminMcp = (api: PlatformApiClient) => api.get<McpAdmin>('/connections/admin/mcp');
 export const saveAdminMcp = (api: PlatformApiClient, body: Partial<McpAdmin>) => api.put<McpAdmin>('/connections/admin/mcp', body);
+
+
+// ---- How a new chat starts (#680) ----
+
+export type NewChatAccounts = 'off' | 'read' | 'read_write';
+
+/** The owner's choice for new chats (`connections.newChats` of the user settings); read and change when never saved. */
+export async function getNewChatAccounts(api: PlatformApiClient): Promise<NewChatAccounts> {
+  const doc = await api.get<{ connections?: { newChats?: NewChatAccounts } | null }>('/user-settings');
+  const v = doc.connections?.newChats;
+  return v === 'off' || v === 'read' || v === 'read_write' ? v : 'read_write';
+}
+
+export async function setNewChatAccounts(api: PlatformApiClient, newChats: NewChatAccounts): Promise<NewChatAccounts> {
+  const doc = await api.patch<{ connections?: { newChats?: NewChatAccounts } | null }>('/user-settings', { connections: { newChats } });
+  return doc.connections?.newChats ?? newChats;
+}

@@ -10021,6 +10021,13 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            connections?: {
+                /**
+                 * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                 * @enum {string}
+                 */
+                newChats: "off" | "read" | "read_write";
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -10119,6 +10126,13 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            connections?: {
+                /**
+                 * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                 * @enum {string}
+                 */
+                newChats: "off" | "read" | "read_write";
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -10211,6 +10225,13 @@ export interface components {
             } | null;
             approvals?: {
                 paused?: boolean;
+            } | null;
+            connections?: {
+                /**
+                 * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                 * @enum {string}
+                 */
+                newChats?: "off" | "read" | "read_write";
             } | null;
             notifications?: {
                 [key: string]: {
@@ -11437,6 +11458,13 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
+                };
+                connections?: {
+                    /**
+                     * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                     * @enum {string}
+                     */
+                    newChats: "off" | "read" | "read_write";
                 };
                 notifications?: {
                     [key: string]: {
@@ -17441,7 +17469,7 @@ export interface components {
              * @enum {string}
              */
             needsBrowser?: "auto" | "always" | "never";
-            /** @description The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts. */
+            /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
             connections?: {
                 /**
                  * Format: uuid
@@ -17710,7 +17738,7 @@ export interface components {
              * @enum {string}
              */
             needsBrowser?: "auto" | "always" | "never";
-            /** @description The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts. */
+            /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
             connections?: {
                 /**
                  * Format: uuid
@@ -20577,7 +20605,7 @@ export interface components {
                 useSavedIdentity: boolean;
                 /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
                 useSavedCards: boolean;
-                /** @description The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default. */
+                /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
                 connections: {
                     /**
                      * Format: uuid
@@ -20651,7 +20679,7 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
-            /** @description The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default. */
+            /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
             connections: {
                 /**
                  * Format: uuid
@@ -20737,7 +20765,7 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
-            /** @description The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default. */
+            /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
             connections: {
                 /**
                  * Format: uuid

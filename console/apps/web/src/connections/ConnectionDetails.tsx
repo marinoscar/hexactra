@@ -88,7 +88,7 @@ export function ConnectionDetails({ connectionId, canReadRuns }: { connectionId:
               </Typography>
             ) : used.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                Nothing uses it yet. A task or chat has to be told to.
+                Nothing has used it yet. A new chat can use it (unless you chose Off for new chats); a task has to be told to.
               </Typography>
             ) : (
               <Stack component="ul" spacing={0.5} sx={{ m: 0, p: 0, listStyle: 'none' }}>
