@@ -353,9 +353,10 @@ Read the `connection.connect_failed` row's `meta`:
 |---|---|---|
 | `binding_invalid` | none | The sign-in came back to a different browser or app than the one that started it (the HttpOnly binding cookie is missing). Start again and finish in the same one; on a phone, open the console in the browser it will return to, not a different app. |
 | `state_invalid` | `verifier_missing` | The flow was found but its PKCE verifier is gone (the sign-in took too long, or the flow was cleaned up). Start again. |
-| `exchange_failed` | `invalid_client`, `status 401` | The provider rejected the app's client id or secret. Check Administration, Connections: the client id and secret of the app, and that the secret was copied whole. |
-| `exchange_failed` | `invalid_grant`, `status 400` | The code was already used, expired, or the **redirect URI sent does not match** the one registered at the provider (`<console>/api/connections/callback/google`, exactly, https). |
-| `exchange_failed` | `cause: unavailable` or `network` | The console could not reach the provider's token endpoint (the egress guard, a proxy, DNS). |
+| `exchange_failed` | `cause: invalid_client`, `oauthError: invalid_client`, `status: 401` | The provider rejected the app's client id or secret. Check Administration, Connections: the client id and secret of the app, and that the secret was copied whole. |
+| `exchange_failed` | `cause: invalid_grant`, `oauthError: invalid_grant`, `status: 400` | The code was already used, expired, or the **redirect URI sent does not match** the one registered at the provider (`<console>/api/connections/callback/google`, exactly, https). |
+| `exchange_failed` | `cause: unavailable` | The console could not reach the provider's token endpoint, or it answered 5xx or 429 (the egress guard, a proxy, DNS, the provider's own outage). |
+| `exchange_failed` | `cause: refused`, `oauthError` (for example `invalid_request`, `invalid_scope`) | The provider refused the exchange for another reason: the `oauthError` code names it (a scope the app is not allowed to ask for, a malformed request). |
 | `exchange_failed` | `cause: save_failed`, `error`, `code` | The provider accepted the code but the connection could not be stored (database, credential store: `SECRETS_ENCRYPTION_KEY`). |
 | `refused` | `reason` carries the provider's error code | The provider returned `error=` on the redirect. |
 | `admin_consent_required` | none | Microsoft: an administrator has to approve the app. |
