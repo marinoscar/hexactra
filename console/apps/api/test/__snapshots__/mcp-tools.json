@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "3127a1b303f056d1"
+    "outputSchema": "ffefc01c0a65121f"
   },
   {
     "name": "run_wait",
@@ -117,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "1b5f2d7020853b79"
+    "outputSchema": "ba872e06335243c8"
   },
   {
     "name": "tasks_list",
