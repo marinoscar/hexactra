@@ -412,6 +412,24 @@ export class QuestionsService {
     return rows.map(toQuestionView);
   }
 
+  /**
+   * What was asked and is over (E40.3, the Inbox's History): answered, declined and expired questions, newest first,
+   * with their run's goal and chat. Keyset pages on (createdAt, id).
+   */
+  async settledWithRuns(
+    userId: string,
+    opts: { status?: Exclude<QuestionStatusType, 'pending'>; before?: { at: Date; id: string }; limit?: number } = {},
+  ): Promise<(Question & { run: { goal: string; conversationId: string | null } | null })[]> {
+    await this.expireDue({ ownerUserId: userId });
+    const page = opts.before ? { OR: [{ createdAt: { lt: opts.before.at } }, { createdAt: opts.before.at, id: { lt: opts.before.id } }] } : {};
+    return this.db(userId).question.findMany({
+      where: { status: opts.status ?? { in: ['answered', 'cancelled', 'expired'] }, ...page },
+      include: { run: { select: { goal: true, conversationId: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: opts.limit ?? 50,
+    });
+  }
+
   /** The pending questions with their run's goal (the inbox). */
   async pendingWithRuns(userId: string, limit = 100): Promise<(Question & { run: { goal: string; conversationId: string | null } | null })[]> {
     await this.expireDue({ ownerUserId: userId });

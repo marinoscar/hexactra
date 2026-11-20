@@ -514,6 +514,38 @@ export const inboxItemResponseSchema = z.object({
 });
 export class InboxItemResponseDto extends createZodDto(inboxItemResponseSchema) {}
 
+/** A request that is over (E40.3): what was asked, how it ended, never a secret. */
+export const inboxHistoryItemResponseSchema = z.object({
+  questionId: z.uuid(),
+  runId: z.uuid().nullable(),
+  conversationId: z.uuid().nullable().describe('The chat whose run asked; null for any other request'),
+  goal: z.string().describe("The run's goal (or the prompt of a free-standing question), masked"),
+  askedBy: z.string(),
+  kind: z.string(),
+  input: questionInput,
+  prompt: z.string().describe('Masked'),
+  status: z.enum(['answered', 'cancelled', 'expired']),
+  outcome: z.string().describe('In words: provided, allowed, denied, declined, done by the owner, expired without an answer'),
+  answer: z
+    .object({
+      outcome: z.string(),
+      value: z.string().optional().describe('Masked; absent for a secret, a sign-in and a withheld value'),
+      valueWithheld: z.boolean(),
+      channel: z.string().nullable(),
+      answeredAt: z.string().nullable(),
+      fields: z.array(z.object({ key: z.string(), label: z.string(), value: z.string().optional(), provided: z.literal(true) })).optional(),
+    })
+    .nullable(),
+  createdAt: iso,
+  settledAt: iso.nullable().describe('When it was answered or declined; for an expired request, when it expired'),
+});
+export class InboxHistoryItemResponseDto extends createZodDto(inboxHistoryItemResponseSchema) {}
+export const inboxHistoryResponseSchema = z.object({
+  items: z.array(inboxHistoryItemResponseSchema),
+  nextCursor: z.string().nullable().describe('Pass as `cursor` for the next page; null on the last page'),
+});
+export class InboxHistoryResponseDto extends createZodDto(inboxHistoryResponseSchema) {}
+
 export const scheduleResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
