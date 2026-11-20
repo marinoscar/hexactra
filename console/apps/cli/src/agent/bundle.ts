@@ -1,7 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { AgentPaths } from './paths.js';
@@ -66,7 +65,10 @@ export async function fetchBundle(
   }
   log(`Checksum verified (sha256 ${actual.slice(0, 12)}…)`);
 
-  const stage = mkdtempSync(join(tmpdir(), 'hexactra-agent-'));
+  // Staged beside its destination, not in os.tmpdir(): /tmp is often its own filesystem (tmpfs),
+  // and the rename into versions/ cannot cross filesystems (EXDEV, #695).
+  mkdirSync(paths.versionsDir, { recursive: true });
+  const stage = mkdtempSync(join(paths.versionsDir, '.stage-'));
   try {
     const file = join(stage, 'bundle.tar.gz');
     writeFileSync(file, archive);
@@ -82,7 +84,6 @@ export async function fetchBundle(
     }
     const id = `${info.version}-${info.commit.slice(0, 7)}`;
     const target = join(paths.versionsDir, id);
-    mkdirSync(paths.versionsDir, { recursive: true });
     rmSync(target, { recursive: true, force: true });
     renameSync(dir, target);
     log(`Agent ${info.version} (${info.commit.slice(0, 7)}) unpacked`);
