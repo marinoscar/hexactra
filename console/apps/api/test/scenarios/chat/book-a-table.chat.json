@@ -1,0 +1,8 @@
+{
+  "name": "chat: book a table on a website",
+  "description": "A job on a website: a run.",
+  "connections": [{ "label": "Personal", "capabilities": ["mail_read", "mail_send", "calendar_read"] }],
+  "message": "Book a table for two at restaurant.example.test tomorrow at 19:00",
+  "script": [["start_run", { "goal": "Book a table for two at restaurant.example.test for tomorrow at 19:00." }]],
+  "expect": { "tool": "start_run", "goalIncludes": ["restaurant.example.test"] }
+}

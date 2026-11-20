@@ -1,0 +1,26 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: a website lookup with an account connected",
+  "description": "The job is on a website: the browser does it, and the connected account is not touched.",
+  "goal": "Find the opening hours of the library on library.example.test.",
+  "trigger": "chat",
+  "task": { "allowedDomains": ["library.example.test"] },
+  "site": {
+    "start": "https://library.example.test/",
+    "pages": { "https://library.example.test/": { "title": "Library", "text": "Opening hours: 09:00 to 18:00, Monday to Saturday.", "elements": [] } }
+  },
+  "connections": [
+    { "ref": "c1", "label": "Personal", "provider": "google", "capabilities": ["mail_read", "mail_send", "calendar_read"] }
+  ],
+  "script": [
+    [{ "tool": "read_text", "args": {} }],
+    [{ "tool": "finish", "args": { "success": true, "result": "The library is open 09:00 to 18:00, Monday to Saturday." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 3,
+    "finishIncludes": "09:00",
+    "firstToolFamily": "browser",
+    "mustNotUseFamily": ["accounts"]
+  }
+}

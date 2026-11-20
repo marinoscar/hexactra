@@ -1,0 +1,30 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: what is on my calendar tomorrow",
+  "description": "A calendar question with an account connected: the calendar tool answers it, no browser.",
+  "goal": "What is on my calendar tomorrow (2026-11-21)?",
+  "trigger": "chat",
+  "site": { "start": "about:blank", "pages": {} },
+  "connections": [
+    {
+      "ref": "c1", "label": "Personal", "provider": "google", "capabilities": ["mail_read", "calendar_read"],
+      "events": [
+        { "id": "evt-1", "title": "Dentist", "start": "2026-11-21T09:00:00Z", "end": "2026-11-21T10:00:00Z", "location": "Clinic, example.test" },
+        { "id": "evt-2", "title": "Lunch with Person A", "start": "2026-11-21T12:00:00Z", "end": "2026-11-21T13:00:00Z" }
+      ]
+    }
+  ],
+  "script": [
+    [{ "tool": "calendar_list", "args": { "connection": "Personal", "from": "2026-11-21T00:00:00Z", "to": "2026-11-22T00:00:00Z" } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Tomorrow: Dentist at 09:00, Lunch with Person A at 12:00." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 3,
+    "finishIncludes": "Dentist",
+    "firstToolFamily": "accounts",
+    "toolsUsed": ["calendar_list"],
+    "mustNotUseFamily": ["browser", "desktop"],
+    "browserOpened": false
+  }
+}

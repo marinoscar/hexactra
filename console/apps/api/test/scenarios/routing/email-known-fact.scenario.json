@@ -1,0 +1,28 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: email a fact the chat already found",
+  "description": "A previous job found the miles balance. The owner asks to email it. The account's mail tool does the job: no browser.",
+  "goal": "Send an email to trips@example.test with the miles balance from the previous job.",
+  "trigger": "chat",
+  "context": "Previous job: Find my miles balance on miles.example.test\nIt succeeded: Balance: 99,667 miles.",
+  "site": { "start": "about:blank", "pages": {} },
+  "connections": [
+    { "ref": "c1", "label": "Personal", "provider": "google", "email": "person-a@example.test", "capabilities": ["mail_read", "mail_send"] }
+  ],
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve" }],
+  "script": [
+    [{ "tool": "mail_send", "args": { "connection": "Personal", "to": ["trips@example.test"], "subject": "Miles balance", "body": "The miles balance is 99,667 miles." } }],
+    [{ "tool": "mail_send", "args": { "connection": "Personal", "to": ["trips@example.test"], "subject": "Miles balance", "body": "The miles balance is 99,667 miles." } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Sent the balance (99,667 miles) to trips@example.test." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 4,
+    "questions": 1,
+    "firstToolFamily": "accounts",
+    "mustNotUseFamily": ["browser", "desktop"],
+    "toolsUsed": ["mail_send"],
+    "browserOpened": false,
+    "sent": [{ "connection": "c1", "to": "trips@example.test", "bodyIncludes": "99,667" }]
+  }
+}

@@ -4,6 +4,8 @@
 // scenario checks the harness and the browser layer, not the question broker.
 import { answerLine } from '@marinoscar/hexactra-browser-agent/request-human-spec';
 import { clearUnknown, type HarnessMemory, type OpenedQuestion, type QuestionPort, type QuestionSpec } from '@marinoscar/hexactra-agent';
+import { foldConnectionAnswer } from '../../src/runner/host/connections/answer';
+import type { RunMemory } from '../../src/runner/host/run-memory';
 import type { OwnerRule } from './scenario.schema';
 import type { OwnerSecrets } from './site';
 
@@ -91,6 +93,11 @@ export class OwnerScript {
     }
     q.answered = { rule, completed };
     if (!completed) {
+      const declined = (q.spec as { action?: unknown }).action;
+      if (declined) {
+        memory.log.push(foldConnectionAnswer(memory as unknown as RunMemory, { id: q.handoffId, prompt: q.spec.prompt, action: declined }, false)!);
+        return true;
+      }
       memory.log.push('The person did not help (handoff cancelled, declined). Do not retry the same request; finish if you cannot continue.');
       return true;
     }
@@ -103,8 +110,11 @@ export class OwnerScript {
       memory.confirmedTarget = { category: gate.category, label: gate.label, host: gate.host };
       clearUnknown(memory, memory.confirmedTarget);
     }
-    if (approved) memory.pendingConfirmation = { prompt: q.spec.prompt, tries: 0 };
-    memory.log.push(answerLine({ input, kind, value, options, unit: null, rememberLabel: null }));
+    // A call through one of the owner's connections (E41.1): folded as the host folds it (`runner/host/start.ts`), so the gate lets exactly that call through once.
+    const action = (q.spec as { action?: unknown }).action;
+    const connectionLine = action ? foldConnectionAnswer(memory as unknown as RunMemory, { id: q.handoffId, prompt: q.spec.prompt, action }, approved) : null;
+    if (approved && !connectionLine) memory.pendingConfirmation = { prompt: q.spec.prompt, tries: 0 };
+    memory.log.push(connectionLine ?? answerLine({ input, kind, value, options, unit: null, rememberLabel: null }));
     return true;
   }
 }

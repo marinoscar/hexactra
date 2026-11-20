@@ -1,0 +1,29 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: find a PDF someone sent and save it to files",
+  "description": "The PDF is in the owner's mailbox: the mail tools find it and the documents tools look where to put it. No browser. (Saving a mail attachment straight to files has no tool yet: the run says so.)",
+  "goal": "Find the PDF Person A sent last week and save it to my files.",
+  "trigger": "chat",
+  "site": { "start": "about:blank", "pages": {} },
+  "connections": [
+    {
+      "ref": "c1", "label": "Personal", "provider": "google", "capabilities": ["mail_read", "docs_read", "docs_write"],
+      "mail": [{ "id": "msg-1", "from": "person-a@example.test", "subject": "The invoice", "date": "2026-11-14T10:00:00Z", "body": "Attached is the invoice.", "attachments": ["invoice.pdf"] }],
+      "files": [{ "id": "folder-docs", "name": "Documents", "kind": "other" }]
+    }
+  ],
+  "script": [
+    [{ "tool": "mail_search", "args": { "connection": "Personal", "from": "person-a@example.test", "has_attachment": true } }],
+    [{ "tool": "mail_read", "args": { "connection": "Personal", "message_id": "msg-1" } }, { "tool": "docs_search", "args": { "connection": "Personal", "text": "Documents" } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Found invoice.pdf from Person A (14 November). There is no tool to copy a mail attachment into files yet." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 4,
+    "finishIncludes": "invoice.pdf",
+    "firstToolFamily": "accounts",
+    "toolsUsed": ["mail_search", "mail_read", "docs_search"],
+    "mustNotUseFamily": ["browser", "desktop"],
+    "browserOpened": false
+  }
+}

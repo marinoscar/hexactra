@@ -10,10 +10,11 @@
 //      budget and the activity are the context's services (`ctx.record`, `ctx.setActivity`), applied once per step whoever calls them.
 import type { GatePipeline } from './gate-pipeline';
 import { runAsCommit } from './intent';
-import type { ModelTool } from './ports';
+import type { ModelTool, ToolCallMeta } from './ports';
 import type { AnyContext } from './run-context';
 import type { ToolRegistry } from './registry';
 import type { RunnerTool } from './tool-def';
+import { toolFamilyOf } from './tool-family-of';
 import { PAUSED_TEXT, STOPPED_TEXT } from './types';
 
 export async function executeTool<C extends AnyContext>(ctx: C, tool: RunnerTool<C>, args: unknown, pipeline: GatePipeline<C>): Promise<string> {
@@ -27,10 +28,12 @@ export async function executeTool<C extends AnyContext>(ctx: C, tool: RunnerTool
     ctx.state.stop ??= 'owner_pause';
     return PAUSED_TEXT;
   }
+  const meta: ToolCallMeta = { family: toolFamilyOf(tool) };
   return telemetry.toolCall(tool.name, async () => {
     // 3. The gates.
     const verdict = await pipeline.run(ctx, tool, args);
     if (verdict.kind === 'refuse') {
+      meta.outcome = 'refused';
       if (verdict.step) await ctx.record('action', verdict.step.action, verdict.step.args, false, verdict.step.summary, Date.now(), verdict.step.reasoning);
       return verdict.text;
     }
@@ -38,12 +41,14 @@ export async function executeTool<C extends AnyContext>(ctx: C, tool: RunnerTool
     // 4 and 5. The tool.
     const run = () => tool.execute(ctx, args, verdict.decision);
     return tool.commits ? runAsCommit(run) : run();
-  });
+  }, meta);
 }
 
 /** The tools of this round as the model port takes them: each call goes through `executeTool`. */
 export function offerTools<C extends AnyContext>(ctx: C, registry: ToolRegistry<C>, pipeline: GatePipeline<C>): ModelTool[] {
-  return registry.list(ctx).map((tool) => ({
+  const tools = registry.list(ctx);
+  ctx.ports.telemetry.familiesOffered?.([...new Set(tools.map(toolFamilyOf))].sort());
+  return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: tool.parametersFor ? tool.parametersFor(ctx) : tool.parameters,

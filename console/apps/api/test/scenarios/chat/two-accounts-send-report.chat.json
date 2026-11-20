@@ -1,0 +1,11 @@
+{
+  "name": "chat: two accounts and send the report",
+  "description": "Two accounts could send it and the owner did not say which: ask which.",
+  "connections": [
+    { "label": "Personal", "capabilities": ["mail_read", "mail_send"] },
+    { "label": "Work", "capabilities": ["mail_read", "mail_send"] }
+  ],
+  "message": "Send the report to person-a@example.test",
+  "script": [["ask_user", { "question": "Which account should send it: Personal or Work?", "options": ["Personal", "Work"] }]],
+  "expect": { "tool": "ask_user" }
+}

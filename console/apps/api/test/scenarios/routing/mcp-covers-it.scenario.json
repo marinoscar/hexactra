@@ -1,0 +1,32 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: an MCP server that does the job",
+  "description": "The owner added a Notes server with create_note: the run uses it after the owner approves. No browser.",
+  "goal": "Save a note: buy milk",
+  "trigger": "chat",
+  "site": { "start": "about:blank", "pages": {} },
+  "connections": [
+    {
+      "ref": "c1", "label": "Notes", "provider": "mcp", "instructions": "A notes app: create and list the owner's notes.",
+      "tools": [
+        { "name": "create_note", "description": "Create a note with the given text.", "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }, "effect": "write", "result": "Note created (id note-7)." },
+        { "name": "list_notes", "description": "List the owner's notes.", "inputSchema": { "type": "object", "properties": {} }, "effect": "read", "result": "No notes yet." }
+      ]
+    }
+  ],
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve" }],
+  "script": [
+    [{ "tool": "notes__create_note", "args": { "text": "buy milk" } }],
+    [{ "tool": "notes__create_note", "args": { "text": "buy milk" } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Saved the note \"buy milk\" in Notes." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 3,
+    "questions": 1,
+    "firstToolFamily": "mcp",
+    "toolsUsed": ["notes__create_note"],
+    "mustNotUseFamily": ["browser", "desktop"],
+    "browserOpened": false
+  }
+}

@@ -30,6 +30,7 @@ import { context, createContextKey, ROOT_CONTEXT, SpanKind, SpanStatusCode, trac
 import type { AiDefinedTool } from '@marinoscar/platform-api/ai';
 
 import type { RunMetrics } from '../tasks/run-metrics';
+import { familyLabel, type ToolCallMeta } from '@marinoscar/hexactra-agent';
 import { ATTR, TOOL_ATTRIBUTES, EVENT, ERROR_TYPE, LINK, OPERATION, SPAN, TRACER_NAME, type JobReason } from './trace-attributes';
 
 export const tracer = () => trace.getTracer(TRACER_NAME);
@@ -58,6 +59,9 @@ export class AgentTrace {
   private tier = '';
   private roundStart = Date.now();
   private pending: PendingTool[] = [];
+  /** The tool families offered and used in this job (E41.1). */
+  private readonly offeredFamilies = new Set<string>();
+  private readonly familiesUsed = new Set<string>();
   private closed = false;
 
   private constructor(
@@ -263,11 +267,12 @@ export class AgentTrace {
   }
 
   /** One tool call: opens its `execute_tool <name>` span and times it (the `TelemetryPort` of the harness). */
-  async toolCall<T>(name: string, fn: () => Promise<T>): Promise<T> {
-    const entry: PendingTool = { name, start: Date.now() };
+  async toolCall<T>(name: string, fn: () => Promise<T>, meta?: ToolCallMeta): Promise<T> {
+    const entry: PendingTool = { name, start: Date.now(), ...(meta ? { family: meta.family } : {}) };
+    if (meta) this.familiesUsed.add(meta.family);
     let active = this.currentContext;
     if (this.recording) {
-      entry.span = tracer().startSpan(SPAN.toolCall(name), { kind: SpanKind.INTERNAL, startTime: entry.start, attributes: { [ATTR.operationName]: OPERATION.executeTool, [ATTR.toolName]: name } }, active);
+      entry.span = tracer().startSpan(SPAN.toolCall(name), { kind: SpanKind.INTERNAL, startTime: entry.start, attributes: { [ATTR.operationName]: OPERATION.executeTool, [ATTR.toolName]: name, ...(meta ? { [ATTR.toolFamily]: meta.family } : {}) } }, active);
       this.pending.push(entry);
       active = trace.setSpan(active, entry.span);
     }
@@ -280,7 +285,13 @@ export class AgentTrace {
     } finally {
       entry.endedAt = Date.now();
       this.metrics?.toolDone(name, !entry.thrown && entry.ok !== false, (entry.endedAt - entry.start) / 1000);
+      if (meta) this.metrics?.toolCallOf(familyLabel(meta.family), meta.outcome === 'refused' ? 'refused' : entry.thrown || entry.ok === false ? 'error' : 'ok');
     }
+  }
+
+  /** The tool families offered this round (E41.1): the job's root span carries their union. */
+  familiesOffered(families: readonly string[]): void {
+    for (const f of families) this.offeredFamilies.add(f);
   }
 
   /** Marks the tool call now running with the step it recorded (never its arguments). */
@@ -391,6 +402,8 @@ export class AgentTrace {
         ...(result.outcome ? { [ATTR.outcome]: result.outcome } : {}),
         ...(result.status ? { [ATTR.runStatus]: result.status } : {}),
         ...(result.stopReason ? { [ATTR.runStopReason]: result.stopReason } : {}),
+        ...(this.offeredFamilies.size ? { [ATTR.runFamiliesOffered]: [...this.offeredFamilies].sort().join(',') } : {}),
+        ...(this.familiesUsed.size ? { [ATTR.runFamiliesUsed]: [...this.familiesUsed].sort().join(',') } : {}),
       });
       if (result.error !== undefined) {
         this.root.setAttribute(ATTR.errorType, errorTypeOf(result.error));

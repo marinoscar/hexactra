@@ -91,6 +91,68 @@ const harnessSchema = z.strictObject({
   stall: z.partialRecord(z.enum(['maxConsecutiveFailures', 'maxRepeatedAction', 'noProgressActions', 'maxEscalations']), z.number().int()).optional(),
 });
 
+// The owner's accounts and MCP servers (E41.1, #698): the real connection tools run against doubles seeded with this data.
+const CAPABILITY_IDS = ['mail_read', 'mail_send', 'mail_modify', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'] as const;
+const mailSchema = z.strictObject({
+  id: z.string().min(1),
+  from: z.string().min(1),
+  to: z.array(z.string()).default(['owner@example.test']),
+  subject: z.string(),
+  date: z.string().describe('ISO instant with offset'),
+  body: z.string(),
+  attachments: z.array(z.string()).default([]).describe('File names; the content is invented'),
+});
+const eventSchema = z.strictObject({ id: z.string().optional(), title: z.string(), start: z.string(), end: z.string(), location: z.string().optional() });
+const cellSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const fileSchema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(['document', 'spreadsheet', 'pdf', 'other']),
+  text: z.string().optional().describe('A document\'s text'),
+  sheet: z.string().optional().describe('A spreadsheet\'s tab (default Sheet1)'),
+  rows: z.array(z.array(cellSchema)).optional().describe('A spreadsheet\'s rows'),
+  modifiedAt: z.string().optional(),
+});
+const mcpToolSchema = z.strictObject({
+  name: z.string().min(1),
+  description: z.string(),
+  inputSchema: z.record(z.string(), z.unknown()).describe('The tool\'s JSON schema'),
+  effect: z.enum(['read', 'write']),
+  result: z.string().describe('The text the server answers'),
+});
+const connectionSchema = z.strictObject({
+  ref: z.string().regex(/^c\d+$/).describe('The reference connections_list gives it: c1, c2, ... in the order of this list'),
+  label: z.string().min(1),
+  provider: z.enum(['google', 'microsoft', 'mcp']),
+  access: z.enum(['read', 'read_write']).default('read_write'),
+  email: z.string().optional(),
+  capabilities: z.array(z.enum(CAPABILITY_IDS)).default([]),
+  defaultFor: z.array(z.string()).default([]),
+  mail: z.array(mailSchema).default([]),
+  events: z.array(eventSchema).default([]),
+  files: z.array(fileSchema).default([]),
+  instructions: z.string().optional().describe('mcp: what the server says it is for'),
+  tools: z.array(mcpToolSchema).default([]).describe('mcp: its tools'),
+});
+
+const sentSchema = z.strictObject({
+  connection: z.string().describe('The connection\'s ref or label'),
+  to: z.string().describe('One recipient the message went to'),
+  subjectIncludes: z.string().optional(),
+  bodyIncludes: z.string().optional(),
+  attachments: z.number().int().min(0).optional().describe('Exactly this many attachments'),
+});
+
+/** Tool choice (E41.1, #698): which tools and families a run used, and what it sent. */
+const choiceFields = {
+  toolsUsed: z.array(z.string()).optional().describe('Each named tool was called at least once'),
+  mustNotUseFamily: z.array(z.string()).optional().describe('No call of a tool of these families (browser, desktop, accounts, mcp, mcp:<ref>)'),
+  firstToolFamily: z.string().optional().describe('The family of the first tool call that is not control or human'),
+  sent: z.array(sentSchema).optional().describe('What the fake mailboxes sent'),
+  browserOpened: z.boolean().optional().describe('Whether any action reached the browser'),
+};
+const choiceSchema = z.strictObject({ ...choiceFields, finishIncludes: z.string().optional() });
+
 const mustAskSchema = z.strictObject({
   kind: z.string().optional(),
   promptIncludes: z.string().optional(),
@@ -109,6 +171,7 @@ const expectSchema = z.strictObject({
   tierAtEnd: z.enum(['fast', 'standard', 'frontier']).optional(),
   questions: z.number().int().optional().describe('Exactly this many questions were asked of the owner'),
   actionsReachedBrowser: z.number().int().optional().describe('Exactly this many actions reached the browser'),
+  ...choiceFields,
 });
 
 export const scenarioSchema = z.strictObject({
@@ -127,7 +190,14 @@ export const scenarioSchema = z.strictObject({
   protected: z.record(z.string(), z.string()).default({}).describe('Site state the page\'s text must not change: key to the value the owner gave'),
   script: z.array(chunkSchema).default([]).describe('Scripted mode: the model\'s tool calls, one list per model call. Ignored in live mode.'),
   harness: harnessSchema.default({}),
+  connections: z.array(connectionSchema).default([]).describe('The owner\'s accounts and MCP servers this run lists (E41.1)'),
+  needsBrowser: z.enum(['auto', 'never', 'always']).default('auto').describe('A task that never opens a browser is offered no browser tool'),
+  context: z.string().optional().describe('"Earlier in this conversation": what a chat\'s earlier jobs found, as the run reads it'),
   expect: expectSchema,
+  pending: z
+    .strictObject({ issue: z.string().describe('The issue that will make it hold, e.g. E41.4'), expect: choiceSchema.describe('The tool-choice expectations that do not hold yet') })
+    .optional()
+    .describe('Expectations reported but not failing CI until the named issue lands'),
 });
 
 export type Scenario = z.infer<typeof scenarioSchema>;
@@ -136,6 +206,9 @@ export type ScenarioCall = z.infer<typeof callSchema>;
 export type SiteElement = z.infer<typeof elementSchema>;
 export type SitePage = z.infer<typeof pageSchema>;
 export type OwnerRule = z.infer<typeof ownerRuleSchema>;
+export type ScenarioConnection = z.infer<typeof connectionSchema>;
+export type ScenarioExpect = z.infer<typeof expectSchema>;
+export type ChoiceExpect = z.infer<typeof choiceSchema>;
 
 /** The JSON Schema of a scenario file (what an editor validates against). */
 export function scenarioJsonSchema(): Record<string, unknown> {

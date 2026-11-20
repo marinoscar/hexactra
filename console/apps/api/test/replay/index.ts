@@ -3,6 +3,7 @@
 // architecture rules keep loop code, gates and test kits out of the app's production code (test/architecture/no-agent-logic.spec.ts).
 // It builds on the packages' public entry points only (`@marinoscar/hexactra-agent`, `/engine`, `/testing`, and the browser toolset's
 // subpaths), so the harness can move or be published without it noticing.
+export * from './connections';
 export * from './expectations';
 export * from './fake-fabric';
 export * from './invariants';

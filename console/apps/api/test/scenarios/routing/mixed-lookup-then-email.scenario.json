@@ -1,0 +1,30 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: look up on a site, then email it",
+  "description": "The price is only on a website (browser), and the owner wants it by email (the account): a mix.",
+  "goal": "Look up the price of the Blue Kettle on shop.example.test and email it to me at person-a@example.test.",
+  "trigger": "chat",
+  "task": { "allowedDomains": ["shop.example.test"] },
+  "site": {
+    "start": "https://shop.example.test/",
+    "pages": { "https://shop.example.test/": { "title": "Shop", "text": "Blue Kettle. Price: 24.00.", "elements": [] } }
+  },
+  "connections": [
+    { "ref": "c1", "label": "Personal", "provider": "google", "email": "person-a@example.test", "capabilities": ["mail_read", "mail_send"] }
+  ],
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve" }],
+  "script": [
+    [{ "tool": "navigate", "args": { "url": "https://shop.example.test/" } }, { "tool": "read_text", "args": {} }],
+    [{ "tool": "mail_send", "args": { "connection": "Personal", "to": ["person-a@example.test"], "subject": "Blue Kettle price", "body": "The Blue Kettle costs 24.00 on shop.example.test." } }],
+    [{ "tool": "mail_send", "args": { "connection": "Personal", "to": ["person-a@example.test"], "subject": "Blue Kettle price", "body": "The Blue Kettle costs 24.00 on shop.example.test." } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Emailed the price (24.00)." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 6,
+    "firstToolFamily": "browser",
+    "toolsUsed": ["navigate", "mail_send"],
+    "browserOpened": true,
+    "sent": [{ "connection": "Personal", "to": "person-a@example.test", "bodyIncludes": "24.00" }]
+  }
+}
