@@ -311,7 +311,7 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
     const needsBrowser = readNeedsBrowser(run.task?.needsBrowser);
     const lazy = needsBrowser === 'never' || (needsBrowser === 'auto' && connections.length > 0);
     if (!sessionId && !lazy) {
-      const opened = await openFabricSession(d, session, run, savedLoginsOn ? { ownerId: userId } : {});
+      const opened = await openFabricSession(d, session, run, { ...(savedLoginsOn ? { ownerId: userId } : {}), resumed: Boolean(run.pausedAt) || (memory.chunks ?? 0) > 0 });
       if (opened.kind === 'fail') {
         await finishRun(d, userId, run.id, null, session, 'failed', { error: opened.error, stopReason: 'error' });
         return 'failed';
