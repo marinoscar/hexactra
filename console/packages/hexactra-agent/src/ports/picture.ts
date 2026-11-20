@@ -11,4 +11,6 @@ export interface Picture {
 export interface PicturePort {
   capture(moment: string): Promise<Picture>;
   attach(seq: number, moment: string, picture: Picture): Promise<void>;
+  /** The steps of this run that have a stored picture, oldest first (E41.4): what the agent can attach. Optional. */
+  listSteps?(): Promise<number[]>;
 }

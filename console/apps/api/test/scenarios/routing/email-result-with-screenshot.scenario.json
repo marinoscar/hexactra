@@ -1,30 +1,122 @@
 {
   "$schema": "../scenario.schema.json",
   "name": "routing: email a found result with a screenshot",
-  "description": "The owner's example (E41): a previous job found the balance; the owner asks to email it with a screenshot. Today a run cannot attach the previous job's screenshot, so the scripted run goes back to the site: that is the behaviour E41.4 removes (pending).",
+  "description": "The owner's example (E41): a previous job found the balance; the owner asks to email it with a screenshot. The mail tool sends it with the previous job's final screenshot attached (run \"previous\"): no browser.",
   "goal": "Send an email to trips@example.test with the miles balance, including a screenshot.",
   "trigger": "chat",
-  "task": { "allowedDomains": ["miles.example.test"] },
+  "task": {
+    "allowedDomains": [
+      "miles.example.test"
+    ]
+  },
   "context": "Previous job: Find my miles balance on miles.example.test\nIt succeeded: Balance: 99,667 miles.",
-  "site": { "start": "https://miles.example.test/", "pages": { "https://miles.example.test/": { "title": "Miles", "text": "Your account. Balance: 99,667 miles.", "elements": [] } } },
+  "site": {
+    "start": "about:blank",
+    "pages": {}
+  },
   "connections": [
-    { "ref": "c1", "label": "Personal", "provider": "google", "email": "person-a@example.test", "capabilities": ["mail_read", "mail_send"] }
+    {
+      "ref": "c1",
+      "label": "Personal",
+      "provider": "google",
+      "email": "person-a@example.test",
+      "capabilities": [
+        "mail_read",
+        "mail_send"
+      ]
+    }
   ],
-  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve" }],
+  "owner": [
+    {
+      "when": {
+        "kind": "confirmation"
+      },
+      "answer": "approve"
+    }
+  ],
   "script": [
-    [{ "tool": "navigate", "args": { "url": "https://miles.example.test/" } }, { "tool": "read_text", "args": {} }],
-    [{ "tool": "mail_send", "args": { "connection": "Personal", "to": ["trips@example.test"], "subject": "Miles balance", "body": "The miles balance is 99,667 miles (miles.example.test)." } }],
-    [{ "tool": "mail_send", "args": { "connection": "Personal", "to": ["trips@example.test"], "subject": "Miles balance", "body": "The miles balance is 99,667 miles (miles.example.test)." } }],
-    [{ "tool": "finish", "args": { "success": true, "result": "Sent the balance (99,667 miles) to trips@example.test." } }]
+    [
+      {
+        "tool": "mail_send",
+        "args": {
+          "connection": "Personal",
+          "to": [
+            "trips@example.test"
+          ],
+          "subject": "Miles balance",
+          "body": "The miles balance is 99,667 miles.",
+          "attachments": [
+            {
+              "source": "screenshot",
+              "step": null,
+              "run": "previous"
+            }
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "tool": "mail_send",
+        "args": {
+          "connection": "Personal",
+          "to": [
+            "trips@example.test"
+          ],
+          "subject": "Miles balance",
+          "body": "The miles balance is 99,667 miles.",
+          "attachments": [
+            {
+              "source": "screenshot",
+              "step": null,
+              "run": "previous"
+            }
+          ]
+        }
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "Sent the balance (99,667 miles) to trips@example.test with the previous job's screenshot."
+        }
+      }
+    ]
   ],
   "expect": {
     "status": "succeeded",
-    "maxSteps": 6,
-    "toolsUsed": ["mail_send"],
-    "sent": [{ "connection": "c1", "to": "trips@example.test", "bodyIncludes": "99,667" }]
+    "maxSteps": 3,
+    "questions": 1,
+    "firstToolFamily": "accounts",
+    "toolsUsed": [
+      "mail_send"
+    ],
+    "mustNotUseFamily": [
+      "browser",
+      "desktop"
+    ],
+    "browserOpened": false,
+    "sent": [
+      {
+        "connection": "c1",
+        "to": "trips@example.test",
+        "bodyIncludes": "99,667",
+        "attachments": 1
+      }
+    ]
   },
-  "pending": {
-    "issue": "E41.4",
-    "expect": { "mustNotUseFamily": ["browser", "desktop"], "browserOpened": false, "sent": [{ "connection": "c1", "to": "trips@example.test", "bodyIncludes": "99,667", "attachments": 1 }] }
+  "previousJob": {
+    "screenshots": [
+      {
+        "step": 2,
+        "moment": "question"
+      },
+      {
+        "step": 3,
+        "moment": "final"
+      }
+    ]
   }
 }

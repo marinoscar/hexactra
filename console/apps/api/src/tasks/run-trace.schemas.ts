@@ -47,7 +47,7 @@ const runStatus = z.enum(['queued', 'running', 'waiting_human', 'paused', 'succe
 
 const screenshotSchema = z
   .object({
-    moment: z.enum(['question', 'before_confirmed', 'after_confirmed', 'failure', 'final']).nullable().describe('The key moment the picture records'),
+    moment: z.enum(['question', 'before_confirmed', 'after_confirmed', 'failure', 'final', 'saved']).nullable().describe('The key moment the picture records'),
     masked: z.number().int().nullable().describe('How many regions the extension masked in the picture'),
     note: z.enum(['unavailable', 'masked_failed', 'no_storage', 'capped']).nullable().describe('Why a key moment has no picture; null when it has one'),
     contentType: z.string().nullable().describe('`image/jpeg` or `image/png`; null without a picture'),

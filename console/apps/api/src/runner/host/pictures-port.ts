@@ -54,5 +54,11 @@ export function picturesPort(c: PictureContext): PicturePort {
       d.tasks.metrics.traceScreenshot(moment as never, note === 'unavailable' || note === 'masked_failed' ? 'failed' : 'skipped');
       await d.prisma.runStep.updateMany({ where: { runId: c.runId, seq }, data: { screenshotMoment: moment, screenshotNote: note } });
     },
+    /** The steps of this run with a stored picture (E41.4): what the agent can attach by step number. */
+    async listSteps() {
+      if (!d.artifacts) return [];
+      const rows = await d.prisma.runStep.findMany({ where: { runId: c.runId, screenshotKey: { not: null } }, orderBy: { seq: 'asc' }, select: { seq: true } });
+      return rows.map((r) => r.seq);
+    },
   };
 }

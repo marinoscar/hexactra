@@ -46,7 +46,7 @@ export interface RunStep {
 }
 
 /** The key moments a run stores a picture of (#541). */
-export const SCREENSHOT_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
+export const SCREENSHOT_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final', 'saved'] as const;
 export type ScreenshotMoment = (typeof SCREENSHOT_MOMENTS)[number];
 
 /** How a question was answered (#541): the value is masked, and absent when it is withheld (a secret, a sign-in). */

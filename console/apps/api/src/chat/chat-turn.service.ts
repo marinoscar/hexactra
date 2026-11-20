@@ -152,14 +152,32 @@ export class ChatTurnService {
     const last = await this.prisma.forUser({ userId }).run.findFirst({
       where: { conversationId, status: { in: ['succeeded', 'failed', 'cancelled'] } },
       orderBy: { createdAt: 'desc' },
-      select: { goal: true, status: true, result: true, error: true, confirmedActions: true },
+      select: { id: true, goal: true, status: true, result: true, error: true, confirmedActions: true },
     });
     if (!last) return '';
     const ended = last.status === 'succeeded' ? 'It succeeded' : last.status === 'cancelled' ? 'It was stopped' : 'It failed';
     const detail = (last.result ?? last.error ?? '').trim();
     // The confirmed steps it carried out (#540), so this job does not repeat one unasked.
     const confirmed = readConfirmedActions(last.confirmedActions).map((a) => `The previous job carried out a confirmed step (step ${a.seq}: '${a.prompt}'). Do not do it again unless the goal says so.`);
-    return [`Previous job: ${last.goal.slice(0, 1500)}`, `${ended}${detail ? `: ${detail.slice(0, 3000)}` : '.'}`, ...confirmed].join('\n');
+    return [`Previous job: ${last.goal.slice(0, 1500)}`, `${ended}${detail ? `: ${detail.slice(0, 3000)}` : '.'}`, ...confirmed, ...(await this.savedArtifacts(last.id))].join('\n');
+  }
+
+  /**
+   * What the previous job saved that the next one can attach (E41.4): its final screen, up to ten other step pictures, and its PDF report.
+   * Empty when it stored no picture (no artifact store, or none taken). Masked pictures only: there is no other kind.
+   */
+  private async savedArtifacts(runId: string): Promise<string[]> {
+    const shots = await this.prisma.runStep.findMany({ where: { runId, screenshotKey: { not: null } }, orderBy: { seq: 'asc' }, select: { seq: true, screenshotMoment: true } });
+    if (shots.length === 0) return [];
+    const final = shots.some((s) => s.screenshotMoment === 'final');
+    const steps = shots.filter((s) => s.screenshotMoment !== 'final').map((s) => s.seq).slice(-10);
+    const list = (n: number[]) => (n.length === 1 ? `${n[0]}` : `${n.slice(0, -1).join(', ')} and ${n.at(-1)}`);
+    const parts = [
+      ...(final ? ['a screenshot of its final screen (attach it with run "previous")'] : []),
+      ...(steps.length ? [`screenshot${steps.length === 1 ? '' : 's'} of step${steps.length === 1 ? '' : 's'} ${list(steps)}`] : []),
+      'a PDF report',
+    ];
+    return [`The previous job saved: ${parts.join('; ')}.`];
   }
 
   /** What the model reads: the end of the thread and whether a run is live. Built from messages, plus each request's outcome words (E40.1), never a question's answer value. */

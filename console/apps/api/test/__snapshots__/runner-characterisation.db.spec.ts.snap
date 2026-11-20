@@ -500,6 +500,32 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
+          "description": "Save a picture of the current page to this job's record, with sensitive parts covered, so it can be attached to an email or saved to the owner's files. Returns the step number to use as the attachment's step.",
+          "name": "save_screenshot",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+            },
+            "required": [
+              "reason",
+            ],
+            "type": "object",
+          },
+          "strict": true,
+        },
+        {
           "description": "Click the element numbered n on the latest page screenshot, with a real mouse click at its center.",
           "name": "click_mark",
           "parameters": {
@@ -2569,6 +2595,32 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
+          "description": "Save a picture of the current page to this job's record, with sensitive parts covered, so it can be attached to an email or saved to the owner's files. Returns the step number to use as the attachment's step.",
+          "name": "save_screenshot",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+            },
+            "required": [
+              "reason",
+            ],
+            "type": "object",
+          },
+          "strict": true,
+        },
+        {
           "description": "Click the element numbered n on the latest page screenshot, with a real mouse click at its center.",
           "name": "click_mark",
           "parameters": {
@@ -3923,6 +3975,32 @@ When done, or when the goal is impossible, call finish with a short, factual res
             },
             "required": [
               "screen",
+              "reason",
+            ],
+            "type": "object",
+          },
+          "strict": true,
+        },
+        {
+          "description": "Save a picture of the current page to this job's record, with sensitive parts covered, so it can be attached to an email or saved to the owner's files. Returns the step number to use as the attachment's step.",
+          "name": "save_screenshot",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+            },
+            "required": [
               "reason",
             ],
             "type": "object",
@@ -6135,6 +6213,32 @@ When done, or when the goal is impossible, call finish with a short, factual res
             },
             "required": [
               "screen",
+              "reason",
+            ],
+            "type": "object",
+          },
+          "strict": true,
+        },
+        {
+          "description": "Save a picture of the current page to this job's record, with sensitive parts covered, so it can be attached to an email or saved to the owner's files. Returns the step number to use as the attachment's step.",
+          "name": "save_screenshot",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
+            },
+            "required": [
               "reason",
             ],
             "type": "object",

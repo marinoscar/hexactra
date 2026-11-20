@@ -188,7 +188,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
   const policyAtStart = policyFacts();
 
   // The owner's accounts and MCP servers (E41.1): the real connection tools over doubles, registered as the host registers them.
-  const accounts = scenarioAccounts(scenario.connections);
+  const accounts = scenarioAccounts(scenario.connections, scenario.previousJob);
   const registry = registerRunTools<never>({
     needsBrowser: scenario.needsBrowser,
     connections: accounts !== null,

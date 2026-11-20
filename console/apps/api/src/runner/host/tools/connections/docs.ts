@@ -7,7 +7,7 @@ import { cell, type Cell, type FileInfo } from '../../../../connections/capabili
 import type { QuestionAction } from '../../../../questions/questions.contract';
 import { clip, defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
-import { loadRunArtifact } from './artifacts';
+import { loadRunArtifact, noteArtifact } from './artifacts';
 import { commitCall } from './commit';
 import { CONNECTION_GATE, callConnection, hashArgs, noteCall, offers, pickConnection, recordStep, refusal, shortHash, takeRead, wrapContent, type ConnectionDecision, type ConnectionGateRequest } from './support';
 
@@ -290,17 +290,17 @@ export const fileUpload = tool({
   group: 'connection',
   family: 'accounts',
   description:
-    "Save one of this run's own artifacts into the owner's files: a masked screenshot taken at one of the run's steps (source screenshot, with its step number), or this run's PDF report (source report). It goes by handle: you never hold the bytes. The owner is asked first; after they approve you call it again with exactly the same arguments. Needs read and write access to the account. Set the fields that do not apply to null.",
-  parameters: z.object({ connection, source: z.enum(['screenshot', 'report']), step: z.number().int().min(1).nullable().describe('The step number, for a screenshot; null for the report'), name: z.string().max(255).nullable().describe('The file name; null: a name from the run'), folder_id: z.string().max(512).nullable() }),
+    "Save one of this run's own artifacts into the owner's files: a masked screenshot taken at one of the run's steps (source screenshot, with its step number), or this run's PDF report (source report). It goes by handle: you never hold the bytes. With run \"previous\" it is the last job of this chat's (its final screenshot when no step is given). The owner is asked first; after they approve you call it again with exactly the same arguments. Needs read and write access to the account. Set the fields that do not apply to null.",
+  parameters: z.object({ connection, source: z.enum(['screenshot', 'report']), step: z.number().int().min(1).nullable().describe('The step number, for a screenshot; null for the report (or, with run "previous", the previous job\'s final screen)'), run: z.enum(['this', 'previous']).nullable().describe('null or "this": this job; "previous": the last job of this chat'), name: z.string().max(255).nullable().describe('The file name; null: a name from the run'), folder_id: z.string().max(512).nullable() }),
   commits: true,
   gated: {
     [CONNECTION_GATE]: async (ctx, a): Promise<ConnectionGateRequest> => {
       const picked = await pickConnection(ctx, a.connection, 'docs_write', true);
       if (!picked.ok) return refusal('file_upload', picked.text);
-      const art = await loadRunArtifact(ctx, { source: a.source, step: a.step });
+      const art = await loadRunArtifact(ctx, { source: a.source, step: a.step, run: a.run ?? 'this' });
       if (!art.ok) return refusal('file_upload', art.text);
       const name = (a.name ?? art.name).trim() || art.name;
-      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'file_upload', summary: `save the file "${clip(name, 80)}" to ${picked.live.label}`, lines: [{ label: 'File', value: `${clip(name, 200)} (${sizeText(art.bytes.length)})` }, { label: 'From', value: a.source === 'report' ? "this run's PDF report" : `the screenshot of step ${a.step}` }, ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], hash: hashArgs({ tool: 'file_upload', connection: picked.live.id, source: a.source, step: a.step, name, folder: a.folder_id, bytes: shortHash(art.bytes.toString('base64')) }) };
+      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'file_upload', summary: `save the file "${clip(name, 80)}" to ${picked.live.label}`, lines: [{ label: 'File', value: `${clip(name, 200)} (${sizeText(art.bytes.length)})` }, { label: 'From', value: art.origin }, ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], hash: hashArgs({ tool: 'file_upload', connection: picked.live.id, source: a.source, step: a.step, run: a.run ?? 'this', name, folder: a.folder_id, bytes: shortHash(art.bytes.toString('base64')) }) };
       return target(picked.live, 'file_upload', 'docs_write', `Save files with ${picked.live.label}`, action);
     },
   },
@@ -308,15 +308,16 @@ export const fileUpload = tool({
   execute: async (ctx, a, gate) => {
     const decision = gate[CONNECTION_GATE] as ConnectionDecision;
     const conn = decision.request.connection!;
-    const art = await loadRunArtifact(ctx, { source: a.source, step: a.step });
+    const art = await loadRunArtifact(ctx, { source: a.source, step: a.step, run: a.run ?? 'this' });
     if (!art.ok) return art.text;
+    noteArtifact(ctx, { source: a.source, step: a.step, run: a.run ?? 'this' });
     const name = (a.name ?? art.name).trim() || art.name;
     return commitCall(ctx, {
       tool: 'file_upload',
       service: 'documents',
       decision,
       capability: 'docs_write',
-      stepArgs: { connection: conn.label, source: a.source, ...(a.step ? { step: a.step } : {}), name: clip(name, 200), size: art.bytes.length, ...(a.folder_id ? { folder_id: a.folder_id } : {}) },
+      stepArgs: { connection: conn.label, source: a.source, ...(a.step ? { step: a.step } : {}), ...(a.run === 'previous' ? { run: 'previous' } : {}), name: clip(name, 200), size: art.bytes.length, ...(a.folder_id ? { folder_id: a.folder_id } : {}) },
       what: `save the file "${clip(name, 80)}" to ${conn.label}`,
       check: 'look for it with docs_search',
       call: (d) => d.uploadFile({ name, contentType: art.contentType, bytes: art.bytes, ...(a.folder_id ? { folderId: a.folder_id } : {}) }),

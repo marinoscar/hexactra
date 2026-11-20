@@ -124,7 +124,7 @@ The browser card and the full-size browser view show **Pause** beside **Stop** w
 ## Steering and follow-ups
 
 - **While a run is live**, what you type is passed to the working agent (`guide_run` → `run_guidance`). The runner reads pending lines between chunks, each once. Your message shows **Queued for the agent**, then **Seen by the agent**, or **Not seen: the job had ended**. It can take a few actions to land, because a chunk is not interrupted.
-- **After a run has ended**, asking for more starts a new run on the same browser profile, so sign-ins hold. The new run is given the previous goal and how it ended as context. The browser session itself is not kept open between runs.
+- **After a run has ended**, asking for more starts a new run on the same browser profile, so sign-ins hold. The new run is given the previous goal and how it ended as context, and what that job saved (`The previous job saved: a screenshot of its final screen (attach it with run "previous"); screenshots of steps 4 and 9; a PDF report.`, E41.4): "email that to … with a screenshot" attaches the previous job's final screen with the mail tool, with no browser, after the owner approves a card that names the attachment and where it came from. The browser session itself is not kept open between runs.
 
 ## Notifications
 

@@ -149,7 +149,7 @@ The agent picks a tool by capability, not by habit. Each kind of tool is a **fam
 
 | Family | Rank | Where | What the model reads |
 |---|---|---|---|
-| `accounts` | 10 | `accountsFamily`, `apps/api/src/runner/host/tools/connections/index.ts` | "The owner's accounts": Google and Microsoft mail, calendar and files; the toolbox names each account and what it may do |
+| `accounts` | 10 | `accountsFamily`, `apps/api/src/runner/host/tools/connections/index.ts` | "The owner's accounts": Google and Microsoft mail, calendar and files; the toolbox names each account and what it may do; its section says to attach pictures and reports by reference (E41.4) |
 | `mcp:<connectionId>` | 20 | `mcpFamilies`, `tools/connections/mcp.ts` | the owner's label, and the server's own `instructions` (cleaned, at most 300 characters, under `MCP_TRUST_LINE`) or its first tool titles |
 | `browser` | 50 | `browserFamily`, `packages/hexactra-browser-agent/src/families.ts` | "The browser", with the "How to see" and "How to act" sections |
 | `desktop` | 60 | `desktopFamily` (same file) | "The desktop", with the "Outside the page" bullet |
@@ -159,7 +159,8 @@ What a run reads (`runInstructions` and `runContextLines`, `apps/api/src/runner/
 
 1. **The instructions**: a family-neutral identity ("You act for the owner, with their full authority, …"), **Your tools** (one line per family that has at least one tool offered, by rank: `ToolRegistry.families(ctx)`), the fixed **routing rule** (`ROUTING_RULE`: use an account or an added tool when one can do the job; the browser for what is on a website; mix them; do not look up again what is known; ask when two could do it), each offered family's own sections, then the general sections (asking the person, values, the owner, when done) and the tool notes. A run that never opens a browser reads no browser how-to.
 2. **The round's context lines**: `Allowed sites: …` only when a browser tool is offered, then the **toolbox line**, identical in every round: `Tools you have: The owner's accounts, Notes, The browser, The desktop. Accounts: c1 "Work" (Google, read and change: read mail, send mail, …). Added tools: "Notes" (2 tools).` The account is named without calling `connections_list`, and nothing beyond what `connections_list` shows (no token, no address).
-3. **The first round** says "Nothing has been done yet. Choose the tool that fits the goal." (`FIRST_ROUND_HINT`, `LoopProfile.firstRoundHint`).
+3. **The volatile tail** of each round (after the steps used, never in the cached prefix) lists the pictures the agent can attach: `Screenshots you can attach: steps 4, 9, 20.` (`LoopProfile.statusLines`, `PicturePort.listSteps`; E41.4). The browser family has `save_screenshot` (after `look`) to keep a masked picture of the page on purpose.
+4. **The first round** says "Nothing has been done yet. Choose the tool that fits the goal." (`FIRST_ROUND_HINT`, `LoopProfile.firstRoundHint`).
 
 The tool order is unchanged: the connection and MCP tools are registered after the browser core tools, as before, which keeps the prompt cache and isolates the effect of the text.
 

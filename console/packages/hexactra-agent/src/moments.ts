@@ -1,7 +1,8 @@
 // The key moments of a run's trace (#541): when a masked picture is kept, and which requests never get one.
 
 /** The moments a masked screenshot is kept at. */
-export const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
+/** `saved` (E41.4): a picture the agent kept on purpose with `save_screenshot`, to attach or upload. */
+export const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final', 'saved'] as const;
 export type TraceMoment = (typeof TRACE_MOMENTS)[number];
 
 /** A request whose answer is a secret: no picture is taken while it is open (#525), and its value is never in a step. */

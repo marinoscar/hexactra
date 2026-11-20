@@ -31,6 +31,12 @@ export function runContextLines<C extends AnyContext>(registry: ToolRegistry<C>,
   return [...(offersBrowser(registry, ctx) ? [sitesLine(ctx as never)] : []), ...(toolbox ? [toolbox] : []), ...extra];
 }
 
+/** The volatile line of the pictures the agent can attach (E41.4), at most 15, newest last; null with none. */
+export function attachableLine(steps: readonly number[]): string | null {
+  if (steps.length === 0) return null;
+  return `Screenshots you can attach: steps ${steps.slice(-15).join(', ')}.`;
+}
+
 const EXPECTS: Record<string, string> = {
   accounts: "the owner's accounts only",
   browser: 'a website',
