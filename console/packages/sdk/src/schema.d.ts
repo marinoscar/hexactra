@@ -18906,6 +18906,15 @@ export interface components {
                         valueWithheld: boolean;
                         channel: string | null;
                         answeredAt: string | null;
+                        /** @description A form question only (E40.2): each field the owner filled */
+                        fields?: {
+                            key: string;
+                            label: string;
+                            /** @description Masked; absent for a sensitive field */
+                            value?: string;
+                            /** @constant */
+                            provided: true;
+                        }[];
                     } | null;
                 } | null;
                 screenshot: {
@@ -19229,6 +19238,15 @@ export interface components {
                         valueWithheld: boolean;
                         channel: string | null;
                         answeredAt: string | null;
+                        /** @description A form question only (E40.2): each field the owner filled */
+                        fields?: {
+                            key: string;
+                            label: string;
+                            /** @description Masked; absent for a sensitive field */
+                            value?: string;
+                            /** @constant */
+                            provided: true;
+                        }[];
                     } | null;
                 } | null;
                 durationMs: number | null;

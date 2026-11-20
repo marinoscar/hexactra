@@ -51,6 +51,7 @@ export function questionKindLabel(q: Pick<StepQuestion, 'kind' | 'input'>): stri
   if (q.input === 'credentials' || q.kind === 'login' || q.kind === 'passkey') return 'Sign-in';
   if (q.kind === 'code' || q.kind === 'captcha' || q.input === 'secret') return 'Code';
   if (q.input === 'choice' || q.input === 'multi_choice') return 'Choice';
+  if (q.input === 'form') return 'Details';
   return 'Question';
 }
 
@@ -74,6 +75,7 @@ function outcomeWords(q: StepQuestion): string {
   if (a.valueWithheld) return 'Provided (not recorded)';
   if (q.input === 'confirm') return a.value === 'deny' ? 'Declined' : 'Allowed';
   if (q.input === 'none' || q.input === 'takeover') return 'Done';
+  if (q.input === 'form') return 'Provided';
   if (!a.value) return 'Answered';
   if ((q.input === 'choice' || q.input === 'multi_choice') && q.options) {
     const labels = a.value.split(',').map((id) => id.trim()).map((id) => q.options!.find((o) => o.id === id)?.label ?? id);
@@ -106,6 +108,11 @@ export function answerLine(q: StepQuestion, ctx: { askedAt?: string; answeredAt?
   const waited = Number.isNaN(asked) || Number.isNaN(answered) || answered < asked ? null : `waited ${shortDuration(answered - asked)}`;
   const parts = [words, channelWords(q.answer.channel, ctx.fromChat), at ? formatTime(at, ctx.timeZone ? { timeZone: ctx.timeZone } : {}) : null, waited];
   return { text: parts.filter(Boolean).join(' · '), state: words === 'Declined' ? 'declined' : 'answered' };
+}
+
+/** A form's answer, one line per field (E40.2): "Amount: 25", or "Card PIN: provided" for a sensitive field. */
+export function formAnswerLines(q: StepQuestion): string[] {
+  return (q.answer?.fields ?? []).map((f) => `${f.label}: ${f.value ?? 'provided'}`);
 }
 
 /** The steps that have a picture, oldest first: the lightbox's previous and next. */

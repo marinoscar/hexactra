@@ -17,7 +17,7 @@ import { ConnectionStepBody, isConnectionStep } from './connectionSteps';
 import { RunPictures, StepThumbnail } from './RunPictures';
 import { routingRow } from './runRouting';
 import { formatStepDuration, groupSteps, type TimelineOrder, type TimelineStep } from './runTimeline';
-import { answerLine, guidanceText, isAnswerStep, isGuidanceStep, isQuestionStep, questionKindLabel } from './runTrace';
+import { answerLine, formAnswerLines, guidanceText, isAnswerStep, isGuidanceStep, isQuestionStep, questionKindLabel } from './runTrace';
 
 /** A run step as the run page has it, with the trace fields of #541 when the API sends them. */
 export interface RunTimelineStep
@@ -118,6 +118,11 @@ function QuestionBody({ step }: { step: RunTimelineStep }) {
       >
         {line.state === 'pending' ? <QuestionLink id={q.id}>{line.text}</QuestionLink> : line.text}
       </Typography>
+      {formAnswerLines(q).map((text, i) => (
+        <Typography key={i} variant="body2" color="text.secondary" data-testid={`form-answer-${step.seq}`} sx={{ overflowWrap: 'anywhere' }}>
+          {text}
+        </Typography>
+      ))}
     </>
   );
 }

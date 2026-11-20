@@ -58,6 +58,8 @@ export interface StepAnswer {
   /** Where the person answered: web, cli, push, mcp…, api, webhook. */
   channel: string | null;
   answeredAt: string | null;
+  /** A form's fields (E40.2): label and masked value; no value for a sensitive field. */
+  fields?: { key: string; label: string; value?: string; provided: true }[];
 }
 
 /** The question a step asked or answered, as the run's trace shows it (#541). */
