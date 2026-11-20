@@ -1,0 +1,41 @@
+// The tools a run is offered, in the order the model has always been offered them (E41.1, #698). One function, called by the host
+// (`build-context.ts`) and by the scenario kit (`test/replay/run-scenario.ts`), so what a scenario measures is what a run gets.
+import { browserTools } from '@marinoscar/hexactra-browser-agent/tools';
+import { ToolRegistry, type AnyContext, type RunnerTool } from '@marinoscar/hexactra-agent';
+import { connectionTools } from './tools/connections';
+
+export interface RunToolsOptions<C extends AnyContext> {
+  /** A task that never opens a browser (E39.7) is offered no browser tool: only the question tool, the connections and `finish`. */
+  needsBrowser: 'auto' | 'always' | 'never';
+  /** `propose_memory` (when the deployment has memory proposals). */
+  proposeMemory?: RunnerTool<C> | null;
+  /** `propose_saving_login` (when the run may offer to save a sign-in). */
+  proposeSavingLogin?: RunnerTool<C> | null;
+  savedLogins?: readonly RunnerTool<C>[] | null;
+  savedIdentity?: readonly RunnerTool<C>[] | null;
+  savedCards?: readonly RunnerTool<C>[] | null;
+  /** The run lists a connection and the deployment has the connections module (E39.7). */
+  connections: boolean;
+  /** The tools of the owner's MCP servers the run lists (E39.9), already built. */
+  mcp: readonly RunnerTool<C>[];
+}
+
+/** Registers the run's tools on a new registry, in the fixed order (part of the stable prefix the provider caches). */
+export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): ToolRegistry<C> {
+  const registry = new ToolRegistry<C>();
+  const noBrowser = o.needsBrowser === 'never';
+  const core = browserTools.core as unknown as RunnerTool<C>[];
+  registry.registerAll(noBrowser ? core.filter((t) => t.name === 'request_human') : core);
+  if (o.proposeMemory) registry.register(o.proposeMemory);
+  if (o.proposeSavingLogin && !noBrowser) registry.register(o.proposeSavingLogin);
+  if (!noBrowser) registry.register(browserTools.typeSecret as unknown as RunnerTool<C>);
+  if (o.savedLogins && !noBrowser) registry.registerAll(o.savedLogins);
+  if (o.savedIdentity && !noBrowser) registry.registerAll(o.savedIdentity);
+  if (o.savedCards && !noBrowser) registry.registerAll(o.savedCards);
+  // The owner's connections (E39.7): offered only when the run has one with the capability switched on (`available`).
+  if (o.connections) registry.registerAll(connectionTools as unknown as RunnerTool<C>[]);
+  // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.
+  registry.registerAll(o.mcp);
+  registry.register(browserTools.finish as unknown as RunnerTool<C>);
+  return registry;
+}

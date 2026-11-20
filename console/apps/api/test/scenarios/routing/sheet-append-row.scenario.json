@@ -1,0 +1,30 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: add a row to a spreadsheet",
+  "description": "The owner's Expenses sheet is in their documents: find it, add the row after the owner approves. No browser.",
+  "goal": "Add a row to my Expenses sheet: 2026-11-20, Taxi, 18.50",
+  "trigger": "chat",
+  "site": { "start": "about:blank", "pages": {} },
+  "connections": [
+    {
+      "ref": "c1", "label": "Personal", "provider": "google", "capabilities": ["docs_read", "docs_write"],
+      "files": [{ "id": "sheet-expenses", "name": "Expenses", "kind": "spreadsheet", "rows": [["Date", "What", "Amount"], ["2026-11-18", "Lunch", 12.4]] }]
+    }
+  ],
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve" }],
+  "script": [
+    [{ "tool": "docs_search", "args": { "connection": "Personal", "text": "Expenses", "type": "spreadsheet" } }],
+    [{ "tool": "sheet_append_rows", "args": { "connection": "Personal", "file_id": "sheet-expenses", "rows": [["2026-11-20", "Taxi", 18.5]] } }],
+    [{ "tool": "sheet_append_rows", "args": { "connection": "Personal", "file_id": "sheet-expenses", "rows": [["2026-11-20", "Taxi", 18.5]] } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Added 2026-11-20, Taxi, 18.50 to Expenses." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 4,
+    "questions": 1,
+    "firstToolFamily": "accounts",
+    "toolsUsed": ["docs_search", "sheet_append_rows"],
+    "mustNotUseFamily": ["browser", "desktop"],
+    "browserOpened": false
+  }
+}

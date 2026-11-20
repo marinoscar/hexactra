@@ -11,4 +11,4 @@ export type { PolicyPort, RunPolicy, TierRouting } from './policy';
 export type { Ports } from './ports';
 export type { OpenedQuestion, QuestionPort, QuestionSpec } from './questions';
 export type { CheckpointInput, CommitStepInput, NewStep, RunStorePort, StepPatch, StoredStep, Transition } from './run-store';
-export type { StepFacts, TelemetryPort } from './telemetry';
+export type { StepFacts, TelemetryPort, ToolCallMeta } from './telemetry';

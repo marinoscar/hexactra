@@ -53,6 +53,7 @@ const epicChildren = new Map([
   // #608 this close-out. Follow-ups filed by the acceptance run are added here when they exist.
   [581, [598, 599, 601, 602, 600, 603, 604, 605, 606, 607, 608, 661, 662, 663, 664, 665, 666]],
   [684, [685, 686, 687, 688, 689]],
+  [697, [698, 699, 700, 701, 702, 703]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

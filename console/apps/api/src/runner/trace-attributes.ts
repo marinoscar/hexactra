@@ -77,6 +77,10 @@ export const ATTR = {
   actionType: 'hexactra.action.type',
   pageHost: 'hexactra.page.host',
   gateCategory: 'hexactra.gate.category',
+  // Tool families (E41.1): the family of a tool call, and what a job offered and used (sorted, comma-joined).
+  toolFamily: 'hexactra.tool.family',
+  runFamiliesOffered: 'hexactra.run.families_offered',
+  runFamiliesUsed: 'hexactra.run.families_used',
   fabricAction: 'hexactra.fabric.action',
   fabricOperationId: 'hexactra.fabric.operation_id',
   fabricState: 'hexactra.fabric.state',

@@ -13,6 +13,9 @@
 //   --cap-usd N                     the most the job may spend (default 2); a job that reaches it stops and says so
 //   --user <email>                  whose AI settings to use (required)
 //   --filter <text>                 only scenarios whose name or file contains it
+//   --set routing|existing          only the routing set (tool choice, E41.1) or only the existing set
+//   --chat                          the chat-front scenarios (test/scenarios/chat, E41.1) with the configured chat_orchestrator model instead;
+//                                   writes <out>/live-chat.md. Runs only --runs turns per scenario (each one model turn): no spend cap applies
 //   --out <dir>                     where the summary goes (default test-results)
 //   --save-baseline                 write the summary as the baseline for this tier
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -28,8 +31,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { priceTableOf } from '../src/runner/agent-pricing.settings';
 import { AiModelPort } from '../src/runner/host/model-port';
 import { policyPort } from '../src/runner/host/policy-port';
-import { diffBaseline, liveMarkdown, loadScenarios, runLive, type LiveSummary } from '../test/replay';
+import { diffBaseline, liveMarkdown, loadScenarios, runLive, scenarioSet, type LiveSummary } from '../test/replay';
 import type { Tier } from '@marinoscar/hexactra-agent';
+import { chatLiveMarkdown, loadChatScenarios, runChatScenario } from '../test/replay/chat-front';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -49,10 +53,16 @@ async function main(): Promise<number> {
 
   const dir = resolve(root, 'test/scenarios');
   const filter = arg('filter');
+  const set = arg('set');
+  if (set && set !== 'routing' && set !== 'existing') {
+    process.stderr.write(`--set must be routing or existing, not "${set}"\n`);
+    return 1;
+  }
   // The violation scenarios break a rule on purpose with a scripted model: they say nothing about a real one, so they are not run live.
   const chosen = loadScenarios(dir)
     .filter((l) => l.scenario.expect.violations.length === 0 && !(l.scenario.harness.sabotage ?? []).length)
-    .filter((l) => !filter || l.scenario.name.includes(filter) || l.file.includes(filter));
+    .filter((l) => !filter || l.scenario.name.includes(filter) || l.file.includes(filter))
+    .filter((l) => !set || scenarioSet(l.scenario) === set);
   if (chosen.length === 0) {
     process.stderr.write('no scenario to run: refusing to report success for a suite that did not run\n');
     return 1;
@@ -65,6 +75,25 @@ async function main(): Promise<number> {
     const user = await prisma.user.findFirst({ where: { email } });
     if (!user) throw new Error(`--user: no account with the email ${email}`);
     const ai = app.get(AiService);
+    if (process.argv.includes('--chat')) {
+      const scenarios = loadChatScenarios(join(dir, 'chat')).filter((l) => !filter || l.scenario.name.includes(filter) || l.file.includes(filter));
+      if (scenarios.length === 0) throw new Error('no chat scenario to run: refusing to report success for a suite that did not run');
+      const results = [];
+      for (const { scenario } of scenarios) {
+        const runsOf = [];
+        for (let i = 1; i <= runs; i += 1) {
+          process.stdout.write(`${scenario.name} (run ${i} of ${runs})\n`);
+          runsOf.push(await runChatScenario(app, scenario, ai, { aiUserId: user.id }));
+        }
+        results.push(runsOf);
+      }
+      const out = resolve(root, arg('out') ?? 'test-results');
+      mkdirSync(out, { recursive: true });
+      const markdown = chatLiveMarkdown(results, new Date().toISOString());
+      writeFileSync(join(out, 'live-chat.md'), markdown);
+      process.stdout.write(`\n${markdown}`);
+      return 0;
+    }
     const prices = priceTableOf(await app.get(SystemSettingsService).getNamespace('agentPricing'));
     const spec = builtinPolicy('builtin:balanced')!.spec;
     const resolvedTiers = await app.get(ModelTiersService).resolve(user.id, spec);

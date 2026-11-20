@@ -1,0 +1,44 @@
+{
+  "name": "chat: what is my last email",
+  "description": "A simple question about the owner's mail, with an account the chat may read: a read tool answers it, no run.",
+  "connections": [
+    {
+      "label": "Personal",
+      "access": "read",
+      "capabilities": [
+        "mail_read"
+      ],
+      "mail": [
+        {
+          "from": "person-b@example.test",
+          "subject": "Dinner on Friday",
+          "body": "Are we still on for Friday?",
+          "date": "2026-11-20T08:00:00Z"
+        }
+      ]
+    }
+  ],
+  "message": "What is my last email?",
+  "script": [
+    [
+      "mail_search",
+      {
+        "connection": "Personal",
+        "from": null,
+        "to": null,
+        "subject": null,
+        "text": null,
+        "after": null,
+        "before": null,
+        "unread": null,
+        "has_attachment": null,
+        "label": null,
+        "limit": 1,
+        "page_token": null
+      }
+    ]
+  ],
+  "expect": {
+    "tool": "read"
+  }
+}

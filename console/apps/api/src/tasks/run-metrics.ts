@@ -22,6 +22,9 @@ const RUN_EXPORT_FORMAT_LABELS = ['json', 'pdf'] as const;
 export const CARD_USE_OUTCOMES = ['typed', 'asked', 'approved', 'declined', 'refused_amount', 'refused_shop', 'refused_limit', 'refused_other', 'unattended_waits', 'mismatch'] as const;
 
 /** Names are permanent once dashboards read them. */
+/** The outcomes of a tool call in `app.runs.tool_calls` (E41.1). */
+export const TOOL_CALL_OUTCOMES = ['ok', 'error', 'refused'] as const;
+
 export const RUN_METRICS: readonly AppMetricDef[] = [
   { key: 'runsStarted', name: 'app.runs.started', kind: 'counter', unit: '{run}', description: 'Runs that started executing.', attributes: { trigger: { kind: 'enum', values: TRIGGERS } } },
   {
@@ -160,6 +163,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     buckets: [0.05, 0.25, 0.5, 1, 2, 5, 15, 45, 120],
     attributes: { tool: { kind: 'free' }, outcome: { kind: 'enum', values: ['ok', 'error'] } },
   },
+  {
+    key: 'runToolCalls',
+    name: 'app.runs.tool_calls',
+    kind: 'counter',
+    unit: '{call}',
+    description: 'Tool calls of a browser agent (E41.1), by tool family (`browser`, `desktop`, `accounts`, `mcp`, `human`, `control`, ...) and outcome (`ok`, `error`, `refused` by a gate). Every MCP server is the literal `mcp`: never a connection, run or user in a label.',
+    attributes: { family: { kind: 'free' }, outcome: { kind: 'enum', values: TOOL_CALL_OUTCOMES } },
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -241,6 +252,11 @@ export class RunMetrics {
   /** One tool call (E38.4): its name and outcome; never an argument or a result. */
   toolDone(tool: string, ok: boolean, seconds: number): void {
     if (seconds >= 0) this.metrics?.record('runToolDuration', seconds, { tool, outcome: ok ? 'ok' : 'error' });
+  }
+
+  /** One tool call of a run by family and outcome (E41.1). `family` must already be bounded (`familyLabel`: every MCP server is `mcp`). */
+  toolCallOf(family: string, outcome: (typeof TOOL_CALL_OUTCOMES)[number]): void {
+    this.metrics?.add('runToolCalls' as never, 1, { family, outcome });
   }
 
   /** The spend of a finished run; never a run, task or user id as a label. */

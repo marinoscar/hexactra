@@ -231,7 +231,8 @@ describe('what a scenario may contain', () => {
 
   it('names no real company, service or person, and holds no email, phone number or card number', () => {
     for (const file of files) {
-      const text = readFileSync(file, 'utf8');
+      // A connection's provider id (E41.1) is a value of the schema, not a company named in the data.
+      const text = readFileSync(file, 'utf8').replace(/"provider":\s*"(google|microsoft|mcp)"/g, '"provider": "<id>"');
       expect({ file, hit: DENY.exec(text)?.[0] ?? null }).toEqual({ file, hit: null });
       expect({ file, email: [...text.matchAll(/[\w.+-]+@([\w-]+\.)+\w+/g)].map((m) => m[0]).filter((e) => !/@[\w.-]*example\.test$/.test(e)) }).toEqual({ file, email: [] });
       expect({ file, long: text.match(/\b\d{12,19}\b/g) }).toEqual({ file, long: null });

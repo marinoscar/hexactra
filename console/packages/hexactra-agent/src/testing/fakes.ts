@@ -1,7 +1,7 @@
 // In-memory fakes of every harness port, and a scripted model. They need no database, no browser and no model: the harness's own tests and a
 // second host's tests run on them (E38.5). They are deliberately small and honest: each keeps what it was asked, so a test can read it back.
 import { computeEffectiveBudget, type EffectiveBudget } from '../budget';
-import type { ModelPort, ModelRequest, ModelResult, ModelStep, OpenedQuestion, Ports, QuestionPort, QuestionSpec, RunStorePort, StepFacts, StepPatch, StoredStep, TelemetryPort } from '../ports';
+import type { ModelPort, ModelRequest, ModelResult, ModelStep, OpenedQuestion, Ports, QuestionPort, QuestionSpec, RunStorePort, StepFacts, StepPatch, StoredStep, TelemetryPort, ToolCallMeta } from '../ports';
 import type { ApprovalPort } from '../ports';
 import type { ControlPort } from '../ports';
 import type { HarnessMemory } from '../types';
@@ -168,12 +168,23 @@ export class FakeApprovals implements ApprovalPort {
 
 export class FakeTelemetry implements TelemetryPort {
   calls: string[] = [];
+  /** Each tool call's family and, once it ended, its outcome (E41.1): `refused` by a gate, else `ran`. */
+  families: { tool: string; family: string; outcome: 'ran' | 'refused' }[] = [];
+  /** The families offered, round by round. */
+  offered: string[][] = [];
   within<T>(fn: () => Promise<T>) {
     return fn();
   }
-  toolCall<T>(name: string, fn: () => Promise<T>) {
+  async toolCall<T>(name: string, fn: () => Promise<T>, meta?: ToolCallMeta) {
     this.calls.push(`tool:${name}`);
-    return fn();
+    try {
+      return await fn();
+    } finally {
+      if (meta) this.families.push({ tool: name, family: meta.family, outcome: meta.outcome ?? 'ran' });
+    }
+  }
+  familiesOffered(families: readonly string[]) {
+    this.offered.push([...families]);
   }
   setTier() {}
   chunkStart(n: number) {

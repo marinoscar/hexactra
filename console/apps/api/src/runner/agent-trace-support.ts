@@ -15,6 +15,8 @@ export interface PendingTool {
   host?: string;
   gate?: string;
   attrs?: Record<string, string | number | boolean>;
+  /** The tool's family (E41.1), from the harness wrapper; absent for a chat tool. */
+  family?: string;
 }
 
 /** What `onStep` hands over about a model round trip (a structural subset of `AiToolStep`). */

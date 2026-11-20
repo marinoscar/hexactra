@@ -85,7 +85,18 @@ export interface LiveScenarioSummary {
   /** Every distinct reason a run failed. */
   failures: string[];
   skipped: boolean;
+  /** Which set it belongs to (E41.1): `routing` (tool choice, the owner's accounts) or `existing` (the browser suite). Absent in older files: `existing`. */
+  set?: ScenarioSet;
+  /** The tool families any run used, sorted. */
+  familiesUsed?: string[];
+  /** The pending expectations that did not hold (reported, not counted as failures). */
+  pending?: string[];
 }
+
+export type ScenarioSet = 'routing' | 'existing';
+
+/** The set of a scenario: one that lists the owner's accounts or an MCP server measures tool choice. */
+export const scenarioSet = (scenario: Scenario): ScenarioSet => (scenario.connections.length > 0 ? 'routing' : 'existing');
 
 export interface LiveSummary {
   type: 'hexactra.scenario-live';
@@ -125,6 +136,9 @@ export function summarizeRuns(scenario: Scenario, results: ScenarioResult[], ask
     violations: [...new Set(results.flatMap((r) => r.violations))].sort(),
     failures: [...new Set(results.flatMap((r) => r.failures))],
     skipped: completed === 0,
+    set: scenarioSet(scenario),
+    familiesUsed: [...new Set(results.flatMap((r) => r.familiesUsed))].sort(),
+    pending: [...new Set(results.flatMap((r) => r.pendingFailures))],
   };
 }
 

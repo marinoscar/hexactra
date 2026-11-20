@@ -198,6 +198,12 @@ describe('agent traces', () => {
       // A tool call: name, call id, step, outcome, action, the host only.
       expect(tools1[0]!.attributes).toMatchObject({ [ATTR.operationName]: OPERATION.executeTool, [ATTR.toolName]: 'navigate', [ATTR.toolCallId]: 'call-1', [ATTR.stepOk]: true, [ATTR.actionType]: 'navigate', [ATTR.pageHost]: 'shop.example.test' });
       expect(tools1[0]!.attributes[ATTR.stepSeq]).toEqual(expect.any(Number));
+      // Tool families (E41.1): each tool span names its family; the job's root carries the families offered and used.
+      expect(tools1.map((t) => t.attributes[ATTR.toolFamily])).toEqual(['browser', 'browser', 'browser', 'browser']);
+      expect(ask.attributes[ATTR.toolFamily]).toBe('human');
+      expect(String(root1!.attributes[ATTR.runFamiliesOffered]).split(',')).toEqual(expect.arrayContaining(['browser', 'control', 'human']));
+      expect(root1!.attributes[ATTR.runFamiliesUsed]).toBe('browser,human');
+      expect(recorded.filter((r) => r.key === 'runToolCalls').map((r) => r.labels)).toEqual(expect.arrayContaining([{ family: 'browser', outcome: 'ok' }, { family: 'human', outcome: 'ok' }]));
       // A fabric span: the action's type, the operation id and its state.
       const fabricNav = childrenOf(job1, tools1[0]!)[0]!;
       expect(fabricNav.kind).toBe(SpanKind.CLIENT);

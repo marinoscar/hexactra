@@ -13,10 +13,9 @@ import { riskGate } from '@marinoscar/hexactra-browser-agent/gates';
 import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
 import { currentUrl, currentUrlOf } from '@marinoscar/hexactra-browser-agent/page';
 import { domainAllowed } from '@marinoscar/hexactra-browser-agent/policy';
-import { browserTools } from '@marinoscar/hexactra-browser-agent/tools';
 import { instructionsWithOutputs, outputsHandle, outputsNudge, outputsWrapUpNote } from '../outputs';
 import { readOutputs } from '../../tasks/task-outputs.schemas';
-import { BudgetTracker, GatePipeline, ToolRegistry, type LoopProfile, type Ports, type RunnerTool } from '@marinoscar/hexactra-agent';
+import { BudgetTracker, GatePipeline, type LoopProfile, type Ports } from '@marinoscar/hexactra-agent';
 import { createRunLoop, type RunLoop } from '@marinoscar/hexactra-agent/engine';
 import { guidanceSummary } from '../trace';
 import { readUsedSavedCards } from '../saved-cards';
@@ -27,7 +26,7 @@ import { FabricBrowser } from './fabric-browser';
 import { openFabricSession } from './browser-session';
 import { BrowserError } from '@marinoscar/hexactra-browser-agent/browser-port';
 import { connectionGate } from './gates/connection-gate';
-import { connectionTools } from './tools/connections';
+import { registerRunTools } from './run-tools';
 import { mcpTools } from './tools/connections/mcp';
 import { DEFAULT_CONNECTION_READ_LIMITS } from './connections/memory';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from '../goal-run.enqueue';
@@ -196,23 +195,17 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     },
   } satisfies BrowserHooks);
 
-  // The tools, in the order the model has always been offered them.
-  const registry = new ToolRegistry<HostContext>();
-  // A task that never opens a browser (E39.7) is offered no browser tool: only the question tool, the connections and `finish`.
-  const noBrowser = s.connections.needsBrowser === 'never';
-  const core = browserTools.core as unknown as RunnerTool<HostContext>[];
-  registry.registerAll(noBrowser ? core.filter((t) => t.name === 'request_human') : core);
-  if (d.proposals) registry.register(proposeMemory);
-  if (flags.saveLogin && !noBrowser) registry.register(proposeSavingLogin);
-  if (!noBrowser) registry.register(browserTools.typeSecret as unknown as RunnerTool<HostContext>);
-  if (flags.savedLogins && !noBrowser) registry.registerAll(savedLoginTools);
-  if (flags.savedIdentity && !noBrowser) registry.registerAll(savedIdentityTools);
-  if (flags.savedCards && !noBrowser) registry.registerAll(buildSavedCardTools(cardCtx));
-  // The owner's connections (E39.7): offered only when the run has one with the capability switched on (`available`).
-  if (s.connections.list.length > 0 && d.connections) registry.registerAll(connectionTools);
-  // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.
-  if (s.connections.list.length > 0) registry.registerAll(await mcpTools(d, userId, s.connections.list));
-  registry.register(browserTools.finish as unknown as RunnerTool<HostContext>);
+  // The tools, in the order the model has always been offered them (one function, shared with the scenario kit).
+  const registry = registerRunTools<HostContext>({
+    needsBrowser: s.connections.needsBrowser,
+    proposeMemory: d.proposals ? proposeMemory : null,
+    proposeSavingLogin: flags.saveLogin ? proposeSavingLogin : null,
+    savedLogins: flags.savedLogins ? savedLoginTools : null,
+    savedIdentity: flags.savedIdentity ? savedIdentityTools : null,
+    savedCards: flags.savedCards ? buildSavedCardTools(cardCtx) : null,
+    connections: s.connections.list.length > 0 && Boolean(d.connections),
+    mcp: s.connections.list.length > 0 ? await mcpTools(d, userId, s.connections.list) : [],
+  });
 
   // A run an email started (E39.8): a reference to the message, never its content.
   const mailLines = await mailContextLines(d, userId, run.context, registry.get('mail_read') !== undefined);

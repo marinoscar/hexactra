@@ -1,0 +1,31 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: two accounts, ask which before sending",
+  "description": "Two accounts could send it and the owner did not say which: the run asks before any send.",
+  "goal": "Send Person A (person-a@example.test) the report: the quarterly numbers are ready.",
+  "trigger": "chat",
+  "site": { "start": "about:blank", "pages": {} },
+  "connections": [
+    { "ref": "c1", "label": "Personal", "provider": "google", "email": "owner@example.test", "capabilities": ["mail_read", "mail_send"] },
+    { "ref": "c2", "label": "Work", "provider": "google", "email": "owner@work.example.test", "capabilities": ["mail_read", "mail_send"] }
+  ],
+  "owner": [
+    { "when": { "input": "choice" }, "answer": "choice", "value": "Work" },
+    { "when": { "kind": "confirmation" }, "answer": "approve" }
+  ],
+  "script": [
+    [{ "tool": "request_human", "args": { "kind": "other", "input": "choice", "prompt": "Which account should send the report?", "choices": ["Personal", "Work"] } }],
+    [{ "tool": "mail_send", "args": { "connection": "Work", "to": ["person-a@example.test"], "subject": "The report", "body": "The quarterly numbers are ready." } }],
+    [{ "tool": "mail_send", "args": { "connection": "Work", "to": ["person-a@example.test"], "subject": "The report", "body": "The quarterly numbers are ready." } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Sent the report to Person A from Work." } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 4,
+    "questions": 2,
+    "mustAsk": [{ "kind": "other", "promptIncludes": "Which account" }],
+    "toolsUsed": ["request_human", "mail_send"],
+    "mustNotUseFamily": ["browser", "desktop"],
+    "sent": [{ "connection": "Work", "to": "person-a@example.test" }]
+  }
+}

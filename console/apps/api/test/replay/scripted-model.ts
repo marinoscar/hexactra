@@ -43,11 +43,21 @@ const DEFAULTS: Record<string, unknown> = {
   parameter: null,
 };
 
-export function withDefaults(tool: string, args: Record<string, unknown> | undefined): Record<string, unknown> {
+export function withDefaults(tool: string, args: Record<string, unknown> | undefined, shape?: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...args };
-  for (const [k, v] of Object.entries(DEFAULTS)) if (!(k in out)) out[k] = v;
+  // Only the fields the tool has (an MCP server's tool keeps every argument it is given, so a stray default would reach the server).
+  for (const [k, v] of Object.entries(DEFAULTS)) if (!(k in out) && (!shape || k in shape)) out[k] = v;
   if (tool === 'read_text' && !('selector' in out)) out.selector = null;
   if (tool === 'new_tab' && !('url' in out)) out.url = null;
+  return out;
+}
+
+/** Sets every field the script left out that the tool's schema allows to be null (the connection tools' optional fields), to null. */
+export function fillNullable(schema: unknown, args: Record<string, unknown>): Record<string, unknown> {
+  const shape = (schema as { shape?: Record<string, { safeParse(v: unknown): { success: boolean } }> }).shape;
+  if (!shape) return args;
+  const out = { ...args };
+  for (const [k, field] of Object.entries(shape)) if (!(k in out) && field.safeParse(null).success) out[k] = null;
   return out;
 }
 
@@ -73,7 +83,7 @@ export class ScriptedScenarioModel implements ModelPort {
     for (const call of chunk) {
       const tool = req.tools.find((t) => t.name === call.tool);
       if (!tool) throw new ScriptError(`the script calls "${call.tool}", which is not offered this round (offered: ${req.tools.map((t) => t.name).join(', ')})`);
-      const args = withDefaults(call.tool, call.args);
+      const args = fillNullable(tool.parameters, withDefaults(call.tool, call.args, (tool.parameters as { shape?: Record<string, unknown> }).shape));
       const parsed = tool.parameters.safeParse(args);
       if (!parsed.success) throw new ScriptError(`the script's arguments for "${call.tool}" are refused: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
       this.record.calls.push({ tool: call.tool, args: parsed.data });

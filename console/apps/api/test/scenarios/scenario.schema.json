@@ -481,6 +481,275 @@
       },
       "additionalProperties": false
     },
+    "connections": {
+      "default": [],
+      "description": "The owner's accounts and MCP servers this run lists (E41.1)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "pattern": "^c\\d+$",
+            "description": "The reference connections_list gives it: c1, c2, ... in the order of this list"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "google",
+              "microsoft",
+              "mcp"
+            ]
+          },
+          "access": {
+            "default": "read_write",
+            "type": "string",
+            "enum": [
+              "read",
+              "read_write"
+            ]
+          },
+          "email": {
+            "type": "string"
+          },
+          "capabilities": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "mail_read",
+                "mail_send",
+                "mail_modify",
+                "calendar_read",
+                "calendar_write",
+                "docs_read",
+                "docs_write"
+              ]
+            }
+          },
+          "defaultFor": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mail": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "from": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "to": {
+                  "default": [
+                    "owner@example.test"
+                  ],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "ISO instant with offset"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "attachments": {
+                  "default": [],
+                  "description": "File names; the content is invented",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "from",
+                "subject",
+                "date",
+                "body"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "events": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string"
+                },
+                "end": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "files": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "document",
+                    "spreadsheet",
+                    "pdf",
+                    "other"
+                  ]
+                },
+                "text": {
+                  "description": "A document's text",
+                  "type": "string"
+                },
+                "sheet": {
+                  "description": "A spreadsheet's tab (default Sheet1)",
+                  "type": "string"
+                },
+                "rows": {
+                  "description": "A spreadsheet's rows",
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "modifiedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "instructions": {
+            "description": "mcp: what the server says it is for",
+            "type": "string"
+          },
+          "tools": {
+            "default": [],
+            "description": "mcp: its tools",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string"
+                },
+                "inputSchema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {},
+                  "description": "The tool's JSON schema"
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write"
+                  ]
+                },
+                "result": {
+                  "type": "string",
+                  "description": "The text the server answers"
+                }
+              },
+              "required": [
+                "name",
+                "description",
+                "inputSchema",
+                "effect",
+                "result"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "ref",
+          "label",
+          "provider"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "needsBrowser": {
+      "default": "auto",
+      "description": "A task that never opens a browser is offered no browser tool",
+      "type": "string",
+      "enum": [
+        "auto",
+        "never",
+        "always"
+      ]
+    },
+    "context": {
+      "description": "\"Earlier in this conversation\": what a chat's earlier jobs found, as the run reads it",
+      "type": "string"
+    },
     "expect": {
       "type": "object",
       "properties": {
@@ -573,10 +842,147 @@
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
+        },
+        "toolsUsed": {
+          "description": "Each named tool was called at least once",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mustNotUseFamily": {
+          "description": "No call of a tool of these families (browser, desktop, accounts, mcp, mcp:<ref>)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "firstToolFamily": {
+          "description": "The family of the first tool call that is not control or human",
+          "type": "string"
+        },
+        "sent": {
+          "description": "What the fake mailboxes sent",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "connection": {
+                "type": "string",
+                "description": "The connection's ref or label"
+              },
+              "to": {
+                "type": "string",
+                "description": "One recipient the message went to"
+              },
+              "subjectIncludes": {
+                "type": "string"
+              },
+              "bodyIncludes": {
+                "type": "string"
+              },
+              "attachments": {
+                "description": "Exactly this many attachments",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "connection",
+              "to"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "browserOpened": {
+          "description": "Whether any action reached the browser",
+          "type": "boolean"
         }
       },
       "required": [
         "status"
+      ],
+      "additionalProperties": false
+    },
+    "pending": {
+      "description": "Expectations reported but not failing CI until the named issue lands",
+      "type": "object",
+      "properties": {
+        "issue": {
+          "type": "string",
+          "description": "The issue that will make it hold, e.g. E41.4"
+        },
+        "expect": {
+          "type": "object",
+          "properties": {
+            "toolsUsed": {
+              "description": "Each named tool was called at least once",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mustNotUseFamily": {
+              "description": "No call of a tool of these families (browser, desktop, accounts, mcp, mcp:<ref>)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "firstToolFamily": {
+              "description": "The family of the first tool call that is not control or human",
+              "type": "string"
+            },
+            "sent": {
+              "description": "What the fake mailboxes sent",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "connection": {
+                    "type": "string",
+                    "description": "The connection's ref or label"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "One recipient the message went to"
+                  },
+                  "subjectIncludes": {
+                    "type": "string"
+                  },
+                  "bodyIncludes": {
+                    "type": "string"
+                  },
+                  "attachments": {
+                    "description": "Exactly this many attachments",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "connection",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "browserOpened": {
+              "description": "Whether any action reached the browser",
+              "type": "boolean"
+            },
+            "finishIncludes": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "description": "The tool-choice expectations that do not hold yet"
+        }
+      },
+      "required": [
+        "issue",
+        "expect"
       ],
       "additionalProperties": false
     }

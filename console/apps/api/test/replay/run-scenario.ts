@@ -10,7 +10,6 @@ import { riskGate, siteGate } from '@marinoscar/hexactra-browser-agent/gates';
 import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
 import { domainAllowed } from '@marinoscar/hexactra-browser-agent/policy';
 import { assembleRoundInput, observeRound, sitesLine, VISION_NOTES } from '@marinoscar/hexactra-browser-agent/round';
-import { browserTools } from '@marinoscar/hexactra-browser-agent/tools';
 import {
   BudgetTracker,
   type BudgetSpec,
@@ -19,7 +18,6 @@ import {
   readStallState,
   reconcileSteps,
   RunUsage,
-  ToolRegistry,
   type CheckpointInput,
   type LoopProfile,
   type ModelPort,
@@ -33,10 +31,15 @@ import {
 } from '@marinoscar/hexactra-agent';
 import { createRunContext, runLoop } from '@marinoscar/hexactra-agent/engine';
 import { FakeApprovals, FakeRunStore, FakeTelemetry } from '@marinoscar/hexactra-agent/testing';
+import { connectionGate } from '../../src/runner/host/gates/connection-gate';
+import { DEFAULT_CONNECTION_READ_LIMITS } from '../../src/runner/host/connections/memory';
+import { registerRunTools } from '../../src/runner/host/run-tools';
+import { mcpTools } from '../../src/runner/host/tools/connections/mcp';
+import { scenarioAccounts, type ScenarioAccounts } from './connections';
 import { checkInvariants } from './invariants';
 import { OwnerQuestions, OwnerScript, type AskedQuestion } from './owner';
 import type { Scenario } from './scenario.schema';
-import { evaluate } from './expectations';
+import { evaluate, evaluatePending } from './expectations';
 import { newModelRecord, recording, ScriptedScenarioModel, ScriptExhausted, type ModelRecord } from './scripted-model';
 import { OwnerSecrets, SiteBrowser } from './site';
 
@@ -92,6 +95,17 @@ export interface ScenarioResult {
   usage: { modelCalls: number; inputTokens: number; outputTokens: number; costUsd: number; costKnown: boolean };
   model: ModelRecord;
   memory: unknown;
+  /** Every tool call that went through the wrapper, in order, with its family (E41.1): `refused` when a gate refused it. */
+  calls: { tool: string; family: string; outcome: 'ran' | 'refused' }[];
+  /** The families offered in any round, and those used, sorted. */
+  familiesOffered: string[];
+  familiesUsed: string[];
+  /** The tools the run could be offered (registered), for naming an unknown tool in `expect`. */
+  knownTools: string[];
+  /** What the doubles of the owner's accounts received; null without connections. */
+  accounts: ScenarioAccounts | null;
+  /** The pending expectations that do not hold yet (reported, not failing). */
+  pendingFailures: string[];
 }
 
 const MAX_JOBS_DEFAULT = 20;
@@ -172,13 +186,19 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
   const policyFacts = () => ({ sites: sites.text, confirm: scenario.task.confirmRiskyActions, approvals: approvals.rules.length });
   const policyAtStart = policyFacts();
 
-  const registry = new ToolRegistry<never>().registerAll([...browserTools.core, browserTools.typeSecret, browserTools.finish] as unknown as RunnerTool<never>[]);
+  // The owner's accounts and MCP servers (E41.1): the real connection tools over doubles, registered as the host registers them.
+  const accounts = scenarioAccounts(scenario.connections);
+  const registry = registerRunTools<never>({
+    needsBrowser: scenario.needsBrowser,
+    connections: accounts !== null,
+    mcp: accounts ? ((await mcpTools(accounts.deps, 'user-1', accounts.list)) as unknown as RunnerTool<never>[]) : [],
+  });
   // `gates_off` replaces both gates with ones that allow everything, as a broken change to them would.
   const openGates = [
     { name: 'site', check: async () => ({ kind: 'allow' as const }) },
     { name: 'risk', check: async () => ({ kind: 'allow' as const, data: { target: null, rule: null } }) },
   ];
-  const pipeline = new GatePipeline<never>((sabotage.has('gates_off') ? openGates : [siteGate, riskGate]) as never[]);
+  const pipeline = new GatePipeline<never>((sabotage.has('gates_off') ? [...openGates, { name: 'connection', check: async () => ({ kind: 'allow' as const }) }] : [siteGate, riskGate, connectionGate]) as never[]);
 
   const buildJob = async (memory: BrowserMemory) => {
     const stallState = (memory.stall = readStallState(memory.stall));
@@ -224,7 +244,14 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
       masking: NO_MASKING,
       hooks: {},
       outputs: null,
-    };
+      // What the connection tools read from the host's context (E41.1): the doubles, the run's list and its read caps.
+      ...(accounts
+        ? {
+            d: accounts.deps,
+            connections: { list: accounts.list, needsBrowser: scenario.needsBrowser, lazyBrowser: false, limits: DEFAULT_CONNECTION_READ_LIMITS },
+          }
+        : {}),
+    } as BrowserExt;
     const newest = await store.newestSeq();
     const ctx = createRunContext<BrowserMemory, BrowserExt>({
       run: { id: 'run-1', userId: 'user-1', orgId: null, goal: scenario.goal, trigger: scenario.trigger, taskId: null, conversationId: scenario.trigger === 'chat' ? 'chat-1' : null },
@@ -266,7 +293,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
     return { ctx, profile };
   };
 
-  let memory: BrowserMemory = { log: [], chunks: 0, ...(scenario.vision ? {} : { visionOff: true }) };
+  let memory: BrowserMemory = { log: [], chunks: 0, ...(scenario.vision ? {} : { visionOff: true }), ...(scenario.context ? { context: scenario.context } : {}) };
   let status: ScenarioResult['status'] = 'error';
   let error: string | null = null;
   let jobs = 0;
@@ -351,8 +378,16 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
     usage: { ...store.totals },
     model: modelRecord,
     memory: facts.memory,
+    calls: telemetry.families.map((c) => ({ ...c, family: c.family.replace(/^mcp:conn-/, 'mcp:') })),
+    familiesOffered: [...new Set(telemetry.offered.flat().map((f) => f.replace(/^mcp:conn-/, 'mcp:')))].sort(),
+    familiesUsed: [],
+    knownTools: registry.all().map((t) => t.name),
+    accounts,
+    pendingFailures: [],
   };
+  result.familiesUsed = [...new Set(result.calls.map((c) => c.family))].sort();
   result.failures = evaluate(result);
+  result.pendingFailures = evaluatePending(result);
   result.pass = result.failures.length === 0;
   return result;
 }

@@ -190,6 +190,8 @@ Changing the instructions, a tool description, a gate or a model is otherwise a 
 | `invariants.ts` | the rules every scenario is checked against |
 | `run-scenario.ts`, `expectations.ts` | `runScenario(scenario, options)`: the real chunk loop to the end, a new job at each question, crash, pause and hop; and what `expect` compares |
 | `live.ts`, `report.ts` | the live mode (N runs, the spend cap, the summary), and the table, JUnit XML, Markdown and baseline diff |
+| `connections.ts` | the owner's accounts and MCP servers of a scenario (E41.1): the capability hub over in-memory connections and the fake provider, and an in-memory MCP service, seeded from the file; it keeps what was sent, appended, created and called |
+| `chat-front.ts` | the chat-front scenarios (E41.1): one turn of the real `ChatTurnService` over a conversation, on the database; what the chat's model called is checked |
 | `fake-fabric.ts` | `fakeFabric(mockFn)` and `scriptedAi(mockFn, ...)`: the in-memory fabric client and scripted AI service the database specs share (a spec hands in its own `jest.fn`, so the kit has no dependency on jest's types) |
 
 A scenario checks the harness and the browser layer. It does not go through the host's database round trip (the question broker, the policy snapshot): the database specs above do.
@@ -227,6 +229,32 @@ A scenario is one file, `apps/api/test/scenarios/<name>.scenario.json` (a `$sche
 - **The owner** answers by rule: `approve`, `deny`, `text`, `choice`, `secret`, `credentials`, `done`, `decline`. A secret or a password is typed by the fake fabric into the field; it never enters the model's input, a step or the memory, and the scenario's `secrets` list names strings that must not appear anywhere.
 - **`harness`** shapes what happens to the run: `crash` (the job dies before or after a click is sent, then a new job runs `scriptAfterCrash`), `stopAfterActions`, `pauseAfterActions` with `resumeAfterPause`, `budget`, `stall`, and `trigger` (`chat` makes budgets soft). `sabotage` breaks part of the harness **on purpose** and belongs only to the violation scenarios.
 - **`expect`** decides pass or fail from the run's end state and the invariants (there is no model-graded judge): the status, the questions that must have been asked (`mustAsk`, optionally before a click), the rules a scenario guards by name (`mustNot`), `maxSteps`, the site's `endState`, the stop reason and the tier at the end.
+
+### Tool choice: connections, the routing set and the chat front (E41.1)
+
+A scenario can give the run the owner's accounts and MCP servers, and say which tools it must and must not reach for:
+
+```jsonc
+{
+  "connections": [
+    { "ref": "c1", "label": "Personal", "provider": "google", "access": "read_write", "capabilities": ["mail_read", "mail_send"],
+      "mail": [{ "id": "msg-1", "from": "person-b@example.test", "subject": "…", "date": "2026-11-20T08:00:00Z", "body": "…", "attachments": ["invoice.pdf"] }],
+      "events": [], "files": [{ "id": "sheet-1", "name": "Expenses", "kind": "spreadsheet", "rows": [["Date", "What"]] }] },
+    { "ref": "c2", "label": "Notes", "provider": "mcp", "instructions": "…", "tools": [{ "name": "create_note", "description": "…", "inputSchema": { "type": "object" }, "effect": "write", "result": "Note created." }] }
+  ],
+  "needsBrowser": "auto",
+  "context": "Previous job: …\nIt succeeded: …",
+  "expect": { "status": "succeeded", "toolsUsed": ["mail_send"], "mustNotUseFamily": ["browser", "desktop"], "firstToolFamily": "accounts", "browserOpened": false,
+              "sent": [{ "connection": "c1", "to": "trips@example.test", "bodyIncludes": "99,667", "attachments": 1 }] },
+  "pending": { "issue": "E41.4", "expect": { "mustNotUseFamily": ["browser"] } }
+}
+```
+
+- The **real** connection and MCP tools run, with the connection gate and its cards: the kit registers the run's tools through the host's own function (`registerRunTools`, `src/runner/host/run-tools.ts`), so the two never drift, and the owner rules answer the cards the way the host folds an answer. Scripted calls may leave out every nullable field.
+- **Families**: `browser`, `desktop`, `accounts` (Google and Microsoft mail, calendar, documents), `mcp` (any server) or `mcp:<ref>` (one), `human`, `control`. The family of a tool is `toolFamilyOf` (harness package). An unknown tool or family in `expect` fails the scenario, naming it; a scripted call the doubles cannot serve (a file that was not seeded) fails `toolsUsed` with what the model read.
+- **`pending`** holds the expectations a later issue makes hold. They are reported (`PENDING` in the table, a list in the live report) and never fail CI; the issue that lands removes the marker.
+- **The routing set** is `test/scenarios/routing/` (nine scenarios). The live report shows it and the existing set apart, with pass rate, median steps, tokens and cost per set and the families each scenario used; `--set routing` (and the workflow's `set` input) runs it alone.
+- **The chat front** has its own scenarios, `test/scenarios/chat/*.chat.json`: a conversation (owner messages, assistant replies, runs with their results), the chat's accounts, the newest message, the scripted calls of the model's first round, and `expect` (`tool`: `start_run`, `ask_user`, `read`, `none` or a tool name; for `start_run`, `goalIncludes` and `goalMustNotInclude` regexes). They run scripted in `test/chat-front-scenarios.db.spec.ts` (the database tier; it fails when none is found) and live with `npm run scenarios:live --workspace=api -- --chat --runs 3 --user <email>` (the configured `chat_orchestrator` model; `test-results/live-chat.md`).
 
 ### The invariants
 

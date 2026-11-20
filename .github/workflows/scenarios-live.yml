@@ -25,6 +25,11 @@ on:
       filter:
         description: Only scenarios whose name or file contains this text (optional)
         default: ''
+      set:
+        description: Only one set of scenarios (routing is the tool-choice set of E41)
+        type: choice
+        options: [all, routing, existing]
+        default: all
 
 permissions:
   contents: read
@@ -81,10 +86,12 @@ jobs:
           CAP_USD: ${{ inputs.cap_usd }}
           TIER: ${{ inputs.tier }}
           FILTER: ${{ inputs.filter }}
+          SET: ${{ inputs.set }}
           USER_EMAIL: ${{ secrets.SCENARIOS_LIVE_USER_EMAIL }}
         run: |
           args=(--tier "$TIER" --runs "$RUNS" --cap-usd "$CAP_USD" --user "$USER_EMAIL")
           if [ -n "$FILTER" ]; then args+=(--filter "$FILTER"); fi
+          if [ "$SET" != "all" ] && [ -n "$SET" ]; then args+=(--set "$SET"); fi
           npm run scenarios:live --workspace=api -- "${args[@]}" | tee "$RUNNER_TEMP/live.log"
       - name: Summary
         if: always()
