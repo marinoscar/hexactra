@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { ConnectionCapabilities } from '../connections/connection-capabilities.service';
 import { MemoryContext } from '../memories/memory-context';
+import { attributePairs, attributesFromPairs } from '../memories/memory-attribute-pairs';
 import { MemoryProposals } from '../memories/memory-proposals.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
@@ -303,13 +304,13 @@ export class ChatTurnService {
                 kind: z.enum(['person', 'account', 'preference', 'fact']),
                 label: z.string().min(1).max(120).describe('What the owner calls it: "My wife", "Checking account".'),
                 aliases: z.array(z.string().min(1).max(60)).max(10).nullable().describe('Other words for it ("wife", the person\'s first name).'),
-                attributes: z.record(z.string().min(1).max(60), z.string().min(1).max(500)).describe('Named values: { "name": "…", "phone": "…" }.'),
+                attributes: attributePairs.describe('Named values as pairs: [{ "name": "name", "value": "…" }, { "name": "phone", "value": "…" }].'),
                 supersedes: z.string().nullable(),
               }),
               execute: async ({ kind, label, aliases, attributes, supersedes }) => {
                 if (state.proposals >= MAX_PROPOSALS_PER_TURN) return `Refused: at most ${MAX_PROPOSALS_PER_TURN} proposals per turn.`;
                 state.proposals += 1;
-                const out = await this.proposals!.propose(userId, { kind, label, aliases: aliases ?? [], attributes, supersedes: supersedes && /^[0-9a-f-]{36}$/i.test(supersedes) ? supersedes : null }, { conversationId: c.id });
+                const out = await this.proposals!.propose(userId, { kind, label, aliases: aliases ?? [], attributes: attributesFromPairs(attributes), supersedes: supersedes && /^[0-9a-f-]{36}$/i.test(supersedes) ? supersedes : null }, { conversationId: c.id });
                 if (out.proposed) state.wrote = true;
                 return out.message;
               },
@@ -335,6 +336,8 @@ export class ChatTurnService {
         name: 'stop_run',
         description: "Stop the chat's live run, when the owner asks to stop or cancel.",
         parameters: z.object({}),
+        // No arguments, so nothing for strict mode to guarantee. Kept out of it as a precaution: a strict schema needs a `required` list that an empty object does not carry, and OpenAI reports one bad tool per call (#675).
+        strict: false,
         execute: async () => {
           const live = await this.liveRun(userId, c.id);
           if (!live) return 'No run of this chat is live.';
@@ -349,6 +352,8 @@ export class ChatTurnService {
               name: 'pause_run',
               description: "Pause the chat's live run, when the owner asks to hold, wait or pause. It finishes the step it is on and then does nothing until resume_run; its browser stays as it is.",
               parameters: z.object({}),
+              // No arguments, so nothing for strict mode to guarantee. Kept out of it as a precaution: a strict schema needs a `required` list that an empty object does not carry, and OpenAI reports one bad tool per call (#675).
+              strict: false,
               execute: async () => {
                 const live = await this.liveRun(userId, c.id);
                 if (!live) return 'No run of this chat is live.';
@@ -362,6 +367,8 @@ export class ChatTurnService {
               name: 'resume_run',
               description: "Continue the chat's paused run, when the owner says to continue, go on or resume.",
               parameters: z.object({}),
+              // No arguments, so nothing for strict mode to guarantee. Kept out of it as a precaution: a strict schema needs a `required` list that an empty object does not carry, and OpenAI reports one bad tool per call (#675).
+              strict: false,
               execute: async () => {
                 const live = await this.liveRun(userId, c.id);
                 if (!live) return 'No run of this chat is live.';
@@ -379,6 +386,8 @@ export class ChatTurnService {
               name: 'draft_task',
               description: 'Draft a reusable task from this conversation, for the owner to review and save. Only when the owner asks to save, reuse, repeat or schedule what was done.',
               parameters: z.object({}),
+              // No arguments, so nothing for strict mode to guarantee. Kept out of it as a precaution: a strict schema needs a `required` list that an empty object does not carry, and OpenAI reports one bad tool per call (#675).
+              strict: false,
               execute: async () => {
                 if (state.done) return 'Already handled this turn.';
                 const draft = await this.drafts!.draft(userId, c.id, orgId);

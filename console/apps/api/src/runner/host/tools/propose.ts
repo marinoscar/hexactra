@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import { ACTION_TIMEOUT_MS } from '@marinoscar/hexactra-browser-agent/browser-port';
+import { attributePairs, attributesFromPairs } from '../../../memories/memory-attribute-pairs';
 import { ownerBacked } from '../../../memories/memory-proposals.service';
 import type { HostContext } from '../context';
 
@@ -40,11 +41,12 @@ export const proposeMemory = defineRunnerTool({
     kind: z.enum(['person', 'account', 'preference', 'fact']),
     label: z.string().min(1).max(120),
     aliases: z.array(z.string().min(1).max(60)).max(10).nullable(),
-    attributes: z.record(z.string().min(1).max(60), z.string().min(1).max(500)),
+    attributes: attributePairs.describe('Named values as pairs: [{ "name": "phone", "value": "…" }].'),
     supersedes: z.string().nullable(),
     from_answer: z.boolean(),
   }),
-  execute: async (ctx: HostContext, { kind, label, aliases, attributes, supersedes, from_answer }) => {
+  execute: async (ctx: HostContext, { kind, label, aliases, attributes: pairs, supersedes, from_answer }) => {
+    const attributes = attributesFromPairs(pairs);
     const refused = 'Memories come from the owner. Ask the owner if this should be remembered.';
     if (from_answer !== true) return refused;
     if ((ctx.memory.proposals ?? 0) >= MAX_RUN_PROPOSALS) return `Refused: at most ${MAX_RUN_PROPOSALS} proposals per run.`;

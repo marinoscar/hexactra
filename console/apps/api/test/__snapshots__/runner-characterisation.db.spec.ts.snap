@@ -6814,17 +6814,29 @@ When done, or when the goal is impossible, call finish with a short, factual res
                 ],
               },
               "attributes": {
-                "additionalProperties": {
-                  "maxLength": 500,
-                  "minLength": 1,
-                  "type": "string",
+                "description": "Named values as pairs: [{ "name": "phone", "value": "…" }].",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "maxLength": 60,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "value": {
+                      "maxLength": 500,
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "value",
+                  ],
+                  "type": "object",
                 },
-                "propertyNames": {
-                  "maxLength": 60,
-                  "minLength": 1,
-                  "type": "string",
-                },
-                "type": "object",
+                "maxItems": 20,
+                "type": "array",
               },
               "from_answer": {
                 "type": "boolean",
