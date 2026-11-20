@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
@@ -24,7 +24,7 @@ const HOST_ID = '22222222-2222-4222-8222-222222222222';
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
 /** A real (tiny) bundle archive, made the way scripts/package-agent-bundle.mjs makes one. */
-function makeBundle(dir: string, version = '0.1.0', commit = 'abcdef1234567890'): string {
+function makeBundle(dir: string, version = '0.1.0', commit = 'abcdef1234567890', corrupt = false): string {
   const root = join(dir, 'stage', BUNDLE_NAME);
   mkdirSync(join(root, 'bin'), { recursive: true });
   mkdirSync(join(root, 'extension'), { recursive: true });
@@ -33,6 +33,7 @@ function makeBundle(dir: string, version = '0.1.0', commit = 'abcdef1234567890')
   writeFileSync(join(root, 'extension', 'manifest.json'), '{"manifest_version":3,"key":"k"}');
   const files: Record<string, string> = {};
   for (const f of ['bin/hexactra-agent', 'bin/hexactra-native-host', 'extension/manifest.json']) files[f] = sha(readFileSync(join(root, f)));
+  if (corrupt) files['bin/hexactra-agent'] = '0'.repeat(64);
   writeFileSync(join(root, 'BUNDLE.json'), JSON.stringify({ name: BUNDLE_NAME, version, commit, files }));
   const archive = join(dir, `${BUNDLE_NAME}-${commit.slice(0, 4)}.tar.gz`);
   execFileSync('tar', ['-czf', archive, '-C', join(dir, 'stage'), BUNDLE_NAME]);
@@ -128,6 +129,26 @@ describe('the agent bundle', () => {
     const bad = makeBundle(home, '0.1.0', 'ffff000011112222');
     writeFileSync(`${bad}.sha256`, `${'0'.repeat(64)}  x\n`);
     await expect(fetchBundle(paths, { bundle: bad }, d.fetch, () => {})).rejects.toThrow(/checksum mismatch/);
+  });
+
+  it('stages beside the versions directory, not in the system temp directory, and cleans up (#695)', async () => {
+    const { home, paths, d } = harness();
+    const archive = makeBundle(home);
+    // A system temp directory the bundle must not touch: a rename out of it fails on another filesystem.
+    const saved = process.env.TMPDIR;
+    process.env.TMPDIR = join(home, 'no-such-tmp');
+    let b;
+    try {
+      b = await fetchBundle(paths, { bundle: archive }, d.fetch, () => {});
+    } finally {
+      if (saved === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = saved;
+    }
+    expect(readdirSync(paths.versionsDir)).toEqual([basename(b.dir)]);
+
+    const broken = makeBundle(home, '0.1.0', '1234567aaaaaaaaa', true);
+    await expect(fetchBundle(paths, { bundle: broken }, d.fetch, () => {})).rejects.toThrow(/does not match BUNDLE\.json/);
+    expect(readdirSync(paths.versionsDir)).toEqual([basename(b.dir)]);
   });
 
   it('downloads the latest release by default, or a pinned version', () => {
