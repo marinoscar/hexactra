@@ -15,6 +15,7 @@ import { QuestionEvents } from './question-events';
 import { QuestionsController } from './questions.controller';
 import { QuestionsExpireHandler, QuestionsExpireTask } from './questions.jobs';
 import { QuestionsService } from './questions.service';
+import { RequestHistoryRetentionHandler, RequestHistoryRetentionTask } from './request-history.jobs';
 import { TaskRunStarter } from './task-run-starter';
 import { MemoryValueResolverService } from '../memories/memory-value.resolver';
 import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
@@ -38,6 +39,8 @@ import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
     QuestionEvents,
     QuestionsExpireHandler,
     QuestionsExpireTask,
+    RequestHistoryRetentionHandler,
+    RequestHistoryRetentionTask,
     QuestionChannelRegistry,
     QuestionChannelDispatcher,
     QuestionsDeliverHandler,

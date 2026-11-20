@@ -139,6 +139,8 @@ describe('browser agent cards', () => {
       ['Secrets', '/admin/settings/secrets', 'system_settings:read', undefined],
       // E39.2 (#599), appended: what GET /api/connections/admin/apps enforces.
       ['Connections', '/admin/settings/connections', 'system_settings:read', undefined],
+      // E40.4 (#688), appended: the `questions` namespace of the system settings.
+      ['Request history', '/admin/settings/request-history', 'system_settings:read', undefined],
     ]);
     expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');
