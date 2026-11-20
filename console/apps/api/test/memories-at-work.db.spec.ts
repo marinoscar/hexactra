@@ -94,6 +94,8 @@ async function chatWith(s: Session, text: string): Promise<string> {
 }
 const pendingProposals = (userId: string) => prisma.question.findMany({ where: { ownerUserId: userId, input: 'memory', status: 'pending' } });
 const proposal = { kind: 'person', label: 'My wife', aliases: ['wife', 'paula'], attributes: { name: 'Paula Molina', phone: '555-010-6020', relation: 'wife' }, supersedes: null };
+/** The same proposal as the model sends it to the tool: named values as pairs (#675). */
+const toolProposal = { ...proposal, attributes: Object.entries(proposal.attributes).map(([name, value]) => ({ name, value })) };
 
 describe('the chat uses memories (#553)', () => {
   it('with the memory saved, "send my wife $10 with Zelle" starts a run without asking, the goal names her, and the run records the memory', async () => {
@@ -128,7 +130,7 @@ describe('the chat uses memories (#553)', () => {
     const model = scriptedAi([
       [['ask_user', { question: ask, options: null }]],
       [
-        ['propose_memory', proposal],
+        ['propose_memory', toolProposal],
         ['start_run', { goal: 'Send $10 with Zelle to Paula Molina, phone 555-010-6020.' }],
       ],
     ]);
@@ -175,9 +177,9 @@ describe('the chat uses memories (#553)', () => {
     const id = await chatWith(s, 'My seat is the aisle');
     const model = scriptedAi([
       [
-        ['propose_memory', { kind: 'preference', label: 'Seat', aliases: null, attributes: { seat: 'aisle' }, supersedes: null }],
-        ['propose_memory', { kind: 'fact', label: 'Home city', aliases: null, attributes: { city: 'Springfield' }, supersedes: null }],
-        ['propose_memory', { kind: 'fact', label: 'Third', aliases: null, attributes: { a: 'b' }, supersedes: null }],
+        ['propose_memory', { kind: 'preference', label: 'Seat', aliases: null, attributes: [{ name: 'seat', value: 'aisle' }], supersedes: null }],
+        ['propose_memory', { kind: 'fact', label: 'Home city', aliases: null, attributes: [{ name: 'city', value: 'Springfield' }], supersedes: null }],
+        ['propose_memory', { kind: 'fact', label: 'Third', aliases: null, attributes: [{ name: 'a', value: 'b' }], supersedes: null }],
       ],
     ]);
     await engine(model.ai).run(id, s.userId, null);
@@ -202,7 +204,7 @@ describe('the chat uses memories (#553)', () => {
     const patched = await app.inject({ method: 'PATCH', url: '/api/user-settings', headers: { authorization: `Bearer ${s.token}` }, payload: { memories: { suggest: false } } });
     expect(patched.statusCode).toBe(200);
     const id = await chatWith(s, 'Book a flight, my usual seat');
-    const model = scriptedAi([[['propose_memory', { kind: 'fact', label: 'X', aliases: null, attributes: { a: 'b' }, supersedes: null }]]]);
+    const model = scriptedAi([[['propose_memory', { kind: 'fact', label: 'X', aliases: null, attributes: [{ name: 'a', value: 'b' }], supersedes: null }]]]);
     await engine(model.ai).run(id, s.userId, null);
     expect(model.outputs[0]).toBe('The owner turned suggestions off. Do not propose memories.');
     expect(model.inputs[0]).toContain('- Seat (preference): seat aisle');
@@ -326,8 +328,8 @@ describe('the goal runner uses and proposes memories (#553)', () => {
       [
         ['navigate', { url: 'https://bank.example.test', reason: 'open the bank' }],
         ['read_text', { selector: null }],
-        ['propose_memory', { kind: 'person', label: 'My wife', aliases: null, attributes: { phone: '555-0199' }, supersedes: null, from_answer: true }],
-        ['propose_memory', { kind: 'person', label: 'My wife', aliases: null, attributes: { phone: '555-0199' }, supersedes: null, from_answer: false }],
+        ['propose_memory', { kind: 'person', label: 'My wife', aliases: null, attributes: [{ name: 'phone', value: '555-0199' }], supersedes: null, from_answer: true }],
+        ['propose_memory', { kind: 'person', label: 'My wife', aliases: null, attributes: [{ name: 'phone', value: '555-0199' }], supersedes: null, from_answer: false }],
         ['finish', { success: true, result: 'Sent.' }],
       ],
     ]);
@@ -349,7 +351,7 @@ describe('the goal runner uses and proposes memories (#553)', () => {
     const model = scriptedAi([
       [['request_human', { kind: 'other', prompt: 'Which account should I pay from?', input: 'text', choices: null, options: null, constraints: null, confirm_label: null, deny_label: null, risk: null, remember_label: null }]],
       [
-        ['propose_memory', { kind: 'account', label: 'Checking account', aliases: ['checking'], attributes: { bank: 'Example Bank', ending: '0659' }, supersedes: null, from_answer: true }],
+        ['propose_memory', { kind: 'account', label: 'Checking account', aliases: ['checking'], attributes: [{ name: 'bank', value: 'Example Bank' }, { name: 'ending', value: '0659' }], supersedes: null, from_answer: true }],
         ['finish', { success: true, result: 'Paid.' }],
       ],
     ]);

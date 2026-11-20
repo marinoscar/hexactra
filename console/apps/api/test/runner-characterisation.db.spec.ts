@@ -257,7 +257,7 @@ describe('goal runner characterisation (E38.5)', () => {
         ['run_javascript', { script: "document.querySelector('#name').value", reason: 'read it back' }],
         ['look', { screen: 'page', reason: 'check' }],
       ],
-      [['propose_memory', { kind: 'preference', label: 'Seat', aliases: null, attributes: { seat: 'aisle' }, supersedes: null, from_answer: false }], finish('Filled.')],
+      [['propose_memory', { kind: 'preference', label: 'Seat', aliases: null, attributes: [{ name: 'seat', value: 'aisle' }], supersedes: null, from_answer: false }], finish('Filled.')],
     ]);
     const runner = runnerOf(fabric, s.ai, { secrets: seamOf({ identity: true, cards: true, saveLogin: true }), proposals });
     const outcomes = [await runner.advance(run.id, userId, null)];
