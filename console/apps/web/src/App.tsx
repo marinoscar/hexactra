@@ -82,6 +82,7 @@ import { AiAppDetailPage } from './pages/AiAppDetailPage';
 import { AiAppsPage } from './pages/AiAppsPage';
 import { ConnectAiAppPage } from './pages/ConnectAiAppPage';
 import { RunRetentionCeilingPage } from './pages/RunRetentionCeilingPage';
+import { RequestHistorySettingsPage } from './pages/RequestHistorySettingsPage';
 import { AgentPricingPage } from './pages/AgentPricingPage';
 import { AppPlatformHost } from './platformHost';
 import {
@@ -303,6 +304,7 @@ export function AppRoutes() {
           <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
           <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />
           <Route path="admin/settings/run-history" element={<Gate permission="system_settings:read"><RunRetentionCeilingPage /></Gate>} />
+          <Route path="admin/settings/request-history" element={<Gate permission="system_settings:read"><RequestHistorySettingsPage /></Gate>} />
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />
           {/* The enabled optional slices' pages (packages/shared/slices.json; src/slices/). */}

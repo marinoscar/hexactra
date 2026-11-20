@@ -11,7 +11,7 @@ An agent asks its user a typed question and waits for a typed answer. The person
 | Pauses a browser | No | Yes: the session's actions wait until it is answered (a plain screenshot is still taken, except while a secret is asked for) |
 | `secret` | Refused (`SECRET_NEEDS_BROWSER`) | Allowed: the fabric holds the answer and types it with `type_secret` |
 
-Every question has an **owner** (the user it is asked of), an **asker** (`user:<id>`, `agent:<name>` or `run:<id>`) and an expiry (10 s to 24 h; 1 h by default). Only the owner sees or answers it: another user's question is a 404. Each step is recorded: asked, answered (with the channel and `by`), cancelled or expired.
+Every question has an **owner** (the user it is asked of), an **asker** (`user:<id>`, `agent:<name>` or `run:<id>`) and an expiry (10 s to 24 h; when the asker sets none, the administrator's default wait, 60 minutes unless changed in **Admin → Settings → Request history**, E40.4). Only the owner sees or answers it: another user's question is a 404. Each step is recorded: asked, answered (with the channel and `by`), cancelled or expired.
 
 ## Question types
 
@@ -137,7 +137,7 @@ A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is
 - A shown value hides again when the answer is sent, when the tab is hidden, and after 30 seconds without a keystroke.
 - The value lives in the form's memory only while it is typed. It is removed before the request is sent, even when the request then fails, and it is never logged, put in a URL or written to browser storage.
 
-**After an answer.** In the Inbox the card says "Sent." or "Declined." for two seconds, then collapses. It is then listed under the Inbox's **History** tab (`/inbox?tab=history`, E40.3), with what was asked, its outcome (Provided, Allowed, Denied, Declined, Done, Expired), what was given ("Provided (not shown)" for a secret or a sign-in, the masked value or the form's fields otherwise), when, and links to its details and to its chat or run. History is kept for the period an administrator sets (E40.4). A failed answer shows its error inside that card and keeps what was typed (never a secret). An answer the API refuses because the question was already answered or had expired (409) shows that final state instead of an error.
+**After an answer.** In the Inbox the card says "Sent." or "Declined." for two seconds, then collapses. It is then listed under the Inbox's **History** tab (`/inbox?tab=history`, E40.3), with what was asked, its outcome (Provided, Allowed, Denied, Declined, Done, Expired), what was given ("Provided (not shown)" for a secret or a sign-in, the masked value or the form's fields otherwise), when, and links to its details and to its chat or run. History is kept for the period an administrator sets (default 7 days, E40.4; [runbooks/request-history-retention.md](runbooks/request-history-retention.md)). A failed answer shows its error inside that card and keeps what was typed (never a secret). An answer the API refuses because the question was already answered or had expired (409) shows that final state instead of an error.
 
 **Refreshes.** The Inbox re-reads the list every 5 seconds. Cards keep their place and their state, so a refresh never interrupts typing; a new request appears on top with a brief highlight, and the request a notification links to (`?run=` or `?q=`) stays first.
 

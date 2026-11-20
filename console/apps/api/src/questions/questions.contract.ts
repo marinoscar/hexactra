@@ -133,6 +133,8 @@ export interface QuestionSpec {
   risk: 'low' | 'high' | null;
   rememberLabel: string | null;
   timeoutMs: number;
+  /** True when the asker set no time (E40.4): the administrator's default wait (`questions.defaultWaitMinutes`) applies instead of `timeoutMs`. */
+  timeoutDefaulted?: boolean;
   /**
    * The commitment the server's confirmation gate stopped (#550). Set by the runner only, after the
    * request is parsed: `questionSpecSchema` has no such field, so one sent by a model or an API caller is dropped.
@@ -293,6 +295,7 @@ export const questionSpecSchema = questionSpecObject.superRefine(refineSpec).tra
       risk: q.input === 'confirm' ? (q.risk ?? 'high') : null,
       rememberLabel: q.rememberLabel ?? null,
       timeoutMs: q.timeoutMs ?? QUESTION_TIMEOUT.defaultMs,
+      ...(q.timeoutMs === undefined ? { timeoutDefaulted: true } : {}),
     };
   },
 );

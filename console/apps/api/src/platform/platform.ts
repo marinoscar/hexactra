@@ -20,6 +20,7 @@ import '../policies/model-tiers.settings';
 import '../runner/agent-pricing.settings';
 import '../runner/budget-ceilings.settings';
 import '../tasks/runs.settings';
+import '../questions/questions.settings';
 import '../memories/memories.settings';
 import '../mcp/mcp.settings';
 import '../secrets/secrets.settings';

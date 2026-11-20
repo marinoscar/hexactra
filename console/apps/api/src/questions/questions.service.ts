@@ -1,4 +1,6 @@
 import { recordRequestInChat } from './chat-request-record';
+import { questionsSettings } from './request-history.jobs';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
@@ -202,7 +204,18 @@ export class QuestionsService {
     @Optional() private readonly memories?: MemoriesService,
     @Optional() private readonly starter?: TaskRunStarter,
     @Optional() private readonly approvals?: ApprovalRulesService,
+    @Optional() private readonly systemSettings?: SystemSettingsService,
   ) {}
+
+  /**
+   * How long a question waits (E40.4): the asker's own time, or, when it set none, the administrator's
+   * `questions.defaultWaitMinutes` (default 60), within the question limits.
+   */
+  async resolveTimeoutMs(spec: Pick<QuestionSpec, 'timeoutMs' | 'timeoutDefaulted'>): Promise<number> {
+    if (!spec.timeoutDefaulted) return spec.timeoutMs;
+    const { defaultWaitMinutes } = await questionsSettings(this.systemSettings, this.log);
+    return Math.min(QUESTION_TIMEOUT.maxMs, Math.max(QUESTION_TIMEOUT.minMs, defaultWaitMinutes * 60_000));
+  }
 
   private db(userId: string) {
     return this.prisma.forUser({ userId });
@@ -243,7 +256,7 @@ export class QuestionsService {
         fabricSessionId: opts.fabricSessionId ?? null,
         ...clientData(opts.client),
         ...this.specData(spec),
-        expiresAt: new Date(Date.now() + spec.timeoutMs),
+        expiresAt: new Date(Date.now() + (await this.resolveTimeoutMs(spec))),
       },
     });
     await this.emit('question.asked', q);
@@ -352,7 +365,7 @@ export class QuestionsService {
         ...this.specData(spec),
         pageTitle: h.pageTitle?.slice(0, 500) ?? null,
         viewerUrl,
-        expiresAt: h.expiresAt ?? new Date(Date.now() + spec.timeoutMs),
+        expiresAt: h.expiresAt ?? new Date(Date.now() + (await this.resolveTimeoutMs(spec))),
       },
     });
     await this.emit('question.asked', q);
