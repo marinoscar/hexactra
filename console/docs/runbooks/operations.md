@@ -363,6 +363,29 @@ Read the `connection.connect_failed` row's `meta`:
 | `refused` | `reason` carries the provider's error code | The provider returned `error=` on the redirect. |
 | `admin_consent_required` | none | Microsoft: an administrator has to approve the app. |
 
+### The chat answers "The AI could not answer (AI_INVALID_REQUEST ...)"
+
+The provider (OpenAI) refused the request itself, not the account or the key: it answers 400 within a second and no model work is done (#675). The owner's line names the provider's short code and the request field it objected to, for example `(AI_INVALID_REQUEST: invalid_function_parameters, tools[3].parameters)`: `tools[N]` is the N-th tool the chat sent (counting from 0, in the order `ask_user`, `start_run`, `run_task`, `propose_memory`, `guide_run`, `stop_run`, `pause_run`, `resume_run`, `draft_task`, then the chat's connection read tools), `input` the conversation text, `model` the model name.
+
+```bash
+# The failed turn with the provider's facts (status, code, type, parameter, request id and its redacted, capped message). Run on the host:
+docker logs --since 1h hexactra-api-1 2>&1 | grep 'the model call failed'
+# The failed job (its error is the generic text; the line above has the facts):
+docker exec hexactra-api-1 node -e '
+const { buildDatabaseUrl } = require("@marinoscar/platform-api/core");
+const { Client } = require("pg");
+(async () => {
+  const c = new Client({ connectionString: buildDatabaseUrl(process.env) });
+  await c.connect();
+  const r = await c.query("select created_at, status, last_error from jobs where type = $1 order by created_at desc limit 5", ["chat.turn"]);
+  console.log(JSON.stringify(r.rows, null, 1));
+  await c.end();
+})().catch((e) => { console.error(e.message); process.exit(1); });
+'
+```
+
+The provider's own log lists only requests it processed, so a 400 is not in the OpenAI dashboard; the `providerRequestId` in the API log is what to quote to the provider's support. The chat uses the owner's default model (Settings, AI), not the model tiers of the agent policies, so a run can work while the chat does not.
+
 ### A delivery keeps failing
 
 A delivery's failure never changes the run's status. Where to look: the run page's **Deliveries** block, or `hexactra runs deliveries <run>`; each row has a status (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed code and a fixed sentence, never an address or a subject. The owner is told once per task per day (**"A delivery after a run failed"**); the alert rule **Delivery keeps failing** (`hexactra.delivery_failing`, on by default: three failed deliveries in 24 hours) is at Administration → Alerts.

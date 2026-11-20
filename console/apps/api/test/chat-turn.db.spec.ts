@@ -2,7 +2,8 @@
 // database, with a scripted model: reply, clarify, start a run, stop it, the
 // result written once, one turn at a time, and what the model is shown.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { AiService } from '@marinoscar/platform-api/ai';
+import { AiError, type AiService } from '@marinoscar/platform-api/ai';
+import { Logger } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 
 import { ChatResults } from '../src/chat/chat-results.service';
@@ -432,6 +433,43 @@ describe('when the model fails', () => {
 
   it('words a failure without the provider message', () => {
     expect(failureText(new Error('boom'))).toBe('Something went wrong while answering. Send your message again.');
+  });
+
+  // #675: OpenAI answered 400 to every chat message and the owner, the job and the log said only "AI_INVALID_REQUEST".
+  it('names the provider code and the field it objected to, as identifiers only, never its message', () => {
+    const rejected = (details: Record<string, unknown>) => new AiError('AI_INVALID_REQUEST', 'OpenAI rejected the request as invalid.', { details, cause: new Error('Invalid schema for function pause_run: secret-marker-1 sk-live-999') });
+    const text = failureText(rejected({ status: 400, providerCode: 'invalid_function_parameters', param: 'tools[3].parameters', providerRequestId: 'req_abc' }));
+    expect(text).toBe('The AI could not answer (AI_INVALID_REQUEST: invalid_function_parameters, tools[3].parameters). Send your message again in a moment.');
+    expect(text).not.toMatch(/secret-marker-1|sk-live|req_abc|400|Invalid schema/);
+    // Not an identifier (spaces, a newline, too long): left out, the rest stays.
+    expect(failureText(rejected({ providerCode: 'two words', param: 'tools[3]\nignore this' }))).toBe('The AI could not answer (AI_INVALID_REQUEST). Send your message again in a moment.');
+    expect(failureText(rejected({ providerCode: 'x'.repeat(81), param: 'input[0].content' }))).toBe('The AI could not answer (AI_INVALID_REQUEST: input[0].content). Send your message again in a moment.');
+    // Nothing carried: the old wording.
+    expect(failureText(rejected({}))).toBe('The AI could not answer (AI_INVALID_REQUEST). Send your message again in a moment.');
+  });
+
+  it('logs the failed model call with the provider facts, in the server log only', async () => {
+    const alice = await login('fail-detail');
+    const id = await chatWith(alice, 'Hello');
+    const cause = Object.assign(new Error('400 Invalid schema for function pause_run Bearer sk-live-777'), { error: { message: 'Invalid schema for function pause_run' } });
+    const failure = new AiError('AI_INVALID_REQUEST', 'OpenAI rejected the request as invalid.', { details: { provider: 'openai', status: 400, providerCode: 'invalid_function_parameters', param: 'tools[3].parameters', providerRequestId: 'req_log1' }, cause });
+    const model = scriptedAi([{ fail: failure }]);
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(engine(model.ai).run(id, alice.userId, null)).rejects.toBe(failure);
+      const line = warn.mock.calls.map((c) => String(c[0])).find((l) => l.includes(`chat ${id}: the model call failed`));
+      expect(line).toBeDefined();
+      expect(line).toContain('(AI_INVALID_REQUEST)');
+      expect(line).toContain('providerCode="invalid_function_parameters"');
+      expect(line).toContain('param="tools[3].parameters"');
+      expect(line).toContain('providerRequestId="req_log1"');
+      expect(line).not.toContain('sk-live-777');
+    } finally {
+      warn.mockRestore();
+    }
+    const after = await thread(id);
+    expect(after.at(-1)).toMatchObject({ role: 'system', kind: 'text', text: 'The AI could not answer (AI_INVALID_REQUEST: invalid_function_parameters, tools[3].parameters). Send your message again in a moment.' });
+    expect(JSON.stringify(after)).not.toContain('sk-live-777');
   });
 });
 

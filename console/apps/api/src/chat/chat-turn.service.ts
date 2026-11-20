@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
-import { AiError, AiService, defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
+import { AiError, AiService, aiErrorLogDetails, defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import type { Conversation, Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -411,7 +411,12 @@ export class ChatTurnService {
       text = result.final?.outputText?.trim() ?? '';
     } catch (e) {
       if (!(e instanceof TurnDone)) {
-        if (e instanceof AiError) tr.modelFailed(e, 'unknown');
+        if (e instanceof AiError) {
+          tr.modelFailed(e, 'unknown');
+          // The platform keeps the provider's own reason off the error's message, so say it here, in the server log only (#675): the status, the provider's
+          // short code, type, offending parameter and request id, and for AI_INVALID_REQUEST its message with keys, tokens and URLs redacted and capped.
+          this.log.warn(`chat ${c.id}: the model call failed (${e.code}) ${aiErrorLogDetails(e)}`.trimEnd());
+        }
         // The owner sees why nothing happened; the job still fails, so an administrator sees it too.
         if (!state.wrote) await this.chats.append(c.id, { role: 'system', kind: 'text', text: failureText(e) });
         throw e;
@@ -424,11 +429,23 @@ export class ChatTurnService {
   }
 }
 
+const SAFE_ID = /^[A-Za-z0-9_.[\]-]{1,80}$/;
+
+/**
+ * The provider's own short error code and the request field it objected to (`invalid_function_parameters`, `tools[3].parameters`), when the
+ * error carries them. Identifiers only: a value that is not one is left out, and the provider's message never comes here (#675).
+ */
+export function providerWhy(e: AiError): string {
+  const d = (e.getResponse() as { details?: Record<string, unknown> }).details ?? {};
+  return [d.providerCode, d.param].filter((v): v is string => typeof v === 'string' && SAFE_ID.test(v)).join(', ');
+}
+
 /** Why the AI did not answer, in words for the owner. Never the provider's raw message: it can carry request details. */
 export function failureText(e: unknown): string {
   if (e instanceof AiError) {
     if (/^No model selected/.test(e.message)) return 'No AI model is set up for the chat yet. An administrator can choose one under Administration → AI. Then send your message again.';
-    return `The AI could not answer (${e.code}). Send your message again in a moment.`;
+    const why = providerWhy(e);
+    return `The AI could not answer (${e.code}${why ? `: ${why}` : ''}). Send your message again in a moment.`;
   }
   return 'Something went wrong while answering. Send your message again.';
 }
