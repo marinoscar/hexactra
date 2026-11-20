@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
@@ -6,7 +6,10 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { HandoffAnswers } from './handoff-answers';
-import { InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
+import { InboxHistoryResponseDto, InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
+import { requestOutcomeWords } from '../questions/chat-request-record';
+import { maskSensitive } from '../tasks/mask';
+import { stepQuestionView, type StepQuestionView } from '../tasks/run-trace.view';
 import { QuestionsService, isOwnerCardInput, saveLoginCardOf, type SaveLoginCard } from '../questions/questions.service';
 import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable } from '../questions/questions.contract';
 import { RequestClientService } from '../connected-apps/request-client';
@@ -23,6 +26,41 @@ const respondSchema = z.object({
   remember: z.boolean().optional(),
 });
 class RespondDto extends createZodDto(respondSchema) {}
+
+const historyQuerySchema = z.object({
+  status: z.enum(['answered', 'cancelled', 'expired']).optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+class HistoryQueryDto extends createZodDto(historyQuerySchema) {}
+
+/** A request that is over (E40.3). Masked; a secret's or a sign-in's value is never here. */
+export interface InboxHistoryItem {
+  questionId: string;
+  runId: string | null;
+  conversationId: string | null;
+  goal: string;
+  askedBy: string;
+  kind: string;
+  input: QuestionInputType;
+  prompt: string;
+  status: 'answered' | 'cancelled' | 'expired';
+  outcome: string;
+  answer: StepQuestionView['answer'];
+  createdAt: string;
+  settledAt: string | null;
+}
+
+const encodeCursor = (at: Date, id: string) => Buffer.from(JSON.stringify({ at: at.toISOString(), id })).toString('base64url');
+function decodeCursor(text: string): { at: Date; id: string } {
+  try {
+    const c = JSON.parse(Buffer.from(text, 'base64url').toString('utf8')) as { at?: unknown; id?: unknown };
+    if (typeof c.at === 'string' && typeof c.id === 'string' && !Number.isNaN(Date.parse(c.at)) && /^[0-9a-f-]{36}$/i.test(c.id)) return { at: new Date(c.at), id: c.id };
+  } catch {
+    // Falls through to the typed error.
+  }
+  throw new BadRequestException({ code: 'INVALID_CURSOR', message: 'The cursor is not one a history page returned. Start again from the first page' });
+}
 
 /** One question waiting for the user. */
 export interface InboxItem {
@@ -112,6 +150,44 @@ export class InboxController {
         saveLogin: saveLoginCardOf(q),
       };
     });
+  }
+
+  /**
+   * What was asked and is over (E40.3): answered, declined and expired requests, newest first, so the owner can see
+   * later that information was provided, refused or missed. Values are masked; a secret's never appears.
+   */
+  @Get('history')
+  @ApiDataResponse(InboxHistoryResponseDto)
+  @Auth({ permissions: ['runs:read'] })
+  async history(@CurrentUser('id') userId: string, @Query() query: HistoryQueryDto, @Req() req?: object): Promise<{ items: InboxHistoryItem[]; nextCursor: string | null }> {
+    const hideMemory = (await this.clients?.resolve(req))?.origin === 'mcp';
+    const limit = query.limit ?? 30;
+    const rows = await this.questions.settledWithRuns(userId, { status: query.status, before: query.cursor ? decodeCursor(query.cursor) : undefined, limit: limit + 1 });
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    const items = page
+      .filter((q) => !(hideMemory && isOwnerCardInput(q.input)))
+      .map((q) => {
+        const view = stepQuestionView(q);
+        // A choice reads as its labels (masked by the view), not its option ids.
+        if (view.answer?.value && view.options?.length) view.answer.value = view.answer.value.split(', ').map((v) => view.options!.find((o) => o.id === v)?.label ?? v).join(', ');
+        return {
+          questionId: q.id,
+          runId: q.runId,
+          conversationId: q.run?.conversationId ?? null,
+          goal: maskSensitive((q.run?.goal ?? q.prompt).slice(0, 300)).text,
+          askedBy: q.askedBy,
+          kind: q.kind,
+          input: q.input as QuestionInputType,
+          prompt: view.prompt,
+          status: q.status as InboxHistoryItem['status'],
+          outcome: requestOutcomeWords(q),
+          answer: view.answer,
+          createdAt: q.createdAt.toISOString(),
+          settledAt: (q.answeredAt ?? (q.status === 'expired' ? q.expiresAt : null))?.toISOString() ?? null,
+        };
+      });
+    return { items, nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null };
   }
 
   /** Answer (or decline) the question the run waits on, then resume the run at once. */

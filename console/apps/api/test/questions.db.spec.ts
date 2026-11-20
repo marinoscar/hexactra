@@ -354,3 +354,49 @@ describe('requests kept in the chat thread (E40.1, #685)', () => {
     expect(await prisma.chatMessage.count({ where: { runId: solo.id } })).toBe(0);
   });
 });
+
+describe('the Inbox history (E40.3, #687)', () => {
+  it('lists answered, declined and expired requests newest first, pages them, and never returns a secret', async () => {
+    const a = await login(`q-history-${stamp}@example.test`);
+    const other = await login(`q-history-other-${stamp}@example.test`);
+    const db = prisma.forUser({ userId: a.userId });
+    // A secret, answered.
+    const hid = randomUUID();
+    handoffs.set(hid, { id: hid, status: 'pending', input: 'secret', kind: 'code', prompt: 'Code', choices: [] });
+    const run = await db.run.create({ data: { userId: a.userId, goal: 'Sign in to the bank', trigger: 'external', status: 'waiting_human', handoffId: hid, sessionId: randomUUID() } });
+    const secret = await questions.mirrorHandoff({ id: a.userId }, questions.parseSpec({ input: 'secret', kind: 'code', prompt: 'Code' }), { id: hid, viewerUrl: null, pageTitle: null, expiresAt: null }, { askedBy: 'agent:x', runId: run.id, fabricSessionId: run.sessionId });
+    await app.inject({ method: 'POST', url: `/api/questions/${secret.id}/answer`, headers: as(a.token), payload: { value: SECRET, channel: 'web' } });
+    // A choice, answered; a text, declined; a confirm, expired; one still pending; another user's.
+    const choice = await questions.create({ id: a.userId }, questions.parseSpec({ input: 'choice', prompt: 'Which plan?', options: [{ id: 'b', label: 'Basic' }, { id: 't', label: 'Team' }] }), { askedBy: 'agent:x' });
+    await questions.answer({ id: a.userId }, choice.id, { outcome: 'completed', value: 't' }, { channel: 'cli' });
+    const declined = await questions.create({ id: a.userId }, questions.parseSpec({ input: 'text', prompt: 'Your name?' }), { askedBy: 'agent:x' });
+    await questions.cancel({ id: a.userId }, declined.id, { channel: 'web' });
+    const expired = await questions.create({ id: a.userId }, questions.parseSpec({ input: 'confirm', prompt: 'Pay $5?' }), { askedBy: 'agent:x' });
+    await prisma.question.update({ where: { id: expired.id }, data: { expiresAt: new Date(Date.now() - 1_000) } });
+    const pending = await questions.create({ id: a.userId }, questions.parseSpec({ input: 'text', prompt: 'Still waiting' }), { askedBy: 'agent:x' });
+    await questions.create({ id: other.userId }, questions.parseSpec({ input: 'text', prompt: 'Not yours' }), { askedBy: 'agent:x' });
+
+    const res = await app.inject({ method: 'GET', url: '/api/inbox/history', headers: as(a.token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain(SECRET);
+    type Item = { questionId: string; status: string; outcome: string; answer: { value?: string; valueWithheld: boolean } | null };
+    const page = data<{ items: Item[]; nextCursor: string | null }>(res);
+    const byId = new Map(page.items.map((i) => [i.questionId, i]));
+    expect(byId.has(pending.id)).toBe(false);
+    expect(page.items.map((i) => i.questionId)).toEqual([expired.id, declined.id, choice.id, secret.id]);
+    expect(byId.get(secret.id)).toMatchObject({ status: 'answered', outcome: 'provided', answer: { valueWithheld: true } });
+    expect(byId.get(secret.id)!.answer).not.toHaveProperty('value');
+    expect(byId.get(choice.id)).toMatchObject({ outcome: 'provided', answer: { value: 'Team', valueWithheld: false } });
+    expect(byId.get(declined.id)).toMatchObject({ status: 'cancelled', outcome: 'declined' });
+    expect(byId.get(expired.id)).toMatchObject({ status: 'expired', outcome: 'expired without an answer', answer: null });
+
+    const first = data<{ items: Item[]; nextCursor: string | null }>(await app.inject({ method: 'GET', url: '/api/inbox/history?limit=3', headers: as(a.token) }));
+    expect(first.items).toHaveLength(3);
+    const second = data<{ items: Item[]; nextCursor: string | null }>(await app.inject({ method: 'GET', url: `/api/inbox/history?limit=3&cursor=${first.nextCursor}`, headers: as(a.token) }));
+    expect(second.items.map((i) => i.questionId)).toEqual([secret.id]);
+    expect(second.nextCursor).toBeNull();
+    expect((await app.inject({ method: 'GET', url: '/api/inbox/history?cursor=nope', headers: as(a.token) })).statusCode).toBe(400);
+    const expiredOnly = data<{ items: Item[] }>(await app.inject({ method: 'GET', url: '/api/inbox/history?status=expired', headers: as(a.token) }));
+    expect(expiredOnly.items.map((i) => i.questionId)).toEqual([expired.id]);
+  });
+});

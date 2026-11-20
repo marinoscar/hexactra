@@ -7305,6 +7305,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inbox/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["inbox_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/inbox/{runId}/respond": {
         parameters: {
             query?: never;
@@ -20191,6 +20208,51 @@ export interface components {
                 /** @description When the fabric stops holding the password: after it the card says it is too late to save */
                 valueExpiresAt: string;
             } | null;
+        };
+        InboxHistoryResponseDto: {
+            items: {
+                /** Format: uuid */
+                questionId: string;
+                runId: string | null;
+                /** @description The chat whose run asked; null for any other request */
+                conversationId: string | null;
+                /** @description The run's goal (or the prompt of a free-standing question), masked */
+                goal: string;
+                askedBy: string;
+                kind: string;
+                /**
+                 * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+                 * @enum {string}
+                 */
+                input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+                /** @description Masked */
+                prompt: string;
+                /** @enum {string} */
+                status: "answered" | "cancelled" | "expired";
+                /** @description In words: provided, allowed, denied, declined, done by the owner, expired without an answer */
+                outcome: string;
+                answer: {
+                    outcome: string;
+                    /** @description Masked; absent for a secret, a sign-in and a withheld value */
+                    value?: string;
+                    valueWithheld: boolean;
+                    channel: string | null;
+                    answeredAt: string | null;
+                    fields?: {
+                        key: string;
+                        label: string;
+                        value?: string;
+                        /** @constant */
+                        provided: true;
+                    }[];
+                } | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                /** @description When it was answered or declined; for an expired request, when it expired */
+                settledAt: string | null;
+            }[];
+            /** @description Pass as `cursor` for the next page; null on the last page */
+            nextCursor: string | null;
         };
         OkResponseDto: {
             /** @constant */
@@ -44781,6 +44843,58 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["InboxItemResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    inbox_history: {
+        parameters: {
+            query?: {
+                status?: "answered" | "cancelled" | "expired";
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InboxHistoryResponseDto"];
                     };
                 };
             };

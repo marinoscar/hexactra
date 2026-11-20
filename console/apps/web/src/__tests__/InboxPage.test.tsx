@@ -482,3 +482,36 @@ describe('mergeInbox', () => {
     expect(mergeInbox([item('a')], [fresh], new Set())[0]).toBe(fresh);
   });
 });
+
+describe('the Inbox history (E40.3, #687)', () => {
+  const past = [
+    { questionId: 'h1', runId: 'r1', conversationId: null, goal: 'Sign in', askedBy: 'run:r1', kind: 'code', input: 'secret', prompt: 'Enter the code we sent', status: 'answered', outcome: 'provided', answer: { outcome: 'completed', valueWithheld: true, channel: 'web', answeredAt: '2026-11-20T10:01:00Z' }, createdAt: '2026-11-20T10:00:00Z', settledAt: '2026-11-20T10:01:00Z' },
+    { questionId: 'h2', runId: null, conversationId: null, goal: 'Which plan?', askedBy: 'agent:x', kind: 'other', input: 'choice', prompt: 'Which plan?', status: 'answered', outcome: 'provided', answer: { outcome: 'completed', value: 'Team', valueWithheld: false, channel: 'cli', answeredAt: '2026-11-20T09:01:00Z' }, createdAt: '2026-11-20T09:00:00Z', settledAt: '2026-11-20T09:01:00Z' },
+    { questionId: 'h3', runId: 'r3', conversationId: 'c3', goal: 'Pay', askedBy: 'run:r3', kind: 'confirmation', input: 'confirm', prompt: 'Pay $5?', status: 'expired', outcome: 'expired without an answer', answer: null, createdAt: '2026-11-20T08:00:00Z', settledAt: '2026-11-20T09:00:00Z' },
+  ];
+  it('shows past requests with their outcome, never a secret, and loads the next page', async () => {
+    mockViewport(390);
+    const host = createTestPlatformHost({
+      permissions: ['runs:read'],
+      responses: { 'GET /inbox': [], 'GET /inbox/history': { items: past, nextCursor: 'next1' }, 'GET /inbox/history?cursor=next1': { items: [], nextCursor: null } },
+    });
+    render(
+      <PlatformHostProvider host={host}>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={['/inbox']}>
+            <InboxPage />
+          </MemoryRouter>
+        </ConfirmProvider>
+      </PlatformHostProvider>,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'History' }));
+    expect(await screen.findByText('Enter the code we sent')).toBeInTheDocument();
+    expect(screen.getByText('Provided (not shown)')).toBeInTheDocument();
+    expect(screen.getByText('Team')).toBeInTheDocument();
+    expect(screen.getByText('Expired')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the chat' })).toHaveAttribute('href', '/chat/c3');
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    await waitFor(() => expect(host.requests.some((r) => r.path === '/inbox/history?cursor=next1')).toBe(true));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Load more|Loading/ })).not.toBeInTheDocument());
+  });
+});

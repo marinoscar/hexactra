@@ -1,9 +1,10 @@
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
-import { Alert, Box, Typography } from '@mui/material';
+import { Alert, Box, Tab, Tabs, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { InboxHistory } from '../components/InboxHistory';
 import { QuestionCard, inboxItemToCard, type AnswerResult } from '../components/QuestionCard';
 import { answerRequest, isSettledError, type AnswerBody, type InboxItem } from '../components/questions';
 import { useNow } from '../components/RunActivity';
@@ -45,7 +46,15 @@ export function InboxPage() {
   const settledRef = useRef<Set<string>>(new Set());
   const openViewer = useOpenViewer(setError);
   // `/inbox?run=<id>` (or `?q=<question id>`): the deep link of a "needs you" notification.
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  // Two views of one destination (E40.3): what waits, and what is over (`?tab=history`).
+  const tab = params.get('tab') === 'history' ? 'history' : 'waiting';
+  const setTab = (next: 'waiting' | 'history') => {
+    const p = new URLSearchParams(params);
+    if (next === 'history') p.set('tab', 'history');
+    else p.delete('tab');
+    setParams(p, { replace: true });
+  };
   const focusRun = params.get('run');
   const focusQuestion = params.get('q');
   const focused = useCallback((i: InboxItem) => (focusRun !== null && i.runId === focusRun) || (focusQuestion !== null && i.questionId === focusQuestion), [focusRun, focusQuestion]);
@@ -116,77 +125,87 @@ export function InboxPage() {
   return (
     <PageContainer width="narrow">
       <PageHeader title="Inbox" subtitle={waiting > 0 ? `${waiting} waiting for you` : undefined} />
-      <ErrorBanner error={error} />
-      {items === null && !error && <CardSkeleton rows={2} />}
-      {items?.length === 0 && (
-        <EmptyState Icon={InboxOutlinedIcon} title="Nothing is waiting for you" body="When an agent needs a code, a choice or your approval, it shows up here." />
-      )}
-      {(focusRun || focusQuestion) && items && items.length > 0 && !items.some(focused) && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          That request was already answered or expired.
-        </Alert>
-      )}
-      <Box aria-label="Requests" sx={{ minWidth: 0 }}>
-        {requests.map((item) => (
-          <QuestionCard
-            key={item.questionId}
-            variant="list"
-            question={inboxItemToCard(item)}
-            now={now}
-            canAnswer={canAnswer}
-            focused={focused(item)}
-            isNew={fresh.has(item.questionId)}
-            onAnswer={(answer) => respond(item, answer)}
-            onOpenBrowser={(url) => void openViewer(url)}
-            onLeft={() => left(item.questionId)}
-          />
-        ))}
-      </Box>
-      {accountApprovals.length > 0 && (
-        <Box component="section" aria-label="Account approvals" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
-          <Typography variant="overline" component="h2" color="text.secondary">
-            Waiting for your approval
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            A task or chat wants to send, create or change something with one of your accounts. Nothing happens until you answer.
-          </Typography>
-          {accountApprovals.map((item) => (
-            <QuestionCard
-              key={item.questionId}
-              variant="list"
-              question={inboxItemToCard(item)}
-              now={now}
-              canAnswer={canAnswer}
-              focused={focused(item)}
-              isNew={fresh.has(item.questionId)}
-              onAnswer={(answer) => respond(item, answer)}
-              onLeft={() => left(item.questionId)}
-            />
-          ))}
-        </Box>
-      )}
-      {suggestions.length > 0 && (
-        <Box component="section" aria-label="Suggestions" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
-          <Typography variant="overline" component="h2" color="text.secondary">
-            Suggestions
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Things the agent offers to remember or to save, such as a login you just typed. Nothing waits on them: answer when you like.
-          </Typography>
-          {suggestions.map((item) => (
-            <QuestionCard
-              key={item.questionId}
-              variant="list"
-              question={inboxItemToCard(item)}
-              now={now}
-              canAnswer={canAnswer}
-              focused={focused(item)}
-              isNew={fresh.has(item.questionId)}
-              onAnswer={(answer) => respond(item, answer)}
-              onLeft={() => left(item.questionId)}
-            />
-          ))}
-        </Box>
+      <Tabs value={tab} onChange={(_, v: 'waiting' | 'history') => setTab(v)} aria-label="Inbox views" sx={{ mb: 2, minHeight: 0 }}>
+        <Tab value="waiting" label={waiting > 0 ? `Waiting (${waiting})` : 'Waiting'} sx={{ minHeight: 44 }} />
+        <Tab value="history" label="History" sx={{ minHeight: 44 }} />
+      </Tabs>
+      {tab === 'history' ? (
+        <InboxHistory />
+      ) : (
+        <>
+          <ErrorBanner error={error} />
+          {items === null && !error && <CardSkeleton rows={2} />}
+          {items?.length === 0 && (
+            <EmptyState Icon={InboxOutlinedIcon} title="Nothing is waiting for you" body="When an agent needs a code, a choice or your approval, it shows up here." />
+          )}
+          {(focusRun || focusQuestion) && items && items.length > 0 && !items.some(focused) && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              That request was already answered or expired.
+            </Alert>
+          )}
+          <Box aria-label="Requests" sx={{ minWidth: 0 }}>
+            {requests.map((item) => (
+              <QuestionCard
+                key={item.questionId}
+                variant="list"
+                question={inboxItemToCard(item)}
+                now={now}
+                canAnswer={canAnswer}
+                focused={focused(item)}
+                isNew={fresh.has(item.questionId)}
+                onAnswer={(answer) => respond(item, answer)}
+                onOpenBrowser={(url) => void openViewer(url)}
+                onLeft={() => left(item.questionId)}
+              />
+            ))}
+          </Box>
+          {accountApprovals.length > 0 && (
+            <Box component="section" aria-label="Account approvals" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
+              <Typography variant="overline" component="h2" color="text.secondary">
+                Waiting for your approval
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                A task or chat wants to send, create or change something with one of your accounts. Nothing happens until you answer.
+              </Typography>
+              {accountApprovals.map((item) => (
+                <QuestionCard
+                  key={item.questionId}
+                  variant="list"
+                  question={inboxItemToCard(item)}
+                  now={now}
+                  canAnswer={canAnswer}
+                  focused={focused(item)}
+                  isNew={fresh.has(item.questionId)}
+                  onAnswer={(answer) => respond(item, answer)}
+                  onLeft={() => left(item.questionId)}
+                />
+              ))}
+            </Box>
+          )}
+          {suggestions.length > 0 && (
+            <Box component="section" aria-label="Suggestions" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
+              <Typography variant="overline" component="h2" color="text.secondary">
+                Suggestions
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Things the agent offers to remember or to save, such as a login you just typed. Nothing waits on them: answer when you like.
+              </Typography>
+              {suggestions.map((item) => (
+                <QuestionCard
+                  key={item.questionId}
+                  variant="list"
+                  question={inboxItemToCard(item)}
+                  now={now}
+                  canAnswer={canAnswer}
+                  focused={focused(item)}
+                  isNew={fresh.has(item.questionId)}
+                  onAnswer={(answer) => respond(item, answer)}
+                  onLeft={() => left(item.questionId)}
+                />
+              ))}
+            </Box>
+          )}
+        </>
       )}
     </PageContainer>
   );
