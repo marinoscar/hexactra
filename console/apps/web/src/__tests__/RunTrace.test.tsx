@@ -18,7 +18,7 @@ import { ResultCard } from '../components/ChatBrowser';
 import { EXPORT_NOTE, EXPORT_SCREENSHOTS_KEY } from '../components/RunExport';
 import { RunList } from '../components/RunList';
 import { RunTimeline, type RunTimelineStep } from '../components/RunTimeline';
-import { answerLine, guidanceText, imageCaptionLong, questionKindLabel } from '../components/runTrace';
+import { answerLine, formAnswerLines, guidanceText, imageCaptionLong, questionKindLabel } from '../components/runTrace';
 import { RunDetailPage } from '../pages/RunDetailPage';
 import type { ChatMessage } from '../types/chat';
 import type { Run, StepQuestion } from '../types/runs';
@@ -482,5 +482,14 @@ describe('Export on the chat result card and the run list (#544)', () => {
     expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Open', 'Export PDF', 'Export JSON']);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Export PDF' }));
     await waitFor(() => expect(exports(host)[0]).toMatch(/format=pdf&screenshots=embed&paper=/));
+  });
+});
+
+describe('a form in the trace (E40.2, #686)', () => {
+  const form = { id: 'q1', kind: 'other', input: 'form', prompt: 'A few details to start "Pay": Amount, Card PIN', options: null, risk: null, status: 'answered', answer: { outcome: 'completed', valueWithheld: false, channel: 'web', answeredAt: null, fields: [{ key: 'amount', label: 'Amount', value: '40', provided: true as const }, { key: 'pin', label: 'Card PIN', provided: true as const }] } };
+  it('says Provided and lists each field, with no value for a sensitive one', () => {
+    expect(answerLine(form).text).toBe('Provided · from the console');
+    expect(formAnswerLines(form)).toEqual(['Amount: 40', 'Card PIN: provided']);
+    expect(questionKindLabel(form)).toBe('Details');
   });
 });

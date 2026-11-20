@@ -429,6 +429,8 @@ describe('the administrator page', () => {
     fireEvent.change(g.getByLabelText('Client ID'), { target: { value: 'new-client-id' } });
     fireEvent.click(g.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(host.requests.find((r) => r.method === 'PUT')?.body).toEqual({ enabled: true, clientId: 'new-client-id' }));
+    // Save is disabled while the first save is in flight: wait for it to settle before saving again.
+    await waitFor(() => expect(g.getByRole('button', { name: 'Save' })).toBeEnabled());
     fireEvent.change(g.getByLabelText('Client secret'), { target: { value: 'a-new-secret' } });
     fireEvent.click(g.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(host.requests.filter((r) => r.method === 'PUT').at(-1)?.body).toEqual({ enabled: true, clientId: 'new-client-id', clientSecret: 'a-new-secret' }));
