@@ -137,7 +137,7 @@ A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is
 - A shown value hides again when the answer is sent, when the tab is hidden, and after 30 seconds without a keystroke.
 - The value lives in the form's memory only while it is typed. It is removed before the request is sent, even when the request then fails, and it is never logged, put in a URL or written to browser storage.
 
-**After an answer.** In the Inbox the card says "Sent." or "Declined." for two seconds, then collapses. A failed answer shows its error inside that card and keeps what was typed (never a secret). An answer the API refuses because the question was already answered or had expired (409) shows that final state instead of an error.
+**After an answer.** In the Inbox the card says "Sent." or "Declined." for two seconds, then collapses. It is then listed under the Inbox's **History** tab (`/inbox?tab=history`, E40.3), with what was asked, its outcome (Provided, Allowed, Denied, Declined, Done, Expired), what was given ("Provided (not shown)" for a secret or a sign-in, the masked value or the form's fields otherwise), when, and links to its details and to its chat or run. History is kept for the period an administrator sets (E40.4). A failed answer shows its error inside that card and keeps what was typed (never a secret). An answer the API refuses because the question was already answered or had expired (409) shows that final state instead of an error.
 
 **Refreshes.** The Inbox re-reads the list every 5 seconds. Cards keep their place and their state, so a refresh never interrupts typing; a new request appears on top with a brief highlight, and the request a notification links to (`?run=` or `?q=`) stays first.
 
@@ -154,6 +154,7 @@ All under `/api`, with `runs:read` to read and `runs:write` to ask or answer, ex
 | `POST /questions/:id/cancel` | Decline it |
 | `POST /questions/:id/answer-by-token` | Public. The webhook receiver's answer, with the token in the `x-question-token` header (never the query string) |
 | `GET /inbox` | What is pending for you: questions and runs waiting for a person |
+| `GET /inbox/history?status=&cursor=&limit=` | What is over (E40.3): answered, declined and expired questions, newest first, with the run's goal and chat. Each has `outcome` in words (`provided`, `allowed`, `denied`, `declined`, `done by the owner`, `expired without an answer`) and the masked `answer` (a choice as its labels, a form as its fields); a secret's or a sign-in's value is never there (`valueWithheld: true`). Keyset pages: pass `nextCursor` as `cursor`. An AI app does not see memory and save-login items |
 | `POST /notification-actions` | Public. A notification button, authorized by the button's single-use token |
 
 Example (an agent asks which plan to pick):

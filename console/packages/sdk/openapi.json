@@ -37172,6 +37172,114 @@
         "description": "**Requires:** authentication, plus permission `runs:read`."
       }
     },
+    "/api/inbox/history": {
+      "get": {
+        "operationId": "inbox_history",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "answered",
+                "cancelled",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InboxHistoryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Inbox"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
     "/api/inbox/{runId}/respond": {
       "post": {
         "operationId": "inbox_respond",
@@ -93842,6 +93950,201 @@
           "blocking",
           "proposal",
           "saveLogin"
+        ]
+      },
+      "InboxHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "questionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "conversationId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The chat whose run asked; null for any other request"
+                },
+                "goal": {
+                  "type": "string",
+                  "description": "The run's goal (or the prompt of a free-standing question), masked"
+                },
+                "askedBy": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "input": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "text",
+                    "secret",
+                    "choice",
+                    "multi_choice",
+                    "number",
+                    "confirm",
+                    "takeover",
+                    "credentials",
+                    "memory",
+                    "form",
+                    "save_login"
+                  ],
+                  "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it"
+                },
+                "prompt": {
+                  "type": "string",
+                  "description": "Masked"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "answered",
+                    "cancelled",
+                    "expired"
+                  ]
+                },
+                "outcome": {
+                  "type": "string",
+                  "description": "In words: provided, allowed, denied, declined, done by the owner, expired without an answer"
+                },
+                "answer": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "outcome": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "description": "Masked; absent for a secret, a sign-in and a withheld value",
+                          "type": "string"
+                        },
+                        "valueWithheld": {
+                          "type": "boolean"
+                        },
+                        "channel": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "answeredAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "fields": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "provided": {
+                                "type": "boolean",
+                                "const": true
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "provided"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "outcome",
+                        "valueWithheld",
+                        "channel",
+                        "answeredAt"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "settledAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When it was answered or declined; for an expired request, when it expired"
+                }
+              },
+              "required": [
+                "questionId",
+                "runId",
+                "conversationId",
+                "goal",
+                "askedBy",
+                "kind",
+                "input",
+                "prompt",
+                "status",
+                "outcome",
+                "answer",
+                "createdAt",
+                "settledAt"
+              ]
+            }
+          },
+          "nextCursor": {
+            "description": "Pass as `cursor` for the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
         ]
       },
       "OkResponseDto": {

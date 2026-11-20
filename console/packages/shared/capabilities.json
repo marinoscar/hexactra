@@ -430,6 +430,21 @@
       "web": "/inbox"
     },
     {
+      "id": "inbox.history",
+      "description": "What agents asked and how each request ended (answered, declined, expired), never a secret's value",
+      "rest": [
+        "GET /api/inbox/history"
+      ],
+      "cli": "questions list",
+      "mcp": {
+        "none": "History is for the owner's own review in the console; an AI app reads what a run was told in its trace (runs_get)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering what waits; past requests are in the CLI (questions list --all) and the web app"
+      },
+      "web": "/inbox"
+    },
+    {
       "id": "inbox.answer",
       "description": "Answer a request (done, text, choice, secret, decline)",
       "rest": [
