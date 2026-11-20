@@ -1,10 +1,10 @@
-import { recordRequestInChat } from './chat-request-record';
 import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question, type Task } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun, type GoalRunReason } from '../runner/goal-run.enqueue';
+import { answerSummary } from '../runner/trace';
 import { maskSensitive } from '../tasks/mask';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TaskSchedulesService } from '../tasks/task-schedules.service';
@@ -12,6 +12,7 @@ import { TasksService } from '../tasks/tasks.service';
 import { MEMORY_VALUE_RESOLVER, checkValues, formFields, keyInputs, renderRunGoal, resolveInputs, type FormField, type MemoryValueResolver } from '../tasks/task-params';
 import { outputsSpecOf } from '../tasks/task-outputs';
 import { readParameters, readRunInputs, type InputSource, type RunInputs, type TaskParameter } from '../tasks/task-params.schemas';
+import { recordRequestInChat } from './chat-request-record';
 import { QuestionEvents } from './question-events';
 import { QUESTION_TIMEOUT } from './questions.contract';
 
@@ -132,6 +133,8 @@ export class TaskRunStarter {
     });
     this.log.log(`run ${run.id}: waiting for ${resolved.missing.length} value(s) before it starts`);
     await recordRequestInChat(this.prisma, question, this.log);
+    // The run's trace shows the form like any other question (E40.2, #686): the step that asked, linked to the question.
+    await this.traceStep(run.id, question.id, { action: null, args: { kind: 'other', input: 'form' }, ok: true, summary: `asked a person (other): ${maskSensitive(question.prompt).text.slice(0, 300)}` });
     await this.events.emit({ type: 'question.asked', questionId: question.id, ownerUserId: userId, runId: run.id, input: 'form', kind: 'other', status: 'pending' });
     await this.tasks.events?.publish({ type: 'run.status', runId: run.id, ownerUserId: userId, status: 'waiting_human' });
     await this.notifier?.needsYou(userId, { ...run, handoffId: null }, question.prompt, 'other', 'form', expiresAt).catch((e: unknown) => this.log.warn(`run ${run.id}: could not notify: ${e instanceof Error ? e.message : String(e)}`));
@@ -166,7 +169,7 @@ export class TaskRunStarter {
   }
 
   /** The form was answered (and recorded): fill the goal and queue the run. A run that moved on meanwhile is left alone. */
-  async complete(actor: StartActor, q: Pick<Question, 'runId' | 'fields'>, values: Record<string, string>): Promise<void> {
+  async complete(actor: StartActor, q: Pick<Question, 'id' | 'runId' | 'fields'>, values: Record<string, string>): Promise<void> {
     if (!q.runId) return;
     const db = this.prisma.forUser({ userId: actor.id });
     const run = await db.run.findFirst({ where: { id: q.runId }, select: { id: true, status: true, handoffId: true, goal: true, inputs: true, task: { select: { goal: true, parameters: true } } } });
@@ -180,6 +183,7 @@ export class TaskRunStarter {
     const params = run.task ? readParameters(run.task.parameters) : (fields as TaskParameter[]);
     const goal = renderRunGoal(run.task?.goal ?? run.goal, params, all);
     await db.run.updateMany({ where: { id: run.id, status: 'waiting_human' }, data: { goal, inputs: { values: all, sensitive: prior.sensitive, identity: prior.identity ?? [] } as unknown as Prisma.InputJsonValue } });
+    await this.traceStep(run.id, q.id, { action: 'answered', ok: true, summary: answerSummary({ kind: 'other', input: 'form', completed: true, outcome: 'completed' }) });
     try {
       await this.tasks.transition(actor.id, run.id, 'queued');
     } catch (e) {
@@ -189,11 +193,29 @@ export class TaskRunStarter {
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: actor.id, orgId: actor.activeOrgId ?? null }, 'run_started');
   }
 
+  /**
+   * A step of the run's trace for its form (E40.2): the ask, then the answer, each once per question. Never fails the
+   * start or the answer: a failure is logged.
+   */
+  private async traceStep(runId: string, questionId: string | null, step: { action: string | null; args?: Record<string, unknown>; ok: boolean; summary: string }): Promise<void> {
+    try {
+      if (questionId && (await this.prisma.runStep.count({ where: { runId, kind: 'handoff', action: step.action, questionId } })) > 0) return;
+      const last = await this.prisma.runStep.aggregate({ where: { runId }, _max: { seq: true } });
+      await this.prisma.runStep.create({
+        data: { runId, seq: (last._max.seq ?? 0) + 1, kind: 'handoff', action: step.action, ...(step.args ? { args: step.args as Prisma.InputJsonValue } : {}), ok: step.ok, summary: step.summary, durationMs: 0, ...(questionId ? { questionId } : {}) },
+      });
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not record the form step: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   /** The form was declined or expired: the run ends `cancelled`, "The values were not provided." */
   async abandon(ownerUserId: string, runId: string | null): Promise<void> {
     if (!runId) return;
     const run = await this.prisma.forUser({ userId: ownerUserId }).run.findFirst({ where: { id: runId }, select: { status: true, handoffId: true } });
     if (!run || run.status !== 'waiting_human' || run.handoffId) return;
+    const form = await this.prisma.question.findFirst({ where: { runId, input: 'form' }, orderBy: { createdAt: 'desc' }, select: { id: true, status: true } });
+    if (form) await this.traceStep(runId, form.id, { action: 'answered', ok: false, summary: answerSummary({ kind: 'other', input: 'form', completed: false, outcome: form.status === 'expired' ? 'expired' : 'cancelled' }) });
     await this.tasks.transition(ownerUserId, runId, 'cancelled', { error: VALUES_NOT_PROVIDED, stopReason: 'cancelled' }).catch((e: unknown) => this.log.warn(`run ${runId}: not cancelled after its form: ${e instanceof Error ? e.message : String(e)}`));
   }
 }

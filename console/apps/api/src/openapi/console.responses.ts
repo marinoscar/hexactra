@@ -348,6 +348,10 @@ export const runStepResponseSchema = z.object({
           valueWithheld: z.boolean(),
           channel: z.string().nullable(),
           answeredAt: z.string().nullable(),
+          fields: z
+            .array(z.object({ key: z.string(), label: z.string(), value: z.string().optional().describe('Masked; absent for a sensitive field'), provided: z.literal(true) }))
+            .optional()
+            .describe('A form question only (E40.2): each field the owner filled'),
         })
         .nullable(),
     })

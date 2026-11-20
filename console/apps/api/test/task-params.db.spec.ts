@@ -245,6 +245,12 @@ describe('task parameters (#552)', () => {
     expect(started.status).toBe('queued');
     expect(started.goal).toContain('Send $⟦40⟧ today');
     expect((started.inputs as { values: Record<string, { source: string }> }).values.amount!.source).toBe('asked');
+    // The trace shows the form like any question (E40.2, #686): the ask, then the answer with each field, masked.
+    const trace = body<{ steps: { kind: string; action: string | null; summary: string; question: { input: string; answer: { fields?: { label: string; value?: string }[] } | null } | null }[] }>(await app.inject({ method: 'GET', url: `/api/runs/${view.id}`, headers: as(token) }));
+    const formSteps = trace.steps.filter((st) => st.kind === 'handoff');
+    expect(formSteps.map((st) => [st.action, st.question?.input])).toEqual([[null, 'form'], ['answered', 'form']]);
+    expect(formSteps[1]!.summary).toBe('The owner answered');
+    expect(formSteps[1]!.question!.answer!.fields).toEqual([{ key: 'amount', label: expect.any(String), value: '40', provided: true }]);
   });
 
   it('a declined form ends the run: the values were not provided', async () => {
@@ -266,6 +272,8 @@ describe('task parameters (#552)', () => {
     await app.get(QuestionsService).expireDue({ ownerUserId: userId });
     const run = await prisma.forUser({ userId }).run.findFirstOrThrow({ where: { id: view.id } });
     expect([run.status, run.error]).toEqual(['cancelled', VALUES_NOT_PROVIDED]);
+    const steps = await prisma.runStep.findMany({ where: { runId: view.id }, orderBy: { seq: 'asc' } });
+    expect(steps.map((st) => [st.action, st.ok, st.summary.startsWith('The owner did not answer (expired)') || st.summary.startsWith('asked a person')])).toEqual([[null, true, true], ['answered', false, true]]);
   });
 
   it("a memory-backed default resolves from the owner's memory (#551); archiving it, superseding it or a missing attribute makes the value asked for", async () => {

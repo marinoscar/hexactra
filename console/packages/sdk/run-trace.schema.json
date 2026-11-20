@@ -1251,6 +1251,35 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "fields": {
+                            "description": "A form question only (E40.2): each field the owner filled",
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "description": "Masked; absent for a sensitive field",
+                                  "type": "string"
+                                },
+                                "provided": {
+                                  "type": "boolean",
+                                  "const": true
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "provided"
+                              ],
+                              "additionalProperties": false
+                            }
                           }
                         },
                         "required": [
