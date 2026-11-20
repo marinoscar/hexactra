@@ -1,6 +1,8 @@
 // The deploy's fabric-connect step (issue #309) against a fake docker: it
 // mints only when the console is not connected to its bundled fabric, keeps
 // the token out of every argv, and leaves an operator's own fabric alone.
+import { readFileSync } from 'node:fs';
+
 import { createCli } from '@marinoscar/platform-cli';
 import { listRegisteredDeploySteps, type DeployStepContext } from '@marinoscar/platform-cli/deploy';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
@@ -13,6 +15,7 @@ const status = (s: object) => `noise\nFABRIC_CONNECT ${JSON.stringify({ url: nul
 
 function fakeContext(answers: { before: string; set?: { exitCode: number; stdout: string }; containers?: boolean }) {
   const calls: string[][] = [];
+  const allowed: Array<readonly number[] | undefined> = [];
   const lines: string[] = [];
   const ctx = {
     pipeline: 'install',
@@ -21,8 +24,9 @@ function fakeContext(answers: { before: string; set?: { exitCode: number; stdout
     commitSha: undefined,
     log: (l: string) => lines.push(l),
     progress: () => {},
-    exec: async (argv: readonly string[]) => {
+    exec: async (argv: readonly string[], options?: { allowExitCodes?: readonly number[] }) => {
       calls.push([...argv]);
+      if (argv[0] === 'docker' && argv[1] === 'exec') allowed.push(options?.allowExitCodes);
       if (argv[0] === 'docker' && argv[1] === 'ps') {
         const service = argv.find((a) => a.startsWith('label=com.docker.compose.service='))!.split('=').pop();
         return { exitCode: 0, stdout: answers.containers === false ? '' : `${service === 'api' ? 'aaaaaa111111' : 'bbbbbb222222'}\n`, stderr: '' };
@@ -32,7 +36,7 @@ function fakeContext(answers: { before: string; set?: { exitCode: number; stdout
       throw new Error(`unexpected ${argv.join(' ')}`);
     },
   } as unknown as DeployStepContext;
-  return { ctx, calls, lines };
+  return { ctx, calls, lines, allowed };
 }
 
 describe('fabric-connect deploy step', () => {
@@ -94,5 +98,33 @@ describe('fabric-connect deploy step', () => {
   it('skips a stack without the bundled fabric', async () => {
     const { ctx } = fakeContext({ before: '', containers: false });
     expect(await connectFabric(ctx)).toBe('skipped');
+  });
+  it('treats a status check the kernel killed (exit 137) as a warning, not a failed deploy (#668)', async () => {
+    // The script boots a second copy of the app inside the api container's memory limit; out of memory it
+    // is killed with SIGKILL and prints nothing. The exec must allow 137, and the step must warn and go on.
+    const { ctx, lines, allowed } = fakeContext({ before: '' });
+    await expect(connectFabric(ctx)).resolves.toBe('failed');
+    expect(allowed[0]).toEqual(expect.arrayContaining([1, 137]));
+    expect(lines.join('\n')).toContain('WARNING could not read');
+    expect(lines.join('\n')).toContain('docker stats');
+  });
+
+  it('allows the killed exit code on the connect pipeline too', async () => {
+    const { ctx, lines } = fakeContext({
+      before: status({ state: 'missing' }),
+      set: { exitCode: 137, stdout: '' },
+    });
+    await expect(connectFabric(ctx)).resolves.toBe('failed');
+    expect(lines.join('\n')).toContain('could not connect to the bundled fabric');
+  });
+
+});
+
+describe('the api memory overlay (#668)', () => {
+  it('raises the api limit above the generated 512M, as an app-owned overlay the deploy applies', () => {
+    const overlay = readFileSync(new URL('../../../infra/compose/app.prod.api-memory.compose.yml', import.meta.url), 'utf8');
+    expect(overlay).toMatch(/services:\s*\n\s+api:\s*\n\s+deploy:\s*\n\s+resources:\s*\n\s+limits:\s*\n\s+memory:\s*1G/);
+    const generated = readFileSync(new URL('../../../infra/compose/prod.compose.yml', import.meta.url), 'utf8');
+    expect(generated).toMatch(/memory:\s*512M/);
   });
 });

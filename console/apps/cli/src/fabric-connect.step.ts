@@ -7,6 +7,14 @@ export const BUNDLED_FABRIC_URL = 'http://fabric-control:8787';
 /** The in-container script (apps/api/src/fabric/fabric-connect.cli.ts), from the api image's working directory. */
 const SCRIPT = 'dist/fabric/fabric-connect.cli.js';
 const RESULT_PREFIX = 'FABRIC_CONNECT ';
+/**
+ * Exit codes the in-container script may end with without failing the deploy:
+ * 1 (it ran and said "not connected") and 137 (the kernel killed it, SIGKILL:
+ * the script boots a second copy of the application inside the api container,
+ * under that container's memory limit). Either way the step warns and the
+ * deployment goes on (#668).
+ */
+const TOLERATED_EXIT_CODES = [1, 137] as const;
 
 interface ConnectStatus {
   state: 'connected' | 'missing' | 'broken';
@@ -63,9 +71,9 @@ export async function connectFabric(ctx: DeployStepContext): Promise<'kept' | 'c
     ctx.log('fabric-connect: no running api or fabric-control container in this deployment; nothing to connect.');
     return 'skipped';
   }
-  const before = parseStatus((await ctx.exec(['docker', 'exec', api, 'node', SCRIPT, 'status'], { allowExitCodes: [1] })).stdout);
+  const before = parseStatus((await ctx.exec(['docker', 'exec', api, 'node', SCRIPT, 'status'], { allowExitCodes: TOLERATED_EXIT_CODES })).stdout);
   if (!before) {
-    ctx.log('fabric-connect: WARNING could not read the console\'s fabric connection; set it at Administration → Fabric connection.');
+    ctx.log('fabric-connect: WARNING could not read the console\'s fabric connection (the check may have been killed for memory: see docker stats and the kernel log); set it at Administration → Fabric connection, or run deploy update again.');
     return 'failed';
   }
   switch (decide(before)) {
@@ -83,7 +91,7 @@ export async function connectFabric(ctx: DeployStepContext): Promise<'kept' | 'c
     'set -o pipefail; ' +
     `docker exec ${control} hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console ` +
     `| docker exec -i ${api} node ${SCRIPT} set --url ${BUNDLED_FABRIC_URL}`;
-  const result = await ctx.exec(['bash', '-c', pipeline], { allowExitCodes: [1] });
+  const result = await ctx.exec(['bash', '-c', pipeline], { allowExitCodes: TOLERATED_EXIT_CODES });
   const after = parseStatus(result.stdout);
   if (result.exitCode !== 0 || after?.state !== 'connected') {
     ctx.log(`fabric-connect: WARNING the console could not connect to the bundled fabric (${after?.error ?? 'no status'}); set it at Administration → Fabric connection, or run deploy update again.`);
