@@ -67,6 +67,12 @@ export const bindingCookieName = (state: string): string => `hx_conn_${sha256Hex
 
 const union = <T>(a: readonly T[], b: readonly T[]): T[] => [...new Set([...a, ...b])];
 
+/** How long a callback that claimed its flow is remembered, so a duplicate delivery answers the same outcome (#672). */
+const SEEN_WINDOW_MS = 2 * 60_000;
+const SEEN_MAX = 500;
+/** The outcomes of a callback that claimed (consumed) its flow: a repeat answers the same. `binding_invalid` and `state_invalid` did not. */
+const CLAIMED_OUTCOMES: ReadonlySet<CallbackOutcome> = new Set<CallbackOutcome>(['connected', 'expired', 'denied', 'refused', 'exchange_failed', 'no_refresh_token', 'account_mismatch', 'nothing_granted', 'provider_unavailable', 'limit', 'admin_consent_required']);
+
 /** What is recorded about a failed connect besides its reason: closed values only (#670). */
 type FailureCause = { cause?: string; oauthError?: string; status?: number; error?: string; code?: string };
 const SAFE_CODE = /^[A-Za-z0-9_]{1,60}$/;
@@ -91,6 +97,8 @@ export class ConnectionFlowService {
 
   /** The wall clock; tests replace it. */
   clock: () => number = Date.now;
+  /** Callbacks that claimed their flow, by provider and state hash: what a repeat of the same callback answers (#672). */
+  private readonly seen = new Map<string, { at: number; result: Promise<CallbackResult> }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -159,6 +167,48 @@ export class ConnectionFlowService {
    * controller puts on the redirect to the return page. Never echoes the provider's parameters.
    */
   async handleCallback(provider: string, params: { code?: string; state?: string; error?: string; errorDescription?: string }, bindingFor: (cookieName: string) => string | undefined): Promise<CallbackResult> {
+    const state = params.state;
+    if (!isProviderId(provider) || !state || state.length > 200) return this.handleCallbackOnce(provider, params, bindingFor);
+    // One callback per state at a time (#672). A phone can deliver the same return twice at once (the in-app browser and the app link):
+    // the first claims the single-use flow and exchanges the code; the second used to find the flow gone, answer `state_invalid` after
+    // 28 ms, and the page showed an error for a connect that succeeded. A repeat of a callback that claimed the flow now waits for it
+    // and answers the same outcome (never the connection's id, never a second exchange). A callback that did NOT claim it (another
+    // browser, an unknown state) is judged on its own and leaves nothing behind, so the owner can still finish.
+    const key = `${provider}:${sha256Hex(state)}`;
+    this.sweepSeen(this.clock());
+    for (;;) {
+      const earlier = this.seen.get(key);
+      if (!earlier) break;
+      const result = await earlier.result.catch(() => null);
+      if (result && CLAIMED_OUTCOMES.has(result.outcome)) return { outcome: result.outcome, returnTo: result.returnTo, ...(result.missing ? { missing: result.missing } : {}) };
+      if (this.seen.get(key) === earlier) this.seen.delete(key);
+    }
+    const entry = { at: this.clock(), result: this.handleCallbackOnce(provider, params, bindingFor) };
+    this.seen.set(key, entry);
+    try {
+      const result = await entry.result;
+      if (!CLAIMED_OUTCOMES.has(result.outcome) && this.seen.get(key) === entry) this.seen.delete(key);
+      return result;
+    } catch (e) {
+      if (this.seen.get(key) === entry) this.seen.delete(key);
+      throw e;
+    }
+  }
+
+  /** Forgets callbacks older than the window, and the oldest beyond the bound. */
+  private sweepSeen(now: number): void {
+    for (const [key, entry] of this.seen) {
+      if (now - entry.at > SEEN_WINDOW_MS) this.seen.delete(key);
+      else break; // insertion order is arrival order: the rest are younger
+    }
+    while (this.seen.size > SEEN_MAX) {
+      const oldest = this.seen.keys().next().value;
+      if (oldest === undefined) break;
+      this.seen.delete(oldest);
+    }
+  }
+
+  private async handleCallbackOnce(provider: string, params: { code?: string; state?: string; error?: string; errorDescription?: string }, bindingFor: (cookieName: string) => string | undefined): Promise<CallbackResult> {
     const fail = (outcome: CallbackOutcome, returnTo = DEFAULT_RETURN_TO): CallbackResult => ({ outcome, returnTo });
     if (!isProviderId(provider)) return fail('state_invalid');
     if (!params.state || params.state.length > 200) return fail('state_invalid');

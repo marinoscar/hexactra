@@ -347,6 +347,8 @@ const { Client } = require("pg");
 docker logs --since 2h hexactra-api-1 2>&1 | grep -E 'connect failed|connection' | tail -20
 ```
 
+**A red banner but a `connection.created` row at the same moment** is not a failure: the provider's return was delivered twice at once (on a phone, the in-app browser and the app link), and the duplicate used to answer an error although the other had connected (#672). It no longer does (a repeat of a callback that claimed its flow answers the same outcome for two minutes, and the code is exchanged once). If you see it on an older build, reload the Connections page: the account is there.
+
 Read the `connection.connect_failed` row's `meta`:
 
 | `reason` | `cause` / `oauthError` / `status` | Meaning and fix |
