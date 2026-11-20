@@ -55,6 +55,10 @@ describe('the words of the header and the list', () => {
   it('says what is happening: archived first, then the run, then thinking', () => {
     expect(chatSubtitle({ chat: { status: 'archived' }, thinking: true, run: { status: 'running' } })).toBe('Archived');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: true, run: { status: 'running' } })).toBe('Working in the browser…');
+    // A job without a browser (E41.3) does not speak of one.
+    expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'running', hasBrowser: false } })).toBe('Working…');
+    expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'queued', hasBrowser: false } })).toBe('Starting…');
+    expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'running', hasBrowser: true } })).toBe('Working in the browser…');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'paused' } })).toBe('Paused');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'waiting_human' } })).toBe('Waiting for you');
     expect(chatSubtitle({ chat: { status: 'active' }, thinking: false, run: { status: 'queued' } })).toBe('Starting the browser…');

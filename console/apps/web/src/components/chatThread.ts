@@ -77,11 +77,15 @@ export function threadRows(messages: readonly ChatMessage[], timeZone: string, n
 }
 
 const RUN_WORDS: Record<string, string> = { queued: 'Starting the browser…', running: 'Working in the browser…', waiting_human: 'Waiting for you', paused: 'Paused' };
+/** The same words for a run that has not opened a browser (E41.3): a job done with the owner's accounts may never open one. */
+const RUN_WORDS_NO_BROWSER: Record<string, string> = { ...RUN_WORDS, queued: 'Starting…', running: 'Working…' };
 
 /** The line under the chat's title: what is happening right now, or nothing. */
-export function chatSubtitle(state: { chat: Pick<Chat, 'status'> | null; thinking: boolean; run: Pick<ChatRun, 'status'> | null }): string {
+export function chatSubtitle(state: { chat: Pick<Chat, 'status'> | null; thinking: boolean; run: Pick<ChatRun, 'status' | 'hasBrowser'> | null }): string {
   if (state.chat?.status === 'archived') return 'Archived';
-  if (state.run && RUN_WORDS[state.run.status]) return RUN_WORDS[state.run.status]!;
+  // An older console does not say (`hasBrowser` absent): its words stay as they were.
+  const words = state.run?.hasBrowser === false ? RUN_WORDS_NO_BROWSER : RUN_WORDS;
+  if (state.run && words[state.run.status]) return words[state.run.status]!;
   if (state.thinking) return 'Thinking…';
   return '';
 }

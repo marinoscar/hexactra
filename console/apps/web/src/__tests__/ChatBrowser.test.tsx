@@ -142,6 +142,21 @@ describe('the Browser card', () => {
     expect(screen.getAllByRole('article', { name: 'Browser run' })).toHaveLength(1);
   });
 
+  it('a job that has not opened a browser (E41.3) is a "Job" card: no picture, no browser button, no browser words', async () => {
+    mount();
+    await card();
+    runEvent({ hasBrowser: false, status: 'queued', activity: null });
+    const job = await screen.findByRole('article', { name: 'Run' });
+    expect(within(job).getByRole('status')).toHaveTextContent('Starting…');
+    expect(within(job).queryByRole('button', { name: 'Open browser' })).toBeNull();
+    expect(within(job).queryByRole('img', { name: 'The browser right now' })).toBeNull();
+    expect(job).not.toHaveTextContent('browser');
+    expect(browserStatusLine(run({ status: 'queued', hasBrowser: false, activity: null }))).toBe('Starting…');
+    // Once the run opens one, it is the Browser card again.
+    runEvent({ hasBrowser: true });
+    expect(await card()).toBeInTheDocument();
+  });
+
   it('says in words what each live state is', () => {
     expect(browserStatusLine({ status: 'queued', activity: null, cancelRequested: false })).toBe('Starting the browser…');
     expect(browserStatusLine({ status: 'running', activity: null, cancelRequested: false })).toBe('Working…');

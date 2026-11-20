@@ -26,7 +26,7 @@ import { openFabricSession } from './browser-session';
 import { BrowserError } from '@marinoscar/hexactra-browser-agent/browser-port';
 import { connectionGate } from './gates/connection-gate';
 import { registerRunTools } from './run-tools';
-import { runContextLines, runInstructions } from './toolbox-line';
+import { expectsLine, runContextLines, runInstructions } from './toolbox-line';
 import { mcpToolset } from './tools/connections/mcp';
 import { DEFAULT_CONNECTION_READ_LIMITS } from './connections/memory';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from '../goal-run.enqueue';
@@ -209,6 +209,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
 
   // A run an email started (E39.8): a reference to the message, never its content.
   const mailLines = await mailContextLines(d, userId, run.context, registry.get('mail_read') !== undefined);
+  // The chat's hint of what the job needs (E41.3): shown with the run's connections only, and never authority.
+  const hint = expectsLine(memory.expects, s.connections.list.length > 0);
   const profile: LoopProfile<HostContext> = {
     // The shared instructions, then (for a task with outputs) the list of what to return: the same text every round (the stable prefix, #406).
     instructions: instructionsWithOutputs(runInstructions(registry, ctx, ASK_TOPICS), readOutputs(run.outputsSpec)),
@@ -218,7 +220,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     observe: (c) => observeRound(c as never),
     assembleInput: assembleRoundInput,
     // The allowed sites (with a browser only), the toolbox line (E41.2), then the email that started the run.
-    contextLines: (c) => runContextLines(registry, c, mailLines),
+    contextLines: (c) => runContextLines(registry, c, [...mailLines, ...(hint ? [hint] : [])]),
     firstRoundHint: () => FIRST_ROUND_HINT,
     summarizeGuidance: guidanceSummary,
     aboutOwner: await aboutOwner(d, userId, run, memory.context),

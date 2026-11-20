@@ -1,0 +1,46 @@
+{
+  "name": "chat: after a browser job, add it to the calendar",
+  "description": "After a job found a concert on a website, the owner asks to add it to the calendar: an accounts job naming the calendar account, with the facts already found.",
+  "connections": [
+    {
+      "label": "Personal",
+      "capabilities": [
+        "calendar_read",
+        "calendar_write"
+      ]
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "text": "When does the Blue Band play at hall.example.test?"
+    },
+    {
+      "role": "run",
+      "goal": "Find when the Blue Band plays at hall.example.test",
+      "status": "succeeded",
+      "result": "The Blue Band plays on Friday 27 November 2026 at 20:00 at the Main Hall."
+    }
+  ],
+  "message": "Also add it to my calendar for Friday",
+  "script": [
+    [
+      "start_run",
+      {
+        "goal": "A calendar event in the Personal account's calendar: the Blue Band at the Main Hall, Friday 27 November 2026 at 20:00.",
+        "expects": "accounts"
+      }
+    ]
+  ],
+  "expect": {
+    "tool": "start_run",
+    "goalIncludes": [
+      "calendar",
+      "Personal",
+      "20:00"
+    ],
+    "goalMustNotInclude": [
+      "hall\\.example\\.test"
+    ]
+  }
+}

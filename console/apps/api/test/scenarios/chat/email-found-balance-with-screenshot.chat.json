@@ -1,13 +1,46 @@
 {
   "name": "chat: email a found balance with a screenshot",
-  "description": "The owner's example (E41): a run found the balance; the owner asks to email it. The goal should carry the balance and name the account, and say the outcome, not a browser path (pending E41.3).",
-  "connections": [{ "label": "Personal", "capabilities": ["mail_read", "mail_send"] }],
+  "description": "The owner's example (E41): a run found the balance; the owner asks to email it. The goal carries the balance and names the account, says the outcome rather than a browser route, and asks for the previous job's screenshot.",
+  "connections": [
+    {
+      "label": "Personal",
+      "capabilities": [
+        "mail_read",
+        "mail_send"
+      ]
+    }
+  ],
   "conversation": [
-    { "role": "user", "text": "What is my miles balance on miles.example.test?" },
-    { "role": "run", "goal": "Find the miles balance on miles.example.test", "status": "succeeded", "result": "Balance: 99,667 miles." }
+    {
+      "role": "user",
+      "text": "What is my miles balance on miles.example.test?"
+    },
+    {
+      "role": "run",
+      "goal": "Find the miles balance on miles.example.test",
+      "status": "succeeded",
+      "result": "Balance: 99,667 miles."
+    }
   ],
   "message": "Send an email to trips@example.test with the information including a screenshot",
-  "script": [["start_run", { "goal": "Go to miles.example.test, take a screenshot of the balance and send an email to trips@example.test with the balance (99,667 miles) and the screenshot." }]],
-  "expect": { "tool": "start_run", "goalIncludes": ["99,667", "trips@example.test"] },
-  "pending": { "issue": "E41.3", "expect": { "goalIncludes": ["99,667", "Personal"], "goalMustNotInclude": ["go to|open|navigate"] } }
+  "script": [
+    [
+      "start_run",
+      {
+        "goal": "An email to trips@example.test, using the Personal account, saying the miles balance is 99,667 miles, with the previous job's final screenshot attached.",
+        "expects": "accounts"
+      }
+    ]
+  ],
+  "expect": {
+    "tool": "start_run",
+    "goalIncludes": [
+      "99,667",
+      "trips@example.test",
+      "Personal"
+    ],
+    "goalMustNotInclude": [
+      "go to|open|navigate"
+    ]
+  }
 }

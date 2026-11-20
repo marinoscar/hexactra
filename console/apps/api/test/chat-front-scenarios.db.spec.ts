@@ -25,8 +25,8 @@ afterAll(async () => {
 });
 
 describe('the chat-front scenarios', () => {
-  it('finds the five chat scenarios (a suite that found none must fail)', () => {
-    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'two-accounts-send-report.chat.json']);
+  it('finds the six chat scenarios (a suite that found none must fail)', () => {
+    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'two-accounts-send-report.chat.json']);
   });
 
   it.each(loaded.map((l) => [l.scenario.name, l.scenario] as const))('%s passes scripted', async (_name, scenario) => {
@@ -40,10 +40,11 @@ describe('the chat-front scenarios', () => {
     expect(r.calls.map((c) => c.tool)).toEqual(['mail_search']);
   });
 
-  it('a pending expectation fires today and is only reported', async () => {
+  it('the chat front names the account, states the facts and the outcome, and sets expects (E41.3)', async () => {
     const r = await runChatScenario(app, loaded.find((l) => l.file.endsWith('email-found-balance-with-screenshot.chat.json'))!.scenario);
     expect(r.pass).toBe(true);
-    expect(r.pendingFailures).toEqual(expect.arrayContaining([expect.stringMatching(/^\[pending E41\.3\] goalMustNotInclude: the goal matches/)]));
+    expect(r.pendingFailures).toEqual([]);
+    expect(r.args).toMatchObject({ expects: 'accounts' });
   });
 
   it('names what differs', () => {

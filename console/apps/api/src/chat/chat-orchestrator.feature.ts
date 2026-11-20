@@ -10,7 +10,7 @@ export const CHAT_ORCHESTRATOR_FEATURE_ID = 'chat_orchestrator';
  */
 export const CHAT_ORCHESTRATOR_FEATURE: AiFeatureDefinition = {
   id: CHAT_ORCHESTRATOR_FEATURE_ID,
-  label: 'Chat: understand the request and start browser runs',
+  label: 'Chat: understand the request and start jobs',
   group: 'Hexactra',
   needs: ['responses', 'tools'],
   inputModalities: ['text'],
