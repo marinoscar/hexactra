@@ -290,6 +290,7 @@ export function ChatPage() {
   }, [chatId]);
 
   const rows = useMemo(() => threadRows(messages, timeZone), [messages, timeZone]);
+  const settledRecorded = settled ? messages.some((m) => m.kind === 'request' && (m.meta as { questionId?: unknown } | null)?.questionId === settled.id) : false;
   const readOnly = chat?.status === 'archived';
   const mayType = canWrite && !readOnly;
   /** The suggested answers of the newest message can be tapped, while nothing is being sent. */
@@ -471,7 +472,8 @@ export function ChatPage() {
             onOpenBrowser={request.viewerUrl ? () => void openViewer(request.viewerUrl!) : undefined}
           />
         ) : (
-          settled && <RequestSettled text={settled.text} tone={settled.tone} ruleId={settled.ruleId} />
+          // The thread keeps a record of the request (E40.1); this line stays only when it adds something: a saved approval to see, or no record.
+          settled && (settledRecorded === false || settled.ruleId) && <RequestSettled text={settled.text} tone={settled.tone} ruleId={settled.ruleId} />
         )}
         {state.thinking && <TypingIndicator />}
       </>

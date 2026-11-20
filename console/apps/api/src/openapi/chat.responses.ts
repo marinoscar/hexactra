@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 const iso = z.string().describe('ISO 8601 timestamp');
 const role = z.enum(['user', 'assistant', 'system']);
-const kind = z.enum(['text', 'clarify', 'run', 'result', 'task_draft']).describe('`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).');
+const kind = z.enum(['text', 'clarify', 'run', 'result', 'task_draft', 'memory', 'request']).describe('`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.');
 const liveRun = z
   .object({ id: z.uuid(), status: z.enum(['queued', 'running', 'waiting_human', 'paused']) })
   .nullable()

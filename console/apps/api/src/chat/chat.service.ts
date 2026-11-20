@@ -8,6 +8,7 @@ import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RunDeleteService } from '../tasks/run-delete.service';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
+import { withRequestOutcomes } from '../questions/chat-request-record';
 import './chat.errors';
 import { CHAT_MESSAGES_MAX, CHAT_TITLE_MAX, type CreateChatDto, type ListChatsDto, type UpdateChatDto } from './chat.schemas';
 
@@ -206,7 +207,7 @@ export class ChatService {
   async get(userId: string, id: string, afterSeq = 0): Promise<ChatDetail> {
     const c = await this.owned(userId, id);
     const [rows, live] = await Promise.all([
-      this.prisma.chatMessage.findMany({ where: { conversationId: c.id, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' }, take: CHAT_MESSAGES_MAX + 1 }),
+      this.prisma.chatMessage.findMany({ where: { conversationId: c.id, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' }, take: CHAT_MESSAGES_MAX + 1 }).then((r) => withRequestOutcomes(this.prisma, r)),
       this.liveRuns(userId, [c.id]),
     ]);
     return { ...(await this.withConnections(c)), messages: rows.slice(0, CHAT_MESSAGES_MAX).map(messageView), hasMore: rows.length > CHAT_MESSAGES_MAX, liveRun: live.get(c.id) ?? null, thinking: c.turnLeaseUntil !== null && c.turnLeaseUntil > new Date() };

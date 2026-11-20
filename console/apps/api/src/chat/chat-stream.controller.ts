@@ -15,6 +15,7 @@ import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import './chat.errors';
 import { getChatSchema } from './chat.schemas';
 import type { ChatMessageView } from './chat.service';
+import { withRequestOutcomes } from '../questions/chat-request-record';
 
 /** How often the stream looks for something new, and how often it says it is alive when there is nothing. */
 export const CHAT_STREAM_POLL_MS = 1_000;
@@ -149,7 +150,7 @@ export class ChatStreamService {
     const c = await db.conversation.findFirst({ where: { id }, select: { id: true, title: true, status: true, turnLeaseUntil: true } });
     if (!c) return null;
     const [rows, newest] = await Promise.all([
-      this.prisma.chatMessage.findMany({ where: { conversationId: c.id, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' }, take: MESSAGES_PER_TICK }),
+      this.prisma.chatMessage.findMany({ where: { conversationId: c.id, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' }, take: MESSAGES_PER_TICK }).then((r) => withRequestOutcomes(this.prisma, r)),
       db.run.findFirst({
         where: { conversationId: c.id },
         orderBy: { createdAt: 'desc' },

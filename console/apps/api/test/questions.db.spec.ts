@@ -309,3 +309,48 @@ describe('browser-bound questions', () => {
     expect(await prisma.question.findUniqueOrThrow({ where: { id: q2.id } })).toMatchObject({ status: 'answered', answeredChannel: 'slack', response: expect.objectContaining({ value: 'Person A', channel: 'slack' }) });
   });
 });
+
+describe('requests kept in the chat thread (E40.1, #685)', () => {
+  async function chatRun(userId: string) {
+    const conv = await prisma.conversation.create({ data: { userId, title: 'Requests' } });
+    const run = await prisma.forUser({ userId }).run.create({ data: { userId, conversationId: conv.id, trigger: 'chat', origin: 'web', goal: 'Sign in', status: 'waiting_human', sessionId: randomUUID() } });
+    return { conv, run };
+  }
+  const requestRows = (conversationId: string) => prisma.chatMessage.findMany({ where: { conversationId, kind: 'request' }, orderBy: { seq: 'asc' } });
+
+  it('records a secret request once, keeps it after the answer, and never stores the value', async () => {
+    const a = await login(`q-chat-secret-${stamp}@example.test`);
+    const { conv, run } = await chatRun(a.userId);
+    const hid = randomUUID();
+    handoffs.set(hid, { id: hid, status: 'pending', input: 'secret', kind: 'code', prompt: 'Code', choices: [] });
+    const q = await questions.mirrorHandoff({ id: a.userId }, questions.parseSpec({ input: 'secret', kind: 'code', prompt: 'Enter the code we sent' }), { id: hid, viewerUrl: null, pageTitle: null, expiresAt: null }, { askedBy: `run:${run.id}`, runId: run.id, fabricSessionId: run.sessionId });
+
+    const rows = await requestRows(conv.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ role: 'assistant', runId: run.id, text: 'Enter the code we sent', meta: { questionId: q.id, input: 'secret', questionKind: 'code' } });
+
+    const before = await app.inject({ method: 'GET', url: `/api/chats/${conv.id}`, headers: as(a.token) });
+    expect(data<{ messages: { kind: string; meta: { outcome?: string } }[] }>(before).messages.find((m) => m.kind === 'request')?.meta.outcome).toBe('waiting for the owner');
+
+    expect((await app.inject({ method: 'POST', url: `/api/questions/${q.id}/answer`, headers: as(a.token), payload: { value: SECRET, channel: 'web' } })).statusCode).toBe(200);
+    const after = await app.inject({ method: 'GET', url: `/api/chats/${conv.id}`, headers: as(a.token) });
+    expect(after.body).not.toContain(SECRET);
+    expect(data<{ messages: { kind: string; meta: { outcome?: string } }[] }>(after).messages.find((m) => m.kind === 'request')?.meta.outcome).toBe('provided');
+    const stored = await prisma.chatMessage.findMany({ where: { conversationId: conv.id } });
+    expect(JSON.stringify(stored)).not.toContain(SECRET);
+  });
+
+  it('shows an expired request as expired, and records nothing for a run outside a chat', async () => {
+    const a = await login(`q-chat-expired-${stamp}@example.test`);
+    const { conv, run } = await chatRun(a.userId);
+    const q = await questions.create({ id: a.userId }, questions.parseSpec({ input: 'choice', prompt: 'Which seat?', options: [{ id: 'a', label: 'Aisle' }, { id: 'w', label: 'Window' }] }), { askedBy: `run:${run.id}`, runId: run.id });
+    await prisma.question.update({ where: { id: q.id }, data: { expiresAt: new Date(Date.now() - 1_000) } });
+    await questions.expireDue({ id: q.id });
+    const res = await app.inject({ method: 'GET', url: `/api/chats/${conv.id}`, headers: as(a.token) });
+    expect(data<{ messages: { kind: string; meta: { outcome?: string } }[] }>(res).messages.find((m) => m.kind === 'request')?.meta.outcome).toBe('expired without an answer');
+
+    const solo = await prisma.forUser({ userId: a.userId }).run.create({ data: { userId: a.userId, goal: 'Pick a seat' } });
+    await questions.create({ id: a.userId }, questions.parseSpec({ input: 'text', prompt: 'Name?' }), { askedBy: `run:${solo.id}`, runId: solo.id });
+    expect(await prisma.chatMessage.count({ where: { runId: solo.id } })).toBe(0);
+  });
+});
