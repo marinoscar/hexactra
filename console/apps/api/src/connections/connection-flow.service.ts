@@ -67,6 +67,24 @@ export const bindingCookieName = (state: string): string => `hx_conn_${sha256Hex
 
 const union = <T>(a: readonly T[], b: readonly T[]): T[] => [...new Set([...a, ...b])];
 
+/** What is recorded about a failed connect besides its reason: closed values only (#670). */
+type FailureCause = { cause?: string; oauthError?: string; status?: number; error?: string; code?: string };
+const SAFE_CODE = /^[A-Za-z0-9_]{1,60}$/;
+
+/** The closed, content-free facts of an error: never its message (a provider's text, a value, a token). */
+function causeOf(e: unknown): FailureCause {
+  if (e instanceof OAuthClientError) {
+    return {
+      cause: e.kind,
+      ...(e.oauthError && /^[a-z_]{1,40}$/.test(e.oauthError) ? { oauthError: e.oauthError } : {}),
+      ...(typeof e.status === 'number' ? { status: e.status } : {}),
+    };
+  }
+  const name = e instanceof Error && SAFE_CODE.test(e.name) ? e.name : 'Error';
+  const code = (e as { code?: unknown } | null)?.code;
+  return { cause: 'error', error: name, ...(typeof code === 'string' && SAFE_CODE.test(code) ? { code } : {}) };
+}
+
 @Injectable()
 export class ConnectionFlowService {
   private readonly log = new Logger(ConnectionFlowService.name);
@@ -152,14 +170,14 @@ export class ConnectionFlowService {
     }
     // The flow is bound to the browser that started it: a state alone (a copied link, another user's session) is not enough.
     const binding = bindingFor(bindingCookieName(params.state));
-    if (!binding || !safeEqual(sha256Hex(binding), flow.bindingHash)) return fail('binding_invalid');
+    if (!binding || !safeEqual(sha256Hex(binding), flow.bindingHash)) return this.failed(flow.userId, flow.id, provider, 'binding_invalid', DEFAULT_RETURN_TO);
     // Single use: claim (delete) the flow atomically before anything is exchanged.
     const claimed = await this.prisma.connectionFlow.deleteMany({ where: { id: flow.id } });
     if (claimed.count !== 1) return fail('state_invalid');
     const verifier = await this.store.verifier(flow.userId, flow.id).catch(() => null);
     await this.store.clearVerifier(flow.userId, flow.id).catch(() => undefined);
     const back = safeReturnTo(flow.returnTo);
-    if (!verifier) return fail('state_invalid', back);
+    if (!verifier) return this.failed(flow.userId, flow.id, provider, 'state_invalid', back, undefined, { cause: 'verifier_missing' });
 
     if (params.error) {
       const code = /^[a-z_]{1,40}$/.test(params.error) ? params.error : 'refused';
@@ -180,17 +198,15 @@ export class ConnectionFlowService {
     try {
       tokens = await adapter.exchangeCode({ app, code: params.code, verifier });
     } catch (e) {
-      if (!(e instanceof OAuthClientError)) this.log.warn(`connection code exchange failed (${e instanceof Error ? e.name : 'error'})`);
       // The consent screen was passed but the organization requires an administrator's approval: not a failure of the owner's.
-      return this.failed(flow.userId, flow.id, provider, e instanceof OAuthClientError && e.oauthError === 'admin_consent_required' ? 'admin_consent_required' : 'exchange_failed', back);
+      return this.failed(flow.userId, flow.id, provider, e instanceof OAuthClientError && e.oauthError === 'admin_consent_required' ? 'admin_consent_required' : 'exchange_failed', back, undefined, causeOf(e));
     }
 
     try {
       return await this.complete({ ...flow, provider }, adapter, app, tokens, back);
     } catch (e) {
-      this.log.warn(`connection could not be saved (${e instanceof Error ? e.name : 'error'})`);
       await this.revokeQuietly(adapter, app, tokens.refreshToken ?? tokens.accessToken, tokens.refreshToken ? 'refresh_token' : 'access_token');
-      return this.failed(flow.userId, flow.id, provider, 'exchange_failed', back);
+      return this.failed(flow.userId, flow.id, provider, 'exchange_failed', back, undefined, { ...causeOf(e), cause: 'save_failed' });
     }
   }
 
@@ -297,8 +313,14 @@ export class ConnectionFlowService {
     return defaultFor.filter((g) => groups.includes(g));
   }
 
-  private async failed(userId: string, flowId: string, provider: ConnectionProviderId, outcome: CallbackOutcome, returnTo: string, connectionId?: string): Promise<CallbackResult> {
-    await this.events.audit(userId, CONNECTION_AUDIT.connectFailed, connectionId ?? flowId, { provider, reason: outcome });
+  /**
+   * A failed connect: audited with the closed reason and, when there is one, the closed cause (an `OAuthClientError`'s kind, the
+   * provider's RFC 6749 code and HTTP status, or an error name): enough to tell a wrong client secret from a redirect mismatch, an
+   * unreachable token endpoint or a save failure, never a message, a code, a state, a token or any text from the provider (#670).
+   */
+  private async failed(userId: string, flowId: string, provider: ConnectionProviderId, outcome: CallbackOutcome, returnTo: string, connectionId?: string, cause?: FailureCause): Promise<CallbackResult> {
+    await this.events.audit(userId, CONNECTION_AUDIT.connectFailed, connectionId ?? flowId, { provider, reason: outcome, ...(cause ?? {}) });
+    this.log.warn(`connect failed: provider=${provider} reason=${outcome}${cause ? ` ${Object.entries(cause).map(([k, v]) => `${k}=${v}`).join(' ')}` : ''}`);
     this.events.count(provider, 'failed');
     return { outcome, returnTo, ...(connectionId ? { connectionId } : {}) };
   }

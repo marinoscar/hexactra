@@ -327,6 +327,40 @@ What the owner sees: a bell and push notification **"Reconnect an account"**, th
 
 The daily job `connections.health` (Administration → Jobs; 04:17 UTC, server-only) refreshes connections that were neither used nor refreshed in the last 20 hours and flags the ones that fail, so a token does not die of inactivity.
 
+### A connection will not complete (the owner approved everything and came back to an error)
+
+The owner passes the provider's consent screens, is returned to the console, and the Connections page shows a red banner. The banner names which way it failed (#670); the audit log says why. The callback is deliberately **not** in the nginx access log or the API request log, so the audit is the place to look.
+
+```bash
+# The last ten connect events (closed values only: no code, state, token or provider text). Run on the host:
+docker exec hexactra-api-1 node -e '
+const { buildDatabaseUrl } = require("@marinoscar/platform-api/core");
+const { Client } = require("pg");
+(async () => {
+  const c = new Client({ connectionString: buildDatabaseUrl(process.env) });
+  await c.connect();
+  const r = await c.query("select created_at, action, meta from audit_events where action like $1 order by created_at desc limit 10", ["connection.%"]);
+  console.log(JSON.stringify(r.rows, null, 1));
+  await c.end();
+})().catch((e) => { console.error(e.message); process.exit(1); });
+'
+docker logs --since 2h hexactra-api-1 2>&1 | grep -E 'connect failed|connection' | tail -20
+```
+
+Read the `connection.connect_failed` row's `meta`:
+
+| `reason` | `cause` / `oauthError` / `status` | Meaning and fix |
+|---|---|---|
+| `binding_invalid` | none | The sign-in came back to a different browser or app than the one that started it (the HttpOnly binding cookie is missing). Start again and finish in the same one; on a phone, open the console in the browser it will return to, not a different app. |
+| `state_invalid` | `verifier_missing` | The flow was found but its PKCE verifier is gone (the sign-in took too long, or the flow was cleaned up). Start again. |
+| `exchange_failed` | `cause: invalid_client`, `oauthError: invalid_client`, `status: 401` | The provider rejected the app's client id or secret. Check Administration, Connections: the client id and secret of the app, and that the secret was copied whole. |
+| `exchange_failed` | `cause: invalid_grant`, `oauthError: invalid_grant`, `status: 400` | The code was already used, expired, or the **redirect URI sent does not match** the one registered at the provider (`<console>/api/connections/callback/google`, exactly, https). |
+| `exchange_failed` | `cause: unavailable` | The console could not reach the provider's token endpoint, or it answered 5xx or 429 (the egress guard, a proxy, DNS, the provider's own outage). |
+| `exchange_failed` | `cause: refused`, `oauthError` (for example `invalid_request`, `invalid_scope`) | The provider refused the exchange for another reason: the `oauthError` code names it (a scope the app is not allowed to ask for, a malformed request). |
+| `exchange_failed` | `cause: save_failed`, `error`, `code` | The provider accepted the code but the connection could not be stored (database, credential store: `SECRETS_ENCRYPTION_KEY`). |
+| `refused` | `reason` carries the provider's error code | The provider returned `error=` on the redirect. |
+| `admin_consent_required` | none | Microsoft: an administrator has to approve the app. |
+
 ### A delivery keeps failing
 
 A delivery's failure never changes the run's status. Where to look: the run page's **Deliveries** block, or `hexactra runs deliveries <run>`; each row has a status (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed code and a fixed sentence, never an address or a subject. The owner is told once per task per day (**"A delivery after a run failed"**); the alert rule **Delivery keeps failing** (`hexactra.delivery_failing`, on by default: three failed deliveries in 24 hours) is at Administration → Alerts.

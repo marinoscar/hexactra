@@ -365,6 +365,27 @@ describe('state, PKCE and the browser binding', () => {
     expect(await prisma.userCredential.count({ where: { userId: s.userId, purpose: 'connection_token' } })).toBe(0);
   });
 
+  it('a failed connect is audited with its closed reason and cause, and never with the code, the state or any provider text (#670)', async () => {
+    const s = await login('conn-diag');
+    const start = await call<{ authorizeUrl: string }>(s, 'POST', '/api/connections/authorize', { provider: 'google', capabilities: ['mail_read'] });
+    const { code, state } = google.consent(start.data.authorizeUrl, A);
+    const mine = cookieOf(start.headers['set-cookie']);
+    // 1. The browser that finished the sign-in is not the one that started it: no cookie.
+    const wrongBrowser = await callback('google', { code, state }, null);
+    expect(String(wrongBrowser.headers.location)).toBe('/settings/connections?connect=binding_invalid');
+    // 2. The provider refuses the code (a wrong or used code answers invalid_grant 400 at the fake token endpoint).
+    const refused = await callback('google', { code: 'not-a-real-code-0123456789', state }, mine);
+    expect(String(refused.headers.location)).toBe('/settings/connections?connect=exchange_failed');
+    const rows = await prisma.auditEvent.findMany({ where: { actorUserId: s.userId, action: 'connection.connect_failed' }, orderBy: { createdAt: 'asc' } });
+    expect(rows.map((r) => (r.meta as Record<string, unknown>).reason)).toEqual(['binding_invalid', 'exchange_failed']);
+    expect(rows[0]!.meta).toEqual({ provider: 'google', reason: 'binding_invalid' });
+    expect(rows[1]!.meta).toEqual({ provider: 'google', reason: 'exchange_failed', cause: 'invalid_grant', oauthError: 'invalid_grant', status: 400 });
+    // Only closed values: nothing of the code, the state, the cookie or a provider message.
+    const text = JSON.stringify(rows.map((r) => r.meta));
+    for (const secret of [code, state, mine.value, 'not-a-real-code-0123456789', 'no longer valid']) expect(text).not.toContain(secret);
+    expect(await list(s)).toEqual([]);
+  });
+
   it('the callback of another browser (another user\'s session, or none) is refused, and the owner can still finish', async () => {
     const s = await login('conn-bind-owner');
     const other = await login('conn-bind-other');
