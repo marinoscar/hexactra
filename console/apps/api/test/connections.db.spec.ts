@@ -344,14 +344,57 @@ describe('state, PKCE and the browser binding', () => {
     expect(google.exchangeCalls.some((c) => c.code === code)).toBe(false);
   });
 
-  it('a state is used once: replaying the callback is refused', async () => {
+  it('a state is used once: a replay never exchanges the code again, answers the same outcome for two minutes (a duplicate delivery), then is refused', async () => {
     const s = await login('conn-state-reuse');
     const r = await connect(s, google, A);
     expect(r.location).toContain('connect=connected');
+    const before = google.exchangeCalls.filter((c) => c.code === r.code).length;
+    // Within the window: the same outcome, without the connection's id, and the code is not exchanged again (#672).
     const replay = await callback('google', { code: r.code, state: r.state }, r.cookie);
-    expect(String(replay.headers.location)).toBe('/settings/connections?connect=state_invalid');
+    expect(String(replay.headers.location)).toBe('/settings/connections?connect=connected');
+    expect(google.exchangeCalls.filter((c) => c.code === r.code)).toHaveLength(before);
+    expect(await list(s)).toHaveLength(1);
+    // After the window: the single-use state is refused.
+    flows.clock = () => Date.now() + 3 * 60_000;
+    try {
+      const late = await callback('google', { code: r.code, state: r.state }, r.cookie);
+      expect(String(late.headers.location)).toBe('/settings/connections?connect=state_invalid');
+    } finally {
+      flows.clock = Date.now;
+    }
     expect(await list(s)).toHaveLength(1);
   });
+
+  it('two deliveries of the same callback at once (a phone: the in-app browser and the app link) exchange once, create one connection and both end on "connected" (#672)', async () => {
+    const s = await login('conn-dup-delivery');
+    const start = await call<{ authorizeUrl: string }>(s, 'POST', '/api/connections/authorize', { provider: 'google', capabilities: ['mail_read'] });
+    const { code, state } = google.consent(start.data.authorizeUrl, A);
+    const cookie = cookieOf(start.headers['set-cookie']);
+    const [first, second] = await Promise.all([callback('google', { code, state }, cookie), callback('google', { code, state }, cookie)]);
+    const locations = [String(first.headers.location), String(second.headers.location)];
+    for (const location of locations) expect(location).toMatch(/^\/settings\/connections\?connect=connected/);
+    // Only the first carries the connection's id; the duplicate answers the outcome alone.
+    expect(locations.filter((l) => l.includes('connection='))).toHaveLength(1);
+    expect(google.exchangeCalls.filter((c) => c.code === code)).toHaveLength(1);
+    expect(await list(s)).toHaveLength(1);
+    expect(await prisma.auditEvent.count({ where: { actorUserId: s.userId, action: 'connection.created' } })).toBe(1);
+  });
+
+  it('a callback from another browser is not remembered: the owner can still finish, and a different state is unaffected (#672)', async () => {
+    const s = await login('conn-dup-other-browser');
+    const start = await call<{ authorizeUrl: string }>(s, 'POST', '/api/connections/authorize', { provider: 'google', capabilities: ['mail_read'] });
+    const { code, state } = google.consent(start.data.authorizeUrl, A);
+    const mine = cookieOf(start.headers['set-cookie']);
+    const [wrong, right] = await Promise.all([callback('google', { code, state }, null), callback('google', { code, state }, mine)]);
+    expect(String(wrong.headers.location)).toBe('/settings/connections?connect=binding_invalid');
+    expect(String(right.headers.location)).toMatch(/connect=connected/);
+    expect(google.exchangeCalls.filter((c) => c.code === code)).toHaveLength(1);
+    expect(await list(s)).toHaveLength(1);
+    const other = await login('conn-dup-other-state');
+    const r = await connect(other, google, A);
+    expect(r.location).toContain('connect=connected');
+  });
+
 
   it('an expired flow is refused, and its verifier is deleted', async () => {
     const s = await login('conn-state-expired');
