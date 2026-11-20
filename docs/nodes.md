@@ -106,7 +106,7 @@ A node is built to look like what it is: a person's computer at home.
 - **Driven by the extension:** no `--enable-automation` flag, no DevTools or CDP port, and no WebDriver. The extension's trusted input and JavaScript go through `chrome.debugger` without enabling any CDP domain, and Chrome runs with `--silent-debugger-extension-api`, so there is no debugging bar.
 - **Real input, and the whole desktop:** the agent clicks, types and scrolls with trusted events, and drives the node's desktop (native file pickers, OS dialogs) with `xdotool`. `hexactra agent install` installs the tools it needs (`xdotool`, `imagemagick`), and `hexactra agent update` adds them on nodes set up earlier (VISION §27).
 - **Your environment:** the system's timezone and locale, and a normal screen size (1920x1080).
-- **Persistent profiles:** real sign-ins, kept between runs.
+- **Persistent profiles:** real sign-ins, kept between runs. Each new chat and each task restarts the profile's browser and starts on a blank tab (unless another session is using that profile); the sign-ins stay ([console/docs/runner.md](../console/docs/runner.md), E40.5).
 
 A residential IP lowers the chance of being challenged; it does not remove it. A fresh Google sign-in may still ask for confirmation, which you answer through the remote desktop.
 

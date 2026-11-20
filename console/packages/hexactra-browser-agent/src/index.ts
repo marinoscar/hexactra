@@ -3,6 +3,7 @@
 export * from './browser-port';
 export * from './context';
 export * from './context-settings';
+export * from './fresh-start';
 export * from './gates';
 export * from './instructions';
 export * from './page';
