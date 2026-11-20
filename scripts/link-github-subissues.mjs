@@ -47,6 +47,11 @@ const epicChildren = new Map([
   // acceptance run on the deployed stack, #651 nightly live replay, #652 the flaky VPS stack job, #653 tidy after the
   // split, #654 further console packages.
   [580, [582, 583, 584, 585, 586, 587, 588, 589, 614, 633, 643, 650, 651, 652, 653, 654]],
+  // E39 connections: Google and Microsoft accounts for email, calendar and documents, and deliveries after a run. Sequence order
+  // (E39.1 to E39.11): #598 the auth decision record, #599 connections, #601 the Google provider, #602 the Microsoft provider,
+  // #600 task outputs, #603 deliveries, #604 agent tools, #605 email triggers, #606 generic MCP servers, #607 the console UI and
+  // #608 this close-out. Follow-ups filed by the acceptance run are added here when they exist.
+  [581, [598, 599, 601, 602, 600, 603, 604, 605, 606, 607, 608, 661, 662, 663, 664, 665, 666]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

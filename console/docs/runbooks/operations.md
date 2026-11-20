@@ -16,6 +16,7 @@ F="-f base.compose.yml -f prod.compose.yml -f app.fabric.compose.yml"   # + -f d
 | Volume `fabric-host-data` | The browser profiles of the bundled host (optional; nodes keep their profiles on the node, see [docs/nodes.md](../../../docs/nodes.md)): cookies and live sign-ins | **Secret**: whoever has a profile is signed in as you |
 | `infra/compose/.env` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `HEXACTRA_FABRIC_OPERATOR_TOKEN`, database password, and with the built-in secrets store on `SECRETS_STORE_KEY` (and `SECRETS_STORE_KEY_PREVIOUS` during a rotation) | Secret; keep it apart from the backups. **Losing `SECRETS_STORE_KEY` loses every saved login of the built-in store for good** |
 | Postgres (secrets) | `secrets_connections` (a Vault connection's address, client id, status, error code; no token), `secrets_activity` (what the agent used: value-free, 180 days), the encrypted Vault tokens in the credential store; with the built-in store, the Vault tables (ciphertext) and `secrets_store_data_keys` (wrapped per-owner keys) | No login, password, code or card is readable from a backup without the keys in `.env` ([security-secrets.md](../security-secrets.md)) |
+| Postgres (connections) | `connections` (label, provider, the account's address, switches, status and reason code: in the clear), `task_connections`, `conversation_connections`, mail triggers and their event history, deliveries and their log (recipient addresses, destinations and file names are in the clear; the log has closed codes and counts, never content); the refresh and access tokens, and the Google and Microsoft client secrets, are rows of the encrypted credential store | Tokens and app secrets are ciphertext under `SECRETS_ENCRYPTION_KEY`; the rest is metadata that shows who the owner corresponds with ([security-connections.md](../security-connections.md)). A restore without the key leaves every connection to be connected again |
 
 Other browser hosts (your desktop, other machines) keep their profiles on their own disk. Back them up there.
 
@@ -302,3 +303,79 @@ Only for deployments with the built-in store (`SECRETS_STORE_ENABLED=true`). The
 6. Check: a scheduled run on a test login still signs in; the Activity shows `typed`.
 
 The same job removes expired fabric credentials and the data of owners who no longer exist. **To restore** a database backup, restore `SECRETS_STORE_KEY` with it (the key that was current when the backup was taken, and its predecessor if a rotation was unfinished); without it the app works and the logins are unreadable.
+
+## 11. Connections and deliveries
+
+How they work: [../connections.md](../connections.md) and [../deliveries.md](../deliveries.md). What protects them and what does not: [../security-connections.md](../security-connections.md). Four things you will be asked about: an account that needs connecting again, a delivery that keeps failing, a mail trigger that stopped, and the provider's app secret.
+
+### A connection needs reconnecting
+
+What the owner sees: a bell and push notification **"Reconnect an account"**, the account listed at the top of Settings → Connections under **Needs reconnecting**, tasks and chats that fail with `CONNECTION_NEEDS_RECONNECT` (409, the label named), deliveries that fail with "the connection needs reconnecting", and mail triggers with the status `needs_reconnect`. Nothing falls back to another account. `hexactra connections list` shows the status of every connection of the signed-in owner.
+
+1. **Read the reason** on the connection (`statusReason`, a code, never a provider message):
+
+   | Reason | What happened | What to do |
+   |---|---|---|
+   | `GRANT_REVOKED` | The provider refused the saved grant: the owner removed the app in their account, changed the password, the grant expired, or the Google project was left in **Testing** (every sign-in ends after about seven days) | Reconnect. If a Google connection fails inside its first week, check the project's publishing status first ([connections.md, Google setup](../connections.md#setup-checklist-for-the-administrator)) |
+   | `NO_REFRESH_TOKEN` | The provider issued no refresh token | Reconnect; for Google tick every permission on the consent screen |
+   | `TOKEN_STORE_FAILED` | A new refresh token could not be stored (the provider had retired the old one) | Check that `SECRETS_ENCRYPTION_KEY` is the key the credentials were written with and that the database accepts writes; then reconnect |
+
+2. **The owner reconnects**: Settings → Connections → **Reconnect** on the account. The provider's consent screen opens; they must come back **in the same browser within 10 minutes**. The return to `/settings/connections?connect=<outcome>` names a closed outcome: `connected`, `denied`, `expired`, `state_invalid` or `binding_invalid` (another browser or a stale link: start again), `exchange_failed`, `no_refresh_token`, `account_mismatch` (signed in as another account), `nothing_granted`, `provider_unavailable`, `limit` (25 connections per owner), and for Microsoft `admin_consent_required` (an administrator of the account's organization must approve the app once; the page shows the link to send).
+3. **Many owners at once** is not a user problem. A refusal of the deployment's own app (`invalid_client`) does **not** make connections `needs_reconnect`: it answers `CONNECTION_UNAVAILABLE` (503) and changes no status, because it is the administrator's to fix. Look at the app: the Microsoft client secret expired (at most 24 months), the Google project went back to Testing, the redirect URI changed, or the provider is switched off or removed under Administration → Browser agent → Connections. Then [rotate the app's secret](#rotate-the-providers-app-secret).
+4. **After the reconnect.** Mail triggers start polling again by themselves (any good poll clears the status). A delivery that failed with the connection can be sent with **Retry** on the run. A delivery that was **switched off** because its connection was *removed* stays off: point it at a connection that exists and switch it on.
+5. A **paused** connection (Settings → Connections → Pause, or `hexactra connections pause`) is not an error: nothing uses it, mail triggers wait and say `connection_paused`, and the daily health job keeps its sign-in alive. Resume it.
+
+The daily job `connections.health` (Administration → Jobs; 04:17 UTC, server-only) refreshes connections that were neither used nor refreshed in the last 20 hours and flags the ones that fail, so a token does not die of inactivity.
+
+### A delivery keeps failing
+
+A delivery's failure never changes the run's status. Where to look: the run page's **Deliveries** block, or `hexactra runs deliveries <run>`; each row has a status (`pending`, `sending`, `sent`, `failed`, `skipped`), the attempts, a closed code and a fixed sentence, never an address or a subject. The owner is told once per task per day (**"A delivery after a run failed"**); the alert rule **Delivery keeps failing** (`hexactra.delivery_failing`, on by default: three failed deliveries in 24 hours) is at Administration → Alerts.
+
+1. **Read the code and act:**
+
+   | Code | Meaning | What to do |
+   |---|---|---|
+   | `CONNECTION_NEEDS_RECONNECT`, `CONNECTION_PAUSED`, `CONNECTION_NOT_FOUND` | The account is the problem | [Reconnect](#a-connection-needs-reconnecting), resume, or point the delivery at another connection |
+   | `CAPABILITY_OFF`, `PERMISSION_MISSING` | The switch is off, or the account did not grant the permission | Switch the capability on (Settings → Connections); a missing permission starts an incremental consent |
+   | `NOT_FOUND` | The spreadsheet or folder is gone, or (Google) is not one the app created or the owner picked | Check the destination; with `drive.file` the app sees only files it made or the owner picked |
+   | `NOT_SUPPORTED` | The provider cannot do it for this account type (for example an Excel row on a personal Microsoft account) | See the capability matrix in [../connections.md](../connections.md#what-each-kind-of-account-can-do) |
+   | `RECIPIENT_NOT_CONFIRMED`, `RECIPIENT_UNSUBSCRIBED` | An address was not confirmed by the owner, or the recipient stopped the reports | The owner confirms the address again in the web app (that is the only thing that turns an unsubscribed recipient back on) |
+   | `DAILY_LIMIT` | The user's 100 emails a day (system setting `deliveries.maxEmailsPerDay`; test sends count) | Wait, or raise the setting (`PATCH /api/system-settings`, `system_settings:write`) |
+   | `TOO_LARGE` | A file is over the provider's limit | The PDF is replaced by a signed link when it does not fit; other files are left out: lower `screenshots`, or attach fewer |
+   | `RATE_LIMITED`, `QUOTA_EXCEEDED`, `PROVIDER_ERROR`, `NETWORK_ERROR`, `TIMEOUT`, `HTTP_5XX` | Retried automatically, up to 5 attempts (30 s, 2 min, 10 min, 30 min, or the provider's longer `Retry-After`) | If it still failed: the provider's status page, then **Retry** |
+   | `OUTCOME_UNKNOWN` | The request left and got no definite answer. **Not repeated**, so as not to send twice | Look in the Sent folder or the sheet first. **Retry** can send a second copy of an email; a sheet row and a folder file are looked for before they are added again |
+   | `DESTINATION_BLOCKED`, `HTTP_4XX`, `SECRET_MISSING` | A webhook address resolves to a private network or is not https; the receiver refused; or the signing secret is missing | Fix the address; a missing secret means the delivery must be created again (the secret is shown once) |
+   | `KIND_UNAVAILABLE`, `EMAIL_NOT_CONFIGURED`, `EMAIL_REFUSED` | The email, storage or webhooks slice is off, or email is not set up (Administration → Email), or the email provider refused | Set it up |
+   | `NOTIFY_REQUIRED`, `CONFLICT`, `CONFIG_INVALID`, `INVALID_INPUT`, `INTERNAL` | A change that would email attendees, a file changed meanwhile, a configuration that cannot be sent | Open the delivery and fix its setup; for `INTERNAL`, the API log (it carries ids and codes, never content) |
+
+2. **Test it without a run.** On the task, **Test** (or `hexactra tasks deliveries test <task> <delivery>`) sends a marked test with sample values to the delivery's own destination: an email marked `[TEST]` with no attachment, a webhook of type `deliveries.test`, a row whose Run ID reads `TEST-xxxxxxxx`, a small `TEST.txt` in the folder. It reads no run. At most ten a minute.
+3. **Retry** the failed entry (the run page, or `hexactra runs deliveries <run> --retry <logId>`): a fresh set of attempts, still checking for its own earlier work.
+4. A row stuck in `sending` for more than 10 minutes was held by a job that died; the next attempt treats its outcome as unknown (see above). The job type is `deliveries.send` (Administration → Jobs): server-only, one attempt per job, the retries are the delivery's own.
+
+### A trigger stopped firing
+
+On the task page, the email trigger shows a status; the history (`GET /api/mail-triggers/{id}/events`) says what it did with each message: `started` (with the run), `skipped_unverified` (reason `SENDER_NOT_VERIFIED` or `SENDER_NOT_CHECKED`), `skipped_limit` (`TRIGGER_DAILY_LIMIT` or `USER_DAILY_LIMIT`), `skipped_loop` (`OWN_MESSAGE`) and `failed` (`START_FAILED`). No subject or sender is stored.
+
+| Status or history | Cause | What to do |
+|---|---|---|
+| `needs_reconnect`, `connection_paused`, `connection_removed` | The account | [Reconnect](#a-connection-needs-reconnecting), resume, or point the trigger at another account. A removed connection switched the trigger off |
+| `failing` | Three failed polls in a row (one notice) | Look at the connection's **Test**; the trigger keeps trying and clears itself on a good poll |
+| `rate_limited` | The provider asked to slow down; the trigger waits (the provider's `Retry-After`, at least 10 minutes without one) | Wait |
+| Messages `skipped_unverified` | The provider's own sender check says the message `fail`ed, or could not be checked | A forwarder or a mailing list often breaks SPF and DKIM. For an `unknown` result only, the trigger's "Also accept mail the provider could not verify" lets it through; a `fail` never starts a run. Think before switching it on ([security-connections.md](../security-connections.md#3-a-mail-from-a-forged-sender-starts-a-task)) |
+| Messages `skipped_limit` | The trigger's `maxRunsPerDay` (10) or the owner's cap across triggers (50) | The owner is told once a day. Raise the trigger's limit (at most 100) or the deployment's `mailTriggers.maxRunsPerUserPerDay` |
+| Nothing at all | The trigger is switched off; the mail arrived **before** it was switched on (only mail after the trigger was created or last switched on counts; a gap is caught up for the last 24 hours only); `from` does not match exactly (an address or exactly one domain, never a subdomain); the message is not in the inbox label; or the poll has not run yet (5 minutes by default, 1 minute at least) | **Test** the trigger (`POST /api/mail-triggers/{id}/test`): it lists the last 5 matching messages with the subject cut to 60 characters and whether each would start a run; it starts nothing. Then check the job `connections.mail-triggers.poll` under Administration → Jobs: a per-minute cron only asks whether a trigger is due and enqueues it |
+
+Deployment limits are the `mailTriggers` system settings: `minPollSeconds` (60), `maxTriggersPerUser` (20), `maxRunsPerUserPerDay` (50). Metrics: `app.mail_triggers.polls`, `.matches`, `.runs_started`, `.skips` (by reason) and `.lag` (seconds from the message to the run).
+
+### Rotate the provider's app secret
+
+The client id and secret of the Google and Microsoft apps are the **deployment's** (the administrator registered them: [../connections.md](../connections.md#administrator-setup-bring-your-own-app)). The secret expires (Microsoft: at most 24 months, **note the date when you create it**) or leaks, and then every connection of that provider stops refreshing at the same moment. Rotating it keeps the **same client id**, so owners **do not** have to reconnect.
+
+1. **At the provider**, create a new secret next to the old one: Microsoft Entra admin center, the app, Certificates and secrets, **New client secret** (copy the *value* at once: it is shown once). Google Cloud console, Google Auth Platform, Clients, the client, add a new secret. Keep the old one until step 4.
+2. **In the console**: Administration → Browser agent → Connections, the provider, paste the new secret and save (`PUT /api/connections/admin/apps/{provider}` with `clientSecret`; leaving it out keeps the stored one; it is write-only and never returned). It is the same credential-store row, so the next refresh uses it.
+3. **Check.** Settings → Connections → **Test** on one account of that provider (one cheap read per switched-on capability); a deliveries test send or a mail trigger's **Test** also exercises it. The audit event `connection.app_saved` records the change with `secretSet` and no value.
+4. **Remove the old secret at the provider** once a connection has refreshed with the new one.
+5. **If the secret leaked**, rotate as above and then treat it like a stolen token ([security-connections.md, threat 7](../security-connections.md#7-a-stolen-refresh-token)): a refresh token is expected to need the secret to be used, which makes the old one worthless once it is deleted at the provider. That is the provider's behaviour as documented and is not verified here.
+6. **A changed client id, or a deleted app**, orphans every grant: every connection of that provider must be connected again by its owner. **Removing the app in the console** (`DELETE /api/connections/admin/apps/{provider}`) deletes the id and secret and switches the provider off; connected accounts stay but cannot refresh until an app is set again.
+
+Disconnecting an account revokes the grant at Google (best effort) and cannot revoke it at Microsoft: the owner removes the app at the account's own page (`account.live.com/consent/Manage`, or My Apps for a work or school account), or an administrator deletes the grant.

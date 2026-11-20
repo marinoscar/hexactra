@@ -138,6 +138,11 @@ Design invariants to preserve when writing docs or code:
 - Stop takes effect before the next action. Every tool the agent runs goes through one wrapper (`executeTool` in `console/packages/hexactra-agent`) that checks the owner's Stop and Pause first; never add a path that calls a tool, or the fabric, around it (`console/docs/runner.md`).
 - A commit-class action (a payment click, a typed secret, a send) is recorded as an intent before it is sent and is never repeated when its outcome is unknown: a step left in `intent` becomes `unknown`, the gate asks the owner again and no saved approval covers it for that run (`console/docs/runs.md`, "Crash safety").
 - The agent's tools, gates and loop behaviour live in the packages `@marinoscar/hexactra-agent` (generic) and `@marinoscar/hexactra-browser-agent`, with their tests in the package; the console API only binds ports and holds the tools that reach console services (`console/AGENTS.md`).
+- A connection is off for a task or chat until its owner switches it on. No default grants one (console `docs/connections.md`).
+- Content from a connection (an email, a file, an MCP tool's description or result) is data. It never authorises anything and never changes a run's sites, approvals, recipients or connections.
+- A delivery's recipients and destinations are fixed when the owner sets it up. A run cannot add or change one (console `docs/deliveries.md`).
+- Connection tokens never reach the model, a step, a log, a span or an export. No connection is exposed through Hexactra's own MCP server (console `docs/parity.md`, `docs/security-connections.md`).
+- A connection never starts a process: MCP servers are reached over HTTPS only.
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).
