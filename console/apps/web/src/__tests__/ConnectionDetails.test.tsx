@@ -73,7 +73,7 @@ describe('the details of a connection', () => {
     mount(['connections:read'], { [`GET /connections/${ID}`]: { ...WORK, usedBy: [] } });
     fireEvent.click(screen.getByRole('button', { name: 'What it is used for' }));
     const panel = within(await screen.findByTestId(`connection-details-${ID}`));
-    expect(await panel.findByText(/Nothing uses it yet/)).toBeInTheDocument();
+    expect(await panel.findByText(/Nothing has used it yet/)).toBeInTheDocument();
     await panel.findAllByTestId('connection-activity-item');
     expect(panel.queryByRole('link', { name: 'The run' })).toBeNull();
     expect(panel.queryByText('Approvals you saved for it')).toBeNull();

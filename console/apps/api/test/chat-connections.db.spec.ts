@@ -69,7 +69,8 @@ const engine = (ai: AiService) =>
 
 async function chatWithConnections(userId: string, conns: [string, string[], 'read' | 'read_write'][], text: string) {
   const made = await Promise.all(conns.map(([label, caps]) => kit.connect(userId, label, caps)));
-  const chat = await chats.create(userId, {});
+  // Explicitly none (#680: a chat that says nothing takes the owner's default), then exactly the rows this test names.
+  const chat = await chats.create(userId, { connections: [] });
   await prisma.conversationConnection.createMany({ data: made.map((c, i) => ({ conversationId: chat.id, connectionId: c.id, access: conns[i]![2] })) });
   await chats.postUserMessage(userId, chat.id, text);
   return { chat, made };

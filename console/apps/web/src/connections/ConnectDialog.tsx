@@ -101,7 +101,7 @@ export function ConnectDialog({ open, providers, api, returnTo, onClose, onError
               What the agent may do with it
             </Typography>
             <CapabilityPicker value={capabilities} onChange={setCapabilities} />
-            <FormHelperText>Only what you tick is asked of {chosen?.displayName ?? 'the provider'}. You can change it later. Nothing uses an account until a task or chat is told to.</FormHelperText>
+            <FormHelperText>Only what you tick is asked of {chosen?.displayName ?? 'the provider'}. You can change it later. A new chat can use it straight away (you choose that under New chats); a task has to be told to.</FormHelperText>
           </div>
 
           <TextField label="Name (optional)" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Work, Personal" helperText="What you call this account. Tasks and chats can name it." slotProps={{ htmlInput: { maxLength: 60 } }} />

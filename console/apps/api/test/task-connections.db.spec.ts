@@ -108,7 +108,8 @@ describe('a task lists its connections', () => {
   it('keeps a chat\'s list on update and returns it with the thread', async () => {
     const s = await login('chat');
     const work = await connection(s, 'Work');
-    const chat = await call(s, 'POST', '/chats', {});
+    // An explicit empty list is taken as it is (a chat that says nothing takes the owner's default, #680).
+    const chat = await call(s, 'POST', '/chats', { connections: [] });
     expect(chat.data.connections).toEqual([]);
     const set = await call(s, 'PATCH', `/chats/${chat.data.id}`, { connections: [{ connectionId: work.id, access: 'read_write' }] });
     expect(set.data.connections).toEqual([expect.objectContaining({ connectionId: work.id, access: 'read_write' })]);
@@ -116,6 +117,68 @@ describe('a task lists its connections', () => {
     expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connections).toHaveLength(1);
     const list = await call(s, 'GET', '/chats');
     expect(list.data.items.find((c: { id: string }) => c.id === chat.data.id).connections).toHaveLength(1);
+  });
+});
+
+describe('a new chat starts with the owner\'s own default (#680)', () => {
+  const setDefault = (s: Session, newChats: string) => call(s, 'PATCH', '/user-settings', { connections: { newChats } });
+  const other = (s: Session, label: string, extra: Record<string, unknown>) =>
+    prisma.connection.create({ data: { userId: s.userId, provider: 'google', accountId: `a-${label}-${stamp}`, accountEmail: `${label.toLowerCase()}@example.test`, label, capabilities: ['mail_read'], grantedScopes: ['mail_read'], ...extra } as never });
+
+  it('is read and change, for every active Google or Microsoft account, until the owner chooses otherwise', async () => {
+    const s = await login('def-on');
+    const work = await connection(s, 'Work');
+    const home = await connection(s, 'Home');
+    const chat = await call(s, 'POST', '/chats', {});
+    expect(chat.status).toBe(201);
+    expect(chat.data.connections).toHaveLength(2);
+    expect(chat.data.connections).toEqual(expect.arrayContaining([expect.objectContaining({ connectionId: work.id, access: 'read_write' }), expect.objectContaining({ connectionId: home.id, access: 'read_write' })]));
+    // The setting reads back as read and change when it was never saved.
+    expect((await call(s, 'GET', '/user-settings')).data.connections?.newChats ?? 'read_write').toBe('read_write');
+  });
+
+  it('is read only or off when the owner says so, and a chat that names its accounts (or none) gets exactly those', async () => {
+    const s = await login('def-modes');
+    const work = await connection(s, 'Work');
+    const home = await connection(s, 'Home');
+    expect((await setDefault(s, 'read')).status).toBe(200);
+    const readOnly = await call(s, 'POST', '/chats', {});
+    expect(readOnly.data.connections.map((c: { access: string }) => c.access)).toEqual(['read', 'read']);
+    expect((await setDefault(s, 'off')).status).toBe(200);
+    expect((await call(s, 'POST', '/chats', {})).data.connections).toEqual([]);
+    expect((await setDefault(s, 'read_write')).status).toBe(200);
+    expect((await call(s, 'POST', '/chats', { connections: [] })).data.connections).toEqual([]);
+    const named = await call(s, 'POST', '/chats', { connections: [{ connectionId: home.id, access: 'read' }] });
+    expect(named.data.connections).toEqual([expect.objectContaining({ connectionId: home.id, access: 'read' })]);
+    expect(work.id).toBeDefined();
+    // Not a valid choice: refused, nothing saved.
+    expect((await setDefault(s, 'everything')).status).toBe(400);
+  });
+
+  it('never lists a paused or disconnected account, an MCP server, or another user\'s account', async () => {
+    const s = await login('def-limits');
+    const stranger = await login('def-stranger');
+    const work = await connection(s, 'Work');
+    await other(s, 'Paused', { status: 'paused' });
+    await other(s, 'Reconnect', { status: 'needs_reconnect' });
+    await other(s, 'Tools', { provider: 'mcp' });
+    await connection(stranger, 'Theirs');
+    const chat = await call(s, 'POST', '/chats', {});
+    expect(chat.data.connections).toEqual([expect.objectContaining({ connectionId: work.id, access: 'read_write' })]);
+    expect(chat.data.connections).toHaveLength(1);
+  });
+
+  it('changes no chat that exists, adds no account connected later, and leaves tasks off', async () => {
+    const s = await login('def-existing');
+    await connection(s, 'Work');
+    const chat = await call(s, 'POST', '/chats', {});
+    expect(chat.data.connections).toHaveLength(1);
+    await setDefault(s, 'off');
+    await connection(s, 'Later');
+    expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connections).toHaveLength(1);
+    await setDefault(s, 'read_write');
+    expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connections).toHaveLength(1);
+    expect((await call(s, 'POST', '/tasks', { name: 'Plain', goal: 'Do it' })).data.connections).toEqual([]);
   });
 });
 

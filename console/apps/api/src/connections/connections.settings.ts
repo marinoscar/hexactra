@@ -4,12 +4,15 @@
 //     google.enabled / microsoft.enabled   the per-provider switch, default OFF: while off, nobody can connect that provider.
 //     google.clientId / microsoft.clientId the OAuth client id of the app the administrator registered (BRING YOUR OWN APP).
 //     microsoft.tenant                     `common` (default), `organizations`, `consumers` or a tenant id.
+//   user `connections` (the OWNER's own setting, #680)
+//     newChats                             how a NEW chat starts: `off`, `read` (read only) or `read_write` (read and change), default `read_write`:
+//                                          the owner's Google and Microsoft accounts are on in a new chat unless the owner chose Off. Never MCP servers.
 //   The client SECRETS are system credentials (`connection_app_google`, `connection_app_microsoft`), write-only.
 //     mcp.enabled                          MCP servers as connections (E39.9), default OFF: while off, none can be added or used.
 //     mcp.allowedHosts / mcp.blockedHosts  exact host names or `*.example.test` suffixes. Empty allow-list: any public host.
 //
 // Registered before `SettingsModule.forRoot()` composes the request bodies (the import in src/platform/platform.ts).
-import { registerSystemSettingsNamespaces, type SystemSettingsNamespace } from '@marinoscar/platform-api/settings';
+import { registerSystemSettingsNamespaces, registerUserSettingsNamespaces, type SystemSettingsNamespace, type UserSettingsNamespace } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
 const clientId = z.string().trim().min(1).max(300).nullable().optional();
@@ -121,4 +124,43 @@ declare module '@marinoscar/platform-api/settings' {
   interface SystemSettingsNamespaces {
     connections: ConnectionsSystemSettings;
   }
+  interface UserSettingsNamespaces {
+    connections: ConnectionsUserSettings;
+  }
 }
+
+// ---- user (#680) ----
+
+/** How a new chat starts: the owner's accounts off, read only, or read and change. Writes still ask the owner first (approvals). */
+export const NEW_CHAT_ACCOUNTS = ['off', 'read', 'read_write'] as const;
+export type NewChatAccounts = (typeof NEW_CHAT_ACCOUNTS)[number];
+
+export const connectionsUserSettingsSchema = z.object({
+  newChats: z.enum(NEW_CHAT_ACCOUNTS).describe('How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.'),
+});
+export type ConnectionsUserSettings = z.infer<typeof connectionsUserSettingsSchema>;
+export const connectionsUserSettingsPatchSchema = connectionsUserSettingsSchema.partial();
+export type ConnectionsUserSettingsPatch = z.infer<typeof connectionsUserSettingsPatchSchema>;
+
+export const CONNECTIONS_USER_DEFAULTS: ConnectionsUserSettings = { newChats: 'read_write' };
+
+/** The owner's choice from their settings document; the default when never saved or not valid. */
+export function newChatAccountsOf(doc: unknown): NewChatAccounts {
+  const raw = (doc as { connections?: unknown } | null | undefined)?.connections;
+  const parsed = connectionsUserSettingsPatchSchema.safeParse(raw ?? {});
+  return (parsed.success ? parsed.data.newChats : undefined) ?? CONNECTIONS_USER_DEFAULTS.newChats;
+}
+
+export const CONNECTIONS_USER_SETTINGS = {
+  key: 'connections',
+  description: 'Connections: how a new chat starts (your accounts off, read only, or read and change).',
+  schema: connectionsUserSettingsSchema,
+  patchSchema: connectionsUserSettingsPatchSchema,
+  merge: (current: ConnectionsUserSettings | undefined, patch: ConnectionsUserSettingsPatch | null | undefined): ConnectionsUserSettings | undefined => {
+    if (patch === null) return undefined;
+    if (patch === undefined) return current;
+    return { ...CONNECTIONS_USER_DEFAULTS, ...current, ...patch };
+  },
+} satisfies UserSettingsNamespace<'connections', ConnectionsUserSettings, ConnectionsUserSettingsPatch>;
+
+registerUserSettingsNamespaces([CONNECTIONS_USER_SETTINGS as unknown as UserSettingsNamespace]);

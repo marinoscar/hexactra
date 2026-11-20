@@ -33,6 +33,7 @@ Each step is a checklist. Tick what you saw.
 - [ ] Press **Test** on each account: one cheap read per switched-on capability passes, and the page shows no token and no scope string.
 - [ ] Note which **kinds** of account worked and which did not (a personal Gmail with the restricted permissions, a Workspace account, a personal Microsoft account, a work account that needed administrator approval). This settles the decision record's experiment matrix.
 - [ ] A **second account of the same provider** is a second connection (no duplicate); connecting the first again updates it.
+- [ ] **New chats** (Settings → Connections, and in any chat's settings): a new chat already lists your active Google and Microsoft accounts at **Read and change** (#680); set **Off**, start another chat: it lists none; set **Read only**: it lists them read only. An MCP server is never listed. An existing chat keeps what it had.
 
 ### 2. The example task
 

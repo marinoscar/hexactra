@@ -14,6 +14,7 @@ import { MachinePicker, useFleetHosts } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { SuggestMemoriesSwitch } from '../memories/SuggestMemoriesSwitch';
 import { SavedLoginsToggle } from '../secrets/SavedLoginsSwitch';
+import { NewChatAccountsSetting } from '../connections/NewChatAccounts';
 
 export interface ChatSettingsDialogProps {
   open: boolean;
@@ -102,6 +103,8 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
                 {summaryLine(selections, accounts.connections)}
               </Typography>
               <AccountsSection connections={accounts.connections} failed={accounts.failed} selections={selections} onChange={setSelections} disabled={busy} />
+              {/* A setting of the owner, not of this chat (#680): saved as soon as it is chosen. */}
+              <NewChatAccountsSetting disabled={busy} />
             </Stack>
           )}
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException, 
 import { Prisma, type ChatMessage, type ChatMessageKind, type ChatMessageRole, type Conversation } from '@prisma/client';
 
 import { assertSelectable, conversationConnectionViews, replaceConversationConnections, type ConnectionSelectionView } from '../connections/agent-connections';
+import { defaultChatSelections } from '../connections/chat-default';
 import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -179,6 +180,8 @@ export class ChatService {
   async create(userId: string, input: CreateChatDto): Promise<ChatView> {
     await this.policies?.assertAssignable(userId, input.policyId);
     if (input.connections) await assertSelectable(this.prisma, userId, input.connections);
+    // A chat that does not say which accounts starts with the owner's own default (#680); a list, even an empty one, is taken as it is.
+    const selections = input.connections ?? (await defaultChatSelections(this.prisma, userId));
     const c = await this.db(userId).conversation.create({
       data: {
         userId,
@@ -195,7 +198,7 @@ export class ChatService {
         ...(input.useSavedCards !== undefined ? { useSavedCards: input.useSavedCards } : {}),
       },
     });
-    if (input.connections?.length) await this.prisma.$transaction((tx) => replaceConversationConnections(tx, c.id, input.connections!));
+    if (selections.length) await this.prisma.$transaction((tx) => replaceConversationConnections(tx, c.id, selections));
     return this.withConnections(c);
   }
 

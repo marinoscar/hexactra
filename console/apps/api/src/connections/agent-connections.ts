@@ -1,5 +1,5 @@
-// Which connections a task or a chat may use, and how (E39.7, #604). Nothing is available by default: a run has the connections its
-// task (or the chat that started it) lists, each `read` or `read_write`, and nothing else. The selection is stored in
+// Which connections a task or a chat may use, and how (E39.7, #604). A task has none until it lists them; a new chat starts with the owner's own
+// default (#680, chat-default.ts). A run has the connections its task (or the chat that started it) lists, each `read` or `read_write`, and nothing else. The selection is stored in
 // `task_connections` and `conversation_connections`; a run takes a snapshot of it when it starts (policy-snapshot.ts), so a later
 // change never alters a live run.
 //
@@ -31,7 +31,7 @@ export type ConnectionSelection = z.infer<typeof connectionSelectionSchema>;
 export const connectionSelectionsField = z
   .array(connectionSelectionSchema)
   .max(MAX_CONNECTIONS_PER_USER)
-  .describe('The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts.');
+  .describe('The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts.');
 
 /** What the API returns for each selected connection. */
 export const connectionSelectionViewSchema = connectionSelectionSchema.extend({
