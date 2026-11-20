@@ -1,0 +1,18 @@
+# =============================================================================
+# App compose overlay: the api container's memory limit (APP-OWNED)
+# =============================================================================
+# `prod.compose.yml` (generated, never edited) caps the api at 512M. That no
+# longer fits this app: an idle api uses about 260 MiB, and `hexactra deploy`
+# runs one-shot checks INSIDE the running api container (`docker exec ... node
+# dist/fabric/fabric-connect.cli.js status` boots a second copy of the whole
+# application, about 275 MiB), so the pair is killed by the kernel (exit 137)
+# and the update fails (#668). 1G leaves room for both with headroom. It is a
+# cap, not a reservation: the host only needs the memory while it is used.
+#
+# Scope `prod`: applied in prod and vps, appended after the platform files.
+services:
+  api:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
