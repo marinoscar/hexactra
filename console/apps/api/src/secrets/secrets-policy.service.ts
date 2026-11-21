@@ -5,6 +5,8 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { secretsStoreMounted } from './builtin/secrets-store.loader';
+import { StoreKeyRing, secretsStoreEnabled, secretsStoreKeyConfigured } from './builtin/store.keys';
 import { resolveSecretsSystemSettings, secretsAgentUseOf, secretsDefaultUseSavedLoginsOf, secretsProviderOf, type ResolvedSecretsSystemSettings, type SecretsProviderId } from './secrets.settings';
 
 /** How stale the cached system settings may be: a switch takes effect within a few seconds. */
@@ -61,7 +63,38 @@ export class SecretsPolicyService {
   /** Which provider the owner chose (`vault` unless they picked the built-in store). One is active at a time. */
   async activeProvider(userId: string): Promise<SecretsProviderId> {
     const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
-    return secretsProviderOf(row?.value);
+    const chosen = secretsProviderOf(row?.value);
+    // The built-in store switched off by the administrator (#711): the owner's choice is kept (no data moves) but nothing is
+    // looked up or released through it until the store is on again.
+    if (chosen === 'builtin' && !(await this.storeEnabled())) return 'vault';
+    return chosen;
+  }
+
+  /**
+   * Whether the built-in store is OFFERED (#711): it is mounted (a store key is configured) and the administrator switched it on in
+   * Administration → Secrets. While the switch was never set, the deprecated `SECRETS_STORE_ENABLED` decides, so a deployment that
+   * switched the store on that way keeps it on.
+   */
+  async storeEnabled(): Promise<boolean> {
+    if (!secretsStoreMounted()) return false;
+    const system = await this.system();
+    return system.store.enabled ?? secretsStoreEnabled();
+  }
+
+  /** The store's state for the administrator's card: mounted (a key), the switch, and the key's public id. Never the key. */
+  async storeState(): Promise<{ keyConfigured: boolean; mounted: boolean; enabled: boolean; keyId: string | null; legacyEnv: boolean }> {
+    const keyConfigured = secretsStoreKeyConfigured();
+    let keyId: string | null = null;
+    if (keyConfigured) {
+      try {
+        const ring = StoreKeyRing.fromEnv();
+        keyId = ring.current.id;
+        ring.wipe();
+      } catch {
+        keyId = null;
+      }
+    }
+    return { keyConfigured, mounted: secretsStoreMounted(), enabled: await this.storeEnabled(), keyId, legacyEnv: secretsStoreEnabled() };
   }
 
   /** Whether new tasks and chats of the owner start with "sign in with my saved logins" on (user setting `secrets.defaultUseSavedLogins`, off by default). */

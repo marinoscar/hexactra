@@ -190,3 +190,19 @@ export async function getDeploymentSwitch(api: PlatformApiClient): Promise<{ ena
   const doc = await api.get<{ version: number; secrets?: { agentUse?: { enabled?: boolean } } }>('/system-settings');
   return { enabled: doc.secrets?.agentUse?.enabled === true, version: doc.version };
 }
+
+/** `GET /api/secrets/store/state` (#711): the built-in store for the administrator. Never a key. */
+export interface StoreState {
+  keyConfigured: boolean;
+  mounted: boolean;
+  enabled: boolean;
+  keyId: string | null;
+  legacyEnv: boolean;
+}
+export const getStoreState = (api: PlatformApiClient): Promise<StoreState> => api.get<StoreState>('/secrets/store/state');
+
+/** Switches the built-in store on or off for the deployment (system setting `secrets.store.enabled`, #711). */
+export async function setStoreSwitch(api: PlatformApiClient, enabled: boolean): Promise<void> {
+  const doc = await api.get<{ version: number }>('/system-settings');
+  await api.patch('/system-settings', { secrets: { store: { enabled } } }, { ifMatch: String(doc.version) });
+}

@@ -1,7 +1,7 @@
 // The built-in store's own routes (E37.5, #594), beside Vault's (`/api/secrets`, `/api/secret-types`, mounted by the
 // store module): its status for the owner, and the administrator's key rotation. NOTHING HERE RETURNS A KEY OR A
 // SECRET VALUE.
-import { Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, NotFoundException, Post } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -39,8 +39,10 @@ export class SecretsStoreController {
   @Get('secrets/store/status')
   @ApiDataResponse(StoreStatusResponseDto)
   @Auth({ permissions: ['secrets:read'] })
-  @ApiOperation({ summary: 'Status of your built-in secrets store', description: 'Only present when the deployment switched the built-in store on. Which provider you chose, how many saved logins you have and how many are open to the agent. Never a value or a key.' })
+  @ApiOperation({ summary: 'Status of your built-in secrets store', description: 'Only present when the administrator switched the built-in store on (Administration → Secrets); otherwise 404. Which provider you chose, how many saved logins you have and how many are open to the agent. Never a value or a key.' })
   async status(@CurrentUser('id') userId: string) {
+    // Switched off in Administration → Secrets (#711): the deployment does not offer the store, as if it were not mounted.
+    if (!(await this.policy.storeEnabled())) throw new NotFoundException({ code: 'SECRETS_STORE_OFF', message: 'The built-in store is not switched on for this deployment.' });
     const [provider, logins, openToAgent] = await Promise.all([
       this.policy.activeProvider(userId),
       this.prisma.secret.count({ where: { createdById: userId } }),

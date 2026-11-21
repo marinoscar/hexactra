@@ -3,6 +3,7 @@ import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/co
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 
 import { getAdminSummary, getDefaultClient, getDeploymentSwitch, setDeploymentSwitch, type AdminSummary, type DefaultClient } from '../secrets/api';
+import { BuiltinStoreCard } from '../secrets/BuiltinStoreCard';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, useApiAction } from '../ui';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -162,7 +163,7 @@ export function AdminSecretsPage() {
 
   return (
     <PageContainer width="narrow">
-      <PageHeader title="Secrets" subtitle="Whether the agent may use saved logins on this deployment, and which Vault your users connect to." back={{ to: '/admin/settings', label: 'Settings' }} />
+      <PageHeader title="Secrets" subtitle="Whether the agent may use saved logins on this deployment, whether Hexactra's own store is offered, and which Vault your users connect to." back={{ to: '/admin/settings', label: 'Settings' }} />
       <ErrorBanner error={action.error} onClose={action.clearError} />
       {enabled === null && !action.error && <CardSkeleton />}
       {enabled !== null && (
@@ -200,6 +201,8 @@ export function AdminSecretsPage() {
               </Typography>
             </Box>
           )}
+
+          <BuiltinStoreCard canWrite={canWrite} />
 
           <DefaultClientCard canWrite={canWrite} />
         </Stack>

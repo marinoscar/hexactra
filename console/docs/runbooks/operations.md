@@ -293,7 +293,7 @@ An owner's connection becomes `needs_reconnect` when Vault answers `401`: they r
 
 ### Rotate the store key
 
-Only for deployments with the built-in store (`SECRETS_STORE_ENABLED=true`). The key wraps each owner's data key; rotation re-wraps the data keys and **does not re-encrypt the values**. Take a database backup first and keep the old key until you hold one made **after** step 5. The reference is [../secrets.md](../secrets.md#rotating-the-store-key).
+Only for deployments with the built-in store (switched on in Administration → Secrets; its key `SECRETS_STORE_KEY` is in `infra/compose/.env`). The key wraps each owner's data key; rotation re-wraps the data keys and **does not re-encrypt the values**. Take a database backup first and keep the old key until you hold one made **after** step 5. The reference is [../secrets.md](../secrets.md#rotating-the-store-key).
 
 1. Generate the new key: `openssl rand -base64 32`. Keep the old one.
 2. In `infra/compose/.env` set `SECRETS_STORE_KEY=<new>` and add `SECRETS_STORE_KEY_PREVIOUS=<old>` (neither is in the env template). Recreate the API: `docker compose $F up -d api`. Everything keeps working: rows still wrapped under the old key are read with it.

@@ -13,7 +13,7 @@ for (const specifier of ['@marinoscar/vault-api/core', '@marinoscar/vault-api/ag
 
 import { decryptValue, encryptValue, newDataKey, ownerOfCiphertext, rewrapDataKey, SecretsStoreCryptoError, unwrapDataKey, wrapDataKey } from '../src/secrets/builtin/store.cipher';
 import { SecretsStoreConfigError, StoreKeyRing, parseStoreKey, secretsStoreEnabled, storeKeyId } from '../src/secrets/builtin/store.keys';
-import { loadSecretsStoreModule, secretsStoreMounted } from '../src/secrets/builtin/secrets-store.loader';
+import { loadSecretsStoreModule, secretsStoreMountable, secretsStoreMounted } from '../src/secrets/builtin/secrets-store.loader';
 
 const KEY = Buffer.alloc(32, 1).toString('base64');
 const KEY2 = Buffer.alloc(32, 2).toString('base64');
@@ -54,6 +54,16 @@ describe('the slice is off by default', () => {
     expect(() => loadSecretsStoreModule({ ...on, SECRETS_STORE_KEY: 'not-a-key' })).not.toThrow(/not-a-key/);
     expect(() => loadSecretsStoreModule({ ...on, SECRETS_STORE_KEY: Buffer.alloc(16, 1).toString('base64') })).toThrow(/SECRETS_STORE_KEY must be 32 random bytes/);
     expect(() => loadSecretsStoreModule({ ...on, SECRETS_STORE_KEY: KEY, SECRETS_STORE_KEY_PREVIOUS: KEY })).toThrow(/SECRETS_STORE_KEY_PREVIOUS must differ/);
+  });
+});
+
+describe('mounting follows the key; the switch is the admin panel\'s (#711)', () => {
+  it('a configured key mounts the store; no key and no deprecated switch mounts nothing', () => {
+    expect(secretsStoreMountable({})).toBe(false);
+    expect(secretsStoreMountable({ SECRETS_STORE_KEY: 'x' })).toBe(true);
+    expect(secretsStoreMounted({ SECRETS_STORE_KEY: 'x' })).toBe(true);
+    // The deprecated switch still mounts it (and a missing key still stops the API in the loader).
+    expect(secretsStoreMountable({ SECRETS_STORE_ENABLED: 'true' })).toBe(true);
   });
 });
 

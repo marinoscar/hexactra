@@ -96,3 +96,13 @@ export const defaultVaultClientViewSchema = z.object({
   redirectUri: z.string().describe('The redirect URI to register at the Vault for this client.'),
 });
 export class DefaultVaultClientViewResponseDto extends createZodDto(defaultVaultClientViewSchema) {}
+
+/** `GET /secrets/store/state` (#711): the built-in store for the administrator's card. Never a key. */
+export const storeStateSchema = z.object({
+  keyConfigured: z.boolean().describe('Whether the deployment has a store key (SECRETS_STORE_KEY). The installer generates one; without it the store cannot be switched on.'),
+  mounted: z.boolean().describe('Whether the store is loaded (a key, and the credential store and notifications slices).'),
+  enabled: z.boolean().describe('Whether the store is offered to owners now: mounted and switched on in Administration → Secrets (`secrets.store.enabled`).'),
+  keyId: z.string().nullable().describe("The key's public id (first 8 hex characters of a hash), or null when there is no usable key. Never the key."),
+  legacyEnv: z.boolean().describe('The deprecated SECRETS_STORE_ENABLED=true is set: it decides while the switch was never set.'),
+});
+export class StoreStateResponseDto extends createZodDto(z.object({ data: storeStateSchema })) {}

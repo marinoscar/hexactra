@@ -5981,6 +5981,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/secrets/store/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The built-in secrets store, for the administrator
+         * @description Whether the deployment has a store key (and its public id), whether the store is loaded, and whether it is switched on (system setting `secrets.store.enabled`). Never a key.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["secrets_storeState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/secrets/vault/default-client": {
         parameters: {
             query?: never;
@@ -10284,6 +10306,10 @@ export interface components {
                     /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
                     enabled: boolean;
                 };
+                store?: {
+                    /** @description Offer the built-in store (Hexactra's own encrypted store for saved logins) to every owner. Off by default; needs the deployment's SECRETS_STORE_KEY, which the installer generates. */
+                    enabled: boolean;
+                };
                 vault?: {
                     /** @description The default Vault address owners connect to (`https://vault.example.test`). */
                     baseUrl?: string | null;
@@ -10563,6 +10589,10 @@ export interface components {
             secrets?: {
                 agentUse: {
                     /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
+                    enabled: boolean;
+                };
+                store?: {
+                    /** @description Offer the built-in store (Hexactra's own encrypted store for saved logins) to every owner. Off by default; needs the deployment's SECRETS_STORE_KEY, which the installer generates. */
                     enabled: boolean;
                 };
                 vault?: {
@@ -10850,6 +10880,9 @@ export interface components {
             };
             secrets?: {
                 agentUse?: {
+                    enabled?: boolean;
+                };
+                store?: {
                     enabled?: boolean;
                 };
                 vault?: {
@@ -16158,6 +16191,20 @@ export interface components {
         DisconnectVaultDto: {
             /** @description Also forget your own Vault address, client id and client secret. */
             forgetClient?: boolean;
+        };
+        StoreStateResponseDto: {
+            data: {
+                /** @description Whether the deployment has a store key (SECRETS_STORE_KEY). The installer generates one; without it the store cannot be switched on. */
+                keyConfigured: boolean;
+                /** @description Whether the store is loaded (a key, and the credential store and notifications slices). */
+                mounted: boolean;
+                /** @description Whether the store is offered to owners now: mounted and switched on in Administration → Secrets (`secrets.store.enabled`). */
+                enabled: boolean;
+                /** @description The key's public id (first 8 hex characters of a hash), or null when there is no usable key. Never the key. */
+                keyId: string | null;
+                /** @description The deprecated SECRETS_STORE_ENABLED=true is set: it decides while the switch was never set. */
+                legacyEnv: boolean;
+            };
         };
         DefaultVaultClientViewResponseDto: {
             baseUrl: string | null;
@@ -40988,6 +41035,54 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["DisconnectVaultResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_storeState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StoreStateResponseDto"];
                     };
                 };
             };
