@@ -29,7 +29,7 @@ import { GoalRunnerService } from '../src/runner/goal-runner.service';
 import { TasksService } from '../src/tasks/tasks.service';
 import { fakeFabric as kitFakeFabric } from './replay/fake-fabric';
 import { createGradedBenchmark } from './support/benchmark-fixtures';
-import { SOLVERS, SiteBrowser, type SiteResult, type SiteTransport } from './support/benchmark-solvers';
+import { SOLVERS, SiteBrowser, solution, type SiteResult, type SiteTransport } from './support/benchmark-solvers';
 
 const SITE_BASE = 'https://bench.example.test/benchmark';
 const SITE_HOST = 'bench.example.test';
@@ -95,7 +95,7 @@ const runTools = async (req: { tools: { tool: { name: string }; execute: (a: unk
     return out;
   };
   const transport: SiteTransport = (method, path, body) => send(token, method, path, body);
-  await play(call, { trial, token, chunk, runId: trial.runId!, tools: offered.get(trial.id)!, solve: () => SOLVERS[trial.challengeId]!(new SiteBrowser(transport), trial.seed, { wait: () => undefined }) });
+  await play(call, { trial, token, chunk, runId: trial.runId!, tools: offered.get(trial.id)!, solve: async () => solution(await SOLVERS[trial.challengeId]!(new SiteBrowser(transport), trial.seed, { wait: () => undefined })).result });
   return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
 };
 
@@ -630,9 +630,29 @@ describe('starting a benchmark', () => {
     const suite = (await app.inject({ method: 'GET', url: '/api/benchmarks/suite', headers: admin.headers })).json<{ data: Awaited<ReturnType<BenchmarksService['suite']>> }>().data;
     expect(suite).toMatchObject({ key: SUITE.key, version: SUITE.version, defaults: { trials: 3, capUsd: 5, trialTimeoutMinutes: 15 }, limits: { maxPolicies: 8, maxTrials: 10 }, site: { baseUrl: SITE_BASE, reachable: true, problem: null } });
     expect(suite.challenges.map((c) => c.id)).toEqual(SUITE.challenges.map((c) => c.id));
-    expect(suite.challenges.every((c) => c.supported && c.missing.length === 0)).toBe(true);
+    // Only the two placeholders of the second pack need what the agent lacks.
+    expect(suite.challenges.filter((c) => !c.supported).map((c) => [c.id, c.missing])).toEqual([
+      ['form-upload', ['file_upload']],
+      ['file-download', ['file_download']],
+    ]);
     expect(suite.categories.map((c) => c.id)).toContain('navigation');
   });
+
+  it('reports the two placeholders of suite 2 `unsupported`: they are never run and never count as failures', async () => {
+    const admin = await login('bench-placeholders');
+    const b = await start(admin, { challengeIds: ['form-upload', 'nav-lookup', 'file-download'] });
+    expect(b.suiteVersion).toBe(2);
+    expect(b.progress).toMatchObject({ total: 3, pending: 1, skipped: 2, unsupported: 2, fail: 0 });
+    await drive(b.id, admin.id);
+    const trials = (await service.trials(admin.id, b.id)).items;
+    expect(trials.map((t) => [t.challengeId, t.status, t.verdict, t.failureReason, t.runId === null])).toEqual([
+      ['nav-lookup', 'graded', 'pass', null, false],
+      ['form-upload', 'skipped', 'unsupported', 'unsupported', true],
+      ['file-download', 'skipped', 'unsupported', 'unsupported', true],
+    ]);
+    const done = await service.get(admin.id, b.id);
+    expect([done.status, done.progress.fail, done.progress.error, done.progress.unsupported, done.progress.pass]).toEqual(['completed', 0, 0, 2, 1]);
+  }, 120_000);
 
   it('marks a challenge the agent cannot attempt `unsupported` at the start: it is never run and never failed', async () => {
     const admin = await login('bench-unsupported');

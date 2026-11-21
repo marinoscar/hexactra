@@ -959,12 +959,56 @@ pub enum RemoteAction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
+    /// Start recording the tab as video (epic #755, `docs/decisions/run-recordings.md`).
+    /// The extension runs a CDP screencast of the tab and encodes it to WebM
+    /// (VP8) in an offscreen document. **The video is not masked**: it is the
+    /// owner's opt-in run recording, never a trace image. Frames are dropped
+    /// while a secret is typed or a sensitive field has focus, and while the
+    /// recording is paused. Result: `{ "recording_id": ... }`. One recording
+    /// per tab; a second start on the same tab fails with `recording_active`.
+    RecordStart {
+        /// Widest frame, in CSS pixels (320–1920, default 1280).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_width: Option<u32>,
+        /// JPEG quality of the screencast frames (10–100, default 70).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        quality: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Take the encoded bytes written since the last pull. Result:
+    /// `{ "mime": "video/webm", "data": <base64>, "seq": n, "frames": n,
+    /// "bytes_total": n, "duration_ms": n }` (at most 8 MiB of `data`; the
+    /// control plane swaps `data` for an artifact handle, as for a
+    /// screenshot). The chunks, in `seq` order, concatenate into one WebM file.
+    RecordPull { recording_id: String },
+    /// Pause (`paused: true`) or resume the recording: no frame is kept while
+    /// it is paused (a secret request is open).
+    RecordPause { recording_id: String, paused: bool },
+    /// Stop the recording and return its last bytes, like `record_pull`, with
+    /// `"done": true`. The screencast ends and the encoder is released.
+    RecordStop { recording_id: String },
 }
 
 /// Validation failure for a remote action.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct ActionValidationError(pub String);
+
+/// A recording id is the extension's own: 1–64 ASCII letters, digits, `-` or `_`.
+fn check_recording_id(id: &str) -> Result<(), ActionValidationError> {
+    if id.is_empty()
+        || id.len() > 64
+        || !id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        return Err(ActionValidationError(
+            "recording_id must be 1-64 letters, digits, - or _".into(),
+        ));
+    }
+    Ok(())
+}
 
 fn check_selector(selector: &str) -> Result<(), ActionValidationError> {
     if selector.trim().is_empty() {
@@ -1218,6 +1262,10 @@ impl RemoteAction {
             RemoteAction::DesktopType { .. } => "desktop_type",
             RemoteAction::DesktopKey { .. } => "desktop_key",
             RemoteAction::DesktopScroll { .. } => "desktop_scroll",
+            RemoteAction::RecordStart { .. } => "record_start",
+            RemoteAction::RecordPull { .. } => "record_pull",
+            RemoteAction::RecordPause { .. } => "record_pause",
+            RemoteAction::RecordStop { .. } => "record_stop",
         }
     }
 
@@ -1255,6 +1303,22 @@ impl RemoteAction {
         matches!(
             self,
             RemoteAction::Screenshot { .. } | RemoteAction::DesktopScreenshot
+        )
+    }
+
+    /// Whether a successful result carries bytes (`mime` + base64 `data`)
+    /// that the control plane moves into the artifact store: an image, or a
+    /// chunk of a run recording.
+    pub fn returns_artifact(&self) -> bool {
+        self.returns_image() || self.is_recording_chunk()
+    }
+
+    /// Whether this action returns a chunk of a run recording (video, never
+    /// masked; epic #755).
+    pub fn is_recording_chunk(&self) -> bool {
+        matches!(
+            self,
+            RemoteAction::RecordPull { .. } | RemoteAction::RecordStop { .. }
         )
     }
 
@@ -1434,6 +1498,24 @@ impl RemoteAction {
                 check_modifiers(modifiers)
             }
             RemoteAction::DesktopKey { key } => check_key(key),
+            RemoteAction::RecordStart {
+                max_width, quality, ..
+            } => {
+                if let Some(w) = max_width {
+                    if !(320..=1920).contains(w) {
+                        return Err(ActionValidationError("max_width must be 320-1920".into()));
+                    }
+                }
+                if let Some(q) = quality {
+                    if !(10..=100).contains(q) {
+                        return Err(ActionValidationError("quality must be 10-100".into()));
+                    }
+                }
+                Ok(())
+            }
+            RemoteAction::RecordPull { recording_id }
+            | RemoteAction::RecordPause { recording_id, .. }
+            | RemoteAction::RecordStop { recording_id } => check_recording_id(recording_id),
             RemoteAction::DesktopClick {
                 x, y, click_count, ..
             } => {
@@ -3059,6 +3141,59 @@ mod tests {
             serde_json::to_value(&plain).unwrap(),
             json!({"type": "screenshot"})
         );
+    }
+
+    // #755: the run recording actions.
+    #[test]
+    fn record_actions_round_trip_and_validate() {
+        let start: RemoteAction =
+            serde_json::from_value(json!({"type": "record_start", "max_width": 1280})).unwrap();
+        assert_eq!(
+            start,
+            RemoteAction::RecordStart {
+                max_width: Some(1280),
+                quality: None,
+                tab_id: None
+            }
+        );
+        assert_eq!(start.kind(), "record_start");
+        assert!(start.validate().is_ok());
+        assert!(!start.returns_artifact());
+        for (v, kind) in [
+            (
+                json!({"type": "record_pull", "recording_id": "r-1"}),
+                "record_pull",
+            ),
+            (
+                json!({"type": "record_stop", "recording_id": "r-1"}),
+                "record_stop",
+            ),
+        ] {
+            let a: RemoteAction = serde_json::from_value(v.clone()).unwrap();
+            assert_eq!(a.kind(), kind);
+            assert!(a.returns_artifact());
+            assert!(a.is_recording_chunk());
+            assert!(!a.returns_image());
+            assert!(!a.is_desktop());
+            assert_eq!(serde_json::to_value(&a).unwrap(), v);
+        }
+        let pause: RemoteAction = serde_json::from_value(
+            json!({"type": "record_pause", "recording_id": "r-1", "paused": true}),
+        )
+        .unwrap();
+        assert_eq!(pause.kind(), "record_pause");
+        assert!(!pause.returns_artifact());
+        assert!(RemoteAction::DesktopScreenshot.returns_artifact());
+        for bad in [
+            json!({"type": "record_start", "max_width": 100}),
+            json!({"type": "record_start", "quality": 101}),
+            json!({"type": "record_pull", "recording_id": ""}),
+            json!({"type": "record_pull", "recording_id": "../etc"}),
+            json!({"type": "record_stop", "recording_id": "x".repeat(65)}),
+        ] {
+            let a: RemoteAction = serde_json::from_value(bad.clone()).unwrap();
+            assert!(a.validate().is_err(), "{bad}");
+        }
     }
 
     // #539: a masked screenshot, its result, and the absence of both.

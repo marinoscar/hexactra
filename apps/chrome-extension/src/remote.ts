@@ -14,6 +14,7 @@
 
 import { applyAllowedDomains, currentAllowed, recordBlocked, takeBlocked, urlAllowed, urlHost, type BlockedNavigation } from './site-policy.js';
 import * as cdp from './cdp.js';
+import { recordPause, recordPull, recordStart, recordStop, withSensitiveTyping } from './recorder.js';
 import { MASK_ID, MASK_UNAVAILABLE, MAX_MASK_BOXES, loadSensitivePatterns, maskText, pageClearMask, pageMask, pageNextFrame, type MaskPattern } from './mask.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
@@ -23,7 +24,7 @@ type Button = 'left' | 'middle' | 'right';
 export type RemoteAction =
   | { type: 'navigate'; url: string; tab_id?: number }
   | { type: 'click'; selector: string; tab_id?: number }
-  | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; expect_origin?: string; tab_id?: number }
+  | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; sensitive?: boolean; expect_origin?: string; tab_id?: number }
   | { type: 'press'; key: string; selector?: string; tab_id?: number }
   | { type: 'scroll'; dx?: number; dy?: number; selector?: string; tab_id?: number }
   | { type: 'screenshot'; marks?: boolean; mask?: boolean; tab_id?: number }
@@ -32,7 +33,7 @@ export type RemoteAction =
   | { type: 'mouse'; op: 'move' | 'down' | 'up'; x: number; y: number; button?: Button; tab_id?: number }
   | { type: 'drag'; from_x: number; from_y: number; to_x: number; to_y: number; steps?: number; tab_id?: number }
   | { type: 'scroll_at'; x: number; y: number; dx?: number; dy?: number; tab_id?: number }
-  | { type: 'type_keys'; text: string; expect_origin?: string; tab_id?: number }
+  | { type: 'type_keys'; text: string; sensitive?: boolean; expect_origin?: string; tab_id?: number }
   | { type: 'key'; key: string; modifiers?: string[]; tab_id?: number }
   | { type: 'text'; selector?: string; max_chars?: number; tab_id?: number }
   | { type: 'elements'; max_elements?: number; tab_id?: number }
@@ -43,7 +44,11 @@ export type RemoteAction =
   | { type: 'close_tab'; tab_id: number }
   | { type: 'back'; tab_id?: number }
   | { type: 'forward'; tab_id?: number }
-  | { type: 'reload'; tab_id?: number };
+  | { type: 'reload'; tab_id?: number }
+  | { type: 'record_start'; max_width?: number; quality?: number; tab_id?: number }
+  | { type: 'record_pull'; recording_id: string }
+  | { type: 'record_pause'; recording_id: string; paused: boolean }
+  | { type: 'record_stop'; recording_id: string };
 
 export interface BridgeRequest {
   type: 'request';
@@ -502,6 +507,15 @@ async function toCssPixels(base64: string, width: number, height: number, dpr: n
   }
 }
 
+/** Run a recorder operation (#755), mapping its failure to an ActionError. */
+async function viaRecorder<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    throw new ActionError(e instanceof Error ? e.message : String(e));
+  }
+}
+
 /** Run a CDP operation, mapping its failure to an ActionError. */
 async function viaCdp<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -616,7 +630,9 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     case 'type': {
       const tab = await resolveTab(action.tab_id);
       assertTabOrigin(tab, action.expect_origin);
-      return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
+      const typeIt = () => inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
+      // A sensitive value (a handoff secret, a provider's value) is never in a run recording (#755).
+      return action.sensitive ? withSensitiveTyping(typeIt) : typeIt();
     }
     case 'press': {
       const tab = await resolveTab(action.tab_id);
@@ -681,7 +697,8 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       // Keystrokes go to whatever has focus, one event at a time: the tab is checked again before each, so a page that
       // navigates part-way stops the typing (the rest is not sent).
       const guard = expect === undefined ? undefined : async () => assertTabOrigin(await resolveTab(tab.id), expect);
-      await viaCdp(() => cdp.typeText(tab.id!, action.text, guard));
+      const typeIt = () => viaCdp(() => cdp.typeText(tab.id!, action.text, guard));
+      await (action.sensitive ? withSensitiveTyping(typeIt) : typeIt());
       return {};
     }
     case 'key': {
@@ -752,6 +769,16 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       await loaded.catch(() => undefined);
       return {};
     }
+    case 'record_start': {
+      const tab = await resolveTab(action.tab_id);
+      return viaRecorder(() => recordStart(tab.id!, action.max_width, action.quality));
+    }
+    case 'record_pull':
+      return viaRecorder(() => recordPull(action.recording_id));
+    case 'record_pause':
+      return viaRecorder(async () => recordPause(action.recording_id, action.paused));
+    case 'record_stop':
+      return viaRecorder(() => recordStop(action.recording_id));
     default:
       throw new ActionError(`unsupported action ${(action as { type?: string }).type}`);
   }

@@ -5,7 +5,7 @@ A run can keep a **video** of its browser tab. The owner switches it on per task
 In short:
 
 - **Off by default.** Task form → **Record video**, or the start-run form's switch. The choice is fixed on the run when it is created (`runs.record_video`, from the task's `recordVideo` or the start request's `record`); a task parameter, an agent policy, a page or the model cannot turn it on. MCP tools neither show nor set it.
-- **Continuous, not masked.** The extension records the session tab with a CDP screencast and encodes it to WebM. **The video is not masked**: a card number or an address on the page is visible. Typed passwords show as dots, as on screen. This is the one exception to "every stored image is masked" ([runs.md](runs.md#what-is-masked)), and the recording is **not part of the trace**.
+- **Continuous, not masked.** The extension records the session tab with a CDP screencast and encodes it to VP8; the console turns it into a WebM file. **The video is not masked**: a card number or an address on the page is visible. Typed passwords show as dots, as on screen. This is the one exception to "every stored image is masked" ([runs.md](runs.md#what-is-masked)), and the recording is **not part of the trace**.
 - **Owner-only.** Played on the run page through a 15-minute signed link. Never in a JSON or PDF export, a delivery, run files, an agent tool, the model's context or the MCP server.
 - **Retention.** Admin → Browser agent → **Run recordings**: delete after N days (default **30**) or keep indefinitely. A nightly job enforces it. Deleting a run deletes its recording.
 - **Never changes a run.** A recorder error marks the recording `failed`; the run's result is unchanged.
@@ -15,10 +15,10 @@ In short:
 | Step | Who | What |
 |---|---|---|
 | Start | Runner host (`runner/host/recorder-port.ts`) | When the browser session is ready and the snapshot says `recordVideo`, it creates a `run_recordings` row (`recording`) and sends `record_start` to the fabric. |
-| Capture | Extension (`src/recorder.ts`, offscreen document) | `Page.startScreencast` (JPEG frames, at most 1280 px wide) → WebCodecs `VideoEncoder` (VP8) → `webm-muxer` writing a streamable WebM. |
-| Pull | Runner host | Every 10 s, `record_pull` returns the bytes written since the last pull (at most 8 MiB). Each chunk is stored as a part object `run-recordings/<user>/<run>/part-NNNNN.webm`. |
+| Capture | Extension (`src/recorder.ts`, offscreen document) | `Page.startScreencast` (JPEG frames, at most 1280 px wide) → WebCodecs `VideoEncoder` (VP8, a key frame at least every 2 s) → whole records of the `HXR1` framed stream (`apps/chrome-extension/src/recording-format.ts`). |
+| Pull | Runner host | Every 10 s, `record_pull` returns the bytes written since the last pull (at most 8 MiB). Each chunk is stored as a part object `run-recordings/<user>/<run>/part-NNNNN.hxr`. |
 | Stop | Runner host | When the run ends (done, failed, stopped, crashed) or `maxMinutes` is reached: `record_stop` returns the last bytes; the row becomes `processing` and the finalize job is queued. |
-| Finalize | Job `browser.recordings.finalize` | Joins the parts in order into `recording.webm`, deletes the parts, sets `ready` with its size and duration (or `failed`). |
+| Finalize | Job `browser.recordings.finalize` | Reads the parts in order and muxes them into one `recording.webm` with its duration and cues (seekable), deletes the parts, sets `ready` with its size and duration (or `failed`). |
 
 The recorder's fabric calls are read-only and made by the runner host, like trace screenshots; they are not agent tools, take no budget and are not seen by the stall detector.
 

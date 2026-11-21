@@ -129,6 +129,7 @@ The authoritative list, with fields and results, is [remote-control-api.md, Acti
 - **Trusted input by position:** `click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key`.
 - **JavaScript:** `evaluate`, any script in the page.
 - **The node's OS desktop:** `desktop_click`, `desktop_move`, `desktop_drag`, `desktop_type`, `desktop_key`, `desktop_scroll`.
+- **Run recordings (#755):** `record_start`, `record_pull`, `record_pause`, `record_stop`: an opt-in, unmasked video of a tab, pulled in chunks.
 - **Tabs and history:** `tabs`, `new_tab`, `activate_tab`, `close_tab`, `back`, `forward`, `reload`.
 
 ## Security Considerations

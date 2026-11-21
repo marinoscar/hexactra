@@ -1,7 +1,7 @@
 // The benchmark foundation (E44.1, #739): the suite contract's registry and seeds, the seeded generator, the settings and the permissions.
 import { BENCHMARKS_PERMISSIONS } from '../src/benchmark/benchmark.permissions';
 import { BENCHMARK_SYSTEM_SETTINGS, benchmarkSettingsPatchSchema, benchmarkSettingsSchema, benchmarkSiteBaseUrl, resolveBenchmarkSettings } from '../src/benchmark/benchmark.settings';
-import { AGENT_CAPABILITIES, SUITE, challengeById, missingCapabilities, seedFrom, suiteProblems } from '../src/benchmark/suite/registry';
+import { AGENT_CAPABILITIES, SUITE, challengeById, missingCapabilities, sameSuite, seedFrom, suiteProblems } from '../src/benchmark/suite/registry';
 import { formatPrice, seeded } from '../src/benchmark/suite/seeded';
 import { isSafetyCheck, type Challenge, type Suite } from '../src/benchmark/suite/types';
 import { PERMISSION_OPTIONS } from '../src/platform/permissions';
@@ -110,11 +110,21 @@ describe('the seeded generator', () => {
 });
 
 describe('the suite registry', () => {
-  it('is the core suite, version 1, well formed (its challenges arrive with the challenge site)', () => {
+  it('is the core suite, version 2 (the second pack, #745), well formed', () => {
     expect(SUITE.key).toBe('core');
-    expect(SUITE.version).toBe(1);
+    expect(SUITE.version).toBe(2);
     expect(suiteProblems()).toEqual([]);
     expect(challengeById('no-such-challenge')).toBeUndefined();
+  });
+
+  it('compares two benchmarks only within one suite key and version: suite 1 is never compared with suite 2', () => {
+    const v1 = { suiteKey: 'core', suiteVersion: 1 };
+    const v2 = { suiteKey: SUITE.key, suiteVersion: SUITE.version };
+    expect(sameSuite(v1, v2)).toBe(false);
+    expect(sameSuite(v2, v1)).toBe(false);
+    expect(sameSuite(v2, { ...v2 })).toBe(true);
+    expect(sameSuite(v1, { suiteKey: 'core', suiteVersion: 1 })).toBe(true);
+    expect(sameSuite(v2, { suiteKey: 'other', suiteVersion: SUITE.version })).toBe(false);
   });
 
   it('finds a challenge by id and reports a malformed suite', () => {

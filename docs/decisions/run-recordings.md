@@ -18,7 +18,7 @@ The owner wants to **watch a run as a video**. Two designs were possible:
 ## Decision
 
 1. **Opt-in per task, and per manual run.** A task's **Record video** switch (`recordVideo`, off by default) and the start-run form's switch. The choice is fixed on the run when it is created (`runs.record_video`). A task parameter, an agent policy, a page or the model cannot turn it on.
-2. **Continuous video of the session tab.** The extension runs a CDP screencast (`Page.startScreencast`, through the `debugger` permission it already has) and encodes the frames to WebM (VP8) with WebCodecs in an offscreen document. No `tabCapture` (it needs a user gesture, and unattended runs have none) and no ffmpeg on the node.
+2. **Continuous video of the session tab.** The extension runs a CDP screencast (`Page.startScreencast`, through the `debugger` permission it already has) and encodes the frames to VP8 with WebCodecs in an offscreen document; the console muxes them into a seekable WebM. No `tabCapture` (it needs a user gesture, and unattended runs have none) and no ffmpeg on the node.
 3. **Not masked.** A password typed into a page shows as dots, as on screen; a card number, an address or a balance on the page is visible in the video. This is a deliberate exception to the masked-trace invariant. **The recording is not part of the trace.**
 4. **Mitigations (they reduce exposure; they are not masking):**
    - no frame is kept while the fabric types a secret (`type_secret`);
@@ -31,7 +31,7 @@ The owner wants to **watch a run as a video**. Two designs were possible:
 
 ## Transport
 
-The runner starts the recorder when the browser session is ready (`record_start`), pulls the encoded bytes every 10 seconds (`record_pull`, at most 8 MiB per pull) and stops it when the run ends (`record_stop`). A pulled chunk returns through the existing result → artifact-store path as `mime` + base64 `data`, under the 64 MiB native-messaging frame limit. Each chunk is stored as a part object; a job (`browser.recordings.finalize`) joins the parts, in order, into one `recording.webm`. The muxer writes a streamable WebM, so the parts concatenate into a valid file.
+The runner starts the recorder when the browser session is ready (`record_start`), pulls the encoded bytes every 10 seconds (`record_pull`, at most 8 MiB per pull) and stops it when the run ends (`record_stop`). A pulled chunk returns through the existing result → artifact-store path as `mime` + base64 `data`, under the 64 MiB native-messaging frame limit. A chunk is whole records of a small framed stream (an `HXR1` header with the frame size and codec, then one record per encoded frame with its key-frame flag and time; `apps/chrome-extension/src/recording-format.ts`), so the chunks, in order, are one stream. Each chunk is stored as a part object; a job (`browser.recordings.finalize`) reads the parts in order and muxes them into one `recording.webm` with its duration and cues, so the video can be seeked. Muxing in the console keeps the extension free of a container library and lets the file carry what a player needs to seek.
 
 ## Size
 
