@@ -3,7 +3,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { specFields } from '../task-builder/task-builder.spec.schema';
-import { chatMessageResponseSchema } from './chat.responses';
+import { chatMessageResponseSchema, chatTaskDraftResponseSchema } from './chat.responses';
 
 const iso = z.string().describe('ISO 8601 timestamp');
 
@@ -26,3 +26,14 @@ export const taskBuilderDetailResponseSchema = taskBuilderResponseSchema.extend(
   thinking: z.boolean().describe('True while the builder is working on its reply'),
 });
 export class TaskBuilderDetailResponseDto extends createZodDto(taskBuilderDetailResponseSchema) {}
+
+/** `POST /task-builder/{id}/draft`: the chat draft's shape, plus the schedules and what the owner should check. */
+export const taskBuilderDraftResponseSchema = chatTaskDraftResponseSchema.extend({
+  unattendedPayments: z.enum(['ask', 'allow']),
+  needsBrowser: z.enum(['auto', 'always', 'never']),
+  schedules: z
+    .array(z.object({ cron: z.string(), timezone: z.string(), enabled: z.boolean(), concurrency: z.enum(['skip', 'queue']), policyId: z.null(), inputs: z.record(z.string(), z.string()).optional().describe('Preset values by parameter key') }))
+    .describe('The schedules the spec holds that pass the checks, in the shape `POST /tasks` takes in `schedules[]`'),
+  warnings: z.array(z.string()).describe('What could not be carried over as the spec said (an unknown account, an invalid schedule), in words for the form'),
+});
+export class TaskBuilderDraftResponseDto extends createZodDto(taskBuilderDraftResponseSchema) {}

@@ -6,6 +6,9 @@ import { getTask } from '../taskForm/api';
 import { TaskForm } from '../components/TaskForm';
 import { GOAL_MAX, copyValues, emptyValues, type TaskFormValues } from '../taskForm/values';
 import type { ChatDraftState, ChatTaskDraft } from '../types/chat';
+import type { BuilderDraftState, TaskBuilderDraft } from '../types/taskBuilder';
+import type { ScheduleDraft } from '../schedule/draft';
+import { MAX_SCHEDULES } from '../taskForm/values';
 import { Alert } from '@mui/material';
 
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
@@ -35,6 +38,27 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
   };
 }
 
+/** The form values of a task drafted by the task builder (E42.2): the chat draft's fields, plus its schedules and run options. */
+export function valuesFromBuilderDraft(draft: TaskBuilderDraft): TaskFormValues {
+  const base = valuesFromDraft(draft);
+  const schedules: ScheduleDraft[] = (Array.isArray(draft.schedules) ? draft.schedules : [])
+    .filter((s) => s && typeof s.cron === 'string' && typeof s.timezone === 'string')
+    .slice(0, MAX_SCHEDULES)
+    .map((s) => ({ cron: s.cron, timezone: s.timezone, enabled: s.enabled !== false, concurrency: s.concurrency === 'queue' ? 'queue' : 'skip', policyId: null, ...(s.inputs && Object.keys(s.inputs).length ? { inputs: { ...s.inputs } } : {}) }));
+  return {
+    ...base,
+    unattendedPayments: draft.unattendedPayments === 'allow' ? 'allow' : 'ask',
+    needsBrowser: draft.needsBrowser === 'always' || draft.needsBrowser === 'never' ? draft.needsBrowser : 'auto',
+    schedules,
+  };
+}
+
+/** The builder's draft in the router's state, when the page was opened from the task builder. */
+function builderDraftOf(state: unknown): BuilderDraftState | null {
+  const s = state as Partial<BuilderDraftState> | null;
+  return s && typeof s.builderId === 'string' && s.builderDraft && typeof s.builderDraft.goal === 'string' ? (s as BuilderDraftState) : null;
+}
+
 /** The chat's draft in the router's state, when the page was opened from a chat. */
 function chatDraftOf(state: unknown): ChatDraftState | null {
   const s = state as Partial<ChatDraftState> | null;
@@ -46,15 +70,20 @@ function chatDraftOf(state: unknown): ChatDraftState | null {
  * starts from a copy of that task ("Copy of ...", the same policy, its
  * schedules paused). Opened from a chat (#489) it starts from the task the
  * chat drafted, handed over in the router's state (never in the URL), and
- * tells the chat once the task is saved.
+ * tells the chat once the task is saved. Opened from the task builder (E42.2)
+ * it starts from the builder's draft, with its schedules and the warnings the
+ * owner should check, and links the builder once the task is saved.
  */
 export function TaskCreatePage() {
   const { api } = usePlatformHost();
   const [params] = useSearchParams();
   const from = params.get('from');
   const goal = params.get('goal');
-  const fromChat = chatDraftOf(useLocation().state);
-  const [initial, setInitial] = useState<TaskFormValues | null>(() => (fromChat ? valuesFromDraft(fromChat.chatDraft) : from ? null : { ...emptyValues(), goal: (goal ?? '').slice(0, GOAL_MAX) }));
+  const state = useLocation().state;
+  const fromChat = chatDraftOf(state);
+  const fromBuilder = fromChat ? null : builderDraftOf(state);
+  const [initial, setInitial] = useState<TaskFormValues | null>(() => (fromChat ? valuesFromDraft(fromChat.chatDraft) : fromBuilder ? valuesFromBuilderDraft(fromBuilder.builderDraft) : from ? null : { ...emptyValues(), goal: (goal ?? '').slice(0, GOAL_MAX) }));
+  const warnings = (fromBuilder?.builderDraft.warnings ?? []).filter((w) => typeof w === 'string');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,16 +101,30 @@ export function TaskCreatePage() {
     };
   }, [api, from, goal]);
 
+  const subtitle = fromChat ? 'Drafted from your chat. Check it, change what you like, then save.' : fromBuilder ? 'Drafted with the task builder. Check it, change what you like, then save.' : undefined;
+  const back = fromChat ? { to: `/chat/${fromChat.chatId}`, label: 'Chat' } : fromBuilder ? { to: `/tasks/builder/${fromBuilder.builderId}`, label: 'Task builder' } : { to: '/tasks', label: 'Tasks' };
+  const onCreated = fromChat
+    ? (taskId: string) => api.post(`/chats/${fromChat.chatId}/task-link`, { taskId }).then(() => undefined)
+    : fromBuilder
+      ? (taskId: string) => api.post(`/task-builder/${fromBuilder.builderId}/task-link`, { taskId }).then(() => undefined)
+      : undefined;
+  const proposedAccounts = (fromChat?.chatDraft.connections?.length ?? 0) > 0 || (fromBuilder?.builderDraft.connections?.length ?? 0) > 0;
+
   return (
     <PageContainer width="default">
-      <PageHeader title="New task" subtitle={fromChat ? 'Drafted from your chat. Check it, change what you like, then save.' : undefined} back={fromChat ? { to: `/chat/${fromChat.chatId}`, label: 'Chat' } : { to: '/tasks', label: 'Tasks' }} />
+      <PageHeader title="New task" subtitle={subtitle} back={back} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
-      {fromChat && (fromChat.chatDraft.connections?.length ?? 0) > 0 && (
+      {proposedAccounts && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Taken from the chat: check which accounts this task may use.
+          {fromChat ? 'Taken from the chat: check which accounts this task may use.' : 'Proposed by the task builder: check which accounts this task may use.'}
         </Alert>
       )}
-      {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} useOwnerSavedLoginsDefault={!fromChat && !from} cancelTo={fromChat ? `/chat/${fromChat.chatId}` : '/tasks'} onCreated={fromChat ? (taskId) => api.post(`/chats/${fromChat.chatId}/task-link`, { taskId }).then(() => undefined) : undefined} />}
+      {warnings.map((w) => (
+        <Alert key={w} severity="warning" sx={{ mb: 2 }}>
+          {w}
+        </Alert>
+      ))}
+      {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} useOwnerSavedLoginsDefault={!fromChat && !fromBuilder && !from} cancelTo={back.to} onCreated={onCreated} />}
     </PageContainer>
   );
 }
