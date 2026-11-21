@@ -962,6 +962,28 @@
       ]
     },
     {
+      "id": "tasks.builder",
+      "description": "The AI task builder (E42): start one (optionally with the owner's first message), talk to it, and read or change the live task spec it keeps (goal, sites and accounts, parameters, outputs, guardrails, schedules, policy); it interviews the owner and never starts a run or saves a task",
+      "rest": [
+        "POST /api/task-builder",
+        "GET /api/task-builder/{id}",
+        "POST /api/task-builder/{id}/messages",
+        "PATCH /api/task-builder/{id}/spec"
+      ],
+      "cli": {
+        "none": "The builder is a conversation with a live spec panel; the CLI creates a task from flags with `tasks create`"
+      },
+      "mcp": {
+        "none": "A hosted AI app already interviews its user in its own thread and creates tasks with the task tools"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the builder is a web conversation"
+      },
+      "web": {
+        "none": "The builder page arrives with E42.4 (#721)"
+      }
+    },
+    {
       "id": "apps.manage",
       "description": "AI apps connected to the account with OAuth (ChatGPT, Claude, ...): list them with what they may do and their 30-day usage, show one, change its limits (policy, allowed policies, sites, runs at once, runs and spend per day, confirm purchases, confirm sensitive browser actions), pause and resume it, disconnect it (the platform's grant revocation)",
       "rest": [

@@ -39892,6 +39892,375 @@
         "description": "**Requires:** authentication, plus permissions `chat:write` and `tasks:read`."
       }
     },
+    "/api/task-builder": {
+      "post": {
+        "operationId": "taskBuilder_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskBuilderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskBuilderResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Task builder"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `tasks:write`."
+      }
+    },
+    "/api/task-builder/{id}": {
+      "get": {
+        "operationId": "taskBuilder_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterSeq",
+            "required": false,
+            "in": "query",
+            "description": "Only messages with a `seq` greater than this: `0` (the default) is the whole thread.",
+            "schema": {
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskBuilderDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Task builder"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `tasks:write`."
+      }
+    },
+    "/api/task-builder/{id}/messages": {
+      "post": {
+        "operationId": "taskBuilder_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatMessageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Task builder"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `tasks:write`."
+      }
+    },
+    "/api/task-builder/{id}/spec": {
+      "patch": {
+        "operationId": "taskBuilder_patchSpec",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTaskSpecDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskBuilderSpecResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Task builder"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `tasks:write`."
+      }
+    },
     "/api/webhooks/events": {
       "get": {
         "description": "Each with its JSON Schema and an example. Notifications appear as `notification.<eventKey>`.\n\n**Requires:** authentication, plus permission `webhooks:read`.",
@@ -45885,6 +46254,9 @@
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
+              "TASK_BUILDER_NOT_FOUND",
+              "TASK_BUILDER_ARCHIVED",
+              "INVALID_TASK_SPEC",
               "SECRETS_VAULT_NOT_CONFIGURED",
               "SECRETS_VAULT_URL_REFUSED",
               "SECRETS_VAULT_DISCONNECT_FIRST",
@@ -97440,6 +97812,1466 @@
         "required": [
           "taskId"
         ]
+      },
+      "TaskBuilderResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The builder's id (a conversation's: its live updates are `GET /chats/{id}/stream`)"
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty until the first message names it"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "description": "Archived once its task is saved"
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "objective": {
+                "description": "What the task achieves and how the owner knows it is done.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "goal": {
+                "description": "The standalone instruction so far, with a {{Name}} for each parameter.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "sites": {
+                "description": "The sites or services involved, in words.",
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "allowedDomains": {
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              },
+              "accounts": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "description": "The connection's label, as the owner sees it."
+                    },
+                    "access": {
+                      "default": "read",
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "read_write"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "parameters": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60,
+                      "description": "The placeholder's name, as it appears in the goal (\"Amount\" for {{Amount}})."
+                    },
+                    "type": {
+                      "default": "text",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "default": {
+                      "description": "A fixed default value. Never a secret.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "memory": {
+                      "description": "The label of the owner's memory that holds the default.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "attribute": {
+                      "description": "The name of that memory's value.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "why": {
+                      "description": "Why it varies, in a few words.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "outputs": {
+                "maxItems": 12,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "type": {
+                      "default": "text",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url"
+                      ]
+                    },
+                    "help": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "guardrails": {
+                "type": "object",
+                "properties": {
+                  "confirmRiskyActions": {
+                    "type": "boolean"
+                  },
+                  "useSavedLogins": {
+                    "type": "boolean"
+                  },
+                  "useSavedIdentity": {
+                    "type": "boolean"
+                  },
+                  "useSavedCards": {
+                    "type": "boolean"
+                  },
+                  "unattendedPayments": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "needsBrowser": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default."
+                  },
+                  "why": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "ref"
+                ],
+                "additionalProperties": false
+              },
+              "schedules": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "description": "A 5-field cron expression, e.g. \"0 9 * * 1-5\"."
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "description": "An IANA time zone, e.g. \"America/Costa_Rica\"."
+                    },
+                    "inputs": {
+                      "description": "Preset values for the task's parameters, by parameter name.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  },
+                  "required": [
+                    "cron",
+                    "timezone"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "edgeCases": {
+                "description": "What the agent does when something goes wrong (sold out, a login needed).",
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "openQuestions": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "suggestions": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "ready": {
+                "type": "boolean"
+              }
+            },
+            "description": "What the builder has learned about the task so far. Every field is optional; never a secret."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "spec",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateTaskBuilderDto": {
+        "type": "object",
+        "properties": {
+          "seed": {
+            "description": "The owner's first message (what the task should do): the builder answers it at once. Never a password or a code.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          }
+        }
+      },
+      "TaskBuilderDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The builder's id (a conversation's: its live updates are `GET /chats/{id}/stream`)"
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty until the first message names it"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "description": "Archived once its task is saved"
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "objective": {
+                "description": "What the task achieves and how the owner knows it is done.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "goal": {
+                "description": "The standalone instruction so far, with a {{Name}} for each parameter.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "sites": {
+                "description": "The sites or services involved, in words.",
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "allowedDomains": {
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              },
+              "accounts": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "description": "The connection's label, as the owner sees it."
+                    },
+                    "access": {
+                      "default": "read",
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "read_write"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "parameters": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60,
+                      "description": "The placeholder's name, as it appears in the goal (\"Amount\" for {{Amount}})."
+                    },
+                    "type": {
+                      "default": "text",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "default": {
+                      "description": "A fixed default value. Never a secret.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "memory": {
+                      "description": "The label of the owner's memory that holds the default.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "attribute": {
+                      "description": "The name of that memory's value.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "why": {
+                      "description": "Why it varies, in a few words.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "outputs": {
+                "maxItems": 12,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "type": {
+                      "default": "text",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url"
+                      ]
+                    },
+                    "help": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "guardrails": {
+                "type": "object",
+                "properties": {
+                  "confirmRiskyActions": {
+                    "type": "boolean"
+                  },
+                  "useSavedLogins": {
+                    "type": "boolean"
+                  },
+                  "useSavedIdentity": {
+                    "type": "boolean"
+                  },
+                  "useSavedCards": {
+                    "type": "boolean"
+                  },
+                  "unattendedPayments": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "needsBrowser": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default."
+                  },
+                  "why": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "ref"
+                ],
+                "additionalProperties": false
+              },
+              "schedules": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "description": "A 5-field cron expression, e.g. \"0 9 * * 1-5\"."
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "description": "An IANA time zone, e.g. \"America/Costa_Rica\"."
+                    },
+                    "inputs": {
+                      "description": "Preset values for the task's parameters, by parameter name.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  },
+                  "required": [
+                    "cron",
+                    "timezone"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "edgeCases": {
+                "description": "What the agent does when something goes wrong (sold out, a login needed).",
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "openQuestions": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "suggestions": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "ready": {
+                "type": "boolean"
+              }
+            },
+            "description": "What the builder has learned about the task so far. Every field is optional; never a secret."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Order within the chat, from 1"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant",
+                    "system"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "clarify",
+                    "run",
+                    "result",
+                    "task_draft",
+                    "memory",
+                    "request"
+                  ],
+                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Never a secret: a credential the agent asks for goes to the browser, not to the chat"
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run a `run` or `result` message is about"
+                },
+                "meta": {
+                  "anyOf": [
+                    {},
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Kind-specific data; null for plain text"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                }
+              },
+              "required": [
+                "id",
+                "seq",
+                "role",
+                "kind",
+                "text",
+                "runId",
+                "meta",
+                "createdAt"
+              ]
+            }
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "True when more messages follow the last one returned: read on with `afterSeq`"
+          },
+          "thinking": {
+            "type": "boolean",
+            "description": "True while the builder is working on its reply"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "spec",
+          "createdAt",
+          "updatedAt",
+          "messages",
+          "hasMore",
+          "thinking"
+        ]
+      },
+      "TaskBuilderSpecResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "objective": {
+            "description": "What the task achieves and how the owner knows it is done.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "goal": {
+            "description": "The standalone instruction so far, with a {{Name}} for each parameter.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "sites": {
+            "description": "The sites or services involved, in words.",
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "allowedDomains": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            }
+          },
+          "accounts": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "description": "The connection's label, as the owner sees it."
+                },
+                "access": {
+                  "default": "read",
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ]
+                }
+              },
+              "required": [
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "parameters": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "The placeholder's name, as it appears in the goal (\"Amount\" for {{Amount}})."
+                },
+                "type": {
+                  "default": "text",
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "choice",
+                    "phone",
+                    "email"
+                  ]
+                },
+                "default": {
+                  "description": "A fixed default value. Never a secret.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "memory": {
+                  "description": "The label of the owner's memory that holds the default.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "attribute": {
+                  "description": "The name of that memory's value.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "why": {
+                  "description": "Why it varies, in a few words.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "outputs": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "default": "text",
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "datetime",
+                    "boolean",
+                    "url"
+                  ]
+                },
+                "help": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "label"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "guardrails": {
+            "type": "object",
+            "properties": {
+              "confirmRiskyActions": {
+                "type": "boolean"
+              },
+              "useSavedLogins": {
+                "type": "boolean"
+              },
+              "useSavedIdentity": {
+                "type": "boolean"
+              },
+              "useSavedCards": {
+                "type": "boolean"
+              },
+              "unattendedPayments": {
+                "type": "string",
+                "enum": [
+                  "ask",
+                  "allow"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "needsBrowser": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ]
+          },
+          "policy": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default."
+              },
+              "why": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "ref"
+            ],
+            "additionalProperties": false
+          },
+          "schedules": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cron": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "description": "A 5-field cron expression, e.g. \"0 9 * * 1-5\"."
+                },
+                "timezone": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "An IANA time zone, e.g. \"America/Costa_Rica\"."
+                },
+                "inputs": {
+                  "description": "Preset values for the task's parameters, by parameter name.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              "required": [
+                "cron",
+                "timezone"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "edgeCases": {
+            "description": "What the agent does when something goes wrong (sold out, a login needed).",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "openQuestions": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "suggestions": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "description": "What the builder has learned about the task so far. Every field is optional; never a secret."
+      },
+      "PatchTaskSpecDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sites": {
+            "anyOf": [
+              {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedDomains": {
+            "anyOf": [
+              {
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accounts": {
+            "anyOf": [
+              {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "description": "The connection's label, as the owner sees it."
+                    },
+                    "access": {
+                      "default": "read",
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "read_write"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60,
+                      "description": "The placeholder's name, as it appears in the goal (\"Amount\" for {{Amount}})."
+                    },
+                    "type": {
+                      "default": "text",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "default": {
+                      "description": "A fixed default value. Never a secret.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "memory": {
+                      "description": "The label of the owner's memory that holds the default.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "attribute": {
+                      "description": "The name of that memory's value.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "why": {
+                      "description": "Why it varies, in a few words.",
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "maxItems": 12,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "type": {
+                      "default": "text",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url"
+                      ]
+                    },
+                    "help": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guardrails": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "confirmRiskyActions": {
+                    "type": "boolean"
+                  },
+                  "useSavedLogins": {
+                    "type": "boolean"
+                  },
+                  "useSavedIdentity": {
+                    "type": "boolean"
+                  },
+                  "useSavedCards": {
+                    "type": "boolean"
+                  },
+                  "unattendedPayments": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "allow"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needsBrowser": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default."
+                  },
+                  "why": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "ref"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedules": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "cron": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100,
+                      "description": "A 5-field cron expression, e.g. \"0 9 * * 1-5\"."
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "description": "An IANA time zone, e.g. \"America/Costa_Rica\"."
+                    },
+                    "inputs": {
+                      "description": "Preset values for the task's parameters, by parameter name.",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    }
+                  },
+                  "required": [
+                    "cron",
+                    "timezone"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edgeCases": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "openQuestions": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggestions": {
+            "anyOf": [
+              {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ready": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "WebhookEventCatalogDto": {
         "type": "object",
