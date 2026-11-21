@@ -36727,6 +36727,347 @@
         }
       }
     },
+    "/api/usage/report": {
+      "get": {
+        "description": "Tokens (uncached input, cached input, output, reasoning), requests and cost per day (or per month for `range=1y`), split by model, token type, feature, provider or user, with totals, a per-model table and the runs' own counters. Cost uses the admin's model prices (and, for `scope=me`, the caller's own overrides); a model with no price makes `costKnown` false and the cost a lower bound. `scope=me` is always the caller's own usage; `scope=all` (every user) needs `ai_config:read`. Catalogue syncs are left out.\n\n**Requires:** authentication, plus permission `usage:read`.",
+        "operationId": "usage_report",
+        "parameters": [
+          {
+            "name": "range",
+            "required": false,
+            "in": "query",
+            "description": "`7d`, `30d` and `90d` are whole days ending today; `1y` is the 12 calendar months ending this month, one bucket per month.",
+            "schema": {
+              "default": "30d",
+              "type": "string",
+              "enum": [
+                "7d",
+                "30d",
+                "90d",
+                "1y"
+              ]
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "`me`: the caller's own usage (`usage:read`). `all`: every user's (also needs `ai_config:read`).",
+            "schema": {
+              "default": "me",
+              "type": "string",
+              "enum": [
+                "me",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "breakdown",
+            "required": false,
+            "in": "query",
+            "description": "How the series are split: by model, by token type (uncached input, cached input, output, reasoning), by feature, by provider, by user (`scope=all` only) or not at all.",
+            "schema": {
+              "default": "model",
+              "type": "string",
+              "enum": [
+                "none",
+                "model",
+                "tokenType",
+                "feature",
+                "provider",
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "tz",
+            "required": false,
+            "in": "query",
+            "description": "IANA time zone the days and months are in; default the caller's time zone setting.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Only this user (`scope=all` only).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "required": false,
+            "in": "query",
+            "description": "Only this model id, as the provider reports it.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "feature",
+            "required": false,
+            "in": "query",
+            "description": "Only this AI feature (`browser_agent`, `chat_orchestrator`, `task_builder`, ...).",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UsageReportResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "AI usage and cost",
+        "tags": [
+          "Usage"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "usage:read"
+          ]
+        }
+      }
+    },
+    "/api/usage/export.csv": {
+      "get": {
+        "description": "The same range, scope and filters as `GET /api/usage/report`, one line per period × provider × model × feature (× user for `scope=all`): requests, failed, input, cached input, output, reasoning and total tokens, cost in USD (empty when the model has no price) and `cost_known`. Sent as an attachment.\n\n**Requires:** authentication, plus permission `usage:read`.",
+        "operationId": "usage_exportCsv",
+        "parameters": [
+          {
+            "name": "range",
+            "required": false,
+            "in": "query",
+            "description": "`7d`, `30d` and `90d` are whole days ending today; `1y` is the 12 calendar months ending this month, one bucket per month.",
+            "schema": {
+              "default": "30d",
+              "type": "string",
+              "enum": [
+                "7d",
+                "30d",
+                "90d",
+                "1y"
+              ]
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "`me`: the caller's own usage (`usage:read`). `all`: every user's (also needs `ai_config:read`).",
+            "schema": {
+              "default": "me",
+              "type": "string",
+              "enum": [
+                "me",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "breakdown",
+            "required": false,
+            "in": "query",
+            "description": "How the series are split: by model, by token type (uncached input, cached input, output, reasoning), by feature, by provider, by user (`scope=all` only) or not at all.",
+            "schema": {
+              "default": "model",
+              "type": "string",
+              "enum": [
+                "none",
+                "model",
+                "tokenType",
+                "feature",
+                "provider",
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "tz",
+            "required": false,
+            "in": "query",
+            "description": "IANA time zone the days and months are in; default the caller's time zone setting.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Only this user (`scope=all` only).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "required": false,
+            "in": "query",
+            "description": "Only this model id, as the provider reports it.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "feature",
+            "required": false,
+            "in": "query",
+            "description": "Only this AI feature (`browser_agent`, `chat_orchestrator`, `task_builder`, ...).",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A UTF-8 CSV file (`text/csv`), not wrapped in the `data` envelope."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "AI usage and cost as a CSV file",
+        "tags": [
+          "Usage"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "usage:read"
+          ]
+        }
+      }
+    },
     "/api/browser/sessions": {
       "post": {
         "operationId": "externalBrowser_open",
@@ -94091,6 +94432,300 @@
           }
         },
         "additionalProperties": false
+      },
+      "UsageReportResponseDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "type": "string",
+            "enum": [
+              "7d",
+              "30d",
+              "90d",
+              "1y"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "me",
+              "all"
+            ]
+          },
+          "breakdown": {
+            "type": "string",
+            "enum": [
+              "none",
+              "model",
+              "tokenType",
+              "feature",
+              "provider",
+              "user"
+            ]
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "day",
+              "month"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "description": "First day covered (YYYY-MM-DD, in `timeZone`)."
+          },
+          "to": {
+            "type": "string",
+            "description": "Last day covered (YYYY-MM-DD, in `timeZone`)."
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The periods, oldest first: `YYYY-MM-DD` days, or `YYYY-MM` months for `1y`."
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "costUsd": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "tokens": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "requests": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "costUsd",
+                "tokens",
+                "requests"
+              ]
+            },
+            "description": "One per breakdown key; each array is aligned with `buckets`."
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "requests": {
+                "type": "number"
+              },
+              "failed": {
+                "type": "number"
+              },
+              "inputTokens": {
+                "type": "number"
+              },
+              "cachedInputTokens": {
+                "type": "number",
+                "description": "Part of `inputTokens`."
+              },
+              "outputTokens": {
+                "type": "number"
+              },
+              "reasoningTokens": {
+                "type": "number",
+                "description": "Part of `outputTokens`."
+              },
+              "tokens": {
+                "type": "number",
+                "description": "`inputTokens + outputTokens`."
+              },
+              "costUsd": {
+                "type": "number"
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a call was on a model with no price: `costUsd` is then a lower bound (\"at least\")."
+              },
+              "costByTokenType": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "number"
+                  },
+                  "cachedInput": {
+                    "type": "number"
+                  },
+                  "output": {
+                    "type": "number"
+                  },
+                  "reasoning": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "input",
+                  "cachedInput",
+                  "output",
+                  "reasoning"
+                ]
+              }
+            },
+            "required": [
+              "requests",
+              "failed",
+              "inputTokens",
+              "cachedInputTokens",
+              "outputTokens",
+              "reasoningTokens",
+              "tokens",
+              "costUsd",
+              "costKnown",
+              "costByTokenType"
+            ]
+          },
+          "byModel": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "requests": {
+                  "type": "number"
+                },
+                "failed": {
+                  "type": "number"
+                },
+                "inputTokens": {
+                  "type": "number"
+                },
+                "cachedInputTokens": {
+                  "type": "number"
+                },
+                "outputTokens": {
+                  "type": "number"
+                },
+                "reasoningTokens": {
+                  "type": "number"
+                },
+                "tokens": {
+                  "type": "number"
+                },
+                "costUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "costShare": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "provider",
+                "model",
+                "requests",
+                "failed",
+                "inputTokens",
+                "cachedInputTokens",
+                "outputTokens",
+                "reasoningTokens",
+                "tokens",
+                "costUsd",
+                "costShare"
+              ]
+            }
+          },
+          "unpricedModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`<provider>:<model>` keys with usage but no price."
+          },
+          "runs": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "number"
+              },
+              "succeeded": {
+                "type": "number"
+              },
+              "costUsd": {
+                "type": "number"
+              },
+              "avgSuccessCostUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "count",
+              "succeeded",
+              "costUsd",
+              "avgSuccessCostUsd"
+            ],
+            "description": "Browser-agent runs started in the range (their own cost counters)."
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "overridesApplied": {
+                "type": "boolean",
+                "description": "True when the caller's own model prices replaced the deployment's for this report."
+              }
+            },
+            "required": [
+              "overridesApplied"
+            ]
+          }
+        },
+        "required": [
+          "range",
+          "scope",
+          "breakdown",
+          "timeZone",
+          "granularity",
+          "from",
+          "to",
+          "buckets",
+          "series",
+          "totals",
+          "byModel",
+          "unpricedModels",
+          "runs",
+          "pricing"
+        ]
       },
       "OpenDto": {
         "type": "object",

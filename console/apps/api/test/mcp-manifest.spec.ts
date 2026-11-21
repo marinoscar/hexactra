@@ -132,8 +132,8 @@ describe('MCP tool manifest (#462)', () => {
       expect([s.id, MCP_TOOLS.some((t) => t.scope === s.id)]).toEqual([s.id, true]);
       expect([s.id, s.permissions.length > 0]).toEqual([s.id, true]);
     }
-    // The default consent is delegation only: no browser, desktop or policy change (epic #458, decision 3).
-    expect(MCP_SCOPES.filter((s) => s.default).map((s) => s.id)).toEqual(['runs:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write']);
+    // The default consent is delegation only: no browser, desktop or policy change (epic #458, decision 3). Reading one's own AI usage (#733) is default too.
+    expect(MCP_SCOPES.filter((s) => s.default).map((s) => s.id)).toEqual(['runs:read', 'usage:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write']);
     expect(MCP_SCOPES.filter((s) => s.risk === 'high').map((s) => s.id)).toEqual(['browser:evaluate', 'desktop:control', 'policies:write']);
   });
 
@@ -176,8 +176,8 @@ describe('MCP tool manifest (#462)', () => {
 
   it('classifies the tools by the rules of #462', () => {
     const by = (n: string) => MCP_TOOLS.find((t) => t.name === n)!;
-    // 58 tools for the model (run_pause and run_resume, E38.2), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
-    expect(MCP_TOOLS).toHaveLength(60);
+    // 59 tools for the model (run_pause and run_resume, E38.2; usage_report, #733), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
+    expect(MCP_TOOLS).toHaveLength(61);
     for (const n of ['run_cancel', 'browser_close', 'task_update', 'policy_update', 'policy_set_default', 'policies_import', 'task_pause', 'browser_click', 'browser_type', 'browser_press', 'browser_click_at', 'browser_drag', 'browser_type_keys', 'browser_key', 'browser_evaluate', 'browser_type_secret']) {
       expect([n, by(n).effect]).toEqual([n, 'destructive']);
     }
