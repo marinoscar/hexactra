@@ -223,6 +223,8 @@ describe('the built-in store beside Vault (E37.5)', () => {
     expect(screen.getByRole('link', { name: 'My saved logins' })).toHaveAttribute('href', '/secrets');
     expect(screen.queryByRole('switch', { name: 'Let the agent save and change logins' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
+    // Saving a typed sign-in works with the store too (#712): the card says so, no Vault permission is needed.
+    expect(screen.getByTestId('store-save-note')).toHaveTextContent('the agent offers to save that login here');
     expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toContain('The agent now uses the logins saved in Hexactra.');
   });
 

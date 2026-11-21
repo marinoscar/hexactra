@@ -367,7 +367,8 @@ export const saveLoginProposalSchema = z
     /** The username the owner typed: shown on the card (it is not secret). */
     username: z.string().trim().min(1).max(200),
     handoffId: z.uuid(),
-    provider: z.enum(['vault']),
+    /** Where the login is saved: the owner's Vault, or the built-in store (#712). */
+    provider: z.enum(['vault', 'builtin']),
     /** When the fabric stops holding the password: the card is "too late" after it. */
     valueExpiresAt: z.string().min(1).max(40),
   })

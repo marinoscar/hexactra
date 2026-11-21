@@ -350,6 +350,9 @@ function StoreCard({ store }: { store: StoreStatus }) {
       <Typography sx={{ mt: 1 }} color="text.secondary">
         {store.logins} saved, {store.openToAgent} open to the agent. You decide which logins the agent may use where you save them.
       </Typography>
+      <Typography sx={{ mt: 1 }} color="text.secondary" data-testid="store-save-note">
+        After you sign in yourself during a run, the agent offers to save that login here, on a card. You decide each time.
+      </Typography>
       <Button component={RouterLink} to="/secrets" variant="outlined" sx={{ ...TOUCH, mt: 2 }}>
         My saved logins
       </Button>

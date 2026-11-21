@@ -97,7 +97,11 @@ export class SaveLoginService implements SaveLoginPort, OnModuleInit {
   async supported(userId: string): Promise<boolean> {
     try {
       if (!(await this.policy.agentUse(userId)).effective) return false;
-      if ((await this.policy.activeProvider(userId)) !== 'vault') return false;
+      const provider = await this.policy.activeProvider(userId);
+      // The built-in store (#712): it can always save once the owner chose it and the administrator switched it on (that is
+      // what `activeProvider` answering `builtin` means). Each save still asks the owner on a card.
+      if (provider === 'builtin') return true;
+      if (provider !== 'vault') return false;
       if (!(await this.connection.grantedScopes(userId)).includes(VAULT_SCOPES.write)) return false;
       const access = await this.tokens.getAccess(userId);
       const who = await this.api.whoami(access.baseUrl, access.accessToken, (await this.policy.system()).vault.allowedHosts);
@@ -140,7 +144,8 @@ export class SaveLoginService implements SaveLoginPort, OnModuleInit {
     const waiting = await db.question.findFirst({ where: { input: 'save_login', proposalKey: key }, select: { id: true } });
     if (waiting) return { proposed: false, message: 'Already offered: it waits for the owner.', questionId: waiting.id };
 
-    const proposal: SaveLoginProposal = { site, origin, domain, name: offeredName(args.name, site), username: username.slice(0, 200), handoffId: args.handoffId, provider: 'vault', valueExpiresAt: valueExpiresAt.toISOString() };
+    const provider = (await this.policy.activeProvider(userId)) === 'builtin' ? 'builtin' : 'vault';
+    const proposal: SaveLoginProposal = { site, origin, domain, name: offeredName(args.name, site), username: username.slice(0, 200), handoffId: args.handoffId, provider, valueExpiresAt: valueExpiresAt.toISOString() };
     const q = await this.questions.createSaveLoginProposal(userId, proposal, {
       askedBy: `run:${args.from.runId}`,
       proposalKey: key,
@@ -149,7 +154,7 @@ export class SaveLoginService implements SaveLoginPort, OnModuleInit {
     });
     // In a chat, the card is a message of the thread (a card of its own: `meta.card`).
     if (args.from.conversationId) await this.appendCard(args.from.conversationId, q.id, site);
-    await this.events.audit(userId, SECRETS_AUDIT.loginOffered, q.id, { provider: 'vault', site }, null, 'question');
+    await this.events.audit(userId, SECRETS_AUDIT.loginOffered, q.id, { provider, site }, null, 'question');
     return { proposed: true, message: 'Offered; the owner decides. The run does not wait for the answer.', questionId: q.id };
   }
 
@@ -171,21 +176,26 @@ export class SaveLoginService implements SaveLoginPort, OnModuleInit {
   async save(userId: string, proposal: SaveLoginProposal, name: string, ctx: { questionId: string; runId: string | null }): Promise<{ itemId: string | null }> {
     const parsed = saveLoginProposalSchema.parse(proposal);
     const site = parsed.site;
+    const provider = parsed.provider;
     const fail = async (code: SaveLoginError['code'], message: string, reason: string): Promise<never> => {
-      await this.events.audit(userId, SECRETS_AUDIT.loginSaveFailed, ctx.questionId, { provider: 'vault', site, reason }, null, 'question');
+      await this.events.audit(userId, SECRETS_AUDIT.loginSaveFailed, ctx.questionId, { provider, site, reason }, null, 'question');
       throw new SaveLoginError(code, message);
     };
+    // The owner may have switched provider since the card was made: the login goes where the card said, or nowhere.
+    if ((await this.policy.activeProvider(userId)) !== provider) {
+      return fail('SAVE_DISABLED', provider === 'builtin' ? 'The built-in store is no longer your provider (or it was switched off). Nothing was saved.' : 'Vault is no longer your provider. Nothing was saved.', 'provider_changed');
+    }
     const registered = await this.registrar.ensureRegistered(userId, { force: true });
     if (registered === 'not_enabled') return fail('SAVE_DISABLED', 'Saved logins are switched off. Turn them on in Settings → Secrets, then try again.', 'not_enabled');
     if (registered === 'needs_reconnect' || registered === 'not_connected') return fail('SAVE_RECONNECT', 'Vault needs to be connected again. Reconnect it in Settings → Secrets, then try again.', registered);
     if (registered !== 'registered') return fail('SAVE_UNAVAILABLE', 'Vault could not be reached. Try again in a moment.', 'unavailable');
     try {
-      const saved = await new FabricSession(this.fabric).saveLogin(userId, 'vault', { handoffId: parsed.handoffId, name, origin: parsed.origin, ...(ctx.runId ? { runId: ctx.runId } : {}), clientLabel: 'Hexactra' });
-      await this.events.audit(userId, SECRETS_AUDIT.loginSaved, ctx.questionId, { provider: 'vault', site }, null, 'question');
-      await this.recordOutcome(userId, true);
+      const saved = await new FabricSession(this.fabric).saveLogin(userId, provider, { handoffId: parsed.handoffId, name, origin: parsed.origin, ...(ctx.runId ? { runId: ctx.runId } : {}), clientLabel: 'Hexactra' });
+      await this.events.audit(userId, SECRETS_AUDIT.loginSaved, ctx.questionId, { provider, site }, null, 'question');
+      if (provider === 'vault') await this.recordOutcome(userId, true);
       return saved;
     } catch (e) {
-      if (e instanceof SecretsProviderError) return this.failureOf(e, fail, userId);
+      if (e instanceof SecretsProviderError) return provider === 'builtin' ? this.storeFailureOf(e, fail) : this.failureOf(e, fail, userId);
       if (e instanceof FabricError) return fail('SAVE_UNAVAILABLE', 'Hexactra could not reach the browser service to save the login. Try again in a moment.', 'fabric_unreachable');
       throw e;
     }
@@ -213,6 +223,27 @@ export class SaveLoginService implements SaveLoginPort, OnModuleInit {
       default:
         // Refused (a missing scope, a Vault older than contract 1.3) or unsupported: the card says what to check.
         return fail('SAVE_REFUSED', 'Vault did not accept the login. It needs the "save and change logins" permission and Vault 1.3 or newer.', e.code);
+    }
+  }
+
+  /** The card's words for a failure of the built-in store (#712). */
+  private storeFailureOf(e: SecretsProviderError, fail: (code: SaveLoginError['code'], message: string, reason: string) => Promise<never>): Promise<never> {
+    switch (e.code) {
+      case 'secret_unavailable':
+      case 'not_found':
+        return fail('SAVE_TOO_LATE', 'Too late to save this time; it will be offered at the next sign-in.', e.code);
+      case 'name_taken':
+        return fail('SAVE_NAME_TAKEN', 'You already have a saved login with that name. Choose another name.', e.code);
+      case 'disabled':
+        return fail('SAVE_DISABLED', 'The built-in store is switched off, so it cannot save logins.', e.code);
+      case 'rate_limited':
+      case 'unavailable':
+      case 'timed_out':
+      case 'no_provider':
+      case 'unauthorized':
+        return fail('SAVE_UNAVAILABLE', 'The built-in store could not be reached. Try again in a moment.', e.code);
+      default:
+        return fail('SAVE_REFUSED', 'The built-in store did not accept the login.', e.code);
     }
   }
 
