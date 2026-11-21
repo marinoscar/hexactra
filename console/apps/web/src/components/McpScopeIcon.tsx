@@ -10,6 +10,7 @@ import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined';
 import EditCalendarOutlinedIcon from '@mui/icons-material/EditCalendarOutlined';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
 import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined';
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined';
@@ -19,6 +20,7 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 /** One icon per scope, in the theme's action colour. */
 export const MCP_SCOPE_ICONS: Readonly<Record<string, { Icon: SvgIconComponent }>> = {
   'runs:read': { Icon: VisibilityOutlinedIcon },
+  'usage:read': { Icon: InsightsOutlinedIcon },
   'runs:write': { Icon: PlayCircleOutlinedIcon },
   'tasks:write': { Icon: EditCalendarOutlinedIcon },
   'inbox:read': { Icon: InboxOutlinedIcon },

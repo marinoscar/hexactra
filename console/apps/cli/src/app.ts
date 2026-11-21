@@ -26,6 +26,7 @@ import { fleetScreen } from './fleet.tui.js';
 import { connectionsCommand } from './connections.command.js';
 import { memoriesCommand } from './memories.command.js';
 import { policiesCommand } from './policies.command.js';
+import { usageCommand } from './usage.command.js';
 import { runsCommand } from './runs.command.js';
 import { runsScreen } from './runs.tui.js';
 
@@ -92,7 +93,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   version: readVersion(),
   // `android`: build, version and release the Android app (apps/android) through the platform's group,
   // behind this app's folder check (#478): the app is in console/, and a build needs `npm ci` there.
-  extraCommands: [bundledHostCommand, devCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, policiesCommand, memoriesCommand, connectionsCommand, appsCommand, inboxCommand, questionsCommand, mcpCommand, withAndroidPreflight(androidCommand({ identity: ANDROID_IDENTITY_SOURCE }))],
+  extraCommands: [bundledHostCommand, devCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, policiesCommand, usageCommand, memoriesCommand, connectionsCommand, appsCommand, inboxCommand, questionsCommand, mcpCommand, withAndroidPreflight(androidCommand({ identity: ANDROID_IDENTITY_SOURCE }))],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen, agentScreen, androidScreen],
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,

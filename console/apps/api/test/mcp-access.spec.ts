@@ -16,8 +16,8 @@ import { MCP_INSTRUCTIONS, MCP_TOOLS, instructionsFor } from '../src/mcp/mcp.too
 
 const DEFAULT_SCOPES = MCP_SCOPES.filter((s) => s.default).map((s) => s.id);
 /** The permissions the console's roles give (their `defaultGrants`). */
-const CONTRIBUTOR = ['runs:read', 'runs:write', 'runs:delete', 'tasks:read', 'tasks:write', 'fleet:read', 'agent_policies:read', 'agent_policies:write'];
-const VIEWER = ['runs:read', 'tasks:read', 'fleet:read', 'agent_policies:read'];
+const CONTRIBUTOR = ['runs:read', 'runs:write', 'runs:delete', 'tasks:read', 'tasks:write', 'fleet:read', 'agent_policies:read', 'agent_policies:write', 'usage:read'];
+const VIEWER = ['runs:read', 'tasks:read', 'fleet:read', 'agent_policies:read', 'usage:read'];
 
 const oauth = (scopes: readonly string[]) => ({ kind: 'oauth' as const, tokenId: 't', grantId: 'g', clientId: 'c', resourceId: 'mcp', scopes: [...scopes] });
 const tool = (name: string) => MCP_TOOLS.find((t) => t.name === name)!;

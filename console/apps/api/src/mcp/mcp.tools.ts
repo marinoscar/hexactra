@@ -5,6 +5,7 @@
 // calls the console's own REST routes in-process, as the caller.
 import { chatAnswerMode } from '@app/shared/question-rules';
 import { z } from 'zod';
+import type { UsageReport } from '../usage/usage.schemas';
 
 import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
 import { schedulePreviewSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
@@ -1180,6 +1181,62 @@ export const MCP_TOOLS: McpTool[] = [
     call: async (a, ctx) => questionOutput(await awaitQuestion(ctx, String(a.question_id), Number(a.wait_s)), ctx),
   },
 
+  // --- AI usage and cost (#733) ----------------------------------------------
+  {
+    name: 'usage_report',
+    title: 'Read your AI usage and cost',
+    description:
+      "Read the user's own AI token use and cost for the last 7, 30 or 90 days, or the last 12 months by month: totals (requests, uncached input, cached input, output and reasoning tokens, cost in USD), a per-model table and one total per day or month. " +
+      "Cost uses the model prices set in the console; cost_known false means a model has no price and the cost is a lower bound. Only the caller's own usage.",
+    input: z.object({
+      range: z.enum(['7d', '30d', '90d', '1y']).default('30d').describe('7d, 30d or 90d whole days ending today, or 1y: the 12 calendar months ending this month.'),
+      model: z.string().min(1).max(128).optional().describe('Only this model id.'),
+      feature: z.string().min(1).max(64).optional().describe('Only this AI feature, e.g. browser_agent or chat_orchestrator.'),
+    }),
+    output: z.object({
+      range: z.string(),
+      time_zone: z.string(),
+      from: z.string(),
+      to: z.string(),
+      totals: z.object({ requests: z.number(), input_tokens: z.number(), cached_input_tokens: z.number(), output_tokens: z.number(), reasoning_tokens: z.number(), cost_usd: z.number(), cost_known: z.boolean() }),
+      by_model: z.array(z.object({ model: z.string(), provider: z.string(), requests: z.number(), tokens: z.number(), cost_usd: z.number().nullable() })),
+      periods: z.array(z.object({ period: z.string(), tokens: z.number(), cost_usd: z.number() })),
+    }),
+    scope: 'usage:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const qs = new URLSearchParams({ range: String(a.range ?? '30d'), scope: 'me', breakdown: 'none' });
+      if (a.model) qs.set('model', String(a.model));
+      if (a.feature) qs.set('feature', String(a.feature));
+      const r = await ctx.api<UsageReport>('GET', `/usage/report?${qs.toString()}`);
+      // `breakdown=none`: one series, the total. Read defensively: a field the route left out is a zero, never a crash.
+      const total = r.series?.[0];
+      const t: Partial<UsageReport['totals']> = r.totals ?? {};
+      const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+      const out = {
+        range: String(r.range ?? a.range ?? '30d'),
+        time_zone: String(r.timeZone ?? ''),
+        from: String(r.from ?? ''),
+        to: String(r.to ?? ''),
+        totals: {
+          requests: num(t.requests),
+          input_tokens: num(t.inputTokens),
+          cached_input_tokens: num(t.cachedInputTokens),
+          output_tokens: num(t.outputTokens),
+          reasoning_tokens: num(t.reasoningTokens),
+          cost_usd: num(t.costUsd),
+          cost_known: t.costKnown !== false,
+        },
+        // At most 50 models and 366 periods, so the answer stays within the result limits.
+        by_model: (Array.isArray(r.byModel) ? r.byModel : []).slice(0, 50).map((m) => ({ model: String(m.model), provider: String(m.provider), requests: num(m.requests), tokens: num(m.tokens), cost_usd: m.costUsd === null ? null : num(m.costUsd) })),
+        periods: (Array.isArray(r.buckets) ? r.buckets : []).slice(0, 366).map((period, i) => ({ period: String(period), tokens: num(total?.tokens?.[i]), cost_usd: num(total?.costUsd?.[i]) })),
+      };
+      const cost = `${out.totals.cost_known ? '' : 'at least '}$${out.totals.cost_usd.toFixed(2)}`;
+      return toolOutput({ text: out, structured: out, summary: `${out.from} to ${out.to}: ${num(t.tokens)} tokens in ${out.totals.requests} requests, ${cost}.` });
+    },
+  },
   // --- agent policies (budgets and model tiers of a run) --------------------
   {
     name: 'policies_list',

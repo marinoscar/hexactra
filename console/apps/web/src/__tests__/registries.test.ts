@@ -122,6 +122,8 @@ describe('browser agent cards', () => {
       ['/settings/secrets', secretsStatus![1], undefined],
       // E39.2 (#599), appended: what GET /api/connections enforces.
       ['/settings/connections', connectionsList![1], undefined],
+      // E43.4 (#734), appended: what GET /api/usage/report enforces for the caller's own usage.
+      ['/settings/usage', 'usage:read', undefined],
     ]);
   });
 
@@ -141,6 +143,8 @@ describe('browser agent cards', () => {
       ['Connections', '/admin/settings/connections', 'system_settings:read', undefined],
       // E40.4 (#688), appended: the `questions` namespace of the system settings.
       ['Request history', '/admin/settings/request-history', 'system_settings:read', undefined],
+      // E43.4 (#734), appended: what GET /api/usage/report?scope=all enforces.
+      ['AI usage & cost', '/admin/settings/usage', 'ai_config:read', undefined],
     ]);
     expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');
