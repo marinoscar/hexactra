@@ -163,6 +163,18 @@ grep -qi '^content-type: application/json' "$tmpdir_headers" || fail "assetlinks
 echo "$links" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(!Array.isArray(JSON.parse(s)))process.exit(1)})' \
   || fail "assetlinks.json is not a JSON array"
 pass "/.well-known/assetlinks.json is served by the API"
+# The benchmark challenge site (#740): nginx publishes the API's challenge pages at /benchmark/
+# (infra/nginx/app.d/locations/benchmark.conf). A stylesheet proves the proxying (the SPA would answer HTML), and a
+# token that opens nothing is the site's 404 with the platform's security headers and the site's own policy.
+[ "$(code -D "$tmpdir_headers" "$base/benchmark/assets/site.css")" = 200 ] || fail "/benchmark/assets/site.css through nginx"
+grep -qi '^content-type: text/css' "$tmpdir_headers" || fail "/benchmark/assets/site.css is not served as a stylesheet (the SPA answered?)"
+[ "$(code -D "$tmpdir_headers" "$base/benchmark/t/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/")" = 404 ] || fail "an unknown benchmark trial token is not a 404"
+grep -qi '^content-type: text/html' "$tmpdir_headers" || fail "the benchmark site's 404 is not its own page"
+for header in "x-content-type-options: nosniff" "x-frame-options: SAMEORIGIN" "strict-transport-security: " "content-security-policy: default-src 'self'" "content-security-policy: default-src 'none'"; do
+  grep -qi "^$header" "$tmpdir_headers" || fail "/benchmark/ answers without the header '$header'"
+done
+[ "$(code -X POST -H 'content-type: application/json' -d '{}' "$base/benchmark/t/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/api/x")" = 404 ] || fail "a post to an unknown benchmark trial is not a 404"
+pass "the benchmark challenge site is served at /benchmark/ with the security headers; an unknown token is a 404"
 # Remote desktops (#339, #343): the old ticket viewer is gone, and nginx
 # admits a desktop WebSocket only with a console viewer session.
 [ "$(code "$base/viewer/local/vnc.html")" = 404 ] || fail "the legacy /viewer/local/ viewer is still served"
