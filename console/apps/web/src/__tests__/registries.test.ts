@@ -124,6 +124,8 @@ describe('browser agent cards', () => {
       ['/settings/connections', connectionsList![1], undefined],
       // E43.4 (#734), appended: what GET /api/usage/report enforces for the caller's own usage.
       ['/settings/usage', 'usage:read', undefined],
+      // E43.5 (#735), appended: the user's own `agentPricing` in GET/PATCH /api/user-settings.
+      ['/settings/model-prices', 'user_settings:read', undefined],
     ]);
   });
 

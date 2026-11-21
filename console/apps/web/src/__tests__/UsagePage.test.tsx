@@ -87,8 +87,9 @@ describe('My usage & cost', () => {
     expect(screen.getByTestId('usage-cache')).toHaveTextContent('40%');
     expect(screen.getByTestId('usage-runs')).toHaveTextContent('$0.75');
     expect(screen.getByTestId('usage-unpriced')).toHaveTextContent('openai:mystery');
-    // A user without the price settings is told to ask, not given a link.
-    expect(within(screen.getByTestId('usage-unpriced')).queryByRole('link')).toBeNull();
+    // A user without the price settings is told to ask, or to set their own (#735).
+    expect(within(screen.getByTestId('usage-unpriced')).getByRole('link', { name: 'set your own' })).toHaveAttribute('href', '/settings/model-prices');
+    expect(within(screen.getByTestId('usage-unpriced')).queryByRole('link', { name: 'Set model prices' })).toBeNull();
     expect(screen.getByTestId('usage-token-types')).toHaveTextContent('Cached input');
     expect(screen.getByRole('table', { name: 'Cost per period' })).toHaveTextContent('Nov 21');
     expect(screen.getAllByText('No price').length).toBeGreaterThan(0);

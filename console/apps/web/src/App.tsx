@@ -302,6 +302,8 @@ export function AppRoutes() {
           <Route path="admin/settings/agent-pricing" element={<Gate permission="system_settings:read"><AgentPricingPage /></Gate>} />
           {/* AI usage and cost (#734): `usage:read` and `ai_config:read` are what GET /api/usage/report enforces for scope=me and scope=all. */}
           <Route path="settings/usage" element={<Gate permission="usage:read"><MyUsagePage /></Gate>} />
+          {/* My model prices (#735): the user's own `agentPricing` in /user-settings. */}
+          <Route path="settings/model-prices" element={<Gate permission="user_settings:read"><AgentPricingPage scope="user" /></Gate>} />
           <Route path="admin/settings/usage" element={<Gate permission="ai_config:read"><AdminUsagePage /></Gate>} />
           {/* Memories (#551): `memories:read` is what /api/memories enforces; writes are gated in the page. */}
           <Route path="settings/memories" element={<Gate permission="memories:read"><MemoriesPage /></Gate>} />

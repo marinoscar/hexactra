@@ -4,20 +4,31 @@ import { Prisma } from '@prisma/client';
 import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../../policies/builtin-policies';
 import { readAppLimits, readSnapshot, type RunPolicySnapshot } from '../../policies/policy-snapshot';
 import type { PrismaService } from '../../prisma/prisma.service';
-import { priceTableOf } from '../agent-pricing.settings';
+import { mergePrices, priceTableOf, readUserPriceOverrides } from '../agent-pricing.settings';
 import { computeEffectiveBudget, enforcementFor, isUnlimited, UNLIMITED_LOG_LINE, type BudgetCeilings } from '@marinoscar/hexactra-agent';
 import type { PriceTable } from '@marinoscar/hexactra-agent';
 import type { RunMemory } from './run-memory';
 import { runConnections } from './connections/run-connections';
 import type { HostDeps } from './deps';
 
-  /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
-export async function priceTable(d: HostDeps): Promise<PriceTable> {
+  /**
+   * The price table of a run: the admin's, with the run owner's own prices on top
+   * (#735); read at the start of each job. Empty when unreadable (calls are then
+   * unpriced, never free); unreadable user prices fall back to the admin's.
+   */
+export async function priceTable(d: HostDeps, userId?: string): Promise<PriceTable> {
+    let table: PriceTable = {};
     try {
-      return priceTableOf(await d.systemSettings?.getNamespace('agentPricing'));
+      table = priceTableOf(await d.systemSettings?.getNamespace('agentPricing'));
     } catch (e) {
       d.log.warn(`could not read the agent price table: ${e instanceof Error ? e.message : String(e)}`);
-      return {};
+    }
+    if (!userId) return table;
+    try {
+      return mergePrices(table, await readUserPriceOverrides(d.prisma, userId));
+    } catch (e) {
+      d.log.warn(`could not read the user's own model prices: ${e instanceof Error ? e.name : 'error'}`);
+      return table;
     }
   }
   /** The deployment's budget ceilings; none when unreadable or when no settings service is wired. */
