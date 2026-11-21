@@ -86,6 +86,8 @@ model BenchmarkTrial {
   modelCalls   Int?     @map("model_calls")
   inputTokens  Int?     @map("input_tokens")
   outputTokens Int?     @map("output_tokens")
+  /// Input tokens the provider served from its cache (a subset of `input_tokens`).
+  cachedInputTokens Int? @map("cached_input_tokens")
   costUsd      Decimal? @map("cost_usd") @db.Decimal(12, 6)
   costKnown    Boolean? @map("cost_known")
   stopReason   String?  @map("stop_reason") @db.VarChar(32)
