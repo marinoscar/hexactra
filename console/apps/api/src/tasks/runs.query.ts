@@ -16,7 +16,7 @@ import { readOutputs, type OutputView } from './task-outputs.schemas';
 import type { TaskOutput } from '@app/shared/task-fields';
 import type { RunStatus } from './run-status';
 import { TERMINAL_RUN_STATUSES } from './run-status';
-import { BUDGET_STOP_REASONS, LIVE_RUN_STATUSES, RUN_STATES, RUN_STATUSES, type RunFilter } from './runs.schemas';
+import { BUDGET_STOP_REASONS, HIDDEN_RUN_TRIGGERS, LIVE_RUN_STATUSES, RUN_STATES, RUN_STATUSES, type RunFilter } from './runs.schemas';
 
 function invalidFilter(message: string): BadRequestException {
   return new BadRequestException({ code: 'INVALID_FILTER', message });
@@ -26,6 +26,9 @@ function invalidFilter(message: string): BadRequestException {
  * The Prisma WHERE of a run filter. It carries no user: run it through
  * `prisma.forUser({ userId })`, which confines it to that user's rows.
  * Throws 400 `INVALID_FILTER` for `status` with `state`, and for `from` after `to`.
+ *
+ * A filter without `trigger` leaves out a benchmark's trial runs (E44, #738), for the list, the counts and a delete by filter alike;
+ * `trigger: ['benchmark']` selects them. Retention has its own rule and still removes them.
  */
 export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
   if (filter.status && filter.state) throw invalidFilter('Use status or state, not both');
@@ -37,7 +40,7 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
   return {
     ...(statuses ? { status: { in: statuses } } : {}),
     ...(filter.taskId ? { taskId: filter.taskId === 'none' ? null : filter.taskId } : {}),
-    ...(filter.trigger ? { trigger: { in: filter.trigger } } : {}),
+    trigger: filter.trigger ? { in: filter.trigger } : { notIn: [...HIDDEN_RUN_TRIGGERS] },
     ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
     ...(filter.q ? { goal: { contains: filter.q, mode: 'insensitive' as const } } : {}),
     ...(stopReasons ? { stopReason: { in: stopReasons } } : {}),
@@ -46,6 +49,12 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
     ...(filter.clientId ? { clientId: filter.clientId } : {}),
   };
 }
+
+/**
+ * The same default for a hand-written query over `runs r` (the home summary, task statistics): not a benchmark's trial run.
+ * The literal is fixed text, never a value from a request.
+ */
+export const NOT_BENCHMARK_RUN_SQL = Prisma.sql`r.trigger <> 'benchmark'`;
 
 /** Where a page ended: the last row's creation time (to the microsecond, as stored) and id. */
 export interface RunCursor {
