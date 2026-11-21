@@ -227,7 +227,8 @@ export function fakeSecretsFabric(url: string) {
       if (state.failSave) throw new FabricError('api', state.failSave.code, state.failSave.status, state.failSave.code);
       if (!h.offer || h.offer.expiresAt <= Date.now()) throw gone();
       const password = h.offer.password;
-      if (!state.vault) {
+      // The built-in store (#712) is the console's own: its save route has its own test (secrets-store.db.spec.ts).
+      if (!state.vault || call.provider === 'builtin') {
         delete h.offer;
         return { saved: true, item_id: 'saved-1' };
       }

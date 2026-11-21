@@ -4,6 +4,8 @@ import type { Chat, ChatListItem, ChatMessage, ChatRun } from '../types/chat';
 
 /** The path of a chat, of the new-chat screen, and of the list. */
 export const chatPaths = {
+  /** The console's home (#713): a new chat, for a person who may read chats. */
+  home: '/',
   list: '/chat',
   new: '/chat/new',
   chat: (id: string) => `/chat/${id}`,

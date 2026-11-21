@@ -1,6 +1,7 @@
 //! The console-hosted provider (epic #579, issue #594): the built-in secrets
 //! store. It has no address of its own, so the fabric CALLS BACK into the
 //! console's internal release route (`<base_url>/lookup`, `/release`, `/code`,
+//! and `/save` for a login the owner typed by hand, #712,
 //! see `console/docs/secrets.md`, "How the fabric reaches it"). What it
 //! presents is the credential the console minted for this owner when it
 //! registered the provider (`sct_...`), which is the registration's access
@@ -38,7 +39,8 @@ use serde_json::{json, Value};
 use zeroize::Zeroizing;
 
 use crate::{
-    CodeRequest, Origin, OwnerId, ProviderError, ReleaseRequest, SecretValue, SecretsProvider,
+    CodeRequest, NewLogin, Origin, OwnerId, ProviderError, ReleaseRequest, SavedLogin, SecretValue,
+    SecretsProvider,
 };
 
 /// The id actions name.
@@ -119,6 +121,28 @@ struct WireError {
     code: Option<String>,
 }
 
+/// The body of `save` (#712): the owner typed this login in by hand and it
+/// worked. Serialized straight into a wiped buffer.
+#[derive(serde::Serialize)]
+struct WireNewLogin<'a> {
+    owner_id: &'a str,
+    name: &'a str,
+    username: &'a str,
+    origin: &'a str,
+    purpose: &'a str,
+    password: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    run_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_label: Option<&'a str>,
+}
+
+/// `{ id }` of a saved login.
+#[derive(Deserialize)]
+struct WireSaved {
+    id: String,
+}
+
 #[derive(Deserialize)]
 struct WireItems {
     items: Vec<ItemSummary>,
@@ -158,6 +182,17 @@ impl ConsoleProvider {
     }
 
     async fn post(&self, route: &str, body: Value) -> Result<Reply, ProviderError> {
+        self.post_bytes(route, Zeroizing::new(body.to_string().into_bytes()))
+            .await
+    }
+
+    /// Sends a body already serialized into a buffer that is wiped when the
+    /// call ends (a save carries the password: it never becomes a `Value`).
+    async fn post_bytes(
+        &self,
+        route: &str,
+        body: Zeroizing<Vec<u8>>,
+    ) -> Result<Reply, ProviderError> {
         if self.expires_at.is_some_and(|t| t <= Utc::now()) {
             return Err(ProviderError::Unauthorized);
         }
@@ -170,7 +205,7 @@ impl ConsoleProvider {
             .post(self.url(route))
             .header(AUTHORIZATION, auth)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(body.to_string())
+            .body(body.to_vec())
             .send()
             .await
             .map_err(|_| ProviderError::Unavailable)?;
@@ -214,6 +249,7 @@ fn interpret(reply: Reply) -> Result<Reply, ProviderError> {
         (_, Some("unauthorized")) => ProviderError::Unauthorized,
         (400..=499, Some("refused")) => ProviderError::Refused("refused".into()),
         (422, Some("unsupported")) => ProviderError::Refused("unsupported".into()),
+        (409, Some("name_taken")) => ProviderError::Refused("name_taken".into()),
         (400..=499, _) => ProviderError::Refused("refused".into()),
         _ => ProviderError::Unavailable,
     })
@@ -307,6 +343,47 @@ impl SecretsProvider for ConsoleProvider {
             .ok_or(ProviderError::Unavailable)?;
         Ok((SecretValue::new(reply.body.to_vec()), expires_at))
     }
+
+    /// `save` (#712): the owner's sign-in typed by hand, saved in the built-in
+    /// store, bound to the page's origin. `409 { code: "name_taken" }` is
+    /// [`ProviderError::NameTaken`]. The password goes from the offer's copy
+    /// into one wiped buffer and the request; it is never in a `Value`.
+    async fn save_login(&self, req: NewLogin) -> Result<SavedLogin, ProviderError> {
+        let origin = req.origin.to_string();
+        let body = req
+            .password
+            .expose(|pw| {
+                let pw = std::str::from_utf8(pw).ok()?;
+                let wire = WireNewLogin {
+                    owner_id: req.owner.as_str(),
+                    name: &req.name,
+                    username: &req.username,
+                    origin: &origin,
+                    purpose: "save_login",
+                    password: pw,
+                    run_id: req.run_id.as_deref(),
+                    client_label: req.client_label.as_deref(),
+                };
+                // Sized up front so the buffer never reallocates (a grown
+                // buffer would leave an unwiped copy behind).
+                let mut buf = Zeroizing::new(Vec::with_capacity(
+                    pw.len() + req.name.len() + req.username.len() + origin.len() + 512,
+                ));
+                serde_json::to_writer(&mut *buf, &wire).ok()?;
+                Some(buf)
+            })
+            .ok_or_else(|| ProviderError::Refused("invalid_request".into()))?;
+        let reply = match self.post_bytes("save", body).await {
+            Ok(r) => r,
+            Err(ProviderError::Refused(c)) if c == "name_taken" => {
+                return Err(ProviderError::NameTaken)
+            }
+            Err(e) => return Err(e),
+        };
+        let wire: WireSaved =
+            serde_json::from_slice(&reply.body).map_err(|_| ProviderError::Unavailable)?;
+        Ok(SavedLogin { id: wire.id })
+    }
 }
 
 /// The route's schema is strict: omit absent optional fields instead of sending `null`.
@@ -367,6 +444,8 @@ mod tests {
                             }
                             ("release", _) => raw(PASSWORD, &[]),
                             ("code", _) => raw("123456", &[("x-expires-at", "2030-01-01T00:00:30Z")]),
+                            ("save", _) if body["name"] == "Taken" => reply(409, json!({"code": "name_taken"}), &[]),
+                            ("save", _) => reply(201, json!({"id": "saved-1"}), &[]),
                             _ => reply(500, json!({}), &[]),
                         }
                     }
@@ -561,5 +640,35 @@ mod tests {
                 .err(),
             Some(ProviderError::Unavailable)
         );
+    }
+
+    // #712: a login the owner typed by hand, saved in the built-in store through the callback.
+    #[tokio::test]
+    async fn saves_a_typed_login_with_its_origin_and_maps_a_taken_name() {
+        let (base, seen) = serve().await;
+        let p = ConsoleProvider::new(&base, TOKEN.into(), None).unwrap();
+        let login = |name: &str| NewLogin {
+            owner: owner(),
+            name: name.into(),
+            username: "person-a@example.test".into(),
+            origin: origin("https://shop.example.test"),
+            password: SecretValue::from_string("CANARY-save-pw-0002".into()),
+            run_id: Some("r-1".into()),
+            client_label: Some("Hexactra".into()),
+        };
+        let saved = p.save_login(login("Shop")).await.unwrap();
+        assert_eq!(saved.id, "saved-1");
+        let (route, _, body) = seen.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(route, "save");
+        assert_eq!(body["origin"], "https://shop.example.test");
+        assert_eq!(body["purpose"], "save_login");
+        assert_eq!(body["password"], "CANARY-save-pw-0002");
+        assert_eq!(body["owner_id"], owner().as_str());
+        assert_eq!(
+            p.save_login(login("Taken")).await.unwrap_err(),
+            ProviderError::NameTaken
+        );
+        // The provider never shows the password in Debug.
+        assert!(!format!("{p:?}").contains("CANARY"));
     }
 }

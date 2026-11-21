@@ -1,4 +1,6 @@
+import AddCommentIcon from '@mui/icons-material/AddCommentOutlined';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -6,12 +8,16 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, Fab, IconButton, Menu, MenuItem, Stack, TextField, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link as RouterLink, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+import { useOptionalAuth } from '@marinoscar/platform-web/identity/headless';
 
 import { BrowserPane, confirmedPromptOf } from '../components/ChatBrowser';
 import { runAgainQuestion } from '../components/runRow';
 import { ChatComposer } from '../components/ChatComposer';
+import { ChatOptions, type ChatRunChoice } from '../components/ChatOptions';
+import { useInboxCount } from '../components/InboxCountProvider';
+import { firstName, greeting } from '../components/home/homeText';
 import { ChatAccountChips } from '../taskConnections/ChatAccountChips';
 import { ChatRequestCard, RequestSettled, settledText, type RequestResult } from '../components/ChatRequest';
 import { ChatList, type ChatRowAction } from '../components/ChatList';
@@ -78,6 +84,11 @@ function useFillHeight(): { ref: (el: HTMLDivElement | null) => void; top: numbe
   return { ref, ...box };
 }
 
+/** What `/chat/:id` is opened with when "All chat settings" was chosen on a new chat: the chat is created first, then its settings open. */
+interface OpenSettingsState {
+  openSettings: true;
+}
+
 interface RenameState {
   chat: Pick<Chat, 'id' | 'title'>;
   value: string;
@@ -106,8 +117,10 @@ export function ChatPage() {
 
   const params = useParams<{ id?: string }>();
   const chatId = params.id ?? null;
-  // `/chat/new` is its own route (no `:id`). `/chat` on a phone is the list alone; elsewhere it shows the new-chat screen beside (or behind) the list.
-  const onNewRoute = useMatch(chatPaths.new) !== null;
+  // `/chat/new` is its own route (no `:id`), and `/` (the home, #713) is the same new-chat screen.
+  // `/chat` on a phone is the list alone; elsewhere it shows the new-chat screen beside (or behind) the list.
+  const onHome = useMatch({ path: chatPaths.home, end: true }) !== null;
+  const onNewRoute = useMatch(chatPaths.new) !== null || onHome;
   const isNew = chatId === null && (onNewRoute || !isPhone);
   const showThread = chatId !== null || isNew;
   const showListScreen = isPhone && !showThread;
@@ -124,6 +137,11 @@ export function ChatPage() {
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rename, setRename] = useState<RenameState | null>(null);
   const [settings, setSettings] = useState(false);
+  /** A new chat's policy and machine (#713), chosen in the composer before the chat exists: sent with `POST /chats`. Only what was chosen. */
+  const [pending, setPending] = useState<Partial<ChatRunChoice>>({});
+  const location = useLocation();
+  const inbox = useInboxCount();
+  const name = firstName(useOptionalAuth()?.user?.displayName);
 
   // ---- The browser of the chat's live run (#487) ----
   const run = state.run;
@@ -304,9 +322,10 @@ export function ChatPage() {
     try {
       if (chatId === null) {
         // A new chat is created by its first message; its title comes from it.
-        const created = await api.post<Chat>('/chats', {});
+        const created = await api.post<Chat>('/chats', pending);
         await api.post(`/chats/${created.id}/messages`, { text: body });
         setDraft('');
+        setPending({});
         void list.reload();
         navigate(chatPaths.chat(created.id));
       } else {
@@ -364,6 +383,43 @@ export function ChatPage() {
     else if (action === 'unarchive') void setArchived(target, false);
     else void remove(target);
   };
+  // ---- The composer's options (#713): the policy and the machine, and the way to every setting. ----
+  const choice: ChatRunChoice = chat && chatId !== null ? { policyId: chat.policyId, hostId: chat.hostId, hostFallback: chat.hostFallback } : { policyId: pending.policyId ?? null, hostId: pending.hostId ?? null, hostFallback: pending.hostFallback ?? true };
+  const changeChoice = async (change: Partial<ChatRunChoice>) => {
+    if (chatId === null || !chat) {
+      // Not saved anywhere yet: it goes with the request that creates the chat.
+      setPending((p) => ({ ...p, ...change }));
+      return;
+    }
+    try {
+      changed(await api.patch<Chat>(`/chats/${chat.id}`, change));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not change the chat', 'error');
+    }
+  };
+  /** Every setting: a new chat is created first (with what was chosen), then its settings open. */
+  const openSettings = async () => {
+    if (chatId !== null) {
+      setSettings(true);
+      return;
+    }
+    try {
+      const created = await api.post<Chat>('/chats', pending);
+      setPending({});
+      void list.reload();
+      navigate(chatPaths.chat(created.id), { state: { openSettings: true } satisfies OpenSettingsState });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not open the settings', 'error');
+    }
+  };
+  // Arrived from a new chat's "All chat settings": open them once the chat is here, and only once.
+  const wantsSettings = (location.state as Partial<OpenSettingsState> | null)?.openSettings === true;
+  useEffect(() => {
+    if (!wantsSettings || !chat || chat.id !== chatId) return;
+    setSettings(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [wantsSettings, chat, chatId, navigate, location.pathname]);
+
   const saveSettings = async (next: ChatSettings) => {
     if (!chat) return;
     changed(await api.patch<Chat>(`/chats/${chat.id}`, next));
@@ -426,8 +482,11 @@ export function ChatPage() {
   if (isNew) {
     body = canWrite ? (
       <Stack spacing={2} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: '100%', textAlign: 'center', py: 3 }}>
-        <ChatBubbleOutlineIcon aria-hidden sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.7 }} />
-        <Typography variant="h5" component="h1">
+        <Typography color="text.secondary" component="p" data-testid="chat-greeting">
+          {greeting(new Date(), timeZone)}
+          {name ? `, ${name}` : ''}
+        </Typography>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mt: '4px !important' }}>
           What should I do?
         </Typography>
         <Typography color="text.secondary" sx={{ maxWidth: 480 }}>
@@ -438,6 +497,11 @@ export function ChatPage() {
             <Chip key={prompt} label={prompt} variant="outlined" onClick={() => setDraft(prompt)} sx={{ height: 'auto', minHeight: 44, justifyContent: 'flex-start', borderRadius: 3, '& .MuiChip-label': { whiteSpace: 'normal', textAlign: 'left', py: 1 } }} />
           ))}
         </Stack>
+        {inbox.count > 0 && (
+          <Button component={RouterLink} to="/inbox" startIcon={<InboxOutlinedIcon />} color="warning" sx={{ minHeight: 44 }} data-testid="chat-needs-you">
+            {inbox.count === 1 ? '1 request needs you' : `${inbox.count} requests need you`}
+          </Button>
+        )}
       </Stack>
     ) : (
       <EmptyState Icon={ChatBubbleOutlineIcon} title="Choose a chat" body="You can read your chats. Starting one needs the permission to write chats." />
@@ -488,9 +552,16 @@ export function ChatPage() {
     <Box component="section" aria-label={isNew ? 'New chat' : chatTitle(chat)} sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', px: { xs: 0.5, sm: 1 }, py: 0.5, minHeight: 56, borderBottom: 1, borderColor: 'divider', flex: 'none' }}>
         {isPhone ? (
-          <IconButton component={RouterLink} to={chatPaths.list} aria-label="Back to chats" sx={{ width: 44, height: 44 }}>
-            <ArrowBackIcon />
-          </IconButton>
+          isNew ? (
+            // The new-chat screen is the home on a phone (#713): its chats are one tap away, as in a chat app.
+            <IconButton component={RouterLink} to={chatPaths.list} aria-label="Your chats" sx={{ width: 44, height: 44 }}>
+              <MenuIcon />
+            </IconButton>
+          ) : (
+            <IconButton component={RouterLink} to={chatPaths.list} aria-label="Back to chats" sx={{ width: 44, height: 44 }}>
+              <ArrowBackIcon />
+            </IconButton>
+          )
         ) : (
           !hasRail && (
             <IconButton aria-label="Show chats" onClick={() => setDrawer(true)} sx={{ width: 44, height: 44 }}>
@@ -508,6 +579,11 @@ export function ChatPage() {
             </Typography>
           )}
         </Box>
+        {!isNew && !hasRail && canWrite && (
+          <IconButton component={RouterLink} to={chatPaths.new} aria-label="New chat" sx={{ width: 44, height: 44 }}>
+            <AddCommentIcon />
+          </IconButton>
+        )}
         {chat && canWrite && (
           <IconButton aria-label="Chat actions" aria-haspopup="menu" onClick={(e) => setMenu(e.currentTarget)} sx={{ width: 44, height: 44 }}>
             <MoreVertIcon />
@@ -548,7 +624,9 @@ export function ChatPage() {
               canWrite && (
                 <>
                   <ChatAccountChips accounts={chat?.connections} />
-                  <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : liveRun ? 'Add something for the agent' : 'Message'} />
+                  <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'Ask Hexactra to do something' : liveRun ? 'Add something for the agent' : 'Message'}
+                    options={<ChatOptions {...choice} onChange={(change) => void changeChoice(change)} onOpenSettings={() => void openSettings()} />}
+                  />
                 </>
               )
             )}
