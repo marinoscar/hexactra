@@ -275,6 +275,11 @@ The owner's own user setting `connections.newChats` decides, once, how a **new**
 - **Why it is on.** Off by default made "what is my last email" start a browser run instead of reading the mailbox the owner had just connected (#680). The owner who wants the old behaviour sets **New chats: Off** once.
 - **Tested.** `task-connections.db.spec.ts`, "a new chat starts with the owner's own default (#680)" (read and change when never saved, read only, off, an explicit list or an empty list, no paused, disconnected, MCP or foreign account, no change to existing chats or tasks); `NewChatAccounts.test.tsx`.
 
+
+### Attachments across a chat's jobs (E41.4)
+
+`mail_send` attachments and `file_upload` name an artifact by reference: `{ source: "screenshot" | "report", step, run }`. `run` is `this` (or null) for this job's own masked pictures and PDF report, or `previous` for the most recent finished job of the **same chat and the same owner** (its final screen when `step` is null, else that step; or its report). Nothing else is reachable: a run id from the model is never accepted, a task run has no previous job (`This job has no previous job to take that from.`), and a chat with none says `There is no earlier job in this chat.` Only stored masked pictures and the masked PDF exist; the 10 MB limit holds. The owner's card names each attachment and its origin (`Screenshot from the previous job (final screen): previous-job-screenshot-step-12.png (84 KB)`), the step keeps `from: previous` (never bytes), and the intent hash includes `run`, so a retried send is the same call. The tool span carries `hexactra.artifact.source` and `hexactra.artifact.run`. Not covered: a mail attachment, a download or an MCP binary result as an artifact (a follow-up).
+
 ## Start a task from an email (E39.8)
 
 A task can start when a matching email arrives: "when the electricity bill arrives, pay it". On the task page, under **When an email arrives** (beside the schedules), choose a connected account, say who the email must come from and what else to look for, and the console starts **one run per matching message** that arrives afterwards. A run an email started has the trigger `email` (origin `system`) in the run list and its filters.

@@ -102,10 +102,35 @@ describe('the tool-choice expectations fire', () => {
   });
 
   it('a pending expectation is reported and does not fail the scenario', async () => {
+    const s = byFile('browser-only-no-mail.scenario.json');
+    s.pending = { issue: 'E99.9', expect: { mustNotUseFamily: ['browser'] } };
+    const r = await runScenario(s);
+    expect(r.pass).toBe(true);
+    expect(r.pendingFailures).toEqual(['[pending E99.9] mustNotUseFamily: the browser family was used (read_text)']);
+    expect(resultsTable([r])).toContain('PENDING: routing: a website lookup with an account connected');
+  });
+
+  it("attaches the previous job's final screenshot without a browser, and the card names where it came from (E41.4)", async () => {
     const r = await runScenario(byFile('email-result-with-screenshot.scenario.json'));
     expect(r.pass).toBe(true);
-    expect(r.pendingFailures).toEqual(expect.arrayContaining(['[pending E41.4] mustNotUseFamily: the browser family was used (navigate, read_text)']));
-    expect(resultsTable([r])).toContain('PENDING: routing: email a found result with a screenshot');
+    expect(r.asked[0]!.spec.prompt).toMatch(/Attachments: Screenshot from the previous job \(final screen\): previous-job-screenshot-step-3\.png/);
+    expect(r.accounts!.sent()[0]!.attachments).toEqual(['previous-job-screenshot-step-3.png']);
+    expect(r.site.actions).toEqual([]);
+  });
+
+  it('refuses "previous" in a run that is not a chat\'s, and when the previous job stored no picture', async () => {
+    const task = byFile('email-result-with-screenshot.scenario.json');
+    task.trigger = 'manual';
+    task.script = [task.script[0]!, [{ tool: 'finish', args: { success: false, result: 'x' } }]];
+    task.expect = { ...task.expect, status: 'failed', questions: undefined, sent: undefined, toolsUsed: undefined };
+    const r = await runScenario(task);
+    expect(r.model.results[0]).toBe('This job has no previous job to take that from.');
+    const none = byFile('email-result-with-screenshot.scenario.json');
+    none.previousJob = { screenshots: [] };
+    none.script = [none.script[0]!, [{ tool: 'finish', args: { success: false, result: 'x' } }]];
+    none.expect = { ...none.expect, status: 'failed', questions: undefined, sent: undefined, toolsUsed: undefined };
+    const n = await runScenario(none);
+    expect(n.model.results[0]).toBe('The previous job has no stored screenshot. Open the page and use save_screenshot.');
   });
 
   it('a scripted call with arguments the doubles cannot serve fails with what is missing', async () => {

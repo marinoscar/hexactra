@@ -8,7 +8,7 @@ import { outgoingMail, type OutgoingAttachment } from '../../../../connections/c
 import type { QuestionAction } from '../../../../questions/questions.contract';
 import { clip, defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
-import { loadRunArtifact, type RunArtifactRef } from './artifacts';
+import { loadRunArtifact, noteArtifact, type RunArtifactRef } from './artifacts';
 import { commitCall } from './commit';
 import { CONNECTION_GATE, callConnection, hashArgs, noteCall, offers, pickConnection, recordStep, refusal, shortHash, takeRead, wrapContent, type ConnectionDecision, type ConnectionGateRequest } from './support';
 
@@ -16,7 +16,11 @@ const tool = <P extends z.ZodTypeAny>(def: Parameters<typeof defineRunnerTool<Ho
 
 const connection = z.string().max(100).nullable().describe('The account: its label or reference from connections_list. null: the only account that can do this; with more than one you must ask the owner which.');
 const addresses = z.array(z.string().max(320)).max(50);
-const attachmentRef = z.object({ source: z.enum(['screenshot', 'report']).describe('screenshot: a masked picture taken at one of this run\'s steps; report: this run\'s PDF report'), step: z.number().int().min(1).nullable().describe('The step number, for a screenshot; null for the report') });
+const attachmentRef = z.object({
+  source: z.enum(['screenshot', 'report']).describe('screenshot: a masked picture taken at one of this run\'s steps; report: this run\'s PDF report'),
+  step: z.number().int().min(1).nullable().describe('The step number, for a screenshot; null for the report (or, with run "previous", the previous job\'s final screen)'),
+  run: z.enum(['this', 'previous']).nullable().describe('null or "this": this job; "previous": the last job of this chat'),
+});
 
 const lower = (list: readonly string[] | null | undefined): string[] => (list ?? []).map((a) => a.trim().toLowerCase());
 const BODY_PREVIEW = 500;
@@ -240,18 +244,21 @@ async function planSend(ctx: HostContext, a: SendArgs): Promise<SendPlan | strin
   } else if (!a.to?.length || !a.subject || !a.body) {
     return 'A message needs to, subject and body (or a draft_id from mail_draft).';
   }
-  const files: RunArtifactRef[] = (a.attachments ?? []).map((x) => ({ source: x.source, step: x.step }));
+  const files: RunArtifactRef[] = (a.attachments ?? []).map((x) => ({ source: x.source, step: x.step, run: x.run ?? 'this' }));
   if (draftId && files.length > 0) return 'A draft is sent as it was saved: attachments cannot be added. Send a new message to attach.';
   const loaded: OutgoingAttachment[] = [];
+  const origins: string[] = [];
   for (const f of files) {
     const art = await loadRunArtifact(ctx, f);
     if (!art.ok) return art.text;
     loaded.push({ filename: art.name, contentType: art.contentType, bytes: art.bytes });
+    origins.push(art.origin);
+    noteArtifact(ctx, f);
   }
   const parsed = outgoingMail.safeParse({ to: to.map((x) => ({ address: x })), cc: cc.map((x) => ({ address: x })), bcc: bcc.map((x) => ({ address: x })), subject, text: body, ...(a.reply_to_message_id ? { inReplyTo: a.reply_to_message_id } : {}), ...(loaded.length ? { attachments: loaded } : {}) });
   if (!parsed.success) return `The message is not valid (${[...new Set(parsed.error.issues.map((i) => i.path.join('.') || 'message'))].join(', ')}). Fix it and retry.`;
   const recipients = [...new Set([...to, ...cc, ...bcc])];
-  const attachments = loaded.map((f) => ({ name: f.filename, size: f.bytes.length }));
+  const attachments = loaded.map((f, i) => ({ name: f.filename, size: f.bytes.length, from: files[i]!.run === 'previous' ? 'previous' : 'this' }));
   const shown = (label: string, list: string[]) => (list.length ? [{ label, value: list.join(', ') }] : []);
   const action: QuestionAction = {
     connectionId: live.id,
@@ -265,10 +272,11 @@ async function planSend(ctx: HostContext, a: SendArgs): Promise<SendPlan | strin
       ...shown('Bcc', bcc),
       { label: 'Subject', value: clip(subject, 300) },
       { label: 'Message', value: body.length > BODY_PREVIEW ? `${body.slice(0, BODY_PREVIEW)}… (${body.length - BODY_PREVIEW} more characters: show all)` : body },
-      ...(attachments.length ? [{ label: 'Attachments', value: attachments.map((x) => `${x.name} (${sizeText(x.size)})`).join(', ') }] : []),
+      // Each attachment with where it came from (E41.4): this job's, or the previous job's of the chat.
+      ...(attachments.length ? [{ label: 'Attachments', value: attachments.map((x, i) => `${origins[i]}: ${x.name} (${sizeText(x.size)})`).join(', ') }] : []),
     ],
     body: body.slice(0, BODY_CARD_MAX),
-    hash: hashArgs({ tool: 'mail_send', connection: live.id, draftId: draftId ?? null, to, cc, bcc, subject, body: shortHash(body), reply: a.reply_to_message_id, attachments: loaded.map((f) => shortHash(f.bytes.toString('base64'))) }),
+    hash: hashArgs({ tool: 'mail_send', connection: live.id, draftId: draftId ?? null, to, cc, bcc, subject, body: shortHash(body), reply: a.reply_to_message_id, attachments: loaded.map((f, i) => `${files[i]!.run ?? 'this'}:${shortHash(f.bytes.toString('base64'))}`) }),
   };
   const request: ConnectionGateRequest = { tool: 'mail_send', connection: { id: live.id, label: live.label, provider: live.provider }, capability: 'mail_send', recipients, action, summary: `Send mail with ${live.label}` };
   const stepArgs = { connection: live.label, ...(draftId ? { draft_id: draftId } : {}), to, cc, bcc, subject: clip(subject, 200), body_length: body.length, body_hash: shortHash(body), attachments };
@@ -281,6 +289,7 @@ export const mailSend = tool({
   family: 'accounts',
   description:
     "Send an email from one of the owner's accounts: a new message (to, subject, body) or a draft this run saved (draft_id). It is sent from the account's own address. The owner is asked first: the run waits for their answer, and after they approve you call mail_send again with exactly the same arguments. " +
+    'An attachment is one of this job\'s saved screenshots or its PDF report, or, with run "previous", the last job of this chat\'s (its final screenshot when no step is given). ' +
     'A message to someone the owner has not approved before always asks. Never put a secret in a message. Needs read and write access to the account. Set the fields that do not apply to null.',
   parameters: sendParameters,
   commits: true,

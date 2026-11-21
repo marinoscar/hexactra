@@ -79,6 +79,9 @@ export const ATTR = {
   gateCategory: 'hexactra.gate.category',
   // Tool families (E41.1): the family of a tool call, and what a job offered and used (sorted, comma-joined).
   toolFamily: 'hexactra.tool.family',
+  // Artifacts across tools (E41.4): what an attachment or an upload is, and whose job it is from.
+  artifactSource: 'hexactra.artifact.source',
+  artifactRun: 'hexactra.artifact.run',
   runFamiliesOffered: 'hexactra.run.families_offered',
   runFamiliesUsed: 'hexactra.run.families_used',
   fabricAction: 'hexactra.fabric.action',
@@ -98,7 +101,7 @@ export const ATTR = {
 } as const;
 
 /** The only attributes a tool may add to its own span with `toolAttributes`: closed, content-free names. */
-export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect];
+export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect, ATTR.artifactSource, ATTR.artifactRun];
 
 /** Why a span link exists (`hexactra.link.type`). */
 export const LINK = { previousJob: 'previous_job', startedBy: 'started_by' } as const;

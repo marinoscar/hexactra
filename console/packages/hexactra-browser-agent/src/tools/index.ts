@@ -7,6 +7,7 @@ import { clickAt, click, clickMark } from './click';
 import { desktopClick, desktopDrag, desktopKey, desktopScroll, desktopType } from './desktop';
 import { finish } from './finish';
 import { look } from './look';
+import { saveScreenshot } from './save-screenshot';
 import { goBack, navigate, newTab, switchTab, tabs } from './navigate';
 import { observeElements, readText, runJavascript, waitFor } from './observe';
 import { drag, hoverAt, scroll, scrollAt } from './pointer';
@@ -29,6 +30,7 @@ export const browserTools = {
     waitFor,
     goBack,
     look,
+    saveScreenshot,
     clickMark,
     clickAt,
     hoverAt,

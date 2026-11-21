@@ -13,7 +13,7 @@ export const RUN_DELETE_MODES = ['single', 'ids', 'filter', 'retention'] as cons
 export type RunDeleteMode = (typeof RUN_DELETE_MODES)[number];
 const STEP_KINDS = ['action', 'handoff', 'finish', 'error', 'note'] as const;
 /** The key moments a trace screenshot is taken at (#541; runner/trace.ts). */
-const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
+const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final', 'saved'] as const;
 const TRACE_RESULTS = ['stored', 'skipped', 'failed'] as const;
 /** The formats of a run export: the JSON file (#542) and the PDF report (#543). */
 const RUN_EXPORT_FORMAT_LABELS = ['json', 'pdf'] as const;

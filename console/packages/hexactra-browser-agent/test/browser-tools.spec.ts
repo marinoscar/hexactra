@@ -7,6 +7,7 @@ import { finish } from '../src/tools/finish';
 import { navigate, newTab } from '../src/tools/navigate';
 import { click } from '../src/tools/click';
 import { look } from '../src/tools/look';
+import { saveScreenshot } from '../src/tools/save-screenshot';
 import { requestHuman } from '../src/tools/request-human';
 import { typeHandoffSecret } from '../src/tools/type-secret';
 import { observeElements } from '../src/tools/observe';
@@ -134,7 +135,7 @@ describe('look, request_human, finish, observe_elements and type_handoff_secret'
 describe('the browser toolset as offered to the model', () => {
   it('lists the tools in the order the model has always seen them, ending with finish', () => {
     expect([...browserTools.core.map((t) => t.name), browserTools.typeSecret.name, browserTools.finish.name]).toEqual([
-      'observe_elements', 'read_text', 'navigate', 'click', 'type_text', 'press_key', 'scroll', 'wait_for', 'go_back', 'look', 'click_mark', 'click_at', 'hover_at', 'drag', 'scroll_at',
+      'observe_elements', 'read_text', 'navigate', 'click', 'type_text', 'press_key', 'scroll', 'wait_for', 'go_back', 'look', 'save_screenshot', 'click_mark', 'click_at', 'hover_at', 'drag', 'scroll_at',
       'type_keys', 'key', 'run_javascript', 'tabs', 'switch_tab', 'new_tab', 'desktop_click', 'desktop_type', 'desktop_key', 'desktop_scroll', 'desktop_drag', 'request_human', 'type_handoff_secret', 'finish',
     ]);
     expect(browserTools.core.filter((t) => t.group === 'desktop')).toHaveLength(5);
@@ -150,5 +151,40 @@ describe('tool families (E41.2)', () => {
     expect(byFamily('human')).toEqual(['request_human']);
     expect(byFamily('control')).toEqual(['finish']);
     expect(byFamily('desktop')).toEqual(['desktop_click', 'desktop_type', 'desktop_key', 'desktop_scroll', 'desktop_drag']);
+  });
+});
+
+describe('save_screenshot (E41.4)', () => {
+  const withPictures = (run: Run, picture: { shot?: unknown; note?: string }) => {
+    const attached: { seq: number; moment: string }[] = [];
+    const moments: string[] = [];
+    (run.ctx.ports as { pictures?: unknown }).pictures = {
+      capture: async (moment: string) => (moments.push(moment), picture),
+      attach: async (seq: number, moment: string) => void attached.push({ seq, moment }),
+    };
+    return { attached, moments };
+  };
+
+  it('keeps a masked picture at moment "saved" on its own step and returns the step number', async () => {
+    const run = fakeBrowserRun();
+    const p = withPictures(run, { shot: { bytes: 'x' } });
+    const out = await call(run, saveScreenshot, { reason: 'for the email' });
+    const seq = run.store.rows().at(-1)!.seq;
+    expect(out).toBe(`Saved as the screenshot of step ${seq}.`);
+    expect(p.moments).toEqual(['saved']);
+    expect(p.attached).toEqual([{ seq, moment: 'saved' }]);
+    expect(run.store.rows().at(-1)).toMatchObject({ kind: 'action', action: 'save_screenshot', ok: true });
+  });
+
+  it('says why when there is no store, and takes no picture while a secret waits to be typed', async () => {
+    const run = fakeBrowserRun();
+    withPictures(run, { note: 'no_storage' });
+    expect(await call(run, saveScreenshot, { reason: null })).toBe('Screenshots are not stored on this deployment, so there is nothing to attach.');
+    expect(run.store.rows().at(-1)).toMatchObject({ action: 'save_screenshot', ok: false });
+    const secret = fakeBrowserRun();
+    const p = withPictures(secret, { shot: { bytes: 'x' } });
+    secret.ctx.memory.secretHandoffId = 'h-1';
+    expect(await call(secret, saveScreenshot, { reason: null })).toMatch(/A secret is being asked for/);
+    expect(p.moments).toEqual([]);
   });
 });

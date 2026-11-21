@@ -328,7 +328,7 @@ export const runStepResponseSchema = z.object({
   summary: z.string(),
   reasoning: z.string().nullable(),
   hasScreenshot: z.boolean().describe('The step has a masked trace screenshot (#541): `GET /runs/{id}/steps/{seq}/screenshot`'),
-  screenshotMoment: z.enum(['question', 'before_confirmed', 'after_confirmed', 'failure', 'final']).nullable().describe('The key moment the step records a screen for'),
+  screenshotMoment: z.enum(['question', 'before_confirmed', 'after_confirmed', 'failure', 'final', 'saved']).nullable().describe('The key moment the step records a screen for'),
   screenshotMasked: z.number().int().nullable().describe('How many regions the extension masked in the picture'),
   screenshotNote: z.enum(['unavailable', 'masked_failed', 'no_storage', 'capped']).nullable().describe('Why a key moment has no picture'),
   questionId: z.uuid().nullable().describe('The question the step asked or answered'),

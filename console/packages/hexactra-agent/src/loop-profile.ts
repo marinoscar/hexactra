@@ -42,6 +42,8 @@ export interface LoopProfile<C extends AnyContext = AnyContext> {
   wrapUpNote?(ctx: C): string;
   /** The memory block about the owner (#553): information for the model, after the goal. '' without memories. */
   aboutOwner: string;
+  /** Lines for the volatile tail of a round, after the steps used (E41.4: the pictures the agent can attach). Never in the stable prefix. */
+  statusLines?(ctx: C): Promise<string[]>;
   /** What the first round says after "Nothing has been done yet." (E41.2): family-neutral. Absent: the default sentence. */
   firstRoundHint?(ctx: C): string;
 }

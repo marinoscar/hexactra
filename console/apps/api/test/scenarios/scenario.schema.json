@@ -750,6 +750,43 @@
       "description": "\"Earlier in this conversation\": what a chat's earlier jobs found, as the run reads it",
       "type": "string"
     },
+    "previousJob": {
+      "description": "The chat's previous job (E41.4): the masked pictures it stored, which run \"previous\" attachments reach",
+      "type": "object",
+      "properties": {
+        "screenshots": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "moment": {
+                "type": "string",
+                "enum": [
+                  "question",
+                  "before_confirmed",
+                  "after_confirmed",
+                  "failure",
+                  "final",
+                  "saved"
+                ]
+              }
+            },
+            "required": [
+              "step",
+              "moment"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "expect": {
       "type": "object",
       "properties": {

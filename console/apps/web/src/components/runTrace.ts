@@ -12,6 +12,7 @@ export const MOMENT_CAPTION: Record<ScreenshotMoment, string> = {
   after_confirmed: 'After the confirmed step',
   failure: 'When it stopped',
   final: 'Final screen',
+  saved: 'Saved by the agent to attach',
 };
 
 /** "1 area masked", "3 areas masked", or null for none. */

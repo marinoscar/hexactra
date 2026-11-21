@@ -193,6 +193,10 @@ export const scenarioSchema = z.strictObject({
   connections: z.array(connectionSchema).default([]).describe('The owner\'s accounts and MCP servers this run lists (E41.1)'),
   needsBrowser: z.enum(['auto', 'never', 'always']).default('auto').describe('A task that never opens a browser is offered no browser tool'),
   context: z.string().optional().describe('"Earlier in this conversation": what a chat\'s earlier jobs found, as the run reads it'),
+  previousJob: z
+    .strictObject({ screenshots: z.array(z.strictObject({ step: z.number().int().min(1), moment: z.enum(['question', 'before_confirmed', 'after_confirmed', 'failure', 'final', 'saved']) })).default([]) })
+    .optional()
+    .describe('The chat\'s previous job (E41.4): the masked pictures it stored, which run "previous" attachments reach'),
   expect: expectSchema,
   pending: z
     .strictObject({ issue: z.string().describe('The issue that will make it hold, e.g. E41.4'), expect: choiceSchema.describe('The tool-choice expectations that do not hold yet') })

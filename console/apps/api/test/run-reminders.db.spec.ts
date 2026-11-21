@@ -94,8 +94,10 @@ describe('reminders while a run waits (browser.runs.remind)', () => {
   it('a due reminder goes out once, with fresh buttons, and the next one is scheduled', async () => {
     const { uid, run, expiresAt } = await waiting(8, 30);
     expect(await reminders.sendDue()).toBeGreaterThanOrEqual(1);
-    expect(reminded).toHaveBeenCalledTimes(1);
-    const [to, ref, ask, when] = reminded.mock.calls[0];
+    // Only this run's reminders: `sendDue` reminds every due run in the database, as the other cases here read it.
+    const mine = reminded.mock.calls.filter((c) => c[1].id === run.id);
+    expect(mine).toHaveLength(1);
+    const [to, ref, ask, when] = mine[0]!;
     expect(to).toBe(uid);
     expect(ref).toMatchObject({ id: run.id });
     expect(ask).toEqual({ prompt: 'Enter the code sent to your phone', kind: 'code', input: 'secret' });

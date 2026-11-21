@@ -77,7 +77,10 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
         ...(profile.firstRoundHint ? { firstRoundHint: profile.firstRoundHint(ctx) } : {}),
       });
     // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
-    const status = buildStatus({ stepCount: state.stepCount, actionsLimit: policy.effectiveBudget.limits.actions, askLine: (await ports.approvals?.askTopicsLine(observation.url)) ?? null });
+    const baseStatus = buildStatus({ stepCount: state.stepCount, actionsLimit: policy.effectiveBudget.limits.actions, askLine: (await ports.approvals?.askTopicsLine(observation.url)) ?? null });
+    // The toolset's volatile lines (E41.4: the pictures the agent can attach), after the steps used.
+    const extraStatus = (await profile.statusLines?.(ctx)) ?? [];
+    const status = extraStatus.length ? `${baseStatus}\n${extraStatus.join('\n')}` : baseStatus;
     await ctx.setActivity('thinking');
     const tierRoute = ports.policy.routing.route(ctx.tier);
     const callTools = (withImage: boolean, route: ModelRoute) =>

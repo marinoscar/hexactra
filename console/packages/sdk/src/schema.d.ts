@@ -18954,7 +18954,7 @@ export interface components {
                 } | null;
                 screenshot: {
                     /** @description The key moment the picture records */
-                    moment: ("question" | "before_confirmed" | "after_confirmed" | "failure" | "final") | null;
+                    moment: ("question" | "before_confirmed" | "after_confirmed" | "failure" | "final" | "saved") | null;
                     /** @description How many regions the extension masked in the picture */
                     masked: number | null;
                     /** @description Why a key moment has no picture; null when it has one */
@@ -19244,7 +19244,7 @@ export interface components {
                 /** @description The step has a masked trace screenshot (#541): `GET /runs/{id}/steps/{seq}/screenshot` */
                 hasScreenshot: boolean;
                 /** @description The key moment the step records a screen for */
-                screenshotMoment: ("question" | "before_confirmed" | "after_confirmed" | "failure" | "final") | null;
+                screenshotMoment: ("question" | "before_confirmed" | "after_confirmed" | "failure" | "final" | "saved") | null;
                 /** @description How many regions the extension masked in the picture */
                 screenshotMasked: number | null;
                 /** @description Why a key moment has no picture */

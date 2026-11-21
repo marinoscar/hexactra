@@ -10,7 +10,8 @@ export { isSecretInput, questionMoment, TRACE_MOMENTS, type TraceMoment };
 /** The most images one run keeps; past it, only the confirmed-action pictures and the final screen. */
 export const TRACE_MAX_IMAGES = 40;
 /** The moments still kept past the cap. */
-const KEPT_PAST_CAP: ReadonlySet<TraceMoment> = new Set(['before_confirmed', 'after_confirmed', 'final']);
+// A picture the agent saved on purpose (E41.4) is one it means to attach: never dropped by the cap.
+const KEPT_PAST_CAP: ReadonlySet<TraceMoment> = new Set(['before_confirmed', 'after_confirmed', 'final', 'saved']);
 
 /** Whether a moment gets a picture when the run already holds `taken` of them. */
 export function traceAllowed(moment: TraceMoment, taken: number): boolean {

@@ -33,7 +33,7 @@ export interface ScenarioAccounts {
   /** The run's connections, as the policy snapshot lists them. */
   list: SnapshotConnection[];
   /** The deps the connection tools read: the hub, the MCP service, the connection rows. */
-  deps: Pick<HostDeps, 'connections' | 'mcp'> & { prisma: unknown };
+  deps: Pick<HostDeps, 'connections' | 'mcp'> & { prisma: unknown; artifacts?: unknown };
   /** What the doubles received. */
   sent(): SentMail[];
   /** Every write the providers recorded (`documents.appendRows`, `calendar.createEvent`, ...), with the connection's ref. */
@@ -42,6 +42,7 @@ export interface ScenarioAccounts {
 }
 
 const USER = 'user-1';
+const PREVIOUS_RUN = 'run-0';
 const idOf = (ref: string): string => `conn-${ref}`;
 
 /** Fills a fake account from the scenario's seeded data. */
@@ -71,7 +72,7 @@ function seed(account: FakeAccount, c: ScenarioConnection): void {
 const hashOf = (ref: string, tool: string): string => `fake-${ref}-${tool}`;
 
 /** The doubles of a scenario's connections. Null when it declares none. */
-export function scenarioAccounts(connections: readonly ScenarioConnection[]): ScenarioAccounts | null {
+export function scenarioAccounts(connections: readonly ScenarioConnection[], previous?: { screenshots: { step: number; moment: string }[] }): ScenarioAccounts | null {
   if (connections.length === 0) return null;
   const registry = new CapabilityProviderRegistry();
   const fakes = new Map<ConnectionProviderId, FakeCapabilityProvider>();
@@ -98,9 +99,19 @@ export function scenarioAccounts(connections: readonly ScenarioConnection[]): Sc
           .filter((c): c is ScenarioConnection => Boolean(c) && q.where.userId === USER)
           .map((c) => ({ id: idOf(c.ref), label: c.label, provider: c.provider, accountEmail: c.email ?? `${c.ref}@example.test`, capabilities: c.provider === 'mcp' ? [] : c.capabilities, defaultFor: c.defaultFor, status: 'active' })),
     },
-    // No artifact of an earlier step is stored in a scenario (E41.4 adds the previous job's).
-    runStep: { findFirst: async () => null },
+    // The chat's previous job (E41.4): `run-0`, with the masked pictures the scenario says it stored. This run stores none.
+    runStep: {
+      findFirst: async (q: { where: { runId: string; seq?: number; screenshotMoment?: string } }) => {
+        if (q.where.runId !== PREVIOUS_RUN) return null;
+        const shots = [...(previous?.screenshots ?? [])].sort((a, b) => b.step - a.step);
+        const hit = shots.find((s) => (q.where.seq === undefined || s.step === q.where.seq) && (q.where.screenshotMoment === undefined || s.moment === q.where.screenshotMoment));
+        return hit ? { seq: hit.step, screenshotKey: `previous/${hit.step}.png`, screenshotMasked: 1 } : null;
+      },
+    },
+    forUser: () => ({ run: { findFirst: async (q: { where: { conversationId: string } }) => (previous && q.where.conversationId ? { id: PREVIOUS_RUN } : null) } }),
   };
+  // The masked pictures' bytes (invented).
+  const artifacts = { get: async (key: string) => (key.startsWith('previous/') ? { bytes: Buffer.from(`masked picture ${key}`), contentType: 'image/png' } : null) };
 
   const mcpCalls: McpCall[] = [];
   const toolOf = (connectionId: string, name: string) => byId.get(connectionId)?.tools.find((t) => t.name === name);
@@ -131,7 +142,7 @@ export function scenarioAccounts(connections: readonly ScenarioConnection[]): Sc
   const accounts = (): [ScenarioConnection, FakeAccount][] => connections.filter((c) => c.provider !== 'mcp').map((c) => [c, fakes.get(c.provider as ConnectionProviderId)!.account(idOf(c.ref))]);
   return {
     list: connections.map((c) => ({ connectionId: idOf(c.ref), access: c.access, label: c.label, provider: c.provider, capabilities: c.provider === 'mcp' ? [] : [...c.capabilities] })),
-    deps: { connections: hub, mcp, prisma },
+    deps: { connections: hub, mcp, prisma, ...(previous ? { artifacts } : {}) } as ScenarioAccounts['deps'],
     sent: () =>
       accounts().flatMap(([c, a]) =>
         a.sent.map((m) => ({
