@@ -981,9 +981,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; the builder is a web conversation"
       },
-      "web": {
-        "none": "The builder page arrives with E42.4 (#721)"
-      }
+      "web": [
+        "/tasks/builder/:id"
+      ]
     },
     {
       "id": "apps.manage",

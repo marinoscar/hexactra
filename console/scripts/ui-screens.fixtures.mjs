@@ -23,6 +23,8 @@ export const IDS = {
   app: '8888888a-8888-4888-8888-888888888888',
   // Task parameters (#556): a task with three, the run waiting for its values, and a run that used them.
   paramTask: '11111111-1111-4111-8111-111111111119',
+  // The task builder (E42.4): a conversation in task_builder mode, its spec half filled.
+  builder: '77777777-7777-4777-8777-777777777771',
   formQuestion: '55555555-5555-4555-8555-555555555559',
   paramRun: '33333339-3333-4333-8333-333333333333',
   outputsTask: '11111111-1111-4111-8111-11111111111a',
@@ -777,4 +779,35 @@ const rowApproval = accountApproval(3, 'sheet_append_rows', [{ label: 'File', va
 RESPONSES['GET /inbox'] = [mailApproval, eventApproval, rowApproval, ...RESPONSES['GET /inbox']];
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id };
+const builderMsg = (seq, role, kind, text, meta = null) => ({ id: `b-${seq}`, seq, role, kind, text, runId: null, meta, createdAt: iso(-600_000 + seq * 30_000) });
+RESPONSES[`GET /task-builder/${IDS.builder}`] = {
+  id: IDS.builder,
+  title: 'Pay my water bill every month',
+  status: 'active',
+  createdAt: iso(-600_000),
+  updatedAt: iso(-60_000),
+  hasMore: false,
+  thinking: false,
+  spec: {
+    name: 'Water bill',
+    objective: 'The monthly water bill is paid and I have the confirmation number',
+    goal: 'Pay {{Amount}} on the water utility site with my saved login. Done when the payment confirmation number is shown.',
+    sites: ['The water utility'],
+    allowedDomains: ['water.example.test'],
+    parameters: [{ name: 'Amount', type: 'money', why: 'The bill changes every month' }],
+    outputs: [{ label: 'Confirmation number', type: 'text' }],
+    guardrails: { confirmRiskyActions: true, useSavedLogins: true },
+    schedules: [{ cron: '0 9 1 * *', timezone: 'America/Costa_Rica', description: 'On the 1st of every month at 09:00' }],
+    openQuestions: ['Should a scheduled run ask for the amount, or read it from the bill?'],
+    suggestions: ['Read the amount due from the bill so the schedule can run unattended'],
+  },
+  messages: [
+    builderMsg(1, 'user', 'text', 'Pay my water bill every month'),
+    builderMsg(2, 'assistant', 'clarify', 'Does the amount change every month, or is it always the same?', { options: ['It changes', 'Always the same'] }),
+    builderMsg(3, 'user', 'text', 'It changes'),
+    builderMsg(4, 'assistant', 'clarify', 'I suggest running on the 1st of every month at 09:00, confirming before paying. Should a scheduled run read the amount from the bill?', { options: ['Read it from the bill', 'Ask me each time'] }),
+  ],
+};
+RESPONSES[`POST /task-builder`] = { id: IDS.builder };
+
+export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id };

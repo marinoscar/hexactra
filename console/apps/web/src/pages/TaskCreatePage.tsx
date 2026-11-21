@@ -9,7 +9,9 @@ import type { ChatDraftState, ChatTaskDraft } from '../types/chat';
 import type { BuilderDraftState, TaskBuilderDraft } from '../types/taskBuilder';
 import type { ScheduleDraft } from '../schedule/draft';
 import { MAX_SCHEDULES } from '../taskForm/values';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { Alert } from '@mui/material';
+import { TASK_BUILDER_ENABLED, useStartTaskBuilder } from '../components/useStartTaskBuilder';
 
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
 
@@ -83,6 +85,7 @@ export function TaskCreatePage() {
   const fromChat = chatDraftOf(state);
   const fromBuilder = fromChat ? null : builderDraftOf(state);
   const [initial, setInitial] = useState<TaskFormValues | null>(() => (fromChat ? valuesFromDraft(fromChat.chatDraft) : fromBuilder ? valuesFromBuilderDraft(fromBuilder.builderDraft) : from ? null : { ...emptyValues(), goal: (goal ?? '').slice(0, GOAL_MAX) }));
+  const builder = useStartTaskBuilder();
   const warnings = (fromBuilder?.builderDraft.warnings ?? []).filter((w) => typeof w === 'string');
   const [error, setError] = useState<string | null>(null);
 
@@ -112,7 +115,13 @@ export function TaskCreatePage() {
 
   return (
     <PageContainer width="default">
-      <PageHeader title="New task" subtitle={subtitle} back={back} />
+      <PageHeader
+        title="New task"
+        subtitle={subtitle}
+        back={back}
+        // A plain new task can be built with AI instead (E42.4); `?goal=` becomes the builder's first message.
+        actions={[{ key: 'builder', label: builder.starting ? 'Starting…' : 'Build with AI', Icon: AutoAwesomeIcon, onClick: () => void builder.start(goal ?? undefined), disabled: builder.starting, hidden: !TASK_BUILDER_ENABLED || Boolean(fromChat || fromBuilder || from) }]}
+      />
       <ErrorBanner error={error} onClose={() => setError(null)} />
       {proposedAccounts && (
         <Alert severity="info" sx={{ mb: 2 }}>

@@ -59,6 +59,8 @@ import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage } from './pages/RunDetailPage';
 import { RunsPage } from './pages/RunsPage';
 import { TaskCreatePage } from './pages/TaskCreatePage';
+import { TaskBuilderPage } from './pages/TaskBuilderPage';
+import { TASK_BUILDER_ENABLED } from './components/useStartTaskBuilder';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskEditPage } from './pages/TaskEditPage';
 import { TasksPage } from './pages/TasksPage';
@@ -251,6 +253,7 @@ export function AppRoutes() {
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
           <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />
+          {TASK_BUILDER_ENABLED && <Route path="tasks/builder/:id" element={<Gate permission="tasks:write"><TaskBuilderPage /></Gate>} />}
           <Route path="tasks/:id/edit" element={<Gate permission="tasks:write"><TaskEditPage /></Gate>} />
           <Route path="tasks/:id" element={<Gate permission="tasks:read"><TaskDetailPage /></Gate>} />
           {/* Chat (#486): the list, the new-chat screen and one thread are one page. */}

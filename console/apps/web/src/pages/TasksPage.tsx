@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ClearIcon from '@mui/icons-material/Clear';
 import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
@@ -31,6 +32,7 @@ import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { FleetHost } from '../types/fleet';
 import type { TaskListSort, TaskScheduleState, TaskWithSummary } from '../types/tasks';
 import { TaskChips } from '../taskConnections/TaskChips';
+import { TASK_BUILDER_ENABLED, useStartTaskBuilder } from '../components/useStartTaskBuilder';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, aboveBottomBar, useBreakpoint, type Column } from '../ui';
 
 /** How long typing rests before the search is sent. */
@@ -45,6 +47,7 @@ export function TasksPage() {
   const { api, viewer } = usePlatformHost();
   const { isPhone } = useBreakpoint();
   const canWrite = viewer.hasPermission('tasks:write');
+  const builder = useStartTaskBuilder();
   const canRun = viewer.hasPermission('runs:write');
   const canReadRuns = viewer.hasPermission('runs:read');
   const canReadPolicies = viewer.hasPermission('agent_policies:read');
@@ -212,6 +215,7 @@ export function TasksPage() {
         subtitle="What your agents do, and when."
         // On a phone the primary action is the floating button below.
         primary={{ key: 'new', label: 'New task', Icon: AddIcon, to: taskPaths.create, hidden: !canWrite || isPhone }}
+        actions={[{ key: 'builder', label: builder.starting ? 'Starting…' : 'Build with AI', Icon: AutoAwesomeIcon, onClick: () => void builder.start(), disabled: builder.starting, hidden: !canWrite || !TASK_BUILDER_ENABLED }]}
       />
       <ErrorBanner error={error} onClose={() => setError(null)} />
       <ErrorBanner error={list.error} onRetry={list.reload} />
