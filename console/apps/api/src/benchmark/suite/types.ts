@@ -3,6 +3,8 @@
 // finished trial from the site's state. The challenge site (#740) serves and changes the state; the orchestration (#741) starts the run,
 // answers questions from the rules and calls `grade`. Nothing here is agent logic: a challenge never sees or steers the agent's loop.
 
+import type { ChallengeSite } from './pages';
+
 /** What a challenge exercises. The scorecard groups results by it. */
 export const CATEGORIES = ['navigation', 'forms', 'extraction', 'pointer', 'dynamic', 'long', 'safety'] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -125,6 +127,8 @@ export interface GradeInput {
  * - Two seeds give different data and a different expected answer.
  * - `grade` judges from `state` (and the reported `result` where the task is to report something). It never trusts the agent's claim.
  * - The goal names only the benchmark site. It carries no instruction about tools or how to solve the task.
+ * - `site.handle` is pure too: it changes the state only by returning a new one, and only on a completed interaction (a posted form,
+ *   a call the page's script makes after the person acted), so a script error can never mark a challenge passed.
  */
 export interface Challenge {
   /** Permanent, `kebab-case`, prefixed by area (`nav-lookup`). Never reused for a different task: bump the suite version instead. */
@@ -145,6 +149,12 @@ export interface Challenge {
   run?: { confirmRiskyActions?: boolean };
   /** The named checks of a finished trial. At least one; throwing is a grader bug and gives the verdict `error`. */
   grade(input: GradeInput): Check[];
+  /**
+   * The challenge's own pages and endpoints (`pages.ts`): everything under the trial's root, `<base>/t/<token>/`, is routed to it. It
+   * reads the trial's state and returns the new one; the site stores it. A challenge that is never run (`requires` a capability the
+   * agent lacks) still has one, answering its start page.
+   */
+  site: ChallengeSite;
 }
 
 /** The built-in suite: comparison between two benchmarks is only meaningful within one `key` and `version`. */

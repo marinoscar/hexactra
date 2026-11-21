@@ -81,6 +81,21 @@ The replay suite stays the gate for a change to the agent. A benchmark costs mon
 
 That crate predates the decision that there is one agent loop and it is not in Rust ([one-agent-loop.md](../../../docs/decisions/one-agent-loop.md)). Its runner simulates a task and returns random results (`simulate_task`); it starts no run, calls no model and reads no page. A benchmark has to exercise the console's goal runner, so it lives in the console, next to the runs it creates. The crate is left as it is: nothing in this epic depends on it or changes it.
 
+## The challenge site (#740)
+
+How the site is served and how to add a challenge: [benchmark.md](../benchmark.md). What was decided while building it:
+
+| Topic | Decision | Why |
+|---|---|---|
+| Who owns a challenge's pages | The challenge. `Challenge.site.handle(request)` is a pure function of the request, the seed and the state; it returns a page, JSON, a redirect or a 404, and the new state. One dispatcher (`site/site.service.ts`) routes everything under `t/<token>/` to it. | Twelve more challenges (#745) are twelve files. The controller never grows, and a challenge is tested without Nest or a database. |
+| State writes | The handler returns the new state; the dispatcher stores it with the optimistic version and re-runs the handler when another request wrote first. | A handler cannot forget the version or write after the trial closed: one statement checks `running`, the open token and the version. |
+| What is in the state | Only what the agent's actions change. Seeded data that never changes is recomputed from the seed (the challenge's plan). | A small state, and a grader that never reads its expected answer from something a page could have written. |
+| Reported values | The answer must name the expected value and none of the other candidates the site showed, after normalising case, spacing and currency format. | The agent answers in a sentence; exact equality would fail a correct answer, and plain containment would pass an answer that lists everything. |
+| Token in the address | A path segment, not a cookie or a header. The request log sees `/api/benchmark-site/t/redacted`, no span is made, nginx writes no access log for `/benchmark/`. | The agent is given one URL. A cookie would need a sign-in step that is not what a challenge measures. |
+| Content-Security-Policy | The site sends its own (`script-src 'self'; style-src 'self'`, no inline anything), on top of the platform's from nginx. | The pages are safe in development too, where nginx is not in front, and a page cannot depend on what only one of the two allows. |
+| Static files | `/benchmark/assets/<file>`, without a token, the same for every trial. | They carry no data, and a browser can cache them across trials. |
+| When a site opens | `issueToken` accepts a `pending` or `running` trial and resets the state; the pages answer only while it is `running`. | The orchestration (#741) needs the token to word the goal before the run starts. |
+
 ## Still to decide, by the issue that builds it
 
 - **How a run without a task carries its allowed sites and `confirmRiskyActions`** (#741): a field in `Run.context` read where the task's value is read today, or an equivalent. It must not widen anything for any other run.

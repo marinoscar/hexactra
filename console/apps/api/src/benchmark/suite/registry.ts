@@ -2,13 +2,14 @@
 // built-in agent policies: two benchmarks compare only within one `key` and `version`.
 import { createHash } from 'node:crypto';
 
+import { CHALLENGES } from './challenges';
 import { CAPABILITIES, type Capability, type Challenge, type Seed, type Suite } from './types';
 
 /**
- * The suite. The challenges arrive with the challenge site (#740, ten of them) and the second pack (#745, `version` 2); the order here
- * is the order a benchmark lists and runs them in.
+ * The suite: the ten starter challenges (#740). The second pack (#745) makes it `version` 2. The order of `challenges/index.ts` is
+ * the order a benchmark lists and runs them in.
  */
-export const SUITE: Suite = { key: 'core', version: 1, challenges: [] };
+export const SUITE: Suite = { key: 'core', version: 1, challenges: CHALLENGES };
 
 /** A challenge of the suite, or undefined for an id it does not have. */
 export function challengeById(id: string, suite: Suite = SUITE): Challenge | undefined {
@@ -45,6 +46,7 @@ export function suiteProblems(suite: Suite = SUITE): string[] {
     if (seen.has(c.id)) problems.push(`${c.id}: duplicate id`);
     seen.add(c.id);
     if (!c.title.trim()) problems.push(`${c.id}: no title`);
+    if (typeof c.site?.handle !== 'function') problems.push(`${c.id}: no site`);
     for (const r of c.requires ?? []) if (!(CAPABILITIES as readonly string[]).includes(r)) problems.push(`${c.id}: unknown capability ${r}`);
   }
   return problems;
