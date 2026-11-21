@@ -98,6 +98,7 @@ Edit `infra/compose/.env`:
 | `INITIAL_ADMIN_EMAIL` | Your email (first admin) |
 | `POSTGRES_HOST` | `db` with the bundled database (below) |
 | `HEXACTRA_FABRIC_OPERATOR_TOKEN` | `openssl rand -hex 32` |
+| `SECRETS_STORE_KEY` | `openssl rand -base64 32`, set once and backed up apart from the database: the built-in secrets store's key. The store itself is switched on in Administration → Secrets ([docs/secrets.md](../secrets.md)) |
 | `COMPOSE_PROFILES` | `bundled-host` to run the bundled browser host, `none` to leave it off |
 | `HEXACTRA_MAX_BROWSERS` | Profiles open at once; about 600 MB each |
 

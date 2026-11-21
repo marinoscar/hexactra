@@ -18,7 +18,9 @@ import {
   DisconnectVaultResponseDto,
   SaveVaultClientDto,
   SecretsStatusResponseDto,
+  StoreStateResponseDto,
 } from './secrets.schemas';
+import { SecretsPolicyService } from './secrets-policy.service';
 import { BINDING_COOKIE, CALLBACK_PATH, CONNECT_TTL_MS, VaultConnectionService } from './vault-connection.service';
 import { VaultDefaultClientService } from './vault-default-client.service';
 
@@ -35,6 +37,7 @@ export class SecretsController {
   constructor(
     private readonly vault: VaultConnectionService,
     private readonly defaults: VaultDefaultClientService,
+    private readonly policy: SecretsPolicyService,
   ) {}
 
   @Get('status')
@@ -113,6 +116,16 @@ export class SecretsController {
   })
   disconnect(@CurrentUser('id') userId: string, @Body() body: DisconnectVaultDto) {
     return this.vault.disconnect(userId, body);
+  }
+
+  // ---- the built-in store (#711) ----
+
+  @Get('store/state')
+  @ApiDataResponse(StoreStateResponseDto)
+  @Auth({ permissions: ['system_settings:read'] })
+  @ApiOperation({ summary: 'The built-in secrets store, for the administrator', description: 'Whether the deployment has a store key (and its public id), whether the store is loaded, and whether it is switched on (system setting `secrets.store.enabled`). Never a key.' })
+  storeState() {
+    return this.policy.storeState();
   }
 
   // ---- the administrator's default client ----

@@ -198,9 +198,9 @@ describe('the job', () => {
   it('the cron only decides: due when the deployment switch is on or an owner is connected', async () => {
     const task = app.get(SecretsActivityIngestTask, { strict: false });
     const policy = app.get(SecretsPolicyService, { strict: false });
-    jest.spyOn(policy, 'system').mockResolvedValue({ agentUse: { enabled: true }, vault: { baseUrl: null, clientId: null, allowedHosts: [] } });
+    jest.spyOn(policy, 'system').mockResolvedValue({ agentUse: { enabled: true }, store: { enabled: null }, vault: { baseUrl: null, clientId: null, allowedHosts: [] } });
     expect(await task.due()).toBe(true);
-    jest.spyOn(policy, 'system').mockResolvedValue({ agentUse: { enabled: false }, vault: { baseUrl: null, clientId: null, allowedHosts: [] } });
+    jest.spyOn(policy, 'system').mockResolvedValue({ agentUse: { enabled: false }, store: { enabled: null }, vault: { baseUrl: null, clientId: null, allowedHosts: [] } });
     const connected = await prisma.secretsConnection.count({ where: { status: 'connected' } });
     expect(await task.due()).toBe(connected > 0);
   });

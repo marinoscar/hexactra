@@ -36,15 +36,20 @@ describe('deploy environment of the fabric keys', () => {
   });
 });
 
-describe('the built-in secrets store keys (E37.5)', () => {
-  it('the switch and the callback address may stay blank (the store is off by default)', () => {
-    for (const name of ['SECRETS_STORE_ENABLED', 'SECRETS_STORE_CALLBACK_URL']) expect(resolveEnvMetadata(name)).toMatchObject({ allowBlank: true });
+describe('the built-in secrets store key (E37.5, #711)', () => {
+  it('is generated without a question, as 32 random bytes the API accepts, and the callback address may stay blank', () => {
+    const meta = resolveEnvMetadata('SECRETS_STORE_KEY');
+    expect(meta).toMatchObject({ secret: true, autoGenerate: true, generate: 'base64-32' });
+    const value = generateValue(meta!.generate!);
+    expect(Buffer.from(value, 'base64')).toHaveLength(32);
+    expect(resolveEnvMetadata('SECRETS_STORE_CALLBACK_URL')).toMatchObject({ allowBlank: true });
   });
 
-  it('neither key is a variable of the template: a declared secret is asked for, and the key matters only when the store is on', () => {
+  it('the template declares the key and no on/off switch: the store is switched on in the admin panel', () => {
     const template = readFileSync(new URL('../../../infra/compose/.env.example', import.meta.url), 'utf8');
-    expect(template).toMatch(/^SECRETS_STORE_ENABLED=/m);
-    expect(template).not.toMatch(/^SECRETS_STORE_KEY(_PREVIOUS)?=/m);
+    expect(template).toMatch(/^SECRETS_STORE_KEY=/m);
+    expect(template).not.toMatch(/^SECRETS_STORE_ENABLED=/m);
+    expect(template).not.toMatch(/^SECRETS_STORE_KEY_PREVIOUS=/m);
   });
 });
 

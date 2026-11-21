@@ -1258,9 +1258,10 @@
     },
     {
       "id": "secrets.admin",
-      "description": "Administrator: counts of connected owners, fields typed and refusals this week. No owner, site or login (E37.4)",
+      "description": "Administrator: counts of connected owners, fields typed and refusals this week, and the built-in store's state (its key configured and public id, whether it is switched on; #711). No owner, site, login or key (E37.4)",
       "rest": [
-        "GET /api/secrets/admin/summary"
+        "GET /api/secrets/admin/summary",
+        "GET /api/secrets/store/state"
       ],
       "cli": {
         "none": "Deliberate: an administrator reads it in Administration"

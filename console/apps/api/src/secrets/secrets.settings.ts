@@ -7,6 +7,8 @@
 //                          Connect (the client secret is a system credential, purpose `secrets_vault_client`).
 //     vault.allowedHosts   exact host names exempt from the private-address check (an on-premises Vault);
 //                          `https` is still required.
+//     store.enabled        the built-in store (E37.5) on or off (E37.12, #711), default OFF. A runtime switch: never an
+//                          environment variable. Only its key (`SECRETS_STORE_KEY`) is a deployment secret.
 //   user `secrets`    the OWNER's switch (default OFF): `agentUse.enabled`; their provider and default for new tasks; and the
 //                     registrable domains they chose "Never for this site" for on a "Save this login?" card (E37.4b).
 //
@@ -36,6 +38,9 @@ const vaultUrl = z
 
 export const secretsSystemSettingsSchema = z.object({
   agentUse: z.object({ enabled: z.boolean().describe('Deployment kill switch for the agent using stored secrets. Off by default.') }),
+  store: z
+    .object({ enabled: z.boolean().describe("Offer the built-in store (Hexactra's own encrypted store for saved logins) to every owner. Off by default; needs the deployment's SECRETS_STORE_KEY, which the installer generates.") })
+    .optional(),
   vault: z
     .object({
       baseUrl: vaultUrl.nullable().optional().describe("The default Vault address owners connect to (`https://vault.example.test`)."),
@@ -48,21 +53,25 @@ export type SecretsSystemSettings = z.infer<typeof secretsSystemSettingsSchema>;
 
 export const secretsSystemSettingsPatchSchema = z.object({
   agentUse: z.object({ enabled: z.boolean() }).partial().optional(),
+  store: z.object({ enabled: z.boolean() }).partial().optional(),
   vault: secretsSystemSettingsSchema.shape.vault.unwrap().partial().optional(),
 });
 export type SecretsSystemSettingsPatch = z.infer<typeof secretsSystemSettingsPatchSchema>;
 
 export interface ResolvedSecretsSystemSettings {
   agentUse: { enabled: boolean };
+  /** The built-in store's switch (#711): null when an administrator never set it (then the deprecated `SECRETS_STORE_ENABLED` decides). */
+  store: { enabled: boolean | null };
   vault: { baseUrl: string | null; clientId: string | null; allowedHosts: string[] };
 }
 
-export const SECRETS_SYSTEM_DEFAULTS: ResolvedSecretsSystemSettings = { agentUse: { enabled: false }, vault: { baseUrl: null, clientId: null, allowedHosts: [] } };
+export const SECRETS_SYSTEM_DEFAULTS: ResolvedSecretsSystemSettings = { agentUse: { enabled: false }, store: { enabled: null }, vault: { baseUrl: null, clientId: null, allowedHosts: [] } };
 
 /** A stored (or partial) namespace with every missing field at its default. */
 export function resolveSecretsSystemSettings(v: Partial<SecretsSystemSettings> | null | undefined): ResolvedSecretsSystemSettings {
   return {
     agentUse: { enabled: v?.agentUse?.enabled === true },
+    store: { enabled: typeof v?.store?.enabled === 'boolean' ? v.store.enabled : null },
     vault: {
       baseUrl: v?.vault?.baseUrl ?? null,
       clientId: v?.vault?.clientId ?? null,
@@ -71,12 +80,16 @@ export function resolveSecretsSystemSettings(v: Partial<SecretsSystemSettings> |
   };
 }
 
+/** The stored shape of resolved settings: the store's switch is written only once an administrator set it. */
+const storedOf = (r: ResolvedSecretsSystemSettings): SecretsSystemSettings => ({ agentUse: r.agentUse, ...(r.store.enabled !== null ? { store: { enabled: r.store.enabled } } : {}), vault: r.vault });
+
 const mergeSystem = (current: SecretsSystemSettings | undefined, patch: SecretsSystemSettingsPatch | undefined): SecretsSystemSettings => {
   // The platform calls every namespace's merge on every settings write: no patch for this one is the current value.
-  if (!patch) return resolveSecretsSystemSettings(current);
+  if (!patch) return storedOf(resolveSecretsSystemSettings(current));
   const base = resolveSecretsSystemSettings(current);
   return {
     agentUse: { enabled: patch.agentUse?.enabled ?? base.agentUse.enabled },
+    ...(patch.store?.enabled !== undefined ? { store: { enabled: patch.store.enabled } } : base.store.enabled !== null ? { store: { enabled: base.store.enabled } } : {}),
     vault: {
       baseUrl: patch.vault && 'baseUrl' in patch.vault ? (patch.vault.baseUrl ?? null) : base.vault.baseUrl,
       clientId: patch.vault && 'clientId' in patch.vault ? (patch.vault.clientId ?? null) : base.vault.clientId,
@@ -87,13 +100,13 @@ const mergeSystem = (current: SecretsSystemSettings | undefined, patch: SecretsS
 
 export const SECRETS_SYSTEM_SETTINGS = {
   key: 'secrets',
-  description: 'Secrets the agent can use but never see: the deployment kill switch (off by default), an optional default Vault address and OAuth client id, and Vault hosts exempt from the private-address check.',
+  description: 'Secrets the agent can use but never see: the deployment kill switch (off by default), the built-in store on or off (off by default), an optional default Vault address and OAuth client id, and Vault hosts exempt from the private-address check.',
   storedSchema: secretsSystemSettingsSchema,
   patchSchema: secretsSystemSettingsPatchSchema,
   putSchema: secretsSystemSettingsSchema,
   wirePatchSchema: secretsSystemSettingsPatchSchema,
   responseSchema: secretsSystemSettingsSchema,
-  defaults: SECRETS_SYSTEM_DEFAULTS,
+  defaults: storedOf(SECRETS_SYSTEM_DEFAULTS),
   requiredOnPut: false,
   merge: (current, patch) => mergeSystem(current, patch as SecretsSystemSettingsPatch | undefined),
 } satisfies SystemSettingsNamespace<'secrets', SecretsSystemSettings, SecretsSystemSettingsPatch>;

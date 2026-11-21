@@ -30178,6 +30178,82 @@
         }
       }
     },
+    "/api/secrets/store/state": {
+      "get": {
+        "description": "Whether the deployment has a store key (and its public id), whether the store is loaded, and whether it is switched on (system setting `secrets.store.enabled`). Never a key.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "secrets_storeState",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StoreStateResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The built-in secrets store, for the administrator",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
     "/api/secrets/vault/default-client": {
       "get": {
         "description": "Address, client id and whether a client secret is stored (never the secret), plus the redirect URI to register at the Vault.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
@@ -50034,6 +50110,18 @@
                   "enabled"
                 ]
               },
+              "store": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Offer the built-in store (Hexactra's own encrypted store for saved logins) to every owner. Off by default; needs the deployment's SECRETS_STORE_KEY, which the installer generates."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
               "vault": {
                 "type": "object",
                 "properties": {
@@ -51338,6 +51426,18 @@
                   "enabled": {
                     "type": "boolean",
                     "description": "Deployment kill switch for the agent using stored secrets. Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "store": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Offer the built-in store (Hexactra's own encrypted store for saved logins) to every owner. Off by default; needs the deployment's SECRETS_STORE_KEY, which the installer generates."
                   }
                 },
                 "required": [
@@ -52716,6 +52816,14 @@
             "type": "object",
             "properties": {
               "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "store": {
                 "type": "object",
                 "properties": {
                   "enabled": {
@@ -77352,6 +77460,49 @@
           }
         },
         "additionalProperties": false
+      },
+      "StoreStateResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "keyConfigured": {
+                "type": "boolean",
+                "description": "Whether the deployment has a store key (SECRETS_STORE_KEY). The installer generates one; without it the store cannot be switched on."
+              },
+              "mounted": {
+                "type": "boolean",
+                "description": "Whether the store is loaded (a key, and the credential store and notifications slices)."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "Whether the store is offered to owners now: mounted and switched on in Administration → Secrets (`secrets.store.enabled`)."
+              },
+              "keyId": {
+                "description": "The key's public id (first 8 hex characters of a hash), or null when there is no usable key. Never the key.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "legacyEnv": {
+                "type": "boolean",
+                "description": "The deprecated SECRETS_STORE_ENABLED=true is set: it decides while the switch was never set."
+              }
+            },
+            "required": [
+              "keyConfigured",
+              "mounted",
+              "enabled",
+              "keyId",
+              "legacyEnv"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
       },
       "DefaultVaultClientViewResponseDto": {
         "type": "object",

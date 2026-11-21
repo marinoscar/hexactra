@@ -26,9 +26,18 @@ export class SecretsStoreConfigError extends Error {
 
 type Env = Record<string, string | undefined>;
 
-/** Whether the built-in store slice is switched on (deployment configuration, off by default). */
+/**
+ * DEPRECATED (#711): the old deployment switch. The store is switched on and off in Administration → Secrets (system
+ * setting `secrets.store.enabled`); this variable is read only as that setting's value while an administrator has never
+ * set it, so a deployment that switched the store on this way keeps it on.
+ */
 export function secretsStoreEnabled(env: Env = process.env): boolean {
   return (env[STORE_ENABLED_ENV] ?? '').trim().toLowerCase() === 'true';
+}
+
+/** Whether a store key is configured (the installer generates one, #711). Says nothing about whether it is valid. */
+export function secretsStoreKeyConfigured(env: Env = process.env): boolean {
+  return (env[STORE_KEY_ENV] ?? '').trim() !== '';
 }
 
 /**

@@ -25,6 +25,8 @@ if [ ! -f "$env_file" ]; then
   set_var GOOGLE_CLIENT_ID ci-google-client-id
   set_var GOOGLE_CLIENT_SECRET ci-google-client-secret
   set_var HEXACTRA_FABRIC_OPERATOR_TOKEN "$(openssl rand -hex 32)"
+  # The built-in secrets store's key (#711): `deploy` generates it; the local init profile asks for it, so set it here.
+  set_var SECRETS_STORE_KEY "$(openssl rand -base64 32)"
   set_var COMPOSE_PROFILES bundled-host
   set_var POSTGRES_HOST db
   # Blank, so init generates them with the CSPRNG.
