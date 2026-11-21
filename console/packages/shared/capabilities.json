@@ -8,7 +8,11 @@
     "POST /api/questions/{id}/answer-by-token": "the webhook channel's single-use token answer for a receiver with no session; on every surface the same action is questions.answer",
     "GET /api/reports/{token}": "the signed link to a run's masked PDF report (E39.6): the token in the path is the authority, for a webhook receiver or the person an email went to; on every surface the same file is the run export (runs.export)",
     "GET /api/deliveries/unsubscribe/{token}": "the page behind the unsubscribe link in a run report email (E39.6): the signed token is the authority, the recipient has no session; changes nothing until the button",
-    "POST /api/deliveries/unsubscribe/{token}": "the recipient of a run report email stops the emails (E39.6): the signed token is the authority, the recipient has no session; the owner confirming the address again is deliveries.manage"
+    "POST /api/deliveries/unsubscribe/{token}": "the recipient of a run report email stops the emails (E39.6): the signed token is the authority, the recipient has no session; the owner confirming the address again is deliveries.manage",
+    "GET /api/benchmark-site/assets/{file}": "a script or stylesheet of the benchmark challenge site (E44.2): static files a challenge page links, opened by a node's browser, not a client operation",
+    "GET /api/benchmark-site/t/{token}": "the benchmark challenge site (E44.2): redirects a trial's address without its trailing slash to its start page; opened by a node's browser, not a client operation",
+    "GET /api/benchmark-site/t/{token}/{path}": "a page of a benchmark trial's challenge (E44.2): fixture HTML for the browser the agent drives, the token in the path is the authority; starting and reading a benchmark is the benchmarks capability",
+    "POST /api/benchmark-site/t/{token}/{path}": "a form post or script call of a benchmark trial's challenge page (E44.2): it changes only that trial's fixture state, made by the browser the agent drives; not a client operation"
   },
   "capabilities": [
     {
