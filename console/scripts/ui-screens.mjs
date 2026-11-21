@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -86,6 +86,7 @@ export const ROUTES = [
   ['question', '/inbox/q/{question}'],
   ['tasks', '/tasks'],
   ['task-new', '/tasks/new'],
+  ['task-builder', '/tasks/builder/{builder}'],
   ['task-detail', '/tasks/{task}'],
   ['task-edit', '/tasks/{task}/edit'],
   ['runs', '/runs'],
