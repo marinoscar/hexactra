@@ -31,6 +31,7 @@ import { UsedSavedLogins } from '../components/UsedSavedLogins';
 import { UsedSavedIdentity } from '../components/UsedSavedIdentity';
 import { UsedSavedCards } from '../components/UsedSavedCards';
 import { RunTimeline } from '../components/RunTimeline';
+import { RunRecording } from '../components/RunRecording';
 import { RunTraceId } from '../components/RunTraceId';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -395,6 +396,8 @@ export function RunDetailPage() {
   const outputs = !isLive && <RunOutputs outputs={run.outputs} complete={run.outputsComplete} />;
   // What was sent when the run ended (E39.6): an email, a row, files, a webhook. Only a run of a task has any.
   const deliveries = !isLive && run.taskId && viewer.hasPermission('runs:read') ? <RunDeliveries runId={run.id} canRetryDelivery={viewer.hasPermission('runs:write')} taskId={run.taskId} canOpenLinks={viewer.hasPermission('connections:read')} /> : null;
+  // The run's video, when its owner chose to record it (epic #755): not masked, owner-only. Nothing for a run without one.
+  const recording = viewer.hasPermission('runs:read') ? <RunRecording runId={run.id} canDelete={viewer.hasPermission('runs:delete')} /> : null;
   // Paused: nothing happens until the owner resumes or stops. The browser stays in view, and takeover stays available.
   const pausedBanner = paused && <PausedBanner onResume={canCancel ? resume : undefined} onStop={canCancel ? cancel : undefined} resuming={resuming} stopping={stopping} />;
   const waiting = run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>;
@@ -537,6 +540,7 @@ export function RunDetailPage() {
               {outcome}
               {outputs}
               {deliveries}
+              {recording}
             </Box>
             <Box data-testid="run-timeline-scroll" tabIndex={0} role="region" aria-label="Timeline" sx={{ flex: '1 1 auto', minHeight: 240, overflowY: 'auto' }}>
               {timeline}
@@ -554,6 +558,7 @@ export function RunDetailPage() {
       {outcome}
       {outputs}
       {deliveries}
+      {recording}
       {waiting}
       {pausedBanner}
       {compact ? (

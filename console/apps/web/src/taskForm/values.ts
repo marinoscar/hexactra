@@ -63,6 +63,8 @@ export interface TaskFormValues {
   connections: ConnectionSelection[];
   /** Whether the task's runs open a browser: `auto` (when a tool needs one), `always` or `never`. */
   needsBrowser: NeedsBrowser;
+  /** Record a video of each run's browser tab (epic #755). Off by default; the video is not masked. */
+  recordVideo: boolean;
   /** Each carries an optional `policyId` override. */
   schedules: ScheduleDraft[];
 }
@@ -78,7 +80,7 @@ export interface TaskWithSchedules extends Task {
 }
 
 export function emptyValues(): TaskFormValues {
-  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], connections: [], needsBrowser: 'auto', schedules: [] };
+  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], connections: [], needsBrowser: 'auto', recordVideo: false, schedules: [] };
 }
 
 /** The form values of a saved task. */
@@ -100,6 +102,7 @@ export function valuesFromTask(task: TaskWithSchedules): TaskFormValues {
     outputs: (task.outputs ?? []).map((o) => ({ ...o })),
     connections: selectionsOf(task.connections),
     needsBrowser: task.needsBrowser ?? 'auto',
+    recordVideo: task.recordVideo === true,
     schedules: (task.summary?.schedules ?? []).map(draftFromSchedule),
   };
 }
@@ -206,6 +209,8 @@ export interface CreateTaskBody {
   connections?: ConnectionSelection[];
   /** Present only when it is not `auto` (or changed back to it). */
   needsBrowser?: NeedsBrowser;
+  /** Present only when on (or changed). */
+  recordVideo?: boolean;
   /** Present only when the form has schedules. */
   schedules?: ScheduleItemInput[];
 }
@@ -215,7 +220,7 @@ export function savedParameters(values: Pick<TaskFieldValues, 'goal' | 'paramete
   return cleanParameters(syncParameters(values.goal.trim(), values.parameters).parameters);
 }
 
-function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs' | 'connections' | 'needsBrowser'> & { parameters: TaskParameter[]; outputs: TaskOutput[]; connections: ConnectionSelection[]; needsBrowser: NeedsBrowser } {
+function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs' | 'connections' | 'needsBrowser' | 'recordVideo'> & { parameters: TaskParameter[]; outputs: TaskOutput[]; connections: ConnectionSelection[]; needsBrowser: NeedsBrowser; recordVideo: boolean } {
   return {
     name: values.name.trim(),
     goal: values.goal.trim(),
@@ -232,6 +237,7 @@ function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | '
     outputs: cleanOutputs(values.outputs),
     connections: cleanSelections(values.connections),
     needsBrowser: values.needsBrowser,
+    recordVideo: values.recordVideo === true,
   };
 }
 
@@ -241,13 +247,14 @@ export function scheduleItems(schedules: readonly ScheduleDraft[]): ScheduleItem
 
 /** The body of `POST /tasks`: the task and its schedules in one request. */
 export function createBody(values: TaskFormValues, options: { sendPolicy: boolean }): CreateTaskBody {
-  const { parameters, outputs, connections, needsBrowser, ...fields } = fieldBody(values);
+  const { parameters, outputs, connections, needsBrowser, recordVideo, ...fields } = fieldBody(values);
   return {
     ...fields,
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(outputs.length > 0 ? { outputs } : {}),
     ...(connections.length > 0 ? { connections } : {}),
     ...(needsBrowser !== 'auto' ? { needsBrowser } : {}),
+    ...(recordVideo ? { recordVideo } : {}),
     ...(options.sendPolicy ? { policyId: values.policyId } : {}),
     ...(values.schedules.length > 0 ? { schedules: scheduleItems(values.schedules) } : {}),
   };
@@ -287,7 +294,7 @@ export interface MappedError {
   banner: string | null;
 }
 
-const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs', 'connections', 'needsBrowser'];
+const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs', 'connections', 'needsBrowser', 'recordVideo'];
 
 /** `allowedDomains.2` (zod) and `schedules[1].cron` (the schedule checks) in one spelling: `a[2]`, `schedules[1].cron`. */
 export function normalizePath(path: unknown): string {

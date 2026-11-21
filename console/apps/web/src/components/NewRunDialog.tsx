@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Link, Stack, TextField } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, FormHelperText, Link, Stack, Switch, TextField } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
@@ -34,6 +34,7 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
   const [profile, setProfile] = useState('default');
   const [machine, setMachine] = useState<MachineChoice>({ hostId: null, hostFallback: true });
   const [policyId, setPolicyId] = useState<string | null>(null);
+  const [record, setRecord] = useState(false);
   const { clearError } = action;
 
   useEffect(() => {
@@ -48,10 +49,12 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
         profile: profile.trim() || 'default',
         ...(machine.hostId ? { hostId: machine.hostId, hostFallback: machine.hostFallback } : {}),
         ...(canPickPolicy && policyId ? { policyId } : {}),
+        ...(record ? { record: true } : {}),
       }),
     );
     if (!run) return;
     setGoal('');
+    setRecord(false);
     onStarted(run.id);
   };
 
@@ -92,6 +95,12 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
             <TextField label="Profile" value={profile} onChange={(e) => setProfile(e.target.value)} helperText="The browser profile (its sign-ins)." />
             <MachinePicker hosts={hosts} hostId={machine.hostId} hostFallback={machine.hostFallback} onChange={(change) => setMachine((m) => ({ ...m, ...change }))} />
             {canPickPolicy && <PolicySelect catalog={catalog} value={policyId} onChange={setPolicyId} manageLink />}
+            <Box>
+              <FormControlLabel control={<Switch checked={record} onChange={(e) => setRecord(e.target.checked)} slotProps={{ input: { 'aria-describedby': 'new-run-record-help' } }} />} label="Record a video of this run" />
+              <FormHelperText id="new-run-record-help" sx={{ mt: 0 }}>
+                The video is not masked: anything on the page is visible. Only you can watch it.
+              </FormHelperText>
+            </Box>
             <Link component={RouterLink} to={`/tasks/new${trimmed ? `?goal=${encodeURIComponent(trimmed)}` : ''}`} variant="body2" onClick={onClose}>
               Save as task instead
             </Link>
