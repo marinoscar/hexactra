@@ -10,6 +10,7 @@ import { FleetService } from '../fleet/fleet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { readEffectiveBudget, runBudgetView, BUDGET_KEYS } from '../runner/budget';
 import { describeCron } from '../schedules/cron-describe';
+import { NOT_BENCHMARK_RUN_SQL } from '../tasks/runs.query';
 import { BUDGET_STOP_REASONS } from '../tasks/runs.schemas';
 import { FAILING_AFTER } from '../tasks/task-list.schemas';
 import './home.metrics';
@@ -245,7 +246,7 @@ export class HomeService {
              (count(*) OVER ())::int AS total, (count(*) FILTER (WHERE r.status = 'running') OVER ())::int AS running
       FROM runs r
       LEFT JOIN tasks t ON t.id = r.task_id AND t.user_id = r.user_id
-      WHERE r.user_id = ${userId}::uuid AND r.status IN ('queued', 'running', 'waiting_human', 'paused')
+      WHERE r.user_id = ${userId}::uuid AND r.status IN ('queued', 'running', 'waiting_human', 'paused') AND ${NOT_BENCHMARK_RUN_SQL}
       ORDER BY CASE r.status WHEN 'running' THEN 0 WHEN 'waiting_human' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END, r.created_at DESC, r.id DESC
       LIMIT ${HOME_LIMITS.liveRuns}`);
     return {
@@ -288,7 +289,7 @@ export class HomeService {
              CASE WHEN r.status = 'failed' THEN left(split_part(r.error, E'\n', 1), ${TEXT_MAX}) END AS error
       FROM runs r
       LEFT JOIN tasks t ON t.id = r.task_id AND t.user_id = r.user_id
-      WHERE r.user_id = ${userId}::uuid AND r.status IN ('succeeded', 'failed', 'cancelled')
+      WHERE r.user_id = ${userId}::uuid AND r.status IN ('succeeded', 'failed', 'cancelled') AND ${NOT_BENCHMARK_RUN_SQL}
       ORDER BY COALESCE(r.finished_at, r.created_at) DESC, r.id DESC
       LIMIT ${HOME_LIMITS.recentRuns}`);
     return rows.map(({ modelCalls, costUsd, clientId, clientName, ...r }) => ({
@@ -314,7 +315,7 @@ export class HomeService {
              (count(*) FILTER (WHERE r.stop_reason::text = ANY(${[...BUDGET_STOP_REASONS]}::text[])))::int AS "budgetStops",
              (count(*) FILTER (WHERE r.stop_reason::text = 'stalled'))::int AS stalled
       FROM runs r
-      WHERE r.user_id = ${userId}::uuid AND r.created_at >= ${from}
+      WHERE r.user_id = ${userId}::uuid AND r.created_at >= ${from} AND ${NOT_BENCHMARK_RUN_SQL}
       GROUP BY 1`);
     const byDay = new Map(rows.map((d) => [d.day, d]));
     const series: NonNullable<HomeSummary['week']>['series'] = [];
@@ -368,7 +369,7 @@ export class HomeService {
    * (`TaskSummaryService.list`), so the count equals the list the link opens.
    */
   private async account(userId: string, tasks: boolean, runs: boolean): Promise<{ tasks: number; runs: number; paused: number; failing: number }> {
-    const runCount = runs ? Prisma.sql`(SELECT count(*) FROM runs r WHERE r.user_id = ${userId}::uuid)::int` : Prisma.sql`0`;
+    const runCount = runs ? Prisma.sql`(SELECT count(*) FROM runs r WHERE r.user_id = ${userId}::uuid AND ${NOT_BENCHMARK_RUN_SQL})::int` : Prisma.sql`0`;
     const taskCounts = tasks
       ? Prisma.sql`(
           SELECT json_build_object(
@@ -381,7 +382,7 @@ export class HomeService {
             FROM task_schedules s WHERE s.task_id = t.id AND s.user_id = t.user_id
           ) sc ON TRUE
           LEFT JOIN LATERAL (
-            SELECT r.status FROM runs r WHERE r.task_id = t.id AND r.user_id = t.user_id
+            SELECT r.status FROM runs r WHERE r.task_id = t.id AND r.user_id = t.user_id AND ${NOT_BENCHMARK_RUN_SQL}
             ORDER BY r.created_at DESC, r.id DESC LIMIT 1
           ) lr ON TRUE
           WHERE t.user_id = ${userId}::uuid)`

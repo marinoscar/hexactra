@@ -217,6 +217,8 @@ The characterisation snapshot changes when a family's text or a tool is offered 
 
 Changing the instructions, a tool description, a gate or a model is otherwise a guess: the only check is trying a real task and watching. The **replay suite** (E38.6) runs scenarios against the runner and says whether the agent still reaches the goal, how many steps and tokens it took, and whether it broke a safety rule. A change that makes the agent click "Pay" without asking fails in CI, not in the owner's bank account.
 
+The replay suite checks the harness against a fake website. Comparing agent policies or models on the real product, in real Chrome on a node, is a **benchmark** (E44): see the decision record [decisions/benchmark.md](decisions/benchmark.md), which also says how the two differ.
+
 ### The test kit
 
 `apps/api/test/replay/` (exported by its `index.ts` for the specs and the scripts). It is test tooling, so it lives in `test/`, not in the app's `src/` (the agent packages' rules keep loop code, gates and test kits out of production code: `test/architecture/no-agent-logic.spec.ts`). It sits on the public entry points of the agent packages only (`@marinoscar/hexactra-agent`, `/engine` and `/testing` for the harness and its fakes, the browser toolset's subpaths), so the packages can change or be published without it noticing. Run `npm run build:packages` first: like every app spec, it imports the packages' built output.

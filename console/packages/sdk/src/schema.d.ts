@@ -10580,6 +10580,12 @@ export interface components {
                 maxTriggersPerUser?: number;
                 maxRunsPerUserPerDay?: number;
             };
+            benchmark: {
+                siteBaseUrl: string;
+                defaultTrials: number;
+                defaultCapUsd: number;
+                trialTimeoutMinutes: number;
+            };
             storage: {
                 provider: string;
                 drivers: {
@@ -10864,6 +10870,12 @@ export interface components {
                 minPollSeconds?: number;
                 maxTriggersPerUser?: number;
                 maxRunsPerUserPerDay?: number;
+            };
+            benchmark?: {
+                siteBaseUrl: string;
+                defaultTrials: number;
+                defaultCapUsd: number;
+                trialTimeoutMinutes: number;
             };
             storage?: {
                 provider: string;
@@ -11153,6 +11165,12 @@ export interface components {
                 minPollSeconds?: number;
                 maxTriggersPerUser?: number;
                 maxRunsPerUserPerDay?: number;
+            };
+            benchmark?: {
+                siteBaseUrl?: string;
+                defaultTrials?: number;
+                defaultCapUsd?: number;
+                trialTimeoutMinutes?: number;
             };
             storage?: {
                 provider?: string;
@@ -17110,7 +17128,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -17308,7 +17326,7 @@ export interface components {
                         /** @enum {string} */
                         status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                         /** @enum {string} */
-                        trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                        trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                         /** @description ISO 8601 timestamp */
                         createdAt: string;
                         finishedAt: string | null;
@@ -17561,7 +17579,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -18181,7 +18199,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -18290,7 +18308,7 @@ export interface components {
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /**
                  * Format: date-time
@@ -18367,7 +18385,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
             /**
              * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
              * @enum {string}
@@ -18610,7 +18628,7 @@ export interface components {
                 /** @enum {string} */
                 status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
                 /** @enum {string} */
-                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                 /**
                  * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
                  * @enum {string}
@@ -18903,7 +18921,7 @@ export interface components {
                 result: string | null;
                 error: string | null;
                 /** @enum {string} */
-                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                 /**
                  * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
                  * @enum {string}
@@ -19192,7 +19210,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
             /**
              * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
              * @enum {string}
@@ -19524,7 +19542,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
             /**
              * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
              * @enum {string}
@@ -20760,7 +20778,7 @@ export interface components {
                     /** @enum {string} */
                     status: "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
                     /**
                      * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
                      * @enum {string}
@@ -44433,7 +44451,7 @@ export interface operations {
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
                 from?: string;
@@ -44561,7 +44579,7 @@ export interface operations {
             query?: {
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
                 from?: string;

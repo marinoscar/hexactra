@@ -187,7 +187,7 @@ export const runResponseSchema = z.object({
   taskId: z.uuid().nullable(),
   conversationId: z.uuid().nullable().describe('The chat that started the run (trigger `chat`); null for every other run'),
   status: runStatus,
-  trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email']),
+  trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email', 'benchmark']),
   origin: runOriginSchema,
   client: runClientSchema.nullable(),
   goal: z.string(),

@@ -11,9 +11,10 @@ const PLAIN_RUN_ID_COLUMNS = ['ApprovalRule.lastUsedRunId', 'ApprovalRuleUse.run
 /**
  * Foreign keys to Run that are ON DELETE SET NULL on purpose: the row outlives
  * the run with no pointer left. A chat keeps a result message's text after its
- * run is deleted by hand or by retention (#483).
+ * run is deleted by hand or by retention (#483). A benchmark trial keeps its verdict
+ * and the metrics copied from its run, so a scorecard outlives run retention (E44, #738).
  */
-const SET_NULL_RUN_KEYS = ['ChatMessage.run'];
+const SET_NULL_RUN_KEYS = ['BenchmarkTrial.run', 'ChatMessage.run'];
 
 describe('relations to Run', () => {
   const models = readSchemaDatamodel(join(__dirname, '..', 'prisma', 'schema'));
@@ -23,7 +24,7 @@ describe('relations to Run', () => {
   it('every foreign key to Run is ON DELETE CASCADE, or SET NULL where the row is meant to outlive the run', () => {
     const toRun = foreignKeys.filter((fk) => fk.field.type === 'Run');
     // The ones known today; a new one appears here and must cascade too.
-    expect(toRun.map((fk) => `${fk.model}.${fk.field.name}`).sort()).toEqual(['ChatMessage.run', 'Question.run', 'RunDelivery.run', 'RunGuidance.run', 'RunStep.run']);
+    expect(toRun.map((fk) => `${fk.model}.${fk.field.name}`).sort()).toEqual(['BenchmarkTrial.run', 'ChatMessage.run', 'Question.run', 'RunDelivery.run', 'RunGuidance.run', 'RunStep.run']);
     for (const fk of toRun) {
       const field = `${fk.model}.${fk.field.name}`;
       expect({ field, onDelete: effectiveOnDelete(fk.field) }).toEqual({ field, onDelete: SET_NULL_RUN_KEYS.includes(field) ? 'SetNull' : 'Cascade' });

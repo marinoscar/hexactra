@@ -166,8 +166,10 @@ export interface ConfirmedAction {
 }
 
 /** What started a run (`RUN_TRIGGERS` in apps/api/src/tasks/runs.schemas.ts). */
-export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email'] as const;
+export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email', 'benchmark'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
+/** Left out of every run list unless the filter names the trigger: a benchmark's trial runs (`HIDDEN_RUN_TRIGGERS` in the API). */
+export const HIDDEN_RUN_TRIGGERS: readonly RunTrigger[] = ['benchmark'];
 
 /** A run in a list (`GET /api/runs?envelope=1`): the run with its task's name; `budget` only while it is live. */
 export interface RunListItem extends Run {

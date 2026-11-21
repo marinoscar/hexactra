@@ -1,0 +1,113 @@
+// Benchmarks (E44, epic #738; decision record docs/decisions/benchmark.md): an administrator runs the same challenges under several
+// agent policies on a real node, and each trial is graded from the challenge site's own state.
+//
+//   Benchmark       one matrix: the chosen challenges x policies x trials of one suite version, its spend and its summary.
+//   BenchmarkTrial  one cell of it: a challenge under a policy, attempt `trial_index`. The trial is an ordinary Run with trigger
+//                   `benchmark`; its metrics are COPIED here when it is graded, so a scorecard outlives run retention.
+//
+// Statuses, verdicts and failure reasons are closed lists in code (src/benchmark/benchmark.constants.ts), stored as text.
+// No secret is stored here: a trial token is kept only as its SHA-256. `site_state` holds seeded fixture data, never the owner's.
+// Registered in the user-owned data registry (src/benchmark/benchmark.ownership.ts).
+
+model Benchmark {
+  id           String    @id @default(uuid()) @db.Uuid
+  /// The administrator who started it; its runs are theirs.
+  userId       String    @map("user_id") @db.Uuid
+  name         String    @db.VarChar(200)
+  /// The suite and its version when the benchmark started (`core`, 1). Two benchmarks compare only within one version.
+  suiteKey     String    @map("suite_key") @db.VarChar(32)
+  suiteVersion Int       @map("suite_version")
+  /// `queued` | `running` | `completed` | `cancelled` | `failed`.
+  status       String    @default("queued") @db.VarChar(16)
+  /// What was asked for: the challenge ids, the policies (`{ ref, label }`), the trial count, the host and profile, the spend cap and
+  /// the trial timeout. Validated by zod on write.
+  config       Json
+  /// The console version and the build's commit when it started (a commit is unknown on a development build).
+  appVersion   String    @map("app_version") @db.VarChar(32)
+  commit       String?   @db.VarChar(64)
+  /// USD spent by its graded trials so far; checked against the cap before each new trial.
+  spentUsd     Decimal   @default(0) @map("spent_usd") @db.Decimal(12, 6)
+  /// The scorecard, computed when the benchmark ends. Null until then.
+  summary      Json?
+  /// The earlier benchmark this one is compared with. SetNull: deleting the baseline leaves this benchmark.
+  baselineId   String?   @map("baseline_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt    DateTime? @map("started_at") @db.Timestamptz
+  finishedAt   DateTime? @map("finished_at") @db.Timestamptz
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseline   Benchmark?       @relation("BenchmarkBaseline", fields: [baselineId], references: [id], onDelete: SetNull)
+  comparedBy Benchmark[]      @relation("BenchmarkBaseline")
+  trials     BenchmarkTrial[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([baselineId])
+  @@map("benchmarks")
+}
+
+model BenchmarkTrial {
+  id          String   @id @default(uuid()) @db.Uuid
+  benchmarkId String   @map("benchmark_id") @db.Uuid
+  /// The challenge's id in the suite (`nav-lookup`).
+  challengeId String   @map("challenge_id") @db.VarChar(64)
+  /// The agent policy the trial runs under: an own policy's UUID or `builtin:<key>`, and its name when the benchmark started.
+  policyRef   String   @map("policy_ref") @db.VarChar(64)
+  policyLabel String   @map("policy_label") @db.VarChar(200)
+  /// 0-based attempt of this challenge under this policy.
+  trialIndex  Int      @map("trial_index")
+  /// 32 hex characters derived from (benchmark, challenge, policy, trial): the challenge's data and expected answer come from it.
+  seed        String   @db.VarChar(64)
+  /// SHA-256 (hex) of the trial's site token; the token itself is never stored. Null before the trial starts and after it closes.
+  tokenHash   String?  @unique @map("token_hash") @db.VarChar(64)
+  /// The trial's run. SetNull: retention or the owner may delete the run; the copied metrics below stay.
+  runId       String?  @map("run_id") @db.Uuid
+  /// `pending` | `running` | `graded` | `skipped`.
+  status      String   @default("pending") @db.VarChar(16)
+  /// `pass` | `fail` | `error` | `skipped` | `unsupported`. Null until the trial is graded or skipped.
+  verdict     String?  @db.VarChar(16)
+  /// Why a trial did not pass (`wrong_result`, `budget`, `stalled`, `asked_person`, `timeout`, `error`, `no_model`, `cap`, ...).
+  failureReason String? @map("failure_reason") @db.VarChar(32)
+  /// The grader's named checks: `[{ name, pass, detail? }]`.
+  checks      Json?
+  /// Whether the agent said it succeeded (`finish` with success): compared with the verdict for the false-success rate.
+  claimedSuccess Boolean? @map("claimed_success")
+  /// The challenge site's state for this trial (seeded fixture data). Written only while the trial is `running`.
+  siteState   Json?    @map("site_state")
+  /// Optimistic version of `site_state`: a write names the version it read and bumps it.
+  siteStateVersion Int @default(0) @map("site_state_version")
+  /// Copied from the run when the trial is graded; null until then.
+  durationMs   Int?     @map("duration_ms")
+  activeMs     Int?     @map("active_ms")
+  steps        Int?
+  modelCalls   Int?     @map("model_calls")
+  inputTokens  Int?     @map("input_tokens")
+  outputTokens Int?     @map("output_tokens")
+  costUsd      Decimal? @map("cost_usd") @db.Decimal(12, 6)
+  costKnown    Boolean? @map("cost_known")
+  stopReason   String?  @map("stop_reason") @db.VarChar(32)
+  /// How many questions the agent asked a person, and how many tier escalations the run made.
+  questions    Int?
+  escalations  Int?
+  /// The run's policy snapshot (models, budgets, resolved tiers) as it ran.
+  policySnapshot Json?  @map("policy_snapshot")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz
+
+  benchmark Benchmark @relation(fields: [benchmarkId], references: [id], onDelete: Cascade)
+  run       Run?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@unique([benchmarkId, challengeId, policyRef, trialIndex])
+  @@index([runId])
+  @@index([benchmarkId, status])
+  @@map("benchmark_trials")
+}
+
+extend model User {
+  benchmarks Benchmark[]
+}
+
+extend model Run {
+  benchmarkTrials BenchmarkTrial[]
+}

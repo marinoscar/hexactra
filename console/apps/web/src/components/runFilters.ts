@@ -5,7 +5,7 @@
 import { getTimeZoneOffsetMinutes, zonedDateKey } from '@marinoscar/platform-web/timezone/headless';
 
 import { RUN_ORIGINS, type RunOrigin } from '../aiApps/types';
-import { RUN_TRIGGERS, type RunCounts, type RunListItem, type RunStatus, type RunTrigger } from '../types/runs';
+import { HIDDEN_RUN_TRIGGERS, RUN_TRIGGERS, type RunCounts, type RunListItem, type RunStatus, type RunTrigger } from '../types/runs';
 
 /** The status tabs, in the order they show. */
 export const RUN_VIEWS = ['all', 'live', 'needs', 'paused', 'succeeded', 'failed', 'cancelled'] as const;
@@ -27,7 +27,7 @@ export type StopFilter = (typeof STOP_FILTERS)[number];
 
 export const STOP_FILTER_LABEL: Record<StopFilter, string> = { budget: 'Budget', stalled: 'Stalled', error: 'Error', no_model: 'No model' };
 
-export const TRIGGER_LABEL: Record<RunTrigger, string> = { manual: 'Manual', schedule: 'Schedule', api: 'API', mcp: 'MCP', external: 'External agent', chat: 'Chat', email: 'Email' };
+export const TRIGGER_LABEL: Record<RunTrigger, string> = { manual: 'Manual', schedule: 'Schedule', api: 'API', mcp: 'MCP', external: 'External agent', chat: 'Chat', email: 'Email', benchmark: 'Benchmark' };
 
 /** The date presets: a number of days back from today (0: today). */
 export const DATE_PRESETS = [
@@ -260,7 +260,8 @@ export function matchesFilters(run: RunListItem, filters: RunFilters, scope: Run
   if (statuses && !statuses.includes(run.status)) return false;
   const taskId = scope.taskId ?? filters.taskId;
   if (taskId === 'none' ? run.taskId !== null : taskId ? run.taskId !== taskId : false) return false;
-  if (filters.trigger.length && !filters.trigger.includes(run.trigger as RunTrigger)) return false;
+  // No trigger filter leaves out a benchmark's trial runs, as the server does.
+  if (filters.trigger.length ? !filters.trigger.includes(run.trigger as RunTrigger) : HIDDEN_RUN_TRIGGERS.includes(run.trigger as RunTrigger)) return false;
   const q = filters.q.trim().toLowerCase();
   if (q && !run.goal.toLowerCase().includes(q)) return false;
   const { from, to } = rangeInstants(filters, timeZone);

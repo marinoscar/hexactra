@@ -34844,7 +34844,7 @@
             "name": "trigger",
             "required": false,
             "in": "query",
-            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas.",
+            "description": "What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -35185,7 +35185,7 @@
             "name": "trigger",
             "required": false,
             "in": "query",
-            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas.",
+            "description": "What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -51662,6 +51662,36 @@
               }
             }
           },
+          "benchmark": {
+            "type": "object",
+            "properties": {
+              "siteBaseUrl": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "defaultTrials": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "defaultCapUsd": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              "trialTimeoutMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 120
+              }
+            },
+            "required": [
+              "siteBaseUrl",
+              "defaultTrials",
+              "defaultCapUsd",
+              "trialTimeoutMinutes"
+            ]
+          },
           "storage": {
             "type": "object",
             "properties": {
@@ -52273,6 +52303,7 @@
           "connections",
           "deliveries",
           "mailTriggers",
+          "benchmark",
           "storage",
           "notifications",
           "ai",
@@ -52983,6 +53014,36 @@
                 "maximum": 1000
               }
             }
+          },
+          "benchmark": {
+            "type": "object",
+            "properties": {
+              "siteBaseUrl": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "defaultTrials": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "defaultCapUsd": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              "trialTimeoutMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 120
+              }
+            },
+            "required": [
+              "siteBaseUrl",
+              "defaultTrials",
+              "defaultCapUsd",
+              "trialTimeoutMinutes"
+            ]
           },
           "storage": {
             "type": "object",
@@ -54319,6 +54380,30 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 1000
+              }
+            }
+          },
+          "benchmark": {
+            "type": "object",
+            "properties": {
+              "siteBaseUrl": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "defaultTrials": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              },
+              "defaultCapUsd": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              "trialTimeoutMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 120
               }
             }
           },
@@ -81582,7 +81667,8 @@
                           "mcp",
                           "external",
                           "chat",
-                          "email"
+                          "email",
+                          "benchmark"
                         ]
                       },
                       "createdAt": {
@@ -82296,7 +82382,8 @@
                                 "mcp",
                                 "external",
                                 "chat",
-                                "email"
+                                "email",
+                                "benchmark"
                               ]
                             },
                             "createdAt": {
@@ -83249,7 +83336,8 @@
                           "mcp",
                           "external",
                           "chat",
-                          "email"
+                          "email",
+                          "benchmark"
                         ]
                       },
                       "createdAt": {
@@ -85302,7 +85390,8 @@
                           "mcp",
                           "external",
                           "chat",
-                          "email"
+                          "email",
+                          "benchmark"
                         ]
                       },
                       "createdAt": {
@@ -85801,7 +85890,7 @@
                 ]
               },
               "trigger": {
-                "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat, email. Repeat the parameter or separate the values with commas.",
+                "description": "What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas.",
                 "anyOf": [
                   {
                     "type": "string"
@@ -86099,7 +86188,8 @@
               "mcp",
               "external",
               "chat",
-              "email"
+              "email",
+              "benchmark"
             ]
           },
           "origin": {
@@ -87172,7 +87262,8 @@
                     "mcp",
                     "external",
                     "chat",
-                    "email"
+                    "email",
+                    "benchmark"
                   ]
                 },
                 "origin": {
@@ -88423,7 +88514,8 @@
                   "mcp",
                   "external",
                   "chat",
-                  "email"
+                  "email",
+                  "benchmark"
                 ]
               },
               "origin": {
@@ -89793,7 +89885,8 @@
               "mcp",
               "external",
               "chat",
-              "email"
+              "email",
+              "benchmark"
             ]
           },
           "origin": {
@@ -91267,7 +91360,8 @@
               "mcp",
               "external",
               "chat",
-              "email"
+              "email",
+              "benchmark"
             ]
           },
           "origin": {
@@ -96509,7 +96603,8 @@
                             "mcp",
                             "external",
                             "chat",
-                            "email"
+                            "email",
+                            "benchmark"
                           ]
                         },
                         "origin": {

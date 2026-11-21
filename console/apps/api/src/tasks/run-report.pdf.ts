@@ -121,6 +121,7 @@ const ORIGIN_LABEL: Record<string, string> = { web: 'Console', android: 'Android
 export function startedFrom(run: RunTrace['run']): string {
   const app = run.client?.name ? `AI app (${run.client.name})` : null;
   if (run.trigger === 'chat') return 'Chat';
+  if (run.trigger === 'benchmark') return 'Benchmark';
   if (run.trigger === 'email') return run.taskName ? `Email (task "${run.taskName}")` : 'Email';
   if (run.trigger === 'schedule' || run.origin === 'schedule') return run.taskName ? `Schedule (task "${run.taskName}")` : 'Schedule';
   if (app) return app;
