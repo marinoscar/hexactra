@@ -33,6 +33,7 @@ import { MicrosoftConnectionsModule } from './connections/microsoft/microsoft.mo
 import { MailTriggersModule } from './mail-triggers/mail-triggers.module';
 import { loadSecretsStoreModule, secretsStoreMountable } from './secrets/builtin/secrets-store.loader';
 import { TasksModule } from './tasks/tasks.module';
+import { UsageModule } from './usage/usage.module';
 import { MemoriesModule } from './memories/memories.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
@@ -75,6 +76,7 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     // Connected AI apps (#464): the request's client context and the per-app limits (global).
     ConnectedAppsModule,
     TasksModule,
+    UsageModule,
     QuestionsModule,
     BrowserModule,
     McpSecurityModule,

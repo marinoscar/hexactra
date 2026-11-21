@@ -120,6 +120,9 @@ model User {
   // composed from package:webhooks.prisma
   webhookEndpoints WebhookEndpoint[] @relation("WebhookEndpointOwner")
 
+  // composed from app:ai-usage-rollups.prisma
+  aiUsageHourly AiUsageHourly[]
+
   // composed from app:approval-rules.prisma
   approvalRules ApprovalRule[]
 
