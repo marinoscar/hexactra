@@ -63,14 +63,15 @@ async function incidents(key: string) {
 }
 
 describe('console alert rules', () => {
-  it('creates its nine rules once by key (the expensive-run rule disabled), and leaves existing ones alone', async () => {
+  it('creates its ten rules once by key (the expensive-run and monthly AI spend rules disabled), and leaves existing ones alone', async () => {
     expect(await service.seed()).toBe(0); // bootstrap already created them
     for (const key of ['hexactra.host_offline', 'hexactra.schedule_failing', 'hexactra.run_budget', 'hexactra.run_stalled']) {
       expect(await rule(key)).toMatchObject({ enabled: true });
     }
     expect(await rule('hexactra.run_stalled')).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.RUN_STALLED, severity: 'warning', config: { windowHours: 24, minStalls: 3 } });
     expect(await rule('hexactra.run_cost')).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, enabled: false, config: { maxRunCostUsd: 10 } });
-    expect(await prisma.alertRule.count({ where: { key: { in: HEXACTRA_ALERT_RULES.map((r) => r.key) } } })).toBe(9);
+    expect(await rule('hexactra.ai_spend_monthly')).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.AI_SPEND_MONTHLY, enabled: false, config: { maxDeploymentUsd: 500, maxUserUsd: null, warnAtPercent: 80 } });
+    expect(await prisma.alertRule.count({ where: { key: { in: HEXACTRA_ALERT_RULES.map((r) => r.key) } } })).toBe(10);
     // A deleted starter rule comes back once, by key, with its starter values.
     await prisma.alertRule.delete({ where: { key: 'hexactra.run_cost' } });
     expect(await service.seed()).toBe(1);
