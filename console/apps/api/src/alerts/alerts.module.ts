@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 
 import { ApprovalsModule } from '../approvals/approvals.module';
 import { FabricModule } from '../fabric/fabric.module';
+import { UsageModule } from '../usage/usage.module';
 import './hexactra-alert-kinds';
 import { HexactraAlertsService } from './hexactra-alerts.service';
 
 /** The console's alert kinds and rules, on the platform alerts slice. */
 @Module({
-  imports: [FabricModule, ApprovalsModule],
+  imports: [FabricModule, ApprovalsModule, UsageModule],
   providers: [HexactraAlertsService],
   exports: [HexactraAlertsService],
 })

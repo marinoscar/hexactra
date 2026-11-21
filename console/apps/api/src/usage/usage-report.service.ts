@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { buildUsageReport, usageCsv, usageWindow, type UsageWindow } from './usage-report';
+import { buildUsageReport, spendSummary, usageCsv, usageWindow, type SpendSummary, type UsageWindow } from './usage-report';
 import { UsagePricingService } from './usage-pricing.service';
 import { UsageRollupService, type UsageRow } from './usage-rollup.service';
 import type { UsageQuery, UsageReport } from './usage.schemas';
@@ -47,6 +47,17 @@ export class UsageReportService {
       runs: await this.runs(all ? q.userId : caller.id, window),
       pricing: { overridesApplied: prices.overridesApplied },
     };
+  }
+
+  /**
+   * AI spend since the start of the current UTC month (#736), at the
+   * deployment's prices, in total and per user: what the monthly spend alert
+   * reads. Catalogue syncs are left out, as in the reports.
+   */
+  async monthToDate(now = new Date()): Promise<SpendSummary & { since: Date }> {
+    const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const rows = await this.rollup.rows({ from: since, to: new Date(now.getTime() + 3_600_000) });
+    return { since, ...spendSummary(rows, await this.pricing.deployment()) };
   }
 
   /** The CSV export of the same report and filters. */
