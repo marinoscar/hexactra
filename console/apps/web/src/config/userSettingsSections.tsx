@@ -71,15 +71,6 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
       },
       // Run retention (#422). `runs:delete` is what `GET /api/runs/retention`, its preview and
       // `POST /api/runs/retention/apply` enforce (apps/api/src/tasks/run-retention.controller.ts).
-      // AI usage and cost (#734). `usage:read` is what GET /api/usage/report enforces for the caller's own usage
-      // (apps/api/src/usage/usage.controller.ts).
-      {
-        title: 'My usage & cost',
-        description: 'The AI tokens you used and what they cost, by day, month and model. Export as CSV.',
-        Icon: InsightsOutlinedIcon,
-        path: '/settings/usage',
-        permission: 'usage:read',
-      },
       {
         title: 'Run history',
         description: 'How long finished runs are kept.',
@@ -133,6 +124,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: LinkOutlinedIcon,
         path: '/settings/connections',
         permission: 'connections:read',
+      },
+      // AI usage and cost (#734). `usage:read` is what GET /api/usage/report enforces for the caller's own usage
+      // (apps/api/src/usage/usage.controller.ts).
+      {
+        title: 'My usage & cost',
+        description: 'The AI tokens you used and what they cost, by day, month and model. Export as CSV.',
+        Icon: InsightsOutlinedIcon,
+        path: '/settings/usage',
+        permission: 'usage:read',
       },
     ],
   },

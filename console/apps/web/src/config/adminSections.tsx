@@ -92,14 +92,6 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: '/admin/settings/agent-pricing',
         permission: 'system_settings:read',
       },
-      // AI usage and cost for everyone (#734): `ai_config:read` is what GET /api/usage/report?scope=all enforces.
-      {
-        title: 'AI usage & cost',
-        description: "Every user's AI tokens and what they cost, by day or month, model, feature and user. Export as CSV.",
-        Icon: InsightsOutlinedIcon,
-        path: '/admin/settings/usage',
-        permission: 'ai_config:read',
-      },
       // Run retention (#422): the `runs` namespace of the system settings document.
       {
         title: 'Run history limit',
@@ -145,6 +137,14 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: HistoryOutlinedIcon,
         path: '/admin/settings/request-history',
         permission: 'system_settings:read',
+      },
+      // AI usage and cost for everyone (#734): `ai_config:read` is what GET /api/usage/report?scope=all enforces.
+      {
+        title: 'AI usage & cost',
+        description: "Every user's AI tokens and what they cost, by day or month, model, feature and user. Export as CSV.",
+        Icon: InsightsOutlinedIcon,
+        path: '/admin/settings/usage',
+        permission: 'ai_config:read',
       },
     ],
   },
