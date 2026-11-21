@@ -103,6 +103,16 @@ The browser agent picks its model by tier (Fast, Standard, Frontier; [README, Mo
 - **Changing them** affects runs that start afterwards. A run in flight keeps the models it started with.
 - **Prices.** Give every tier's model (and fallback) an entry in [Model prices](#model-prices), or the run's cost is a lower bound.
 
+### AI usage rollups
+
+Usage and cost reports (#730) read hourly sums of the AI usage ledger, not every call, so a year stays fast and outlives the ledger's own retention.
+
+- **What.** `ai_usage_hourly`: one row per UTC hour × organization × user × provider × model × operation × feature × key source, with requests, failed requests, input, cached input, output and reasoning tokens, latency and non-token units. Counts and ids only. `ai_usage_rollup_state.rolled_until` says how far the rollups go.
+- **The job.** `usage.rollup` is enqueued every 15 minutes (at :07, :22, :37 and :52). It re-rolls from two hours before `rolled_until` up to the start of the current hour, replacing those hours in one transaction per week of data. It is idempotent, and it picks up ledger rows written late. The first run rolls the whole ledger. It deletes rollup hours older than 25 months. It calls no model, so it keeps running while AI is switched off.
+- **Reads.** A report takes the rollups before `rolled_until` and the ledger from there on, so it is never behind and never counts an hour twice. Catalogue syncs are left out of reports by default.
+- **Retention.** The ledger keeps `ai.usageRetentionDays` (180 by default; drill-down beyond the rollups needs the ledger). The rollups keep 25 months. Shortening the ledger's retention is safe once `rolled_until` is current.
+- **Check it.** `SELECT rolled_until FROM ai_usage_rollup_state;` should be within the last hour. Administration → Jobs lists `usage.rollup` runs. Each run logs `usage.rollup windows=… hours=… rows=… purged=… rolledUntil=…`.
+
 ### Model prices
 
 Every model call the browser agent makes is priced, so a run, a task (last 30 days) and the platform's AI usage report can show money as well as tokens. The console ships no prices: they change, and they are your contract with a provider.
