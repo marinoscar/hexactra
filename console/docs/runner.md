@@ -97,6 +97,8 @@ A task can declare outputs the run must return ([api-tasks-runs.md](api-tasks-ru
 
 ## A fresh browser for each new chat and task (E40.5)
 
+A run's own limits (its allowed sites, and whether a risky step asks first) are read in one place, `runLimits(run)` (`apps/api/src/runner/host/run-limits.ts`): the task's, else the chat's, else none; a benchmark trial run, which has neither, carries them in `runs.context.benchmark` ([benchmark decision record](decisions/benchmark.md#how-a-run-without-a-task-carries-its-allowed-sites-and-confirmriskyactions)). The browser session and the gates both use it.
+
 When a run opens its browser session for the first time, `openFabricSession` (`apps/api/src/runner/host/browser-session.ts`) calls `freshStart` (`runner/host/fresh-start.ts`), which binds the pure rules of `@marinoscar/hexactra-browser-agent` (`src/fresh-start.ts`):
 
 - **When.** A task run (manual, scheduled, API, an AI app's `run_goal`, an email trigger) and the **first** run of a chat restart the profile's browser. A follow-up run in the same chat, a resumed run (paused, or a later job of the same run) and an external agent's session keep the browser as it is.

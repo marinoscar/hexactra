@@ -1,6 +1,122 @@
 # Benchmarks
 
-A benchmark runs the same challenges under several agent policies on a real node and grades each trial from the challenge site's own state. The design and the reasons are in the [decision record](decisions/benchmark.md). This page is the working reference. It grows with the epic (E44, #738): the challenge site and the first ten challenges are here; starting a benchmark, the scorecard, the pages, the exports and the CLI arrive with the issues that build them.
+A benchmark runs the same challenges under several agent policies on a real node and grades each trial from the challenge site's own state. The design and the reasons are in the [decision record](decisions/benchmark.md). This page is the working reference. It grows with the epic (E44, #738): the challenge site, the first ten challenges, and starting and running a benchmark through the API are here; the scorecard, the pages, the exports and the CLI arrive with the issues that build them.
+
+## How a benchmark runs
+
+An organization administrator starts one with `POST /api/benchmarks` (permission `benchmarks:run`). The request answers at once; the work is a queue job.
+
+1. **Start.** The API checks the challenges, the policies (each must be a built-in or one of the administrator's own), the node, and that a node can reach the challenge site. It writes the benchmark and one trial per challenge, policy and attempt, and queues the job `benchmark.advance`. A challenge the agent cannot attempt is marked `unsupported` here and never run.
+2. **One trial at a time.** The job starts the next trial as an ordinary run (`trigger: benchmark`) under that trial's policy. Trials run attempt by attempt, challenge by challenge, one policy after the other, so a drift in the node or the provider is spread over all policies.
+3. **The run.** The goal runner drives it like any run. It can be watched, paused and stopped on its run page. It is limited to the challenge site and has no connection, saved login, identity detail or card.
+4. **Questions.** When the run asks a person, the [scripted owner](#the-scripted-owner) answers from the challenge's rules.
+5. **Grading.** When the run ends, the site is closed, the challenge's grader reads the site's stored state, and the verdict, the checks and the run's metrics are written on the trial. The cost is added to the benchmark's spend.
+6. **Next.** The job checks the spend cap and starts the next trial, or finishes the benchmark.
+
+| | |
+|---|---|
+| A benchmark's status | `queued`, `running`, then `completed`, `cancelled` or `failed` |
+| A trial's status | `pending`, `running`, then `graded` (it ran and was judged) or `skipped` (it never ran, or was stopped) |
+| One benchmark per browser | A second benchmark on the same node and profile is refused (`409 BENCHMARK_RUNNING`) while the first is live |
+| Where the runs are | In the run history with the filter `trigger=benchmark`; they are left out of the ordinary run list, the counts and the statistics |
+
+### Verdicts
+
+| Verdict | When | Failure reason |
+|---|---|---|
+| `pass` | every check of the grader passed, whatever the agent claimed | |
+| `fail` | a check failed | `wrong_result` (the agent claimed success), `gave_up` (it did not), `budget` or `stalled` (what stopped the run) |
+| `fail` | the trial ran past its timeout, or the agent asked a question no rule answers | `timeout`, `asked_person` |
+| `error` | the trial could not be judged: the node was down, no model or a provider error, the grader threw, the run was deleted | `error`, `no_model` |
+| `skipped` | it never ran or was stopped: the benchmark was cancelled, the spend cap was reached, three errors in a row, somebody stopped the run | `cancelled`, `cap`, `error` |
+| `unsupported` | the challenge needs a capability the agent lacks | `unsupported` |
+
+`claimedSuccess` is what the agent said (`finish` with success). A `fail` with `claimedSuccess: true` is a false success; a `pass` with `claimedSuccess: false` is a false failure. `error`, `skipped` and `unsupported` say nothing about the agent.
+
+### The limits of a benchmark
+
+| Limit | What happens |
+|---|---|
+| Spend cap (`capUsd`) | Checked before each trial against the cost of the trials that ended. Once reached, the rest is `skipped` with the reason `cap` and the benchmark is `completed`. A trial in progress finishes, so the spend can pass the cap by one trial. A run whose model has no price counts as zero (`costKnown: false`). |
+| Trial timeout (`trialTimeoutMinutes`) | Wall-clock from the trial's start. The run is stopped like any run and the trial is `fail` with `timeout`. A run that does not stop within a minute is ended by the benchmark. |
+| A node that is down | The trial is `error` and the next one starts. Three `error` trials in a row end the benchmark as `failed`, the rest `skipped`. |
+| Cancel | `POST /api/benchmarks/{id}/cancel`: nothing more starts, the trials that have not run and the one running are `skipped` with `cancelled`, and the running trial's run is stopped through the ordinary cancel path. |
+| A crash | The job reads the rows every time and every write is conditional, so a pass may run twice or after a restart. A trial claimed without a run gets its run on the next pass. |
+
+### What a trial run may do
+
+- It may visit the challenge site's host and nothing else: the browser enforces it, and the site gate checks every action.
+- It asks before a risky step only when its challenge says so (`run.confirmRiskyActions`).
+- It uses no connection, saved login, identity detail or card, whatever the administrator's own defaults are.
+- How a run without a task carries those two limits is in the [decision record](decisions/benchmark.md#how-a-run-without-a-task-carries-its-allowed-sites-and-confirmriskyactions).
+
+## The scripted owner
+
+A benchmark runs unattended, so a challenge scripts its owner's answers (`Challenge.owner(seed)`, a list of rules).
+
+- A rule states any of the question's kind, its input and text its prompt contains (compared without case). The first rule that fits answers `approve`, `deny`, `text` or `credentials`. A rule answers once unless it says `repeat`.
+- The answer goes through the ordinary answer service as the administrator, on the channel `benchmark`.
+- A question no rule fits ends the trial: the run is stopped, the verdict is `fail`, the reason `asked_person`. An answer that does not suit the card (text for a yes/no card) counts as no rule.
+- It answers questions and nothing else. It never ticks "remember" and cannot create or widen a saved approval. It never answers a suggested memory or an offer to save a sign-in; one left by a run is withdrawn when the trial is graded.
+- `credentials` are fixture values derived from the trial's seed, for the challenge site. The password goes to the fabric like any sign-in and is stored nowhere.
+- The grader receives every question the run asked (`asked`): its kind, its input, the masked prompt, when, and what the scripted owner answered (`none` when nobody did).
+
+## The API
+
+Every route is under `/api/benchmarks`. Reading needs `benchmarks:read`; starting, cancelling and deleting need `benchmarks:run`. Both belong to the organization administrator. There is no MCP tool.
+
+| Route | What it does |
+|---|---|
+| `GET /suite` | The challenges with category, difficulty and `supported`, the defaults and limits of a new benchmark, and `site.reachable` |
+| `GET /` | The administrator's benchmarks, newest first (`limit`, `offset`) |
+| `POST /` | Start one |
+| `GET /{id}` | One benchmark: settings, status, `spentUsd`, `progress` (trial counts by status and verdict), `appVersion` and `commit` |
+| `GET /{id}/trials` | Its trials in run order: verdict, failure reason, checks, `claimedSuccess`, the metrics copied from the run, `runId`. Filters: `status`, `verdict`, `policyRef`, `challengeId` |
+| `POST /{id}/cancel` | Cancel it |
+| `DELETE /{id}` | Delete one that has ended, with its trials. Its runs stay in the run history |
+
+```json
+POST /api/benchmarks
+{
+  "name": "Economy against Thorough",
+  "challengeIds": ["nav-lookup", "form-multistep"],
+  "policies": [{ "ref": "builtin:economy" }, { "ref": "builtin:thorough", "label": "Thorough" }],
+  "trials": 3,
+  "hostId": "6f1c2a5e-0000-4000-8000-000000000001",
+  "profile": "default",
+  "capUsd": 5,
+  "trialTimeoutMinutes": 15
+}
+```
+
+Only `policies` is required: 1 to 8 of them. `challengeIds` defaults to the whole suite, `trials`, `capUsd` and `trialTimeoutMinutes` to the system settings `benchmark.*`, `profile` to `default`, and without `hostId` the fabric picks a node for each trial.
+
+| Refusal | Code |
+|---|---|
+| A challenge the suite does not have | `400 CHALLENGE_UNKNOWN` |
+| A policy that is not a built-in or the administrator's own; a policy or a label listed twice | `400 POLICY_REF_INVALID`, `400 POLICY_DUPLICATE` |
+| A node that is not in the fleet; the fabric did not answer | `400 BENCHMARK_HOST_NOT_FOUND`, `400 BENCHMARK_HOST_UNAVAILABLE` |
+| A node cannot reach the challenge site (the address is a loopback default) | `400 BENCHMARK_SITE_UNREACHABLE` |
+| A benchmark is already live on that node and profile; deleting a live benchmark | `409 BENCHMARK_RUNNING` |
+
+A trial never returns its seed, its token, the site's state or an expected answer.
+
+| Telemetry | |
+|---|---|
+| Counters | `app.benchmarks.started`; `app.benchmarks.trials` by `verdict` |
+| Audit events | `benchmarks.started`, `benchmarks.cancelled`, `benchmarks.deleted` (ids and counts only) |
+| Job | `benchmark.advance`, in Administration, Background jobs |
+
+### Code map
+
+| File (`apps/api/src/benchmark/`) | What it holds |
+|---|---|
+| `benchmarks.controller.ts`, `benchmarks.service.ts`, `benchmarks.schemas.ts` | The routes, start/read/cancel/delete, the request and response shapes |
+| `benchmark.jobs.ts`, `benchmark-runner.service.ts` | The job and one pass over a benchmark |
+| `benchmark-run-starter.ts` | Creates a trial's run |
+| `benchmark-owner.ts`, `owner-script.ts` | The scripted owner, and its rules as pure functions |
+| `benchmark-grader.ts`, `trial-verdict.ts` | The run-end hook, and the verdict as a pure function |
+| `benchmark-site-address.ts` | The site's address and the reachability check |
 
 ## The challenge site
 
@@ -103,4 +219,18 @@ A challenge is one file in `apps/api/src/benchmark/suite/challenges/`. It owns i
 cd console/apps/api
 npx jest --config ./test/jest.config.js benchmark-site                              # the unit tier
 npx jest --config ./test/jest.config.js --testRegex 'benchmark-site\.db\.spec\.ts$' --runInBand   # over HTTP, real Postgres
+```
+
+## Tests
+
+| Spec (`apps/api/test/`) | What it proves |
+|---|---|
+| `benchmark-run.spec.ts` | A trial run's limits and that no other run can carry them, the scripted owner's rules, the verdict, the order of trials, the site address check |
+| `benchmark-run.db.spec.ts` | A benchmark end to end on a real database with a scripted model and the in-memory fabric: every trial graded, a false success, a scripted and an unscripted question, the cap, the timeout, cancel, a node that is down, a crash, the refusals |
+| `support/benchmark-fixtures.ts` | `createGradedBenchmark(prisma, userId, opts)`: a finished benchmark with graded trials, for a spec that reads one |
+
+```bash
+cd console/apps/api
+npx jest --config ./test/jest.config.js benchmark-run
+npx jest --config ./test/jest.config.js --testRegex 'benchmark-run\.db\.spec\.ts$' --runInBand
 ```
