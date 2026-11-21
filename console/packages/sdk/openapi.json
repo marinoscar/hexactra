@@ -50006,51 +50006,6 @@
               "paused"
             ]
           },
-          "agentPricing": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "const": "USD"
-              },
-              "models": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string",
-                  "maxLength": 240,
-                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "inputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "outputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "cachedInputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    }
-                  },
-                  "required": [
-                    "inputPerMTok",
-                    "outputPerMTok"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "currency",
-              "models"
-            ]
-          },
           "connections": {
             "type": "object",
             "properties": {
@@ -50563,51 +50518,6 @@
             },
             "required": [
               "paused"
-            ]
-          },
-          "agentPricing": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "const": "USD"
-              },
-              "models": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string",
-                  "maxLength": 240,
-                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "inputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "outputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "cachedInputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    }
-                  },
-                  "required": [
-                    "inputPerMTok",
-                    "outputPerMTok"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "currency",
-              "models"
             ]
           },
           "connections": {
@@ -51168,61 +51078,6 @@
                     "type": "boolean"
                   }
                 }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "agentPricing": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "currency": {
-                        "type": "string",
-                        "const": "USD"
-                      },
-                      "models": {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string",
-                          "maxLength": 240,
-                          "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                        },
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "inputPerMTok": {
-                              "type": "number",
-                              "minimum": 0,
-                              "maximum": 100000
-                            },
-                            "outputPerMTok": {
-                              "type": "number",
-                              "minimum": 0,
-                              "maximum": 100000
-                            },
-                            "cachedInputPerMTok": {
-                              "type": "number",
-                              "minimum": 0,
-                              "maximum": 100000
-                            }
-                          },
-                          "required": [
-                            "inputPerMTok",
-                            "outputPerMTok"
-                          ]
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               },
               {
                 "type": "null"
@@ -57227,51 +57082,6 @@
                 },
                 "required": [
                   "paused"
-                ]
-              },
-              "agentPricing": {
-                "type": "object",
-                "properties": {
-                  "currency": {
-                    "type": "string",
-                    "const": "USD"
-                  },
-                  "models": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string",
-                      "maxLength": 240,
-                      "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                    },
-                    "additionalProperties": {
-                      "type": "object",
-                      "properties": {
-                        "inputPerMTok": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000
-                        },
-                        "outputPerMTok": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000
-                        },
-                        "cachedInputPerMTok": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 100000
-                        }
-                      },
-                      "required": [
-                        "inputPerMTok",
-                        "outputPerMTok"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "currency",
-                  "models"
                 ]
               },
               "connections": {
