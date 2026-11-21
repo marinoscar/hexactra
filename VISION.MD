@@ -1686,7 +1686,7 @@ The rules are the opt-in rules of Section 27, applied to accounts: a connection 
 
 An owner can watch a run as a video. Decision record: `docs/decisions/run-recordings.md`.
 
-- **Opt-in.** A task's **Record video** switch, or the start-run form's switch, off by default. The choice is part of the run's policy snapshot; a task parameter, a policy, a page or the model cannot turn it on.
+- **Opt-in.** A task's **Record video** switch, or the start-run form's switch, off by default. The choice is fixed on the run when it is created; a task parameter, a policy, a page or the model cannot turn it on.
 - **Continuous video of the session tab**, captured by the extension (a CDP screencast encoded to WebM in an offscreen document), pulled by the runner in chunks and joined into one file when the run ends.
 - **Not masked, and not the trace.** This is the one stored image that is not masked (Section 26.8 still holds for the trace and every export). Frames are dropped while a secret is typed or a sensitive field has focus, and recording pauses while a secret request is open; that reduces exposure, it is not masking.
 - **Owner-only.** Played by its owner through a short-lived signed link; never in an export, a delivery, an agent tool, a model's context or Hexactra's MCP server.
