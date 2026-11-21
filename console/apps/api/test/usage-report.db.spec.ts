@@ -4,7 +4,10 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { PrismaSystemService } from '../src/prisma/prisma-system.service';
+import { priceTable } from '../src/runner/host/policy-snapshot';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -119,5 +122,41 @@ describe('the usage and cost routes (#733)', () => {
     expect(r.granularity).toBe('month');
     expect(r.buckets).toHaveLength(12);
     expect(r.timeZone).toBe('America/Chicago');
+  });
+  it("prices the caller's own report, and their runs, with their own model prices, never the deployment-wide report (#735)", async () => {
+    const doc = await app.inject({ method: 'GET', url: '/api/user-settings', headers: as(alice) });
+    const version = String(doc.json<{ data: { version: number } }>().data.version);
+    const saved = await app.inject({
+      method: 'PATCH',
+      url: '/api/user-settings',
+      headers: { ...as(alice), 'if-match': version },
+      payload: { agentPricing: { models: { [`openai:${model}`]: { inputPerMTok: 1, outputPerMTok: 1 }, [`openai:${other}`]: { inputPerMTok: 1000, outputPerMTok: 0 } } } },
+    });
+    expect(saved.statusCode).toBe(200);
+
+    const mine = (await app.inject({ method: 'GET', url: `/api/usage/report?range=7d&model=${model}`, headers: as(alice) })).json<{ data: Report & { pricing: { overridesApplied: boolean } } }>().data;
+    expect(mine.totals.costUsd).toBeCloseTo(1.1, 6); // 1M * $1 + 0.1M * $1
+    expect(mine.pricing.overridesApplied).toBe(true);
+    // The model with no deployment price is priced by the user's own table.
+    const all = (await app.inject({ method: 'GET', url: '/api/usage/report?range=7d', headers: as(alice) })).json<{ data: Report }>().data;
+    expect(all.unpricedModels).not.toContain(`openai:${other}`);
+
+    // Bob and the administrator still see the deployment's prices.
+    const bobs = (await app.inject({ method: 'GET', url: `/api/usage/report?range=7d&model=${model}`, headers: as(bob) })).json<{ data: Report }>().data;
+    expect(bobs.totals.costUsd).toBeCloseTo(1, 6);
+    const admins = (await app.inject({ method: 'GET', url: `/api/usage/report?scope=all&range=7d&model=${model}`, headers: as(admin) })).json<{ data: Report }>().data;
+    expect(admins.totals.costUsd).toBeCloseTo(4, 6);
+
+    // The runner's table for Alice has her price on top; for Bob, the deployment's.
+    const deps = { systemSettings: app.get(SystemSettingsService, { strict: false }), prisma: app.get(PrismaService), log: { warn: () => undefined } } as never;
+    expect((await priceTable(deps, alice.userId))[`openai:${model}`]).toEqual({ inputPerMTok: 1, outputPerMTok: 1 });
+    expect((await priceTable(deps, bob.userId))[`openai:${model}`]).toEqual({ inputPerMTok: 2, outputPerMTok: 10 });
+
+    // Clearing them goes back to the deployment's prices.
+    const v2 = String((await app.inject({ method: 'GET', url: '/api/user-settings', headers: as(alice) })).json<{ data: { version: number } }>().data.version);
+    expect((await app.inject({ method: 'PATCH', url: '/api/user-settings', headers: { ...as(alice), 'if-match': v2 }, payload: { agentPricing: null } })).statusCode).toBe(200);
+    const after = (await app.inject({ method: 'GET', url: `/api/usage/report?range=7d&model=${model}`, headers: as(alice) })).json<{ data: Report & { pricing: { overridesApplied: boolean } } }>().data;
+    expect(after.totals.costUsd).toBeCloseTo(3, 6);
+    expect(after.pricing.overridesApplied).toBe(false);
   });
 });

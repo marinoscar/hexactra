@@ -110,6 +110,7 @@ export const ROUTES = [
   ['settings', '/settings'],
   ['settings-run-history', '/settings/run-history'],
   ['settings-usage', '/settings/usage'],
+  ['settings-model-prices', '/settings/model-prices'],
   ['settings-tokens', '/settings/tokens'],
   ['settings-agent-policies', '/settings/agent-policies'],
   ['settings-agent-policy-new', '/settings/agent-policies/new'],

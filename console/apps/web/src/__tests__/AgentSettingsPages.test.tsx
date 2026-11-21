@@ -174,3 +174,25 @@ describe('Model prices', () => {
     expect(patchOf(host)!.ifMatch).toBe('5');
   });
 });
+
+describe('My model prices (#735)', () => {
+  it("loads and saves the user's own prices in /user-settings, and clears them with null", async () => {
+    const host = renderPage(<AgentPricingPage scope="user" />, ['user_settings:read', 'user_settings:write'], {
+      'GET /user-settings': { version: 3, agentPricing: { currency: 'USD', models: { 'provider-a:model-big': { inputPerMTok: 1, outputPerMTok: 4 } } } },
+      'PATCH /user-settings': (r: TestApiRequest) => ({ version: 4, ...(r.body as object) }),
+    });
+    expect(await screen.findByRole('heading', { name: 'My model prices' })).toBeInTheDocument();
+    expect(screen.getByText(/replaces the deployment’s price of the same model for your runs/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save prices' }));
+    await screen.findByText(/Your usage report uses them now/);
+    const first = host.requests.find((r) => r.method === 'PATCH')!;
+    expect(first.path).toBe('/user-settings');
+    expect(first.ifMatch).toBe('3');
+    expect(first.body).toEqual({ agentPricing: { models: { 'provider-a:model-big': { inputPerMTok: 1, outputPerMTok: 4 } } } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove provider-a:model-big' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save prices' }));
+    await waitFor(() => expect(host.requests.filter((r) => r.method === 'PATCH')).toHaveLength(2));
+    expect(host.requests.filter((r) => r.method === 'PATCH')[1]!.body).toEqual({ agentPricing: null });
+  });
+});
