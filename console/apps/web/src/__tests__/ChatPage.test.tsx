@@ -94,6 +94,7 @@ function mount({ entry = `/chat/${CHAT_ID}`, responses = {}, permissions = ALL, 
       <MemoryRouter initialEntries={[entry]}>
         <ConfirmProvider>
           <Routes>
+            <Route path="/" element={<ChatPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/chat/new" element={<ChatPage />} />
             <Route path="/chat/:id" element={<ChatPage />} />
@@ -232,6 +233,73 @@ describe('a new chat', () => {
     expect(sent(host, 'POST', '/chats')).toHaveLength(1);
     expect(sent(host, 'POST', `/chats/${NEW_ID}/messages`)[0]!.body).toEqual({ text: 'Find a stroller' });
     expect(await within(thread()).findByText('Find a stroller')).toBeInTheDocument();
+  });
+});
+
+describe('the composer options (#713)', () => {
+  const HOST_ID = '77777777-7777-4777-8777-777777777777';
+  const HOSTS = [{ id: HOST_ID, name: 'home-pc', version: '1', online: true, browserConnected: true, onDemand: false, draining: false, viewerUrl: null, mode: 'unattended', desktop: true, profiles: [], lastSeen: '2026-11-17T10:00:00Z' }];
+  const openOptions = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Chat options' }));
+    return screen.findByRole('list', { name: 'Chat options' });
+  };
+
+  it('/ is the new-chat screen: chat is the home', async () => {
+    mount({ entry: '/' });
+    expect(await screen.findByRole('heading', { name: 'What should I do?' })).toBeInTheDocument();
+    expect(composer()).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Chats' })).toBeInTheDocument();
+  });
+
+  it('on a phone, the home has a way to the chats and no way back', async () => {
+    mount({ entry: '/', width: 390 });
+    expect(await screen.findByRole('heading', { name: 'What should I do?' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Your chats' })).toHaveAttribute('href', '/chat');
+    expect(screen.queryByRole('link', { name: 'Back to chats' })).not.toBeInTheDocument();
+  });
+
+  it('shows the policy and the machine as chips, and saves a policy picked from "+" on the open chat', async () => {
+    const host = mount();
+    await within(thread()).findByText('Which showing?');
+    expect(await screen.findByRole('button', { name: 'Agent policy: Default (Balanced)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Machine: Any machine' })).toBeInTheDocument();
+    const options = await openOptions();
+    fireEvent.click(within(options).getByRole('button', { name: /Agent policy/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Thorough' }));
+    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ policyId: 'builtin:thorough' }));
+    expect(await screen.findByRole('button', { name: 'Agent policy: Thorough' })).toBeInTheDocument();
+  });
+
+  it('keeps a new chat\'s machine and policy and sends them with the request that creates it', async () => {
+    const host = mount({ entry: '/chat/new', responses: { 'GET /fleet/hosts': HOSTS } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Machine: Any machine' }));
+    fireEvent.click(await screen.findByRole('button', { name: /home-pc/ }));
+    expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)).toHaveLength(0);
+    expect(await screen.findByRole('button', { name: 'Machine: home-pc' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /Agent policy:/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Economy' }));
+
+    type('Find a stroller');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sent(host, 'POST', '/chats')[0]?.body).toEqual({ hostId: HOST_ID, policyId: 'builtin:economy' }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(`/chat/${NEW_ID}`));
+  });
+
+  it('opens every setting of an open chat from "+"', async () => {
+    mount();
+    await within(thread()).findByText('Which showing?');
+    const options = await openOptions();
+    fireEvent.click(within(options).getByRole('button', { name: /All chat settings/ }));
+    expect(await screen.findByRole('dialog', { name: 'Chat settings' })).toBeInTheDocument();
+  });
+
+  it('on a new chat, "All chat settings" creates the chat and opens its settings', async () => {
+    const host = mount({ entry: '/chat/new' });
+    const options = await openOptions();
+    fireEvent.click(within(options).getByRole('button', { name: /All chat settings/ }));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(`/chat/${NEW_ID}`));
+    expect(sent(host, 'POST', '/chats')[0]?.body).toEqual({});
+    expect(await screen.findByRole('dialog', { name: 'Chat settings' })).toBeInTheDocument();
   });
 });
 

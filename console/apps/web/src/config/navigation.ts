@@ -3,7 +3,7 @@ import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlined';
-import HomeIcon from '@mui/icons-material/Home';
+import DashboardIcon from '@mui/icons-material/DashboardOutlined';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
 import type { ShellNavigation } from '@marinoscar/platform-web/shell/headless';
@@ -20,11 +20,13 @@ import { USER_SETTINGS_SECTIONS } from './userSettingsSections';
  * `/admin/*` (Console mode). Every `permission` is the exact string the API
  * enforces; the Console shows for anyone who can open one of its cards.
  */
-export const NAVIGATION: ShellNavigation<'home' | 'chat' | 'inbox' | 'tasks' | 'runs' | 'fleet' | 'settings' | 'console'> = {
+export const NAVIGATION: ShellNavigation<'chat' | 'overview' | 'inbox' | 'tasks' | 'runs' | 'fleet' | 'settings' | 'console'> = {
   destinations: [
-    { key: 'home', label: 'Home', compactLabel: 'Home', Icon: HomeIcon, path: '/' },
-    { key: 'chat', label: 'Chat', compactLabel: 'Chat', Icon: ChatBubbleOutlineIcon, path: '/chat', permission: 'chat:read' },
+    // Chat is the home (#713): `/` is a new chat, and every chat is under `/chat`.
+    { key: 'chat', label: 'Chat', compactLabel: 'Chat', Icon: ChatBubbleOutlineIcon, path: '/', permission: 'chat:read' },
     { key: 'inbox', label: 'Inbox', compactLabel: 'Inbox', Icon: InboxOutlinedIcon, path: '/inbox', permission: 'runs:read', badge: useInboxBadge },
+    // The dashboard of runs that was the home page until #713.
+    { key: 'overview', label: 'Overview', compactLabel: 'Overview', Icon: DashboardIcon, path: '/overview' },
     { key: 'tasks', label: 'Tasks', compactLabel: 'Tasks', Icon: AssignmentOutlinedIcon, path: '/tasks', permission: 'tasks:read' },
     { key: 'runs', label: 'Runs', compactLabel: 'Runs', Icon: PlayCircleOutlineIcon, path: '/runs', permission: 'runs:read' },
     { key: 'fleet', label: 'Fleet', compactLabel: 'Fleet', Icon: DnsOutlinedIcon, path: '/fleet', permission: 'fleet:read' },
@@ -39,7 +41,7 @@ export const NAVIGATION: ShellNavigation<'home' | 'chat' | 'inbox' | 'tasks' | '
       pinned: true,
     },
   ],
-  destinationRoutes: { home: ['/'], chat: ['/chat'], inbox: ['/inbox'], tasks: ['/tasks'], runs: ['/runs'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
+  destinationRoutes: { chat: ['/', '/chat'], overview: ['/overview'], inbox: ['/inbox'], tasks: ['/tasks'], runs: ['/runs'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
   settingsSurfaces: [
     { sections: ADMIN_SECTIONS, hubPath: '/admin/settings', hubTitle: 'Administration' },
     { sections: USER_SETTINGS_SECTIONS, hubPath: '/settings', hubTitle: 'Settings' },
@@ -48,14 +50,14 @@ export const NAVIGATION: ShellNavigation<'home' | 'chat' | 'inbox' | 'tasks' | '
 };
 
 /** The daily destinations of the phone bottom bar (below `sm`), in this order: the first three are tabs, the rest are under "More". */
-export const PHONE_BAR_KEYS = ['home', 'chat', 'inbox', 'tasks', 'runs'] as const;
+export const PHONE_BAR_KEYS = ['chat', 'inbox', 'overview', 'tasks', 'runs'] as const;
 
 /**
- * What the phone bottom bar draws: Home, Chat, Inbox and "More" (#486). The
- * shell's bar shows `maxItems` (4) destinations, and with more than that it
- * draws the first three and a "More" tab that lists the others: Tasks and
- * Runs. Chat takes a tab because it is where a job starts and where the
- * agent's requests for that job are answered. Fleet, Settings and
+ * What the phone bottom bar draws: Chat, Inbox, Overview and "More" (#486,
+ * #713). The shell's bar shows `maxItems` (4) destinations, and with more than
+ * that it draws the first three and a "More" tab that lists the others: Tasks
+ * and Runs. Chat comes first because it is the home: where a job starts and
+ * where the agent's requests for that job are answered. Fleet, Settings and
  * Administration stay reachable on a phone from the user menu, which lists
  * every destination of `NAVIGATION`. The routes table is the full one, so on
  * `/fleet` no tab is marked active.

@@ -37,19 +37,19 @@ function renderNav(ui: React.ReactElement, inbox: unknown, permissions = PERMISS
 }
 
 describe('phone bottom bar', () => {
-  it('draws Home, Chat, Inbox and "More" (Tasks and Runs are under it) (#486)', async () => {
+  it('draws Chat, Inbox, Overview and "More" (Tasks and Runs are under it): chat is the home (#486, #713)', async () => {
     restore = mockViewport(390);
     renderNav(<ShellBottomNav navigation={PHONE_NAVIGATION} />, []);
     const tabs = await screen.findAllByRole('button');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Chat', 'Inbox', 'More']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Chat', 'Inbox', 'Overview', 'More']);
     expect(screen.getByRole('button', { name: /More destinations/ })).toBeInTheDocument();
   });
 
-  it('without chat:read keeps the four tabs it had: Home, Inbox, Tasks, Runs, and no "More"', async () => {
+  it('without chat:read draws four tabs: Inbox, Overview, Tasks, Runs, and no "More"', async () => {
     restore = mockViewport(390);
     renderNav(<ShellBottomNav navigation={PHONE_NAVIGATION} />, [], PERMISSIONS.filter((p) => p !== 'chat:read'));
     const tabs = await screen.findAllByRole('button');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Inbox', 'Tasks', 'Runs']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Inbox', 'Overview', 'Tasks', 'Runs']);
     expect(screen.queryByRole('button', { name: /More destinations/ })).not.toBeInTheDocument();
   });
 
@@ -69,13 +69,25 @@ describe('phone bottom bar', () => {
   });
 });
 
+describe('chat is the home (#713)', () => {
+  it('marks Chat active on / and on every chat, and Overview on /overview', async () => {
+    const { resolveActiveDestination, shellDestinationRoutes } = await import('@marinoscar/platform-web/shell/headless');
+    const routes = shellDestinationRoutes(NAVIGATION);
+    expect(resolveActiveDestination(routes, '/')).toBe('chat');
+    expect(resolveActiveDestination(routes, '/chat')).toBe('chat');
+    expect(resolveActiveDestination(routes, '/chat/abc')).toBe('chat');
+    expect(resolveActiveDestination(routes, '/overview')).toBe('overview');
+    expect(resolveActiveDestination(routes, '/tasks')).toBe('tasks');
+  });
+});
+
 describe('Inbox badge on the other surfaces', () => {
   it('is on the rail', async () => {
     restore = mockViewport(1440);
     renderNav(<ShellNavigationRail navigation={NAVIGATION} />, [question('a'), question('b'), question('c')]);
     expect(await screen.findByRole('link', { name: 'Inbox (3)' })).toBeInTheDocument();
     // Every destination is on the rail (tablet and desktop).
-    for (const name of ['Home', 'Tasks', 'Runs', 'Fleet', 'Settings', 'Administration']) expect(screen.getByRole('link', { name })).toBeInTheDocument();
+    for (const name of ['Chat', 'Overview', 'Tasks', 'Runs', 'Fleet', 'Settings', 'Administration']) expect(screen.getByRole('link', { name })).toBeInTheDocument();
   });
 });
 
