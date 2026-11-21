@@ -144,6 +144,8 @@ On a run that succeeded, the result card has **Save as task** (needs `tasks:writ
 
 The draft also proposes **parameters** (#556). A value that would change between runs (an amount, a date, a quantity) becomes a `{{placeholder}}` asked every time. A person, a phone number, an email or an account ending becomes a placeholder whose default is the matching memory (when the owner has one; the model sees memory labels and value names, never their values) or the value from the conversation. Everything else stays text. A Zelle chat drafts `Send {{Amount}} today to {{Recipient phone}} using Zelle on my Bank of America account using the checking account ending in {{Account last 4}}`, with Amount asked every time and the other two defaulted. The definitions are checked like a saved task's: a default that does not fit is dropped, and a malformed goal drafts none. You review every parameter in the task form before anything is saved.
 
+To build a new task by talking it through instead of from a finished chat, use **Build with AI** on Tasks: the [task builder](task-builder.md) interviews you, drafts the schedules too, and opens the same task form.
+
 ## Other clients
 
 The chat is a web surface, recorded in `packages/shared/capabilities.json` (`chats.manage`):
