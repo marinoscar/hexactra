@@ -154,6 +154,14 @@ runPlatformConformance({
           why: 'Connections (E39.2) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'connections:<user id>\'))`) before moving a default account (at most one per provider and capability group) so two concurrent writers of one user cannot both claim it; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
         },
         {
+          file: 'benchmark/benchmark-runner.service.ts',
+          why: 'A benchmark pass (E44.3) takes a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtextextended(\'benchmark:<benchmark id>\', 0))`) so two `benchmark.advance` jobs of one benchmark cannot both start a trial. The key is a bound parameter built from the benchmark\'s own id, the statement names no table and returns nothing.',
+        },
+        {
+          file: 'benchmark/benchmarks.service.ts',
+          why: 'Starting a benchmark (E44.3) takes a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtextextended(\'benchmark:start\', 0))`, a constant key) so two requests cannot both find the same node and profile free. The statement names no table and returns nothing.',
+        },
+        {
           file: 'home/home.service.ts',
           why: 'The Home summary (#430) reads each block in one statement: a window count beside the limited rows, a task name joined on the same user, three named fields out of `runs.policy_snapshot` (the snapshot never leaves the database), and the week bucketed by day in a time zone. Every statement binds the caller\'s `user_id` (`owner_user_id` for questions) and joins only rows of that user.',
         },

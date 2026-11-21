@@ -72,7 +72,7 @@ Hexactra addresses the **execution and control** part of this problem. A separat
 - Guaranteeing that a hardware-bound or user-presence-required authentication ceremony can be completed remotely.
 - Offering fully managed multitenant SaaS, Kubernetes orchestration, or enterprise SSO on day one.
 - Implementing generalized cross-OS desktop automation before Linux Chrome is dependable.
-- Recording all screen contents or every page field indefinitely.
+- Recording all screen contents or every page field indefinitely. (An owner can opt a task or run into a video recording of its browser tab, kept for an admin-set period: Section 26.10.)
 - Treating a notification as an authorization to perform an action.
 
 ### 3.3 Guiding design principles
@@ -1648,7 +1648,7 @@ The console has a second way to start work, next to Task → Run: a chat (`/chat
 - **A chat can become a task.** The AI drafts a name and a standalone goal; the owner reviews and saves it in the task form.
 - **A web surface.** The CLI, TUI and MCP have no chat, by recorded decision (Section 26.2): a hosted AI app is already a chat and shows the run and question cards in its own thread.
 
-Not included: video streaming, one browser session kept open across a chat's runs, several runs of one chat at once, and chat apps as channels (#293).
+Not included: live video streaming in the thread (a finished run can keep a recording, Section 26.10), one browser session kept open across a chat's runs, several runs of one chat at once, and chat apps as channels (#293).
 
 ### 26.8 Runs you can trust and replay (epic #536)
 
@@ -1679,6 +1679,21 @@ The rules are the opt-in rules of Section 27, applied to accounts: a connection 
 **Audit is not telemetry.** Connection use is in the durable records (the run's steps, with recipients and subject and never a body; the delivery log; the audit events). The OpenTelemetry spans of a connection call carry the provider, the capability and read or write, nothing else, and are not the audit trail (Sections 13.5, 14.1).
 
 **The residual risk, in plain words.** Text the agent read on a page can be put into an email, an invitation or a spreadsheet row that the owner approved, or pre-approved for that recipient. The approval, the recipient rule, the default of read access and the allowed sites limit this; they do not remove it. Threat by threat, what stops it and what does not: `console/docs/security-connections.md`. What is built: `console/docs/connections.md` and `console/docs/deliveries.md`.
+
+### 26.10 Run recordings (epic #755)
+
+**Status: being built in epic #755; not yet run end to end on a deployed stack.**
+
+An owner can watch a run as a video. Decision record: `docs/decisions/run-recordings.md`.
+
+- **Opt-in.** A task's **Record video** switch, or the start-run form's switch, off by default. The choice is part of the run's policy snapshot; a task parameter, a policy, a page or the model cannot turn it on.
+- **Continuous video of the session tab**, captured by the extension (a CDP screencast encoded to WebM in an offscreen document), pulled by the runner in chunks and joined into one file when the run ends.
+- **Not masked, and not the trace.** This is the one stored image that is not masked (Section 26.8 still holds for the trace and every export). Frames are dropped while a secret is typed or a sensitive field has focus, and recording pauses while a secret request is open; that reduces exposure, it is not masking.
+- **Owner-only.** Played by its owner through a short-lived signed link; never in an export, a delivery, an agent tool, a model's context or Hexactra's MCP server.
+- **Retention.** An admin sets how long recordings are kept: 30 days by default, or indefinitely. A nightly job deletes older recordings, and deleting a run deletes its recording.
+- **Secondary to the work.** A recorder error marks the recording failed and never changes the run.
+
+Detail: `console/docs/recordings.md`.
 
 ## 27. Human emulator: full powers (epic #366)
 

@@ -9118,6 +9118,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/benchmarks/suite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The benchmark suite
+         * @description The built-in challenges with their category and difficulty, which of them the agent can attempt (`supported`; the others are reported `unsupported`, never run), the defaults and limits of a new benchmark, and whether a node can reach the challenge site (`site.reachable`).
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_suite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your benchmarks
+         * @description Newest first, each with its settings, what it has spent and how many trials are in each state (`progress`).
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_list"];
+        put?: never;
+        /**
+         * Start a benchmark
+         * @description Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:run`.
+         */
+        post: operations["benchmarks_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one benchmark
+         * @description Its settings, status, spend and trial counts. Poll it while `status` is `queued` or `running`.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a benchmark
+         * @description Permanent. Only a benchmark that has ended.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:run`.
+         */
+        delete: operations["benchmarks_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/{id}/trials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a benchmark's trials
+         * @description Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_trials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a benchmark
+         * @description Nothing more starts, the trials that have not run are `skipped`, and the trial that is running is stopped like any run. A benchmark that already ended is returned unchanged.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:run`.
+         */
+        post: operations["benchmarks_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9292,6 +9414,13 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
+             * @example BENCHMARK_NOT_FOUND
+             * @example BENCHMARK_RUNNING
+             * @example BENCHMARK_SITE_UNREACHABLE
+             * @example BENCHMARK_HOST_UNAVAILABLE
+             * @example BENCHMARK_HOST_NOT_FOUND
+             * @example CHALLENGE_UNKNOWN
+             * @example POLICY_DUPLICATE
              * @example ERROR
              */
             code: string;
@@ -22612,6 +22741,247 @@ export interface components {
             allowedHosts?: string[];
             /** @description Hosts that are never allowed, whatever the allow-list says. Replaces the stored list. */
             blockedHosts?: string[];
+        };
+        BenchmarkSuiteResponseDto: {
+            key: string;
+            /** @description Two benchmarks compare only within one suite key and version. */
+            version: number;
+            categories: {
+                /** @enum {string} */
+                id: "navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety";
+                label: string;
+            }[];
+            challenges: {
+                id: string;
+                title: string;
+                /** @enum {string} */
+                category: "navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety";
+                difficulty: number;
+                requires: ("pointer" | "real_keys" | "file_upload" | "file_download")[];
+                /** @description False: the agent lacks a capability the challenge needs, so its trials are reported `unsupported` and never run. */
+                supported: boolean;
+                /** @description The capabilities the agent lacks. */
+                missing: ("pointer" | "real_keys" | "file_upload" | "file_download")[];
+                /** @description Whether the trial run asks before a risky step. */
+                confirmRiskyActions: boolean;
+            }[];
+            defaults: {
+                trials: number;
+                capUsd: number;
+                trialTimeoutMinutes: number;
+            };
+            limits: {
+                maxPolicies: number;
+                maxTrials: number;
+                maxCapUsd: number;
+                maxTrialTimeoutMinutes: number;
+            };
+            site: {
+                /** @description Where a node's browser reaches the challenge site. */
+                baseUrl: string;
+                /** @description False: a node cannot reach that address, and a benchmark cannot start. */
+                reachable: boolean;
+                problem: string | null;
+            };
+        };
+        BenchmarkListResponseDto: {
+            items: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                suiteKey: string;
+                suiteVersion: number;
+                config: {
+                    challengeIds: string[];
+                    policies: {
+                        ref: string;
+                        label: string;
+                    }[];
+                    trials: number;
+                    hostId: string | null;
+                    profile: string;
+                    capUsd: number;
+                    trialTimeoutMinutes: number;
+                };
+                /** @description The console version when the benchmark started. */
+                appVersion: string;
+                /** @description The build's commit when it started; null on a development build. */
+                commit: string | null;
+                /** @description USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`. */
+                spentUsd: number;
+                progress: {
+                    total: number;
+                    pending: number;
+                    running: number;
+                    /** @description Trials that ran and were judged: `pass` + `fail` + `error`. */
+                    graded: number;
+                    /** @description Trials that never ran, or were stopped: cancelled, the spend cap, an unsupported challenge. */
+                    skipped: number;
+                    pass: number;
+                    fail: number;
+                    error: number;
+                    unsupported: number;
+                };
+                totals: {
+                    inputTokens: number;
+                    outputTokens: number;
+                    /** @description Input tokens served from the provider cache: a subset of `inputTokens`. */
+                    cachedInputTokens: number;
+                    modelCalls: number;
+                    /** @description USD on model calls. The same sum as `spentUsd`. */
+                    costUsd: number;
+                    /** @description False when a model call of any trial could not be priced: `costUsd` is then a lower bound. */
+                    costKnown: boolean;
+                };
+                baselineId: string | null;
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+            }[];
+            total: number;
+        };
+        BenchmarkResponseDto: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "cancelled" | "failed";
+            suiteKey: string;
+            suiteVersion: number;
+            config: {
+                challengeIds: string[];
+                policies: {
+                    ref: string;
+                    label: string;
+                }[];
+                trials: number;
+                hostId: string | null;
+                profile: string;
+                capUsd: number;
+                trialTimeoutMinutes: number;
+            };
+            /** @description The console version when the benchmark started. */
+            appVersion: string;
+            /** @description The build's commit when it started; null on a development build. */
+            commit: string | null;
+            /** @description USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`. */
+            spentUsd: number;
+            progress: {
+                total: number;
+                pending: number;
+                running: number;
+                /** @description Trials that ran and were judged: `pass` + `fail` + `error`. */
+                graded: number;
+                /** @description Trials that never ran, or were stopped: cancelled, the spend cap, an unsupported challenge. */
+                skipped: number;
+                pass: number;
+                fail: number;
+                error: number;
+                unsupported: number;
+            };
+            totals: {
+                inputTokens: number;
+                outputTokens: number;
+                /** @description Input tokens served from the provider cache: a subset of `inputTokens`. */
+                cachedInputTokens: number;
+                modelCalls: number;
+                /** @description USD on model calls. The same sum as `spentUsd`. */
+                costUsd: number;
+                /** @description False when a model call of any trial could not be priced: `costUsd` is then a lower bound. */
+                costKnown: boolean;
+            };
+            baselineId: string | null;
+            createdAt: string;
+            startedAt: string | null;
+            finishedAt: string | null;
+        };
+        CreateBenchmarkDto: {
+            /** @description Absent: "Benchmark" and the date. */
+            name?: string;
+            /** @description The challenges to run, by id (`GET /api/benchmarks/suite`). Absent: every challenge of the suite. */
+            challengeIds?: string[];
+            /** @description The agent policies to compare, 1 to 8. Each challenge runs under each of them. */
+            policies: {
+                /** @description An agent policy: `builtin:<key>` or the id of one of your own. */
+                ref: string;
+                /** @description The column's name in the scorecard. Absent: the policy's name. */
+                label?: string;
+            }[];
+            /** @description Attempts per challenge and policy. Absent: the deployment default (`benchmark.defaultTrials`). */
+            trials?: number;
+            /** @description The node every trial runs on. Absent: the fabric picks an available one for each trial. */
+            hostId?: string | null;
+            /**
+             * @description The browser profile on the node.
+             * @default default
+             */
+            profile?: string;
+            /** @description No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`. */
+            capUsd?: number;
+            /** @description How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`. */
+            trialTimeoutMinutes?: number;
+        };
+        BenchmarkTrialListResponseDto: {
+            /** @description In the order the trials run. */
+            items: {
+                id: string;
+                challengeId: string;
+                /** @description The challenge's title; its id when the suite no longer has it. */
+                challengeTitle: string;
+                category: ("navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety") | null;
+                policyRef: string;
+                policyLabel: string;
+                /** @description 0-based attempt of this challenge under this policy. */
+                trialIndex: number;
+                /** @enum {string} */
+                status: "pending" | "running" | "graded" | "skipped";
+                /** @description Null until the trial is judged or skipped. */
+                verdict: ("pass" | "fail" | "error" | "skipped" | "unsupported") | null;
+                failureReason: ("wrong_result" | "gave_up" | "budget" | "stalled" | "asked_person" | "timeout" | "error" | "no_model" | "cancelled" | "cap" | "unsupported") | null;
+                /** @description The grader's named checks. A trial passes only when every check passes; `safety:<name>` guards an invariant. */
+                checks: {
+                    name: string;
+                    pass: boolean;
+                    detail?: string;
+                }[] | null;
+                /** @description Whether the agent said it succeeded: compared with the verdict for the false-success rate. */
+                claimedSuccess: boolean | null;
+                /** @description The trial's run (`GET /api/runs/{id}`); null before it starts and after the run is deleted. */
+                runId: string | null;
+                durationMs: number | null;
+                activeMs: number | null;
+                steps: number | null;
+                modelCalls: number | null;
+                inputTokens: number | null;
+                outputTokens: number | null;
+                cachedInputTokens: number | null;
+                /** @description The model of the run's start tier (`provider:modelId`); null before grading or when unknown. */
+                model: string | null;
+                models: {
+                    startTier: string;
+                    maxTier: string;
+                    /** @description The tier the run was on when it ended. */
+                    finalTier: string;
+                    /** @description The start tier's model, `provider:modelId`. */
+                    model: string | null;
+                    /** @description The tiers from start to max: the only ones the run may use. */
+                    tiers: {
+                        tier: string;
+                        model: string | null;
+                        fallbackModel: string | null;
+                    }[];
+                } | null;
+                costUsd: number | null;
+                /** @description False when a model call could not be priced: `costUsd` is then a lower bound. */
+                costKnown: boolean | null;
+                /** @description The run's stop reason (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`). */
+                stopReason: string | null;
+                /** @description Questions the agent asked a person. */
+                questions: number | null;
+                escalations: number | null;
+                startedAt: string | null;
+                finishedAt: string | null;
+            }[];
         };
     };
     responses: never;
@@ -51473,6 +51843,408 @@ export interface operations {
                 content?: never;
             };
             /** @description The same page for an unknown, closed or malformed token and for a page the challenge does not have. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_suite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkSuiteResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBenchmarkDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkResponseDto"];
+                    };
+                };
+            };
+            /** @description `CHALLENGE_UNKNOWN`, `POLICY_REF_INVALID`, `POLICY_DUPLICATE`, `BENCHMARK_HOST_NOT_FOUND`, `BENCHMARK_HOST_UNAVAILABLE` or `BENCHMARK_SITE_UNREACHABLE`: the message names the challenge, the policy, the node or the address. Nothing was started. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_RUNNING`: a benchmark is already running on that node and profile. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted, with its trials. The runs it started stay in the run history. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `BENCHMARK_RUNNING`: cancel it first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_trials: {
+        parameters: {
+            query?: {
+                status?: "pending" | "running" | "graded" | "skipped";
+                verdict?: "pass" | "fail" | "error" | "skipped" | "unsupported";
+                policyRef?: string;
+                challengeId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkTrialListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
             404: {
                 headers: {
                     [name: string]: unknown;
