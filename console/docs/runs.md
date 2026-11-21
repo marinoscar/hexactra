@@ -31,7 +31,7 @@ All of them work with and without `envelope`.
 | `status` | one or more of `queued`, `running`, `waiting_human`, `paused`, `succeeded`, `failed`, `cancelled` | Any of them. |
 | `state` | `live` or `finished` | `live` = `queued`, `running`, `waiting_human`, `paused`; `finished` = `succeeded`, `failed`, `cancelled`. Not together with `status`. |
 | `taskId` | a task's UUID, or `none` | `none` is the runs without a task (ad-hoc and external runs). A task that is not yours is an empty list. |
-| `trigger` | one or more of `manual`, `schedule`, `api`, `mcp`, `external`, `chat`, `email` | Any of them. |
+| `trigger` | one or more of `manual`, `schedule`, `api`, `mcp`, `external`, `chat`, `email`, `benchmark` | Any of them. Without this parameter the trial runs of a benchmark (`benchmark`, E44) are left out of the list, the counts and a delete by filter; name `benchmark` to select them. |
 | `from`, `to` | ISO 8601 date-time with a zone (`2026-06-01T00:00:00Z`) | On the creation time: `from` inclusive, `to` exclusive. |
 | `q` | 1 to 200 characters | Case-insensitive substring of the goal. Plain text: `%` and `_` are not wildcards. Empty is ignored. |
 | `stopReason` | one or more stop reasons (`finished`, `budget_cost`, `stalled`, …), or `budget` | Any of them. `budget` is every `budget_*` reason. |
