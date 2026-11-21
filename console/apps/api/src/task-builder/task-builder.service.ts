@@ -1,10 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Conversation, Prisma } from '@prisma/client';
 
-import { ChatTurnQueue } from '../chat/chat-turn.job';
 import { ChatService, type ChatMessageView } from '../chat/chat.service';
 import { PrismaService } from '../prisma/prisma.service';
 import './task-builder.errors';
+import { TaskBuilderTurnQueue } from './task-builder-turn.enqueue';
 import { mergeSpec, readSpec, taskBuilderSpecSchema, type TaskBuilderSpec, type TaskBuilderSpecPatch } from './task-builder.spec.schema';
 
 /** A task builder as the API answers it. */
@@ -48,7 +48,7 @@ export class TaskBuilderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly chats: ChatService,
-    private readonly turns: ChatTurnQueue,
+    private readonly turns: TaskBuilderTurnQueue,
   ) {}
 
   private db(userId: string) {
@@ -75,7 +75,7 @@ export class TaskBuilderService {
     return { ...view(c), messages: detail.messages, hasMore: detail.hasMore, thinking: detail.thinking };
   }
 
-  /** The owner's message; the builder's reply arrives as later messages (a `chat.turn` job). */
+  /** The owner's message; the builder's reply arrives as later messages (a `task_builder.turn` job). */
   async postMessage(user: Principal, id: string, text: string): Promise<ChatMessageView> {
     const c = await this.owned(user.id, id);
     if (c.status === 'archived') throw archived();

@@ -13,7 +13,7 @@ const stamp = `${Date.now()}`;
 
 const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
-  // No job worker: a posted message queues a `chat.turn` job that this suite does not run.
+  // No job worker: a posted message queues a `task_builder.turn` job that this suite does not run.
   process.env.JOBS_WORKER_MODE = 'off';
   app = await createApp();
   await app.init();
@@ -81,8 +81,9 @@ describe('task builder (E42.1)', () => {
     expect(row.mode).toBe('task_builder');
     // A builder lists no connection: it never runs anything.
     expect(await prisma.conversationConnection.count({ where: { conversationId: seeded.data.id } })).toBe(0);
-    // The turn is queued like a chat's.
-    expect(await prisma.job.count({ where: { type: 'chat.turn', subjectId: seeded.data.id } })).toBe(1);
+    // The builder's own turn is queued, never a chat's.
+    expect(await prisma.job.count({ where: { type: 'task_builder.turn', subjectId: seeded.data.id } })).toBe(1);
+    expect(await prisma.job.count({ where: { type: 'chat.turn', subjectId: seeded.data.id } })).toBe(0);
   });
 
   it('posts a message and queues a turn', async () => {
@@ -90,7 +91,7 @@ describe('task builder (E42.1)', () => {
     const m = await call<{ seq: number; role: string }>(owner, 'POST', `/task-builder/${b.data.id}/messages`, { text: 'Book a tennis court' });
     expect(m.statusCode).toBe(201);
     expect(m.data).toMatchObject({ seq: 1, role: 'user' });
-    expect(await prisma.job.count({ where: { type: 'chat.turn', subjectId: b.data.id } })).toBe(1);
+    expect(await prisma.job.count({ where: { type: 'task_builder.turn', subjectId: b.data.id } })).toBe(1);
   });
 
   it('changes the spec: merges, clears with null, refuses what does not pass', async () => {
