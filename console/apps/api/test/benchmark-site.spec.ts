@@ -19,7 +19,7 @@ import { navNewTabPlan } from '../src/benchmark/suite/challenges/nav-new-tab';
 import { navPaginationPlan } from '../src/benchmark/suite/challenges/nav-pagination';
 import { navSpaPlan } from '../src/benchmark/suite/challenges/nav-spa';
 import { amountsIn, mentions, normalise, reportedAmount, reportedValue, storedField } from '../src/benchmark/suite/compare';
-import { html, page } from '../src/benchmark/suite/pages';
+import { html } from '../src/benchmark/suite/pages';
 import { SUITE, challengeById, seedFrom, suiteProblems } from '../src/benchmark/suite/registry';
 import { formatPrice } from '../src/benchmark/suite/seeded';
 import type { Challenge, Check, GradeInput, Seed, SiteState } from '../src/benchmark/suite/types';
@@ -395,7 +395,8 @@ describe('the pages and their files', () => {
   });
 
   it('escapes everything a page is given as text', () => {
-    const markup = renderPage(page({ title: '<b>"T"</b>', brand: 'A & B', body: html`<p title="${'"><script>x()</script>'}">${'<img src=x onerror=alert(1)>'}${[html`<i>${'a&b'}</i>`, null, false, 3]}</p>` }).kind === 'page' ? { title: '<b>"T"</b>', brand: 'A & B', body: html`<p title="${'"><script>x()</script>'}">${'<img src=x onerror=alert(1)>'}${[html`<i>${'a&b'}</i>`, null, false, 3]}</p>` } : (null as never), './');
+    const view = { title: '<b>"T"</b>', brand: 'A & B', body: html`<p title="${'"><script>x()</script>'}">${'<img src=x onerror=alert(1)>'}${[html`<i>${'a&b'}</i>`, null, false, 3]}</p>` };
+    const markup = renderPage(view, './');
     expect(markup).toContain('<title>&lt;b&gt;&quot;T&quot;&lt;/b&gt;</title>');
     expect(markup).toContain('<p title="&quot;&gt;&lt;script&gt;x()&lt;/script&gt;">&lt;img src=x onerror=alert(1)&gt;<i>a&amp;b</i>3</p>');
     expect(markup).toContain('>A &amp; B</a>');

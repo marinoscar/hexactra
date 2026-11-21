@@ -87,7 +87,7 @@ A challenge is one file in `apps/api/src/benchmark/suite/challenges/`. It owns i
 4. **Write `site.handle(request)`.** It receives the method, the path below the trial's root, the query, the posted body, the seed and the state, and returns `page(...)`, `json(...)`, `redirect(...)` or `notFound()` (`suite/pages.ts`).
    - Build markup with the `html` tag. It escapes every value.
    - Build every address from `request.root`: `${request.root}orders/${id}`.
-   - To change the state, return the new state: `redirect('done', { state })`. Never change `request.state` in place. The handler may run again for the same request, so it must depend only on its input.
+   - To change the state, return the new state: `redirect('done', { state })`, `json(data, { state })`, `page(view, { state })` or `withState(response, state)`. Never change `request.state` in place. The handler may run again for the same request, so it must depend only on its input.
    - Change the state only on a completed interaction. A script error must never be able to mark a challenge passed.
    - Validate everything posted. Use `field(body, name)` for text.
 5. **Add a page script only if the page needs one.** Put it in `apps/api/assets/benchmark-site/<id>.js` and name it in the page's `scripts`. Use `window.BenchmarkSite` (`site.js`) for calls: `get(path)`, `post(path, body)`, `el(tag, attrs, children)`. No `innerHTML`, no absolute address. Styles go in `site.css` as classes; a page has no inline style. Canvas drawing, shadow roots and same-origin frames are allowed by the site's policy (`frame-src 'self'`).

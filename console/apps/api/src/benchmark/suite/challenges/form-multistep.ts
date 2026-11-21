@@ -1,7 +1,7 @@
 // form-multistep (E44.2, #740): a registration in three steps (contact, address, plan), each a real form post validated by the server.
 // A step with a mistake comes back with its errors; the phone number in the goal is written with a dash and the form wants digits only.
 import { sameText, storedField } from '../compare';
-import { field, html, notFound, page, redirect, type Html, type SiteRequest, type SiteResponse } from '../pages';
+import { field, html, notFound, page, redirect, withState, type Html, type SiteRequest, type SiteResponse } from '../pages';
 import { seeded } from '../seeded';
 import type { Challenge, Check, Json, Seed, SiteState } from '../types';
 import { STREETS, TOWNS, record } from './shared';
@@ -119,7 +119,7 @@ function handle(req: SiteRequest): SiteResponse {
     const errors: Fields = {};
     if (!(PLANS as readonly string[]).includes(plan)) errors.plan = 'Choose a plan.';
     if (field(req.body, 'terms') !== 'yes') errors.terms = 'Accept the terms to continue.';
-    if (Object.keys(errors).length) return { ...planStep(req, draft, plan, errors), state: { ...req.state, rejected } } as SiteResponse;
+    if (Object.keys(errors).length) return withState(planStep(req, draft, plan, errors), { ...req.state, rejected });
     return redirect('done', { state: { ...req.state, record: { ...draft, plan } } });
   }
   const values: Fields = {};
@@ -129,7 +129,7 @@ function handle(req: SiteRequest): SiteResponse {
     const problem = f.check(values[f.name]!);
     if (problem) errors[f.name] = problem;
   }
-  if (Object.keys(errors).length) return { ...fieldStep(req, n, values, errors), state: { ...req.state, rejected } } as SiteResponse;
+  if (Object.keys(errors).length) return withState(fieldStep(req, n, values, errors), { ...req.state, rejected });
   return redirect(`step/${n + 1}`, { state: { ...req.state, draft: { ...draft, ...values } } });
 }
 

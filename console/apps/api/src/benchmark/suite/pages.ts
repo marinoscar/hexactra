@@ -89,6 +89,9 @@ export const redirect = (to: string, options: Pick<Options, 'state'> = {}): Site
 /** The site's one 404. */
 export const notFound = (): SiteResponse => ({ kind: 'not_found' });
 
+/** The same answer, also storing `state` (a page that comes back with its errors and counts the attempt). */
+export const withState = (response: SiteResponse, state: SiteState): SiteResponse => (response.kind === 'not_found' ? response : { ...response, state });
+
 /** A challenge's pages and endpoints: everything under the trial's root is routed here. */
 export interface ChallengeSite {
   handle(request: SiteRequest): SiteResponse;
