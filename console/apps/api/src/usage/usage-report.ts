@@ -285,3 +285,39 @@ export function usageCsv(rows: readonly UsageRow[], opts: { window: UsageWindow;
     });
   return [header.join(','), ...body].join('\r\n') + '\r\n';
 }
+
+/** The cost of one slice at `prices` (USD), or null when its model has no price and it used tokens. */
+export function rowCost(r: Pick<UsageRow, 'provider' | 'modelId' | 'inputTokens' | 'cachedInputTokens' | 'outputTokens' | 'reasoningTokens'>, prices: PriceTable): number | null {
+  const price = prices[priceKey(r.provider, r.modelId)];
+  if (!price) return r.inputTokens + r.outputTokens > 0 ? null : 0;
+  const c = costSplit(tokenSplit(r), price);
+  return c.input + c.cachedInput + c.output + c.reasoning;
+}
+
+/** Spend per user and in total, for alerts (#736): known USD, and whether every slice was priced. */
+export interface SpendSummary {
+  totalUsd: number;
+  totalKnown: boolean;
+  users: { userId: string | null; usd: number; known: boolean }[];
+}
+
+/** Sums `rows` into a spend summary at `prices`. Pure. */
+export function spendSummary(rows: readonly UsageRow[], prices: PriceTable): SpendSummary {
+  const users = new Map<string, { userId: string | null; usd: number; known: boolean }>();
+  let totalUsd = 0;
+  let totalKnown = true;
+  for (const r of rows) {
+    const cost = rowCost(r, prices);
+    const key = r.userId ?? '';
+    const u = users.get(key) ?? { userId: r.userId, usd: 0, known: true };
+    if (cost === null) {
+      u.known = false;
+      totalKnown = false;
+    } else {
+      u.usd += cost;
+      totalUsd += cost;
+    }
+    users.set(key, u);
+  }
+  return { totalUsd: round6(totalUsd), totalKnown, users: [...users.values()].map((u) => ({ ...u, usd: round6(u.usd) })).sort((a, b) => b.usd - a.usd) };
+}

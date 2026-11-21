@@ -3,6 +3,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy }
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsageReportService } from '../usage/usage-report.service';
 import { BUDGET_STOP_REASONS } from '../runner/budget';
 import { RUN_BUDGET_ERROR_LIST } from '../runner/run-budget-errors';
 import { HEXACTRA_ALERT_RULES, setAlertSources, type AlertSources } from './hexactra-alert-kinds';
@@ -25,6 +26,7 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
     private readonly fabric: FabricClient,
     private readonly prisma: PrismaService,
     private readonly approvals: ApprovalRulesService,
+    private readonly usage: UsageReportService,
   ) {}
 
   readonly sources: AlertSources = {
@@ -90,6 +92,7 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
         return r ? [{ userId: c.userId, stalls: c._count._all, latest: { runId: r.id, taskName: r.task?.name ?? null, goal: r.goal } }] : [];
       });
     },
+    monthlyAiSpend: (now) => this.usage.monthToDate(now),
     expensiveRuns: async (overUsd, since) => {
       const rows = await this.prisma.run.findMany({
         where: { createdAt: { gte: since }, costUsd: { gt: overUsd } },

@@ -10399,10 +10399,6 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
-            approvals?: {
-                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
-                paused: boolean;
-            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -10413,6 +10409,10 @@ export interface components {
                         cachedInputPerMTok?: number;
                     };
                 };
+            };
+            approvals?: {
+                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                paused: boolean;
             };
             connections?: {
                 /**
@@ -10515,10 +10515,6 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
-            approvals?: {
-                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
-                paused: boolean;
-            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -10529,6 +10525,10 @@ export interface components {
                         cachedInputPerMTok?: number;
                     };
                 };
+            };
+            approvals?: {
+                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                paused: boolean;
             };
             connections?: {
                 /**
@@ -10627,9 +10627,6 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             } | null;
-            approvals?: {
-                paused?: boolean;
-            } | null;
             agentPricing?: ({
                 /** @constant */
                 currency?: "USD";
@@ -10641,6 +10638,9 @@ export interface components {
                     };
                 };
             } | null) | null;
+            approvals?: {
+                paused?: boolean;
+            } | null;
             connections?: {
                 /**
                  * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
@@ -10716,6 +10716,17 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            agentPricing: {
+                /** @constant */
+                currency: "USD";
+                models: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            };
             notes: {
                 archiveAfterDays: number;
             };
@@ -10750,17 +10761,6 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
                     fallbackModel: string | null;
-                };
-            };
-            agentPricing: {
-                /** @constant */
-                currency: "USD";
-                models: {
-                    [key: string]: {
-                        inputPerMTok: number;
-                        outputPerMTok: number;
-                        cachedInputPerMTok?: number;
-                    };
                 };
             };
             browserAgentCeilings: {
@@ -11007,6 +11007,17 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            agentPricing?: {
+                /** @constant */
+                currency: "USD";
+                models: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            };
             notes?: {
                 archiveAfterDays: number;
             };
@@ -11041,17 +11052,6 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
                     fallbackModel: string | null;
-                };
-            };
-            agentPricing?: {
-                /** @constant */
-                currency: "USD";
-                models: {
-                    [key: string]: {
-                        inputPerMTok: number;
-                        outputPerMTok: number;
-                        cachedInputPerMTok?: number;
-                    };
                 };
             };
             browserAgentCeilings?: {
@@ -11303,6 +11303,17 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            agentPricing?: {
+                /** @constant */
+                currency?: "USD";
+                models?: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            };
             notes?: {
                 archiveAfterDays?: number;
             };
@@ -11336,17 +11347,6 @@ export interface components {
                     maxOutputTokens?: number | null;
                     /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
                     fallbackModel?: string | null;
-                };
-            };
-            agentPricing?: {
-                /** @constant */
-                currency?: "USD";
-                models?: {
-                    [key: string]: {
-                        inputPerMTok: number;
-                        outputPerMTok: number;
-                        cachedInputPerMTok?: number;
-                    };
                 };
             };
             browserAgentCeilings?: {
@@ -11917,10 +11917,6 @@ export interface components {
                     /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                     noticeSentAt?: string | null;
                 };
-                approvals?: {
-                    /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
-                    paused: boolean;
-                };
                 agentPricing?: {
                     /** @constant */
                     currency: "USD";
@@ -11931,6 +11927,10 @@ export interface components {
                             cachedInputPerMTok?: number;
                         };
                     };
+                };
+                approvals?: {
+                    /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                    paused: boolean;
                 };
                 connections?: {
                     /**

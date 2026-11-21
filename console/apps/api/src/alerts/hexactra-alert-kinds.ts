@@ -32,6 +32,16 @@ export interface AlertSources {
   failingDeliveries?(minFailures: number, since: Date): Promise<FailingDelivery[]>;
   /** Saved card payments (E37.7) per user since `since`: how many cards were typed (`number` released) and the largest declared amount. Optional. */
   cardUsage?(since: Date): Promise<CardUsage[]>;
+  /** AI spend since the start of the current UTC month (#736): in total and per user, at the deployment's prices. Optional. */
+  monthlyAiSpend?(now: Date): Promise<MonthlyAiSpend>;
+}
+
+/** AI spend this month (#736): USD and whether every call was priced; users by id only. */
+export interface MonthlyAiSpend {
+  since: Date;
+  totalUsd: number;
+  totalKnown: boolean;
+  users: { userId: string | null; usd: number; known: boolean }[];
 }
 
 /** A run whose job was interrupted again and again (E38.3): which run and how many times; never a step or a page. */
@@ -157,6 +167,8 @@ export const HEXACTRA_ALERT_KINDS = {
   RUN_RECOVERED: 'hexactra_run_recovered',
   /** E39.6. The starter rule's key is `hexactra.delivery_failing`. */
   DELIVERY_FAILING: 'hexactra_delivery_failing',
+  /** #736. The starter rule's key is `hexactra.ai_spend_monthly`. */
+  AI_SPEND_MONTHLY: 'hexactra_ai_spend_monthly',
 } as const;
 
 const hostOfflineConfig = z.object({ includeDraining: z.boolean().default(false) });
@@ -394,6 +406,56 @@ export const deliveryFailingKind: AlertRuleKind<z.infer<typeof deliveryFailingCo
   describe: (rule) => `One delivery failed ${rule.config.minFailures} or more times within ${rule.config.windowHours} h`,
 };
 
+const monthlySpendConfig = z
+  .object({
+    /** The most the whole deployment should spend on AI in a calendar month (UTC), USD; null checks no total. */
+    maxDeploymentUsd: z.number().positive().nullable().default(null),
+    /** The most one user should spend in a month, USD; null checks no user. */
+    maxUserUsd: z.number().positive().nullable().default(null),
+    /** Fire once spend reaches this share of a limit (100 fires only at the limit). */
+    warnAtPercent: z.number().int().min(1).max(100).default(80),
+  });
+// Both amounts null checks nothing (the rule then never fires).
+export const aiSpendMonthlyKind: AlertRuleKind<z.infer<typeof monthlySpendConfig>> = {
+  id: HEXACTRA_ALERT_KINDS.AI_SPEND_MONTHLY,
+  label: 'Monthly AI spend',
+  description: "AI spend this calendar month (UTC), from every model call at the deployment's model prices, reached a share of the deployment's or one user's monthly amount.",
+  configSchema: monthlySpendConfig,
+  async evaluate(ctx, rule) {
+    const source = need().monthlyAiSpend;
+    if (!source) return [];
+    const { maxDeploymentUsd, maxUserUsd, warnAtPercent } = rule.config;
+    const spend = await source(ctx.now);
+    const share = (usd: number, max: number) => Math.round((usd / max) * 100);
+    const out: AlertObservation[] = [];
+    if (maxDeploymentUsd !== null) {
+      const pct = share(spend.totalUsd, maxDeploymentUsd);
+      out.push({
+        labels: { scope: 'deployment' },
+        value: spend.totalUsd,
+        breached: pct >= warnAtPercent,
+        summary: `${rule.name}: the deployment spent ${usd(spend.totalUsd, spend.totalKnown)} on AI this month, ${pct}% of ${usd(maxDeploymentUsd)}`,
+      });
+    }
+    if (maxUserUsd !== null) {
+      for (const u of spend.users) {
+        if (!u.userId) continue;
+        const pct = share(u.usd, maxUserUsd);
+        if (pct < warnAtPercent) continue;
+        out.push({ labels: { 'user.id': u.userId }, value: u.usd, breached: true, summary: `${rule.name}: a user spent ${usd(u.usd, u.known)} on AI this month, ${pct}% of ${usd(maxUserUsd)}` });
+      }
+    }
+    return out;
+  },
+  describe: (rule) =>
+    [
+      rule.config.maxDeploymentUsd !== null ? `the deployment's AI spend this month reaches ${rule.config.warnAtPercent}% of ${usd(rule.config.maxDeploymentUsd)}` : null,
+      rule.config.maxUserUsd !== null ? `one user's reaches ${rule.config.warnAtPercent}% of ${usd(rule.config.maxUserUsd)}` : null,
+    ]
+      .filter(Boolean)
+      .join(', or '),
+};
+
 // Run retention keeps runs for these kinds' windows: a new kind that reads `runs` joins the list.
 const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, HEXACTRA_ALERT_KINDS.RUN_RECOVERED, HEXACTRA_ALERT_KINDS.DELIVERY_FAILING];
 if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_KINDS.some((k) => !RUN_READERS.includes(k))) {
@@ -409,6 +471,7 @@ registerAlertRuleKind(approvalBusyKind);
 registerAlertRuleKind(cardUseKind);
 registerAlertRuleKind(runRecoveredKind);
 registerAlertRuleKind(deliveryFailingKind);
+registerAlertRuleKind(aiSpendMonthlyKind);
 
 /**
  * The rules the console creates once (by key); admins tune them at
@@ -430,4 +493,6 @@ export const HEXACTRA_ALERT_RULES = [
   { key: 'hexactra.run_recovered', name: 'Run keeps being interrupted', kind: HEXACTRA_ALERT_KINDS.RUN_RECOVERED, severity: 'warning', config: { minRecoveries: 4, windowHours: 24 }, forSeconds: 0, enabled: true },
   // E39.6: a delivery after a run that failed three times in a day (its runs read the log, so retention keeps them as long as the window).
   { key: 'hexactra.delivery_failing', name: 'Delivery keeps failing', kind: HEXACTRA_ALERT_KINDS.DELIVERY_FAILING, severity: 'warning', config: { minFailures: 3, windowHours: 24 }, forSeconds: 0, enabled: true },
+  // #736: off by default, like the expensive run: the amounts depend on the deployment's prices and budget.
+  { key: 'hexactra.ai_spend_monthly', name: 'Monthly AI spend', kind: HEXACTRA_ALERT_KINDS.AI_SPEND_MONTHLY, severity: 'warning', config: { maxDeploymentUsd: 500, maxUserUsd: null, warnAtPercent: 80 }, forSeconds: 0, enabled: false },
 ] as const;
