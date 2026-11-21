@@ -109,6 +109,7 @@ export const ROUTES = [
   // Settings (the user's hub and its pages).
   ['settings', '/settings'],
   ['settings-run-history', '/settings/run-history'],
+  ['settings-usage', '/settings/usage'],
   ['settings-tokens', '/settings/tokens'],
   ['settings-agent-policies', '/settings/agent-policies'],
   ['settings-agent-policy-new', '/settings/agent-policies/new'],
@@ -211,6 +212,7 @@ export const ROUTES = [
   ['admin-agent-model-tiers', '/admin/settings/agent-model-tiers'],
   ['admin-agent-ceilings', '/admin/settings/agent-ceilings'],
   ['admin-agent-pricing', '/admin/settings/agent-pricing'],
+  ['admin-usage', '/admin/settings/usage'],
   ['admin-factory-reset', '/admin/settings/factory-reset'],
   ['admin-run-history', '/admin/settings/run-history'],
   ['admin-oauth-clients', '/admin/settings/oauth-clients'],

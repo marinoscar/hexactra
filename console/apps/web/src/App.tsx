@@ -72,6 +72,7 @@ import { AgentPolicyEditorPage } from './pages/AgentPolicyEditorPage';
 import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
+import { AdminUsagePage, MyUsagePage } from './pages/UsagePage';
 import { SavedApprovalsPage } from './pages/SavedApprovalsPage';
 import { AdminSecretsPage } from './pages/AdminSecretsPage';
 import { SecretsSettingsPage } from './pages/SecretsSettingsPage';
@@ -299,6 +300,9 @@ export function AppRoutes() {
           <Route path="admin/settings/agent-model-tiers" element={<Gate permission="system_settings:read"><ModelTiersPage scope="deployment" /></Gate>} />
           <Route path="admin/settings/agent-ceilings" element={<Gate permission="system_settings:read"><AgentCeilingsPage /></Gate>} />
           <Route path="admin/settings/agent-pricing" element={<Gate permission="system_settings:read"><AgentPricingPage /></Gate>} />
+          {/* AI usage and cost (#734): `usage:read` and `ai_config:read` are what GET /api/usage/report enforces for scope=me and scope=all. */}
+          <Route path="settings/usage" element={<Gate permission="usage:read"><MyUsagePage /></Gate>} />
+          <Route path="admin/settings/usage" element={<Gate permission="ai_config:read"><AdminUsagePage /></Gate>} />
           {/* Memories (#551): `memories:read` is what /api/memories enforces; writes are gated in the page. */}
           <Route path="settings/memories" element={<Gate permission="memories:read"><MemoriesPage /></Gate>} />
           <Route path="settings/run-history" element={<Gate permission="runs:delete"><RunHistorySettingsPage /></Gate>} />

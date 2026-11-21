@@ -2,6 +2,7 @@ import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
@@ -123,6 +124,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: LinkOutlinedIcon,
         path: '/settings/connections',
         permission: 'connections:read',
+      },
+      // AI usage and cost (#734). `usage:read` is what GET /api/usage/report enforces for the caller's own usage
+      // (apps/api/src/usage/usage.controller.ts).
+      {
+        title: 'My usage & cost',
+        description: 'The AI tokens you used and what they cost, by day, month and model. Export as CSV.',
+        Icon: InsightsOutlinedIcon,
+        path: '/settings/usage',
+        permission: 'usage:read',
       },
     ],
   },
