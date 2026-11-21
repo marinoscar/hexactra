@@ -52,7 +52,7 @@ import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections'
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
 import { FleetPage } from './pages/FleetPage';
-import { HomePage } from './pages/HomePage';
+import { OverviewPage } from './pages/OverviewPage';
 import { ChatPage } from './pages/ChatPage';
 import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
@@ -124,6 +124,15 @@ function Gate({ permission, children }: { permission: string; children: ReactEle
   return (
     <RequirePermission permission={permission} fallback={<Navigate to="/" replace />}>
       {children}
+    </RequirePermission>
+  );
+}
+
+/** `/` (#713): chat is the home, for a person who may read chats; without `chat:read` the overview of runs. */
+function HomeRoute() {
+  return (
+    <RequirePermission permission="chat:read" fallback={<OverviewPage />}>
+      <ChatPage />
     </RequirePermission>
   );
 }
@@ -237,7 +246,8 @@ export function AppRoutes() {
         {/* OAuth consent (#459: ChatGPT, Claude): signed in, full screen, outside the shell, like /activate. */}
         <Route path="oauth/consent" element={<OAuthConsentPage slots={CONSENT_SLOTS} />} />
         <Route element={shell}>
-          <Route index element={<HomePage />} />
+          <Route index element={<HomeRoute />} />
+          <Route path="overview" element={<OverviewPage />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
           <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />

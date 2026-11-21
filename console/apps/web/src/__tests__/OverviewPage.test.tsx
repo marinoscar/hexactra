@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InboxCountProvider, useInboxCount } from '../components/InboxCountProvider';
 import { NEW_RUN_LINK, budgetColor, checklistSteps, greeting, liveLine, recentTasks, statusSentence, timeLeft, upNextWhen, weekRunsLink } from '../components/home/homeText';
 import { NO_FILTERS, filtersFromParams } from '../components/runFilters';
-import { HOME_ONBOARDED_KEY, HOME_POLL_LIVE_MS, HOME_POLL_MS, HomePage } from '../pages/HomePage';
+import { HOME_ONBOARDED_KEY, HOME_POLL_LIVE_MS, HOME_POLL_MS, OverviewPage } from '../pages/OverviewPage';
 import type { HomeLiveRun, HomeQuestion, HomeRecentRun, HomeSummary } from '../types/home';
 import { ConfirmProvider } from '../ui';
 import { mockViewport } from './matchMedia';
@@ -140,7 +140,7 @@ function mount(summary: HomeSummary | (() => HomeSummary), opts: { permissions?:
       <ConfirmProvider>
         <MemoryRouter initialEntries={['/']}>
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<OverviewPage />} />
             <Route path="*" element={<Where />} />
           </Routes>
         </MemoryRouter>
@@ -251,7 +251,7 @@ describe('the words of the Home page', () => {
   });
 });
 
-describe('HomePage: a busy account', () => {
+describe('OverviewPage: a busy account', () => {
   it('puts Needs you first, with the countdown and the Answer link', async () => {
     vi.useFakeTimers({ now: NOW, shouldAdvanceTime: true });
     mount(busy());
@@ -416,7 +416,7 @@ describe('HomePage: a busy account', () => {
   });
 });
 
-describe('HomePage: quiet, new and restricted accounts', () => {
+describe('OverviewPage: quiet, new and restricted accounts', () => {
   it('a quiet account: one muted line instead of a Running card, and no Needs you', async () => {
     mount(quiet());
     expect(await screen.findByTestId('home-running-empty')).toHaveTextContent('No agent is running right now.');
@@ -511,14 +511,14 @@ describe('HomePage: quiet, new and restricted accounts', () => {
   });
 });
 
-describe('HomePage: loading, errors and polling', () => {
+describe('OverviewPage: loading, errors and polling', () => {
   it('shows a skeleton for every block on the first load', async () => {
     let release: (s: HomeSummary) => void = () => undefined;
     const host = createTestPlatformHost({ permissions: ALL, responses: { 'GET /home/summary': () => new Promise<HomeSummary>((resolve) => (release = resolve)) } });
     render(
       <PlatformHostProvider host={host}>
         <MemoryRouter>
-          <HomePage />
+          <OverviewPage />
         </MemoryRouter>
       </PlatformHostProvider>,
     );
@@ -617,7 +617,7 @@ describe('HomePage: loading, errors and polling', () => {
   });
 });
 
-describe('HomePage: layout', () => {
+describe('OverviewPage: layout', () => {
   it('is one column on a phone, in order of urgency, and two from md', async () => {
     restore = mockViewport(390);
     mount(busy());
@@ -637,7 +637,7 @@ describe('HomePage: layout', () => {
   });
 });
 
-describe('HomePage: the navigation badge', () => {
+describe('OverviewPage: the navigation badge', () => {
   it('re-reads the Inbox count when the summary says another number, and not while they agree (#431)', async () => {
     let waiting = 1;
     const summary = () => {
@@ -655,7 +655,7 @@ describe('HomePage: the navigation badge', () => {
         <ConfirmProvider>
           <MemoryRouter initialEntries={['/']}>
             <InboxCountProvider>
-              <HomePage />
+              <OverviewPage />
               <Badge />
             </InboxCountProvider>
           </MemoryRouter>

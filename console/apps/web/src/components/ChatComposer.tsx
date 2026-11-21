@@ -1,6 +1,6 @@
-import SendIcon from '@mui/icons-material/Send';
-import { Box, IconButton, InputBase, Paper, Tooltip } from '@mui/material';
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import { Box, IconButton, InputBase, Paper, Stack, Tooltip } from '@mui/material';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 import { CHAT_MESSAGE_MAX } from './chatThread';
 
@@ -15,10 +15,12 @@ export interface ChatComposerProps {
   enterSends: boolean;
   /** Put the cursor in the field when the composer appears (a desktop; never a phone, where it would open the keyboard). */
   autoFocus?: boolean;
+  /** The chat's options (#713), drawn in the toolbar under the field, left of Send: the "+" button and the chips of the policy and the machine. */
+  options?: ReactNode;
 }
 
-/** The message field and its send button. Stays usable while the agent works. */
-export function ChatComposer({ value, onChange, onSend, busy = false, placeholder = 'Message', enterSends, autoFocus = false }: ChatComposerProps) {
+/** The message field, its options and its send button. Stays usable while the agent works. */
+export function ChatComposer({ value, onChange, onSend, busy = false, placeholder = 'Message', enterSends, autoFocus = false, options }: ChatComposerProps) {
   const input = useRef<HTMLTextAreaElement | null>(null);
   const canSend = value.trim().length > 0 && !busy;
 
@@ -44,12 +46,12 @@ export function ChatComposer({ value, onChange, onSend, busy = false, placeholde
         e.preventDefault();
         if (canSend) onSend();
       }}
-      sx={{ display: 'flex', alignItems: 'flex-end', gap: 0.5, pl: 2, pr: 0.5, py: 0.5, borderRadius: 6, bgcolor: 'background.paper', '&:focus-within': { borderColor: 'primary.main' } }}
+      sx={{ display: 'flex', flexDirection: 'column', px: 1, pt: 0.5, pb: 1, borderRadius: 6, bgcolor: 'background.paper', boxShadow: 1, '&:focus-within': { borderColor: 'primary.main' } }}
     >
       <InputBase
         inputRef={input}
         multiline
-        maxRows={6}
+        maxRows={8}
         fullWidth
         value={value}
         placeholder={placeholder}
@@ -57,15 +59,32 @@ export function ChatComposer({ value, onChange, onSend, busy = false, placeholde
         onKeyDown={onKeyDown}
         inputProps={{ 'aria-label': 'Message', maxLength: CHAT_MESSAGE_MAX, enterKeyHint: enterSends ? 'send' : 'enter' }}
         // 16 px on a phone: a smaller field makes iOS zoom the page on focus.
-        sx={{ py: 1, fontSize: { xs: 16, sm: 'inherit' } }}
+        sx={{ px: 1, py: 1, fontSize: { xs: 16, sm: 'inherit' } }}
       />
-      <Tooltip title="Send">
-        <Box component="span">
-          <IconButton type="submit" color="primary" aria-label="Send" disabled={!canSend} sx={{ width: 44, height: 44 }}>
-            <SendIcon />
-          </IconButton>
-        </Box>
-      </Tooltip>
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minHeight: 44 }}>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flex: 1, minWidth: 0, overflow: 'hidden' }} role="group" aria-label="Chat options">
+          {options}
+        </Stack>
+        <Tooltip title="Send">
+          <Box component="span">
+            <IconButton
+              type="submit"
+              aria-label="Send"
+              disabled={!canSend}
+              sx={{
+                width: 40,
+                height: 40,
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                '&:hover': { bgcolor: 'primary.dark' },
+                '&.Mui-disabled': { bgcolor: 'action.disabledBackground', color: 'action.disabled' },
+              }}
+            >
+              <ArrowUpwardIcon />
+            </IconButton>
+          </Box>
+        </Tooltip>
+      </Stack>
     </Paper>
   );
 }

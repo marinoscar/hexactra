@@ -74,10 +74,14 @@ function pressButton(name) {
 
 /** Every route the audit opens: `[name, path, options?]`. Append to add a page. */
 export const ROUTES = [
+  // Chat is the home (#713); the dashboard of runs is the overview.
   ['home', '/'],
+  ['home-options', '/', { action: pressButton('Chat options'), viewport: true }],
+  ['overview', '/overview'],
   ['chat', '/chat'],
   ['chat-new', '/chat/new'],
   ['chat-thread', '/chat/{chat}'],
+  ['chat-thread-options', '/chat/{chat}', { action: pressButton('Chat options'), viewport: true }],
   ['inbox', '/inbox'],
   ['question', '/inbox/q/{question}'],
   ['tasks', '/tasks'],

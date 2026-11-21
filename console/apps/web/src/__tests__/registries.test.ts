@@ -63,13 +63,13 @@ describe('shell navigation', () => {
     expect(destination?.permission).toBe('fleet:read');
   });
 
-  it('pins the phone bottom bar: Home, Chat, Inbox, then Tasks and Runs under More, the first five destinations in that order', () => {
+  it('pins the phone bottom bar: Chat, Inbox, Overview, then Tasks and Runs under More, the first five destinations in that order', () => {
     // The shell draws at most four tabs; with more destinations it draws the first
-    // three and "More", which lists the others. Chat takes a tab (#486), so Tasks
-    // and Runs are under "More".
-    expect([...PHONE_BAR_KEYS]).toEqual(['home', 'chat', 'inbox', 'tasks', 'runs']);
+    // three and "More", which lists the others. Chat is the home (#486, #713), so
+    // Tasks and Runs are under "More".
+    expect([...PHONE_BAR_KEYS]).toEqual(['chat', 'inbox', 'overview', 'tasks', 'runs']);
     expect(NAVIGATION.destinations.slice(0, 5).map((d) => d.key)).toEqual([...PHONE_BAR_KEYS]);
-    expect(PHONE_NAVIGATION.destinations.map((d) => d.label)).toEqual(['Home', 'Chat', 'Inbox', 'Tasks', 'Runs']);
+    expect(PHONE_NAVIGATION.destinations.map((d) => d.label)).toEqual(['Chat', 'Inbox', 'Overview', 'Tasks', 'Runs']);
     // Active state still resolves against every destination's routes.
     expect(PHONE_NAVIGATION.destinationRoutes).toBe(NAVIGATION.destinationRoutes);
   });

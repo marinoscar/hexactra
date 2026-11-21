@@ -1,4 +1,4 @@
-// `/`: the page a person opens first (#430). One request, `GET /home/summary`,
+// `/overview`: the dashboard of runs (#430; the home page until #713 made chat the home). One request, `GET /home/summary`,
 // answers: is an agent waiting for me, what is running, what runs next, how
 // did the recent runs go, are my machines up. Each block renders from its part
 // of the response; a block the viewer may not see is null and is not rendered.
@@ -171,7 +171,7 @@ function Slot({ order, children }: { order: number; children: ReactNode }) {
 
 const COLUMN = { display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 3, minWidth: 0 } as const;
 
-export function HomePage() {
+export function OverviewPage() {
   const { api, viewer } = usePlatformHost();
   const name = firstName(useOptionalAuth()?.user?.displayName);
   const timeZone = useProfileTimeZone();
