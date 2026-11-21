@@ -3480,6 +3480,89 @@ components:
             type: string
             enum:
             - reload
+      - type: object
+        description: |-
+          Start recording the tab as video (epic #755, `docs/decisions/run-recordings.md`).
+          The extension runs a CDP screencast of the tab and encodes it to WebM
+          (VP8) in an offscreen document. **The video is not masked**: it is the
+          owner's opt-in run recording, never a trace image. Frames are dropped
+          while a secret is typed or a sensitive field has focus, and while the
+          recording is paused. Result: `{ "recording_id": ... }`. One recording
+          per tab; a second start on the same tab fails with `recording_active`.
+        required:
+        - type
+        properties:
+          max_width:
+            type:
+            - integer
+            - 'null'
+            format: int32
+            description: Widest frame, in CSS pixels (320–1920, default 1280).
+            minimum: 0
+          quality:
+            type:
+            - integer
+            - 'null'
+            format: int32
+            description: JPEG quality of the screencast frames (10–100, default 70).
+            minimum: 0
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - record_start
+      - type: object
+        description: |-
+          Take the encoded bytes written since the last pull. Result:
+          `{ "mime": "video/webm", "data": <base64>, "seq": n, "frames": n,
+          "bytes_total": n, "duration_ms": n }` (at most 8 MiB of `data`; the
+          control plane swaps `data` for an artifact handle, as for a
+          screenshot). The chunks, in `seq` order, concatenate into one WebM file.
+        required:
+        - recording_id
+        - type
+        properties:
+          recording_id:
+            type: string
+          type:
+            type: string
+            enum:
+            - record_pull
+      - type: object
+        description: |-
+          Pause (`paused: true`) or resume the recording: no frame is kept while
+          it is paused (a secret request is open).
+        required:
+        - recording_id
+        - paused
+        - type
+        properties:
+          paused:
+            type: boolean
+          recording_id:
+            type: string
+          type:
+            type: string
+            enum:
+            - record_pause
+      - type: object
+        description: |-
+          Stop the recording and return its last bytes, like `record_pull`, with
+          `"done": true`. The screencast ends and the encoder is released.
+        required:
+        - recording_id
+        - type
+        properties:
+          recording_id:
+            type: string
+          type:
+            type: string
+            enum:
+            - record_stop
       description: |-
         A single bounded browser operation.
 

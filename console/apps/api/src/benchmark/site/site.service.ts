@@ -115,6 +115,7 @@ export class BenchmarkSiteService {
     if (response.kind === 'json') return { status: response.status, type: 'application/json; charset=utf-8', body: JSON.stringify(response.data) };
     // A relative Location: the same redirect works at /benchmark/ behind nginx and at /api/benchmark-site/ in development.
     if (response.kind === 'redirect') return { status: 303, type: HTML, body: '', headers: { location: `${root}${response.to}` } };
+    if (response.kind === 'file') return { status: 200, type: 'text/plain; charset=utf-8', body: response.body, headers: { 'content-disposition': `attachment; filename="${response.name}"` } };
     return { status: response.status, type: HTML, body: renderPage(response.view, root) };
   }
 }
