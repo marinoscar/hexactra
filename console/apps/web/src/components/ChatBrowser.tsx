@@ -25,11 +25,12 @@ import type { RunFrame } from './useRunFrame';
 const CARD_MAX = { xs: '100%', sm: 440 } as const;
 
 /** What the Browser card and the pane say the run is doing, in a few words. */
-export function browserStatusLine(run: Pick<ChatRun, 'status' | 'activity' | 'cancelRequested' | 'pauseRequested'>): string {
+export function browserStatusLine(run: Pick<ChatRun, 'status' | 'activity' | 'cancelRequested' | 'pauseRequested' | 'hasBrowser'>): string {
   if (run.cancelRequested && isLive(run.status)) return 'Stopping…';
   if (run.status === 'paused') return 'Paused';
   if (isPausing(run)) return 'Pausing…';
-  if (run.status === 'queued') return 'Starting the browser…';
+  // A job that has not opened a browser (E41.3) does not speak of one.
+  if (run.status === 'queued') return run.hasBrowser === false ? 'Starting…' : 'Starting the browser…';
   if (run.status === 'waiting_human') return 'Waiting for you';
   if (run.status === 'running') return run.activity ? `${describeActivity(run.activity)}…` : 'Working…';
   return '';
@@ -195,9 +196,14 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
     </Link>
   );
 
+  // A run that has not opened a browser (E41.3): a job done with the owner's accounts. No frame, no browser button; its steps as usual.
+  const noBrowser = run?.hasBrowser === false;
+  const title = noBrowser ? 'Job' : 'Browser';
+  const label = noBrowser ? 'Run' : 'Browser run';
+
   if (!live) {
     return (
-      <CardShell title="Browser" label="Browser run" status={run ? <StatusChip status={run.status} stopReason={run.stopReason} size="small" /> : undefined}>
+      <CardShell title={title} label={label} status={run ? <StatusChip status={run.status} stopReason={run.stopReason} size="small" /> : undefined}>
         {goal}
         <UsedSavedLogins logins={run?.usedSavedLogins} />
         <UsedSavedCards cards={run?.usedSavedCards?.map(cardEntry)} />
@@ -214,8 +220,8 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
 
   return (
     <CardShell
-      title="Browser"
-      label="Browser run"
+      title={title}
+      label={label}
       status={
         <Typography variant="body2" color="text.secondary" role="status" aria-live="polite" noWrap>
           {browserStatusLine(run)}
@@ -224,15 +230,17 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
     >
       <Box ref={anchor}>
         {/* Open: the picture is in the browser pane, one fetch feeds both. */}
-        {!paneOpen && <BrowserFrame frame={frame} activity={run.activity} hidden={frameHidden} now={now} />}
+        {!paneOpen && !noBrowser && <BrowserFrame frame={frame} activity={run.activity} hidden={frameHidden} now={now} />}
       </Box>
       {run.status === 'paused' && <PausedBanner onResume={onResume} />}
       <UsedSavedLogins logins={run.usedSavedLogins} />
       <UsedSavedCards cards={run.usedSavedCards?.map(cardEntry)} />
       <SoftBudgetLine run={run} />
-      <Button fullWidth variant="outlined" onClick={onOpen} disabled={paneOpen} sx={{ mt: 1, minHeight: 44, borderRadius: 3 }}>
-        {paneOpen ? 'Browser is open' : 'Open browser'}
-      </Button>
+      {!noBrowser && (
+        <Button fullWidth variant="outlined" onClick={onOpen} disabled={paneOpen} sx={{ mt: 1, minHeight: 44, borderRadius: 3 }}>
+          {paneOpen ? 'Browser is open' : 'Open browser'}
+        </Button>
+      )}
       {steps}
     </CardShell>
   );

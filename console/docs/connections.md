@@ -256,7 +256,7 @@ Whatever `needsBrowser` says, the agent chooses by capability (E41.2, [runner.md
 
 ### What the chat does
 
-A chat that lists connections answers a simple question about the owner's mail, calendar or documents **itself**, with the read tools only (`mail_search`, `mail_read`, `calendar_list`, `calendar_free_busy`, `docs_search`, `docs_read`, `sheet_read`) and starts no run. It has no write tool: anything that changes something, or needs the browser, is a run (`start_run`), where the gates apply, and the run takes the chat's connections.
+A chat that lists connections answers a simple question about the owner's mail, calendar or documents **itself**, with the read tools only (`mail_search`, `mail_read`, `calendar_list`, `calendar_free_busy`, `docs_search`, `docs_read`, `sheet_read`) and starts no run. It has no write tool: anything that sends, creates or changes is a run (`start_run`), where the gates apply, and the run takes the chat's connections. The chat writes that run's goal as the outcome, names the account by its label and states the facts it already has, and sets `expects` (`accounts`, `browser`, `both`) as a hint the run reads in every round (E41.3; [chat.md](chat.md#how-a-chat-becomes-runs)). The hint grants nothing and removes no tool.
 
 ### What this does not stop
 

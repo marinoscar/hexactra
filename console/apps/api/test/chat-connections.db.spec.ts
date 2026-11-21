@@ -90,8 +90,7 @@ describe('the chat answers from the owner\'s connections', () => {
     const reply = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id, role: 'assistant' } });
     expect(reply.text).toBe('You have a dentist appointment at 9.');
     // The model is told which accounts it may read from, and how to treat what they return.
-    expect(model.seen.input).toContain('Accounts you may read from in this chat');
-    expect(model.seen.input).toContain('c1 "Work" (google)');
+    expect(model.seen.input).toContain('Accounts in this chat: c1 "Work" (google: read only). You may read from them with the read tools; a job (start_run) can also send and change, after asking the owner.');
     expect(model.seen.instructions).toBe(`${CHAT_INSTRUCTIONS}\n${CONNECTION_CHAT_INSTRUCTIONS}`);
   });
 
@@ -104,6 +103,8 @@ describe('the chat answers from the owner\'s connections', () => {
     expect(connectionTools).toEqual(['mail_search', 'mail_read', 'calendar_list', 'calendar_free_busy', 'docs_search', 'docs_read', 'sheet_read']);
     expect(model.outputs[0]).toBe('(not offered: mail_send)');
     expect(kit.fake.account((await prisma.conversationConnection.findFirstOrThrow({ where: { conversationId: chat.id } })).connectionId).sent).toHaveLength(0);
+    // A read and write account is named as such (E41.3): the job can change things, the chat cannot.
+    expect(model.seen.input).toContain('c1 "Work" (google: read and change)');
     // The list is pinned: it is exactly the read tools.
     expect(CHAT_CONNECTION_TOOLS.map((t) => t.name)).toEqual(['mail_search', 'mail_read', 'calendar_list', 'calendar_free_busy', 'docs_search', 'docs_read', 'sheet_read']);
   });
@@ -115,7 +116,7 @@ describe('the chat answers from the owner\'s connections', () => {
     const model = chatModel([]);
     await engine(model.ai).run(chat.id, userId, null);
     expect(model.seen.instructions).toBe(CHAT_INSTRUCTIONS);
-    expect(model.seen.input).not.toContain('Accounts you may read from');
+    expect(model.seen.input).not.toContain('Accounts in this chat');
     expect(model.seen.names.filter((n) => /^(mail|calendar|docs|sheet|file|connections)_/.test(n))).toEqual([]);
   });
 
@@ -139,5 +140,39 @@ describe('the chat answers from the owner\'s connections', () => {
     expect(runModel.offered[0]).toContain('mail_send');
     expect(kit.fake.account(made[0]!.id).sent).toHaveLength(0);
     expect(await prisma.question.count({ where: { runId: run.id, status: 'pending' } })).toBe(1);
+  });
+});
+
+describe('the chat hands a job its outcome, its account and a hint (E41.3)', () => {
+  it('start_run with expects stores the hint on the run, and the run reads it in every round; without a connection it does not', async () => {
+    const userId = await login('expects');
+    const { chat } = await chatWithConnections(userId, [['Work', ['mail_read', 'mail_send'], 'read_write']], 'Email Person B the summary');
+    const model = chatModel([['start_run', { goal: 'An email to person-b@example.test with the summary, using the Work account.', expects: 'accounts' }]]);
+    await engine(model.ai).run(chat.id, userId, null);
+    const run = await prisma.run.findFirstOrThrow({ where: { conversationId: chat.id } });
+    expect((run.transcript as { expects?: string }).expects).toBe('accounts');
+    const runModel = scriptedModel([[['finish', { success: true, result: 'Done.' }]]]);
+    await kit.runner(runModel, fakeFabric()).advance(run.id, userId, null);
+    expect(runModel.inputs[0]).toContain("The chat expects this job to need: the owner's accounts only.");
+    // A hint never removes a tool: the browser is still offered.
+    expect(runModel.offered[0]).toEqual(expect.arrayContaining(['navigate', 'mail_send']));
+
+    // A chat with no connection: the hint is not shown.
+    const plainUser = await login('expects-none');
+    const plain = await chats.create(plainUser, { connections: [] });
+    await chats.postUserMessage(plainUser, plain.id, 'Find the fare');
+    await engine(chatModel([['start_run', { goal: 'The fare to Lisbon on shop.example.test.', expects: 'browser' }]]).ai).run(plain.id, plainUser, null);
+    const plainRun = await prisma.run.findFirstOrThrow({ where: { conversationId: plain.id } });
+    const plainModel = scriptedModel([[['finish', { success: true, result: 'Done.' }]]]);
+    await kit.runner(plainModel, fakeFabric()).advance(plainRun.id, plainUser, null);
+    expect(plainModel.inputs[0]).not.toContain('The chat expects');
+  });
+
+  it('a null expects starts the job with no hint line', async () => {
+    const userId = await login('expects-null');
+    const { chat } = await chatWithConnections(userId, [['Work', ['mail_read'], 'read']], 'Look it up');
+    await engine(chatModel([['start_run', { goal: 'The summary from the Work mailbox.', expects: null }]]).ai).run(chat.id, userId, null);
+    const run = await prisma.run.findFirstOrThrow({ where: { conversationId: chat.id } });
+    expect((run.transcript as { expects?: string } | null)?.expects).toBeUndefined();
   });
 });

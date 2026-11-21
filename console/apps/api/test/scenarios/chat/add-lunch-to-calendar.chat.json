@@ -1,9 +1,31 @@
 {
   "name": "chat: add an event to the calendar",
-  "description": "A change to the owner's calendar is a job: start_run. The goal should name the calendar and the account (pending E41.3).",
-  "connections": [{ "label": "Personal", "capabilities": ["calendar_read", "calendar_write"] }],
+  "description": "A change to the owner's calendar is a job: start_run, naming the calendar and the account.",
+  "connections": [
+    {
+      "label": "Personal",
+      "capabilities": [
+        "calendar_read",
+        "calendar_write"
+      ]
+    }
+  ],
   "message": "Add lunch with Person A tomorrow at noon to my calendar",
-  "script": [["start_run", { "goal": "Add lunch with Person A tomorrow at noon to my calendar." }]],
-  "expect": { "tool": "start_run", "goalIncludes": ["Person A"] },
-  "pending": { "issue": "E41.3", "expect": { "goalIncludes": ["calendar", "Personal"] } }
+  "script": [
+    [
+      "start_run",
+      {
+        "goal": "A calendar event in the Personal account's calendar: lunch with Person A tomorrow at 12:00.",
+        "expects": "accounts"
+      }
+    ]
+  ],
+  "expect": {
+    "tool": "start_run",
+    "goalIncludes": [
+      "Person A",
+      "calendar",
+      "Personal"
+    ]
+  }
 }

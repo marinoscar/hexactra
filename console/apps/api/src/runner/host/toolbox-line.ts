@@ -30,3 +30,15 @@ export function runContextLines<C extends AnyContext>(registry: ToolRegistry<C>,
   const toolbox = toolboxLine(registry, ctx);
   return [...(offersBrowser(registry, ctx) ? [sitesLine(ctx as never)] : []), ...(toolbox ? [toolbox] : []), ...extra];
 }
+
+const EXPECTS: Record<string, string> = {
+  accounts: "the owner's accounts only",
+  browser: 'a website',
+  both: "both a website and the owner's accounts",
+};
+
+/** The chat's hint of what the job needs (E41.3), or null: only for a run with a connection, and never a limit (no tool is removed). */
+export function expectsLine(expects: unknown, hasConnections: boolean): string | null {
+  if (!hasConnections || typeof expects !== 'string' || !(expects in EXPECTS)) return null;
+  return `The chat expects this job to need: ${EXPECTS[expects]}.`;
+}

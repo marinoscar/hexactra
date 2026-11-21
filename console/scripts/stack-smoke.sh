@@ -10,7 +10,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 console=$PWD
-files=(-f base.compose.yml -f prod.compose.yml -f devdb.compose.yml -f app.fabric.compose.yml)
+# The api's memory limit as a deploy applies it (`app.prod.api-memory.compose.yml`, #668): the fabric-connect step below boots a
+# second copy of the application inside the api container, and under the platform's 512M the pair is killed (exit 137, no output).
+files=(-f base.compose.yml -f prod.compose.yml -f devdb.compose.yml -f app.fabric.compose.yml -f app.prod.api-memory.compose.yml)
 fail() { echo "FAIL: $*" >&2; (cd "$console/infra/compose" && docker compose "${files[@]}" logs --tail 80) >&2 || true; exit 1; }
 pass() { echo "ok   $*"; }
 

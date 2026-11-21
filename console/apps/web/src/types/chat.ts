@@ -96,6 +96,8 @@ export interface ChatRun {
   usedSavedLogins?: { itemName: string; origin: string }[];
   /** The saved cards the run paid with (E37.7): brand, last four, the merchant and the amounts. */
   usedSavedCards?: { brand: string | null; last4: string | null; merchant: string; currency: string; declaredAmount: string; confirmedAmount: string | null; mismatch: boolean }[];
+  /** Whether the run has opened a browser (E41.3): a job done with the owner's accounts alone never does. Absent from an older console. */
+  hasBrowser?: boolean;
 }
 
 /** A task drafted from a chat (`POST /chats/:id/task-draft`, and the `meta` of a `task_draft` message). */

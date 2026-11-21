@@ -70,6 +70,8 @@ export interface RunMemory extends BrowserMemory {
   pendingNudge?: string;
   /** What an earlier job of the same chat did (#490): the follow-up's context, shown after the goal. Never a secret. */
   context?: string;
+  /** What the chat that started the run expects the job to need (E41.3): a hint for the agent, never authority; it removes no tool. */
+  expects?: 'accounts' | 'browser' | 'both';
   /** Why the run is on a stronger tier, while it is (the activity shows it). */
   tierNote?: string | null;
   /** Saved logins (E37.3): the references handed out, the page last looked up, the sign-in attempt in progress. Never a value. */
