@@ -40,7 +40,7 @@ const PERMISSIONS = [
   'chat:read', 'chat:write', 'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
   'agent_policies:read', 'agent_policies:write', 'approvals:read', 'approvals:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
-  'usage:read', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
+  'usage:read', 'user_settings:read', 'user_settings:write', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
   'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write',
 ];
@@ -574,7 +574,7 @@ export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
   'GET /auth/providers': { providers: [{ name: 'google', enabled: true }] },
   'GET /auth/me': { id: '99999999-9999-4999-8999-999999999999', email: 'person.a@example.test', displayName: 'Person A', roles: ['admin'], permissions: PERMISSIONS, isActive: true, tenancyMode: 'single' },
-  'GET /user-settings': { settings: { profile: { timezone: 'Etc/UTC' } }, version: 1, browserAgent: { defaultPolicyRef: 'builtin:balanced', tiers: {} } },
+  'GET /user-settings': { settings: { profile: { timezone: 'Etc/UTC' } }, version: 1, browserAgent: { defaultPolicyRef: 'builtin:balanced', tiers: {} }, agentPricing: { currency: 'USD', models: { 'openai:gpt-6-luna': { inputPerMTok: 0.08, outputPerMTok: 0.4, cachedInputPerMTok: 0.008 } } } },
   'GET /system-settings': {
     version: 3,
     agentPricing: { currency: 'USD', models: { 'provider-a:model-small': { inputPerMTok: 0.25, outputPerMTok: 1.25 }, 'provider-a:model-mid': { inputPerMTok: 3, outputPerMTok: 15, cachedInputPerMTok: 0.3 }, 'provider-a:model-large-2026': { inputPerMTok: 15, outputPerMTok: 75, cachedInputPerMTok: 1.5 } } },

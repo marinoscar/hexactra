@@ -135,6 +135,17 @@ type AgentNamespaces = {
   browserAgentCeilings: BudgetCeilings;
 };
 
+/** The signed-in user's own model prices (`agentPricing` of `/user-settings`, #735) and the document version. */
+export async function getUserModelPrices(api: PlatformApiClient): Promise<{ version: number; agentPricing?: Pick<AgentPricing, 'models'> }> {
+  return api.get<{ version: number; agentPricing?: Pick<AgentPricing, 'models'> }>('/user-settings');
+}
+
+/** Saves the user's own prices (the whole table; an empty one clears them). `If-Match` is the document version. */
+export async function patchUserModelPrices(api: PlatformApiClient, models: AgentPricing['models'], version: number): Promise<{ version: number; agentPricing?: Pick<AgentPricing, 'models'> }> {
+  const value = Object.keys(models).length === 0 ? null : { models };
+  return api.patch<{ version: number; agentPricing?: Pick<AgentPricing, 'models'> }>('/user-settings', { agentPricing: value }, { ifMatch: String(version) });
+}
+
 /** `PATCH /system-settings` with one namespace; `If-Match` is the document version (409 when it moved). */
 export function patchAgentSystemSettings<K extends keyof AgentNamespaces>(
   api: PlatformApiClient,

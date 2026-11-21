@@ -1,3 +1,4 @@
+import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
@@ -133,6 +134,14 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: InsightsOutlinedIcon,
         path: '/settings/usage',
         permission: 'usage:read',
+      },
+      // My model prices (#735): the user's own `agentPricing` namespace of GET/PATCH /api/user-settings.
+      {
+        title: 'My model prices',
+        description: 'What each model costs you, if your own key pays a different rate: replaces the deployment price for your runs and usage.',
+        Icon: PaidOutlinedIcon,
+        path: '/settings/model-prices',
+        permission: 'user_settings:read',
       },
     ],
   },

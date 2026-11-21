@@ -170,7 +170,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     tier: s.tier,
     startTier: snapshot.spec.models.startTier,
     active: s.active,
-    prices: await priceTable(d),
+    prices: await priceTable(d, userId),
     // This job hands the run on a little before its lease runs out.
     hopAfterMs: GOAL_RUN_MAX_RUNTIME_MS - GOAL_RUN_HOP_MARGIN_MS,
     startedAt: s.jobStartedAt,

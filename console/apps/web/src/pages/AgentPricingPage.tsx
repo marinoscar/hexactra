@@ -5,7 +5,7 @@ import { useUsableAiModels } from '@marinoscar/platform-web/ai/headless';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
 
-import { getAgentSystemSettings, patchAgentSystemSettings } from '../policies/api';
+import { getAgentSystemSettings, getUserModelPrices, patchAgentSystemSettings, patchUserModelPrices } from '../policies/api';
 import { ModelPicker } from '../policies/ModelPicker';
 import type { ModelPrice } from '../policies/types';
 import { errorText } from '../policies/usePolicyCatalog';
@@ -40,14 +40,24 @@ function rowErrors(row: Row, rows: readonly Row[]): Partial<Record<keyof Row, st
   return out;
 }
 
+export interface AgentPricingPageProps {
+  /** `deployment`: the admin's table (`/system-settings`). `user`: the signed-in user's own prices (`/user-settings`, #735). */
+  scope?: 'deployment' | 'user';
+}
+
 /**
  * `/admin/settings/agent-pricing`: what each model costs per million tokens
  * (`agentPricing`). Run cost and budgets in dollars use it; an unlisted
  * model's calls are unpriced, and a run then shows its cost as "at least".
+ *
+ * `/settings/model-prices` (`scope="user"`, #735): the same editor for the
+ * user's own prices, which replace the deployment's price of the same model
+ * for that user's runs and usage report only.
  */
-export function AgentPricingPage() {
+export function AgentPricingPage({ scope = 'deployment' }: AgentPricingPageProps) {
   const { api, viewer } = usePlatformHost();
-  const canWrite = viewer.hasPermission('system_settings:write');
+  const own = scope === 'user';
+  const canWrite = viewer.hasPermission(own ? 'user_settings:write' : 'system_settings:write');
   const { models } = useUsableAiModels();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [version, setVersion] = useState(0);
@@ -58,7 +68,7 @@ export function AgentPricingPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const doc = await getAgentSystemSettings(api);
+      const doc = own ? await getUserModelPrices(api) : await getAgentSystemSettings(api);
       const table = doc.agentPricing?.models ?? {};
       setRows(
         Object.entries(table)
@@ -69,7 +79,7 @@ export function AgentPricingPage() {
     } catch (e) {
       setError(errorText(e, 'Could not load the prices'));
     }
-  }, [api]);
+  }, [api, own]);
 
   useEffect(() => {
     void load();
@@ -88,7 +98,7 @@ export function AgentPricingPage() {
       for (const r of rows) {
         table[r.key] = { inputPerMTok: Number(r.input), outputPerMTok: Number(r.output), ...(r.cached.trim() ? { cachedInputPerMTok: Number(r.cached) } : {}) };
       }
-      const doc = await patchAgentSystemSettings(api, 'agentPricing', { models: table }, version);
+      const doc = own ? await patchUserModelPrices(api, table, version) : await patchAgentSystemSettings(api, 'agentPricing', { models: table }, version);
       setVersion(doc.version);
       setSaved(true);
     } catch (e) {
@@ -101,14 +111,18 @@ export function AgentPricingPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Model prices"
-        subtitle="What each model costs, in US dollars per million tokens. Run cost, cost budgets and the AI usage report use these prices. A model that is not listed is unpriced: its runs show their cost as “at least”."
+        title={own ? 'My model prices' : 'Model prices'}
+        subtitle={
+          own
+            ? 'What each model costs you, in US dollars per million tokens, if your own key pays a different rate. A price here replaces the deployment’s price of the same model for your runs, your cost budgets and My usage & cost only. Leave a model out to use the deployment’s price.'
+            : 'What each model costs, in US dollars per million tokens. Run cost, cost budgets and the AI usage report use these prices. A model that is not listed is unpriced: its runs show their cost as “at least”. A user may set their own prices for their own runs.'
+        }
       />
       <ErrorBanner error={error} />
       {!rows && !error && <CircularProgress aria-label="Loading" />}
       {rows && (
         <Stack spacing={1.5} aria-label="Prices">
-          {rows.length === 0 && <Alert severity="info">No prices yet. Add the models your runs use.</Alert>}
+          {rows.length === 0 && <Alert severity="info">{own ? 'No prices of your own: your runs use the deployment’s prices.' : 'No prices yet. Add the models your runs use.'}</Alert>}
           {rows.map((r, i) => {
             const errs = rowErrors(r, rows);
             return (
@@ -150,7 +164,7 @@ export function AgentPricingPage() {
               </Paper>
             );
           })}
-          {saved && <Alert severity="success">Saved. New model calls are priced with these values.</Alert>}
+          {saved && <Alert severity="success">{own ? 'Saved. Your usage report uses them now, and your runs from their next step.' : 'Saved. New model calls are priced with these values.'}</Alert>}
           {canWrite && (
             <Stack direction="row" spacing={1}>
               <Button startIcon={<AddIcon />} onClick={() => setRows([...rows, { key: '', input: '', output: '', cached: '' }])}>

@@ -144,7 +144,11 @@ export function UsagePage({ scope }: UsagePageProps) {
         title={title}
         subtitle={subtitle}
         primary={{ key: 'export', label: 'Export CSV', Icon: DownloadOutlinedIcon, onClick: exportCsv, disabled: exporting.busy !== null || !r }}
-        actions={[{ key: 'prices', label: 'Model prices', Icon: PaidOutlinedIcon, to: '/admin/settings/agent-pricing', hidden: !canPrice }]}
+        actions={[
+          scope === 'me'
+            ? { key: 'prices', label: 'My model prices', Icon: PaidOutlinedIcon, to: '/settings/model-prices' }
+            : { key: 'prices', label: 'Model prices', Icon: PaidOutlinedIcon, to: '/admin/settings/agent-pricing', hidden: !canPrice },
+        ]}
       />
       <ErrorBanner error={exporting.error} onClose={exporting.clearError} />
 
@@ -201,7 +205,13 @@ export function UsagePage({ scope }: UsagePageProps) {
                   Set model prices
                 </Link>
               ) : (
-                'Ask an administrator to set their prices.'
+                <>
+                  Ask an administrator to set their prices, or{' '}
+                  <Link component={RouterLink} to="/settings/model-prices">
+                    set your own
+                  </Link>
+                  .
+                </>
               )}
             </Alert>
           )}
