@@ -78,7 +78,10 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages/hexactra-agent/dist ./packages/hexactra-agent/dist
 COPY --from=build /app/packages/hexactra-browser-agent/dist ./packages/hexactra-browser-agent/dist
 # The seed (`npm run prisma:seed`) reads the permission catalog and settings
-# registry from src/, so the image carries them with prisma/.
+# registry from src/, so the image carries them with prisma/. The same copy
+# brings assets/: the report fonts (assets/fonts) and the pages, scripts and
+# stylesheet of the benchmark challenge site (assets/benchmark-site, #740),
+# which dist/ reads at ../../assets and ../../../assets.
 COPY apps/api ./apps/api
 COPY --from=widgets /app/apps/mcp-ui/dist ./apps/mcp-ui/dist
 WORKDIR /app/apps/api

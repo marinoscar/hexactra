@@ -1,0 +1,68 @@
+/* The benchmark challenge site (E44.2, #740). One stylesheet for every challenge; a page has no inline style. */
+*, *::before, *::after { box-sizing: border-box; }
+html { font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #14151f; background: #f5f6fa; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+.site-bar { background: #23255c; padding: 0.75rem 1.25rem; }
+.site-bar a { color: #fff; font-weight: 600; text-decoration: none; }
+main { max-width: 56rem; margin: 1.5rem auto; padding: 1.25rem 1.5rem 2rem; background: #fff; border: 1px solid #dcdfea; border-radius: 0.5rem; }
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+h2 { font-size: 1.15rem; margin: 1.25rem 0 0.5rem; }
+a { color: #3033b8; }
+code { font: 0.95em ui-monospace, "SFMono-Regular", Menlo, monospace; background: #eef0f7; padding: 0.1rem 0.35rem; border-radius: 0.25rem; }
+.muted { color: #5b5f73; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.menu { list-style: none; padding: 0; }
+.menu li { padding: 0.5rem 0; border-bottom: 1px solid #eceef5; }
+.row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin: 0.75rem 0; }
+.stack { display: flex; flex-direction: column; gap: 0.4rem; max-width: 28rem; }
+.stack label, .label { font-weight: 600; margin-top: 0.6rem; }
+.stack label.check { font-weight: 400; display: flex; gap: 0.5rem; align-items: center; }
+input[type="text"], select { font: inherit; padding: 0.5rem 0.6rem; border: 1px solid #b4b8cc; border-radius: 0.35rem; background: #fff; }
+input[aria-invalid="true"] { border-color: #b3261e; }
+button, .button { font: inherit; padding: 0.55rem 1.1rem; border: 1px solid #3033b8; border-radius: 0.35rem; background: #3033b8; color: #fff; cursor: pointer; text-decoration: none; display: inline-block; }
+button.secondary, .button.secondary { background: #fff; color: #3033b8; }
+.errors { border: 1px solid #b3261e; background: #fdecea; color: #7a1a14; border-radius: 0.35rem; padding: 0.5rem 0.9rem; margin: 0.75rem 0; }
+.errors ul, .errors p { margin: 0.25rem 0; }
+.notice { border: 1px solid #1c7c3c; background: #e8f6ec; color: #145a2c; border-radius: 0.35rem; padding: 0.5rem 0.9rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1.25rem; }
+.facts dt { font-weight: 600; }
+.facts dd { margin: 0; }
+
+.grid { width: 100%; border-collapse: collapse; }
+.grid th, .grid td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #e3e5ef; text-align: left; }
+.grid th.num, .grid td.num { text-align: right; }
+.grid th button { background: none; border: 0; color: inherit; font-weight: 600; padding: 0; cursor: pointer; }
+.grid th[aria-sort="ascending"] button::after { content: " \25B2"; }
+.grid th[aria-sort="descending"] button::after { content: " \25BC"; }
+
+.pager { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+.tabs { display: flex; gap: 1rem; border-bottom: 1px solid #dcdfea; padding-bottom: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.tabs a { text-decoration: none; padding: 0.25rem 0.1rem; }
+.tabs a[aria-current="page"] { font-weight: 700; border-bottom: 2px solid #3033b8; }
+.subtabs { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+
+.dropdown, .datepicker { position: relative; }
+.dropdown-toggle, .datepicker-toggle { width: 100%; text-align: left; background: #fff; color: #14151f; border-color: #b4b8cc; }
+.dropdown-toggle::after, .datepicker-toggle::after { content: "\25BE"; float: right; }
+.dropdown-list { position: absolute; z-index: 5; left: 0; right: 0; margin: 0.2rem 0 0; padding: 0.25rem 0; list-style: none; background: #fff; border: 1px solid #b4b8cc; border-radius: 0.35rem; box-shadow: 0 6px 18px rgba(20, 21, 31, 0.15); max-height: 14rem; overflow-y: auto; }
+.dropdown-list li { padding: 0.45rem 0.75rem; cursor: pointer; }
+.dropdown-list li:hover, .dropdown-list li:focus, .dropdown-list li[aria-selected="true"] { background: #e9eaf9; outline: none; }
+.calendar { position: absolute; z-index: 5; left: 0; margin-top: 0.2rem; padding: 0.6rem; width: 19rem; background: #fff; border: 1px solid #b4b8cc; border-radius: 0.35rem; box-shadow: 0 6px 18px rgba(20, 21, 31, 0.15); }
+.calendar-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.calendar-head button { padding: 0.15rem 0.6rem; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.2rem; text-align: center; }
+.calendar-grid span { font-size: 0.8rem; color: #5b5f73; }
+.calendar-grid button { padding: 0.35rem 0; background: #fff; color: #14151f; border-color: #dcdfea; }
+.calendar-grid button[aria-pressed="true"] { background: #3033b8; color: #fff; border-color: #3033b8; }
+
+.feed { list-style: none; padding: 0; margin: 0; }
+.feed-entry { padding: 1.4rem 0.25rem; border-bottom: 1px solid #e3e5ef; display: flex; flex-direction: column; gap: 0.2rem; }
+#feed-end { height: 1px; }
+
+.spinner { display: inline-block; width: 0.9rem; height: 0.9rem; border: 2px solid #b4b8cc; border-top-color: #3033b8; border-radius: 50%; animation: spin 0.9s linear infinite; vertical-align: -0.1rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(20, 21, 31, 0.6); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.modal { background: #fff; border-radius: 0.5rem; padding: 1.25rem 1.5rem; max-width: 26rem; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
+.modal h2 { margin-top: 0; }
