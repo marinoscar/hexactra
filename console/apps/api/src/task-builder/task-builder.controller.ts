@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 
-import { GetChatDto, PostMessageDto } from '../chat/chat.schemas';
+import { GetChatDto, LinkTaskDto, PostMessageDto } from '../chat/chat.schemas';
 import { ChatMessageResponseDto } from '../openapi/chat.responses';
-import { TaskBuilderDetailResponseDto, TaskBuilderResponseDto, TaskBuilderSpecResponseDto } from '../openapi/task-builder.responses';
+import { TaskBuilderDetailResponseDto, TaskBuilderDraftResponseDto, TaskBuilderResponseDto, TaskBuilderSpecResponseDto } from '../openapi/task-builder.responses';
+import { TaskBuilderDraftService } from './task-builder-draft.service';
 import { CreateTaskBuilderDto, PatchTaskSpecDto } from './task-builder.schemas';
 import { TaskBuilderService } from './task-builder.service';
 import type { TaskBuilderSpecPatch } from './task-builder.spec.schema';
@@ -23,7 +24,10 @@ interface Principal {
 @ApiTags('Task builder')
 @Controller('task-builder')
 export class TaskBuilderController {
-  constructor(private readonly builders: TaskBuilderService) {}
+  constructor(
+    private readonly builders: TaskBuilderService,
+    private readonly drafts: TaskBuilderDraftService,
+  ) {}
 
   /** Start a builder. With `seed`, the builder answers that first message at once. */
   @Post()
@@ -55,5 +59,25 @@ export class TaskBuilderController {
   @Auth({ permissions: ['tasks:write'] })
   patchSpec(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: PatchTaskSpecDto) {
     return this.builders.patchSpec(userId, id, body as unknown as TaskBuilderSpecPatch);
+  }
+
+  /**
+   * Draft the task from the spec (E42.2): every field `POST /tasks` takes, with the schedules, and the
+   * `warnings` the owner should check. Nothing is saved: the owner reviews it in the task form.
+   */
+  @Post(':id/draft')
+  @HttpCode(200)
+  @ApiDataResponse(TaskBuilderDraftResponseDto)
+  @Auth({ permissions: ['tasks:write'] })
+  draft(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.drafts.draft(user.id, id, user.activeOrgId ?? null);
+  }
+
+  /** A task was saved from the builder: a line in the thread links it, and the builder is archived. */
+  @Post(':id/task-link')
+  @ApiDataResponse(ChatMessageResponseDto)
+  @Auth({ permissions: ['tasks:write', 'tasks:read'] })
+  link(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: LinkTaskDto) {
+    return this.drafts.link(userId, id, body.taskId);
   }
 }

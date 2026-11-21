@@ -33,6 +33,8 @@ export const aiSlice: ApiSlice = {
     registerAiFeature(BROWSER_AGENT_FEATURE);
     const { CHAT_ORCHESTRATOR_FEATURE } = require('../../chat/chat-orchestrator.feature') as typeof import('../../chat/chat-orchestrator.feature');
     registerAiFeature(CHAT_ORCHESTRATOR_FEATURE);
+    const { TASK_BUILDER_FEATURE } = require('../../task-builder/task-builder.feature') as typeof import('../../task-builder/task-builder.feature');
+    registerAiFeature(TASK_BUILDER_FEATURE);
   },
   modules: () => {
     const { AiModule } = require('./ai.config') as typeof import('./ai.config');

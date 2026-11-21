@@ -7870,6 +7870,40 @@ export interface paths {
         patch: operations["taskBuilder_patchSpec"];
         trace?: never;
     };
+    "/api/task-builder/{id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        post: operations["taskBuilder_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-builder/{id}/task-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permissions `tasks:write` and `tasks:read`. */
+        post: operations["taskBuilder_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks/events": {
         parameters: {
             query?: never;
@@ -9128,6 +9162,7 @@ export interface components {
              * @example TASK_BUILDER_NOT_FOUND
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
+             * @example TASK_SPEC_INCOMPLETE
              * @example SECRETS_VAULT_NOT_CONFIGURED
              * @example SECRETS_VAULT_URL_REFUSED
              * @example SECRETS_VAULT_DISCONNECT_FIRST
@@ -21559,6 +21594,95 @@ export interface components {
             openQuestions?: string[] | null;
             suggestions?: string[] | null;
             ready?: boolean | null;
+        };
+        TaskBuilderDraftResponseDto: {
+            /** @description A short name the AI wrote, or the chat's title */
+            name: string;
+            /** @description A standalone instruction written from the conversation; the chat's newest run goal when no model answered. Never a secret. */
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            hostFallback: boolean;
+            policyId: string | null;
+            allowedDomains: string[];
+            confirmRiskyActions: boolean;
+            /** @description The chat's saved-logins switch (E37.3), carried over to the task */
+            useSavedLogins: boolean;
+            /** @description The chat's saved-details switch (E37.6), carried over to the task */
+            useSavedIdentity: boolean;
+            /** @description The chat's saved-cards switch (E37.7), carried over to the task */
+            useSavedCards: boolean;
+            /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
+            parameters: {
+                /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                help?: string;
+                /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[];
+            /** @description The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping. */
+            outputs: {
+                /** @description snake_case, unique in the task */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                /** @description What to look for; the agent reads it */
+                help?: string;
+                /** @description Masked in every view and export, and never sent to an AI app */
+                sensitive?: boolean;
+            }[];
+            /** @description E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one. */
+            connections: {
+                /** Format: uuid */
+                connectionId: string;
+                /** @enum {string} */
+                access: "read" | "read_write";
+            }[];
+            /** @enum {string} */
+            unattendedPayments: "ask" | "allow";
+            /** @enum {string} */
+            needsBrowser: "auto" | "always" | "never";
+            /** @description The schedules the spec holds that pass the checks, in the shape `POST /tasks` takes in `schedules[]` */
+            schedules: {
+                cron: string;
+                timezone: string;
+                enabled: boolean;
+                /** @enum {string} */
+                concurrency: "skip" | "queue";
+                policyId: null;
+                /** @description Preset values by parameter key */
+                inputs?: {
+                    [key: string]: string;
+                };
+            }[];
+            /** @description What could not be carried over as the spec said (an unknown account, an invalid schedule), in words for the form */
+            warnings: string[];
         };
         WebhookEventCatalogDto: {
             items: {
@@ -47126,6 +47250,110 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["TaskBuilderSpecResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskBuilder_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskBuilderDraftResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskBuilder_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkTaskDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatMessageResponseDto"];
                     };
                 };
             };

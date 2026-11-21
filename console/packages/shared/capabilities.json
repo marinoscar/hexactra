@@ -963,12 +963,14 @@
     },
     {
       "id": "tasks.builder",
-      "description": "The AI task builder (E42): start one (optionally with the owner's first message), talk to it, and read or change the live task spec it keeps (goal, sites and accounts, parameters, outputs, guardrails, schedules, policy); it interviews the owner and never starts a run or saves a task",
+      "description": "The AI task builder (E42): start one (optionally with the owner's first message), talk to it, read or change the live task spec it keeps (goal, sites and accounts, parameters, outputs, guardrails, schedules, policy), and draft the task from it (with its schedules and what to check) for the owner to review and save in the task form, which links the task and archives the builder; it interviews the owner and never starts a run or saves a task",
       "rest": [
         "POST /api/task-builder",
         "GET /api/task-builder/{id}",
         "POST /api/task-builder/{id}/messages",
-        "PATCH /api/task-builder/{id}/spec"
+        "PATCH /api/task-builder/{id}/spec",
+        "POST /api/task-builder/{id}/draft",
+        "POST /api/task-builder/{id}/task-link"
       ],
       "cli": {
         "none": "The builder is a conversation with a live spec panel; the CLI creates a task from flags with `tasks create`"
