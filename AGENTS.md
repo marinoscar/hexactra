@@ -101,7 +101,7 @@ Dev machine is Ubuntu 24.04 x86_64. Installed: Rust via rustup (stable, with cli
 
 ## Product in one paragraph
 
-A portable, self-hostable computer-use runtime letting authorized AI agents operate real graphical browsers (initially Chrome on Linux) through an HTTP API, TypeScript SDK, CLI and MCP, with persistent profiles, human-in-the-loop (HITL) control, and OpenTelemetry. It is a **personal human emulator with its owner's full powers** (VISION §27, epic #366). The agent:
+A portable, self-hostable computer-use runtime letting authorized AI agents operate real graphical browsers (initially Chrome on Linux) through an HTTP API, TypeScript SDK, CLI and MCP, with persistent profiles, human-in-the-loop (HITL) control, and OpenTelemetry. It is a **personal human emulator with its owner's full powers** (VISION §27, epic #366). It chooses among the browser, the owner's connected accounts and the tools they added by capability (tool families, epic #697). The agent:
 - sees the screen (marked screenshots every model round);
 - acts by selector or by position with trusted mouse and keyboard;
 - runs any JavaScript in the page;

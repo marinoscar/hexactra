@@ -164,7 +164,21 @@ What a run reads (`runInstructions` and `runContextLines`, `apps/api/src/runner/
 
 The tool order is unchanged: the connection and MCP tools are registered after the browser core tools, as before, which keeps the prompt cache and isolates the effect of the text.
 
-**Adding a family.** Write one `ToolFamily` (id, title, `whenToUse`, rank, sections if it needs a how-to, `toolbox` if the run should name something), set `family` on its tools, register both in `registerRunTools` (`apps/api/src/runner/host/run-tools.ts`), add a fake for the scenario kit and a routing scenario that shows the agent choosing it. No prompt rewriting is needed.
+**Artifacts.** Results move between families as handles: a run's masked trace pictures and its PDF report, and with `run: "previous"` those of the chat's last job (E41.4). `save_screenshot` keeps a picture on purpose, and each round lists the steps the agent can attach.
+
+The decision and what is still to measure (the tool order, deferred toolsets): [decisions/tool-families.md](decisions/tool-families.md).
+
+### How to add a tool family
+
+1. **The descriptor.** Write a `ToolFamily` with `id`, `title`, `whenToUse` (one or two sentences: what it is for and when to use it), `rank` (structured families below 50, the browser is 50), `sections` if it needs a how-to, and `toolbox(ctx)` if each round should name something (an account, a server). It lives in a package for agent logic (`packages/hexactra-browser-agent/src/families.ts` is the model), or in `apps/api/src/runner/host/tools/<family>/` for a console service (like `accountsFamily` in `tools/connections/index.ts`).
+2. **The tools.** Set `family` on each tool, and give each a name (permanent), a narrow description, parameters (strict: nullable, not optional), `commits` for anything irreversible, and `gated` for the gates it passes. Follow [How to add a tool](#how-to-add-a-tool).
+3. **Register both** in `registerRunTools` (`apps/api/src/runner/host/run-tools.ts`), the one function the host and the scenario kit share: the tools in their fixed order, and the family with `registerFamilies`.
+4. **A fake for the scenario kit.** Extend `test/replay/connections.ts` (or add a sibling) so a scenario can declare the family's data and the real tools run against it.
+5. **Routing scenarios.** Add at least one where the family is the right choice and one where it must not be used, under `test/scenarios/routing/`, with `toolsUsed`, `mustNotUseFamily`, `firstToolFamily` and `sent` or the family's own effect. Add a chat-front case if the chat should hand it jobs.
+6. **Telemetry.** `toolFamilyOf` gives the family id. Make sure the metric label stays bounded (`familyLabel`: one literal per kind, never an id).
+7. **Hexactra's own MCP server.** If it is also exposed as an MCP tool of Hexactra's server, add it to the capability registry (`packages/shared/capabilities.json`) and to `docs/parity.md`, and follow [MCP tools](../AGENTS.md#mandatory-mcp-tools).
+
+The characterisation snapshot changes when a family's text or a tool is offered in its fixtures: update it deliberately and read the diff. No other prompt rewriting is needed.
 
 **Third-party text.** An MCP server's `instructions` (from `initialize`, kept in the connection's `config.server.instructions`) is cleaned like a tool description and capped, appears only in its family line and never changes the tools offered, the gates or the run's sites (`test/scenarios/routing/mcp-instructions-injection.scenario.json`).
 

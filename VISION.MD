@@ -1688,6 +1688,8 @@ The rules are the opt-in rules of Section 27, applied to accounts: a connection 
 
 ### 27.1 What the agent can do
 
+It chooses among the browser, the owner's connected accounts and the tools the owner added by capability, not by habit: an account or an added tool when one can do the job, the browser for what lives on a website, both when the goal needs both (tool families, epic #697).
+
 | Capability | How | Where |
 |---|---|---|
 | See the page | Each model round starts with a screenshot in CSS pixels, with the interactive elements boxed and numbered, and a list of the marks (selector, label, center). `look` refreshes it. | Extension `screenshot { marks }`; console `vision.ts` |
