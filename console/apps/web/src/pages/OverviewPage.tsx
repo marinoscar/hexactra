@@ -10,6 +10,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useOptionalAuth } from '@marinoscar/platform-web/identity/headless';
 
 import { NeedsReconnectBlock } from '../connections/NeedsReconnectBlock';
+import { chatPaths } from '../components/chatThread';
 import { useInboxCount } from '../components/InboxCountProvider';
 import { useNow } from '../components/RunActivity';
 import { BlockSkeleton, GetStartedBlock, MachinesBlock, NeedsYouBlock, RecentRunsBlock, RunningNowBlock, ThisWeekBlock, UpNextBlock } from '../components/home/blocks';
@@ -111,14 +112,25 @@ function useNoConnectedApps(): boolean {
 }
 
 function QuickStart({ tasks, inputRef, connectApp = false }: { tasks: { id: string; name: string }[]; inputRef: React.RefObject<HTMLInputElement | null>; connectApp?: boolean }) {
-  const { api } = usePlatformHost();
+  const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
   const [goal, setGoal] = useState('');
+  /** Chat is the home (#713): with `chat:write` the goal starts a chat, where the agent can clarify, ask and report; otherwise a one-off run. */
+  const asChat = viewer.hasPermission('chat:write');
   const { run, busy, error, clearError } = useApiAction('Could not start the run');
 
   const start = async (e: FormEvent) => {
     e.preventDefault();
     if (!goal.trim()) return;
+    if (asChat) {
+      const chat = await run('goal', async () => {
+        const created = await api.post<{ id: string }>('/chats', {});
+        await api.post(`/chats/${created.id}/messages`, { text: goal.trim() });
+        return created;
+      });
+      if (chat) navigate(chatPaths.chat(chat.id));
+      return;
+    }
     // The default profile and the default policy: the full form is one link away.
     const created = await run('goal', () => api.post<{ id: string }>('/runs', { goal: goal.trim(), profile: 'default' }));
     if (created) navigate(`/runs/${created.id}`);
@@ -143,7 +155,7 @@ function QuickStart({ tasks, inputRef, connectApp = false }: { tasks: { id: stri
             slotProps={{ htmlInput: { maxLength: 4000 } }}
           />
           <Button type="submit" variant="contained" disabled={busy !== null || !goal.trim()} sx={{ minHeight: { xs: 44, sm: 40 }, px: 3 }}>
-            Run
+            {asChat ? 'Ask' : 'Run'}
           </Button>
         </Stack>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mt: 1.5 }}>

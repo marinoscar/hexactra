@@ -399,7 +399,7 @@ Models, tiers and budgets are [agent policies](#agent-policies): these pages sho
 
 ### Overview
 
-`/overview` (the home page until #713, when chat became the home; a person without `chat:read` still gets it at `/`) answers, from one request (`GET /api/home/summary`): is an agent waiting for me, what is running, what will run next, how did the recent runs go, are my machines up. And it starts a run.
+`/overview` (the home page until #713, when chat became the home; a person without `chat:read` still gets it at `/`) answers, from one request (`GET /api/home/summary`): is an agent waiting for me, what is running, what will run next, how did the recent runs go, are my machines up. Its goal box starts a chat (**Ask**) for a person who may write chats, or a one-off run (**Run**) otherwise.
 
 | On a desktop | On a phone |
 |---|---|

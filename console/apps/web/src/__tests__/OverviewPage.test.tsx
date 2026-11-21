@@ -340,6 +340,16 @@ describe('OverviewPage: a busy account', () => {
     expect(host.requests.find((r) => r.method === 'POST' && r.path === '/runs')!.body).toEqual({ goal: 'Find the cheapest fare', profile: 'default' });
   });
 
+  it('with chat:write, the goal box starts a chat instead of a run and opens it (#713)', async () => {
+    const { host } = mount(busy(), { permissions: [...ALL, 'chat:write'], responses: { 'POST /chats': { id: 'new-chat' }, 'POST /chats/new-chat/messages': {} } });
+    const quick = await screen.findByTestId('home-quick-start');
+    fireEvent.change(within(quick).getByLabelText('What should your agent do?'), { target: { value: '  Find the cheapest fare  ' } });
+    fireEvent.click(within(quick).getByRole('button', { name: 'Ask' }));
+    expect(await screen.findByTestId('where')).toHaveTextContent('/chat/new-chat');
+    expect(host.requests.find((r) => r.method === 'POST' && r.path === '/chats/new-chat/messages')!.body).toEqual({ text: 'Find the cheapest fare' });
+    expect(host.requests.some((r) => r.method === 'POST' && r.path === '/runs')).toBe(false);
+  });
+
   it("runs a recent task from its chip, under the task's own policy, and has no policy select", async () => {
     const { host } = mount(busy(), { responses: { 'POST /tasks/task-2/runs': { id: 'task-run' } } });
     const quick = await screen.findByTestId('home-quick-start');
