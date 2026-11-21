@@ -32,6 +32,8 @@ These reduce exposure; they are not masking.
 
 Anything else on the page is in the video: names, addresses, balances, a document the agent opened.
 
+**Limits.** The recording follows the tab that was active when it started; a page the agent opens in a new tab is not in the video. A run whose browser restarted (a new session) continues in a new recording, and the video skips the time in between (`note: restarted`).
+
 ## Statuses
 
 | Status | Meaning |

@@ -21,6 +21,7 @@ import { ChatModule } from './chat/chat.module';
 import { TaskBuilderModule } from './task-builder/task-builder.module';
 import { ConnectedAppsModule } from './connected-apps/connected-apps.module';
 import { QuestionsModule } from './questions/questions.module';
+import { RecordingsModule } from './recordings/recordings.module';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PoliciesModule } from './policies/policies.module';
@@ -78,6 +79,7 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     TasksModule,
     UsageModule,
     QuestionsModule,
+    RecordingsModule,
     BrowserModule,
     McpSecurityModule,
     McpModule,

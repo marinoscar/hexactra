@@ -107,6 +107,15 @@ When a run opens its browser session for the first time, `openFabricSession` (`a
 - **Never fatal.** A failure is logged (`fresh browser start skipped: …`) and the run goes on with the browser as it is.
 - **Recorded.** A `browser` step (`action: fresh_start`, not an action) says "Started with a fresh browser (restarted it and closed N old tabs)" or "Kept the browser as it was: another session is using the same profile", and the agent reads that it starts on a blank tab.
 
+## The run recording, beside the job (epic #755)
+
+A run whose owner switched **Record video** on (`runs.record_video`) gets a `RunRecorder` (`apps/api/src/runner/host/run-recorder.ts`) for each job, started and ended by `GoalRunnerService` around the loop. It is not a tool and not loop behaviour:
+- It calls the fabric's `record_*` actions (`@marinoscar/hexactra-browser-agent/recording`) beside the loop, like a trace screenshot.
+- It never goes through `executeTool`, is never offered to the model and takes no budget.
+- It starts once the run has a browser session, pulls every 10 s into part objects, pauses while a secret or credentials request is open, holds the recording when the job ends with the run waiting or paused, and stops it when the run ends.
+- Any failure is a short code on `run_recordings.note`; the run is never changed.
+- The job `browser.recordings.finalize` (every minute when one is due) muxes the parts into one WebM. Detail: [recordings.md](recordings.md).
+
 ## Stop (E38.1)
 
 Stop is checked **before the next action**, not after it. The API sets `runs.cancel_requested` and publishes `run.cancel`; the job's `RunStopSignal` (`apps/api/src/runner/stop-signal.ts`) hears the event at once and polls the flag every second as a backstop, and surfaces both through `ControlPort.requested`. The one wrapper, `executeTool`, reads it first thing, so a call the model chose before Stop is not gated, traced, executed or recorded. The same signal aborts the model call in flight (`ModelPort` passes it to `AiService.runTools` as `signal`; an aborted call is `AI_PROVIDER_UNAVAILABLE` with `details.aborted`, treated as the stop, never as a provider failure) and the fabric request of a `wait_for`. An action already sent to the fabric cannot be cancelled there: it finishes, its step says its effect is unknown, and nothing after it starts. The owner-facing behaviour, the routes and `app.runs.stop_latency_ms` are in [runs.md, Stop](runs.md#stop-e381). The rule for code: **a tool is never called except through `executeTool`**, so a tool, a gate or a hook cannot bypass Stop; `harness.spec.ts` and the replay suite's `action_after_stop` rule hold it.
