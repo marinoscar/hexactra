@@ -20,6 +20,7 @@ import { RunTimeline } from './RunTimeline';
 import { softBudgetNotice } from './runBudget';
 import { UsedSavedLogins } from './UsedSavedLogins';
 import { UsedSavedCards } from './UsedSavedCards';
+import { SuggestedConnections, type SuggestedConnection } from './SuggestedConnections';
 import type { RunFrame } from './useRunFrame';
 
 const CARD_MAX = { xs: '100%', sm: 440 } as const;
@@ -331,6 +332,8 @@ interface ResultMeta {
   /** What the run returned (E39.5, #600), masked; absent for a run without outputs. */
   outputs?: RunOutput[] | null;
   outputsComplete?: boolean | null;
+  /** The owner's unlisted accounts that could have done it without the browser (E41.5). */
+  suggestedConnections?: SuggestedConnection[];
 }
 
 /** The step a result's lead sentence names (#540), for the "Run again" question; null when it names none. */
@@ -386,6 +389,7 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
           {meta.savedApprovals}
         </Typography>
       )}
+      <SuggestedConnections items={meta.suggestedConnections} />
       {facts.length > 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
           {facts.join(' · ')}

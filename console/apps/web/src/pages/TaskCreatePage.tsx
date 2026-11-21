@@ -6,6 +6,8 @@ import { getTask } from '../taskForm/api';
 import { TaskForm } from '../components/TaskForm';
 import { GOAL_MAX, copyValues, emptyValues, type TaskFormValues } from '../taskForm/values';
 import type { ChatDraftState, ChatTaskDraft } from '../types/chat';
+import { Alert } from '@mui/material';
+
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 /** The form values of a task drafted from a chat (#489): every field the draft carries, no schedule. */
@@ -28,6 +30,8 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
     parameters: Array.isArray(draft.parameters) ? draft.parameters.filter((p) => p && typeof p.key === 'string').map((p) => ({ ...p })) : [],
     // The outputs the draft proposes from what the finished run reported (E39.5): the owner reviews each row in the form.
     outputs: Array.isArray(draft.outputs) ? draft.outputs.filter((o) => o && typeof o.label === 'string').map((o) => ({ ...o, key: typeof o.key === 'string' ? o.key : '' })) : [],
+    // The chat's accounts its runs used (E41.5): preselected; nothing is listed on the task until the owner saves it.
+    connections: Array.isArray(draft.connections) ? draft.connections.filter((c) => c && typeof c.connectionId === 'string').map((c) => ({ connectionId: c.connectionId, access: c.access === 'read_write' ? 'read_write' : 'read' })) : [],
   };
 }
 
@@ -72,6 +76,11 @@ export function TaskCreatePage() {
     <PageContainer width="default">
       <PageHeader title="New task" subtitle={fromChat ? 'Drafted from your chat. Check it, change what you like, then save.' : undefined} back={fromChat ? { to: `/chat/${fromChat.chatId}`, label: 'Chat' } : { to: '/tasks', label: 'Tasks' }} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
+      {fromChat && (fromChat.chatDraft.connections?.length ?? 0) > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Taken from the chat: check which accounts this task may use.
+        </Alert>
+      )}
       {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} useOwnerSavedLoginsDefault={!fromChat && !from} cancelTo={fromChat ? `/chat/${fromChat.chatId}` : '/tasks'} onCreated={fromChat ? (taskId) => api.post(`/chats/${fromChat.chatId}/task-link`, { taskId }).then(() => undefined) : undefined} />}
     </PageContainer>
   );

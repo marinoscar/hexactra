@@ -13,6 +13,7 @@ import { activeElapsedMs } from '../runner/active-time';
 import { RunEndHooks } from './run-end-hooks';
 import { TaskDeleteHooks } from './task-delete-hooks';
 import { RunEvents } from './run-events';
+import { suggestedConnections } from './run-suggestions';
 import { RunMetrics } from './run-metrics';
 import { PoliciesService } from '../policies/policies.service';
 import type { RunStopReason } from '../runner/budget';
@@ -217,6 +218,12 @@ export class TasksService {
     const memories = r.memoryIds.length ? await this.db(userId).memory.findMany({ where: { id: { in: r.memoryIds } }, select: { id: true, label: true, status: true }, orderBy: { label: 'asc' } }) : [];
     // Steps carry the masked question and whether they have a trace picture, never its object key (#541).
     return withCost({ ...r, steps: r.steps.map(stepView), confirmedActions: readConfirmedActions(r.confirmedActions), memories });
+  }
+
+  /** The owner's unlisted accounts a finished run could have used instead of the browser (E41.5): information only. */
+  async suggestedConnections(userId: string, run: { id: string; taskId: string | null; conversationId: string | null; policySnapshot: unknown; status: string }) {
+    if (!['succeeded', 'failed', 'cancelled'].includes(run.status)) return [];
+    return suggestedConnections(this.prisma, userId, run);
   }
 
   /**

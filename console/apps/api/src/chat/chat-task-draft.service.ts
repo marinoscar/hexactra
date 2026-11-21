@@ -30,7 +30,13 @@ export interface ChatTaskDraft {
   parameters: TaskParameter[];
   /** The values a run of the task would return (E39.5, #600), proposed from what the finished run reported (an amount paid, a confirmation number, a date); empty when nothing is worth keeping. */
   outputs: TaskOutput[];
+  /** The chat's connections its runs used (E41.5), at the access they needed: a proposal for the form, never applied by the server. */
+  connections: { connectionId: string; access: 'read' | 'read_write' }[];
 }
+
+/** The connection tools that change something: a run that used one needed read and write access. */
+const WRITE_TOOLS = new Set(['mail_send', 'mail_draft', 'mail_modify', 'calendar_create_event', 'calendar_update_event', 'calendar_delete_event', 'docs_create', 'docs_append', 'sheet_append_rows', 'sheet_create', 'file_upload']);
+const READ_TOOLS = new Set(['connections_list', 'mail_search', 'mail_read', 'mail_attachment_to_browser', 'calendar_list', 'calendar_free_busy', 'docs_search', 'docs_read', 'sheet_read']);
 
 const NAME_MAX = 200;
 const GOAL_MAX = 4000;
@@ -236,6 +242,35 @@ export class ChatTaskDraftService {
       useSavedCards: c.useSavedCards,
       parameters: draftDefinitions(goal, base.parameters ?? [], memories),
       outputs: draftOutputDefinitions(base.outputs ?? []),
+      connections: await this.usedConnections(userId, c.id),
     };
+  }
+
+  /**
+   * The chat's connections that its runs used (E41.5): read from the runs' successful connection steps (each names its account by label, and
+   * an MCP step the server's tool). Read and write when a run changed something through it (a write tool, or an MCP tool the owner set to
+   * write); read otherwise. Only the chat's own connections are ever proposed, and nothing is written.
+   */
+  private async usedConnections(userId: string, conversationId: string): Promise<ChatTaskDraft['connections']> {
+    const listed = await this.prisma.conversationConnection.findMany({ where: { conversationId, conversation: { userId } }, select: { connectionId: true, connection: { select: { label: true, provider: true } } } });
+    if (listed.length === 0) return [];
+    const byLabel = new Map(listed.map((l) => [l.connection.label.toLowerCase(), l]));
+    const steps = await this.prisma.runStep.findMany({ where: { run: { conversationId, userId }, kind: 'action', ok: true }, select: { action: true, args: true }, take: 2000 });
+    const used = new Map<string, 'read' | 'read_write'>();
+    for (const s of steps) {
+      const action = s.action ?? '';
+      const args = (s.args ?? {}) as { connection?: unknown; tool?: unknown };
+      const isMcp = action.includes('__');
+      if (!isMcp && !WRITE_TOOLS.has(action) && !READ_TOOLS.has(action)) continue;
+      const hit = typeof args.connection === 'string' ? byLabel.get(args.connection.toLowerCase()) : undefined;
+      if (!hit) continue;
+      let write = WRITE_TOOLS.has(action);
+      if (isMcp && typeof args.tool === 'string') {
+        const tool = await this.prisma.connectionMcpTool.findFirst({ where: { connectionId: hit.connectionId, name: args.tool }, select: { mode: true } });
+        write = tool?.mode === 'write';
+      }
+      if (write || !used.has(hit.connectionId)) used.set(hit.connectionId, write ? 'read_write' : (used.get(hit.connectionId) ?? 'read'));
+    }
+    return listed.filter((l) => used.has(l.connectionId)).map((l) => ({ connectionId: l.connectionId, access: used.get(l.connectionId)! }));
   }
 }

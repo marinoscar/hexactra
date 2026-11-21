@@ -65,6 +65,9 @@ export const chatTaskDraftResponseSchema = z.object({
   useSavedCards: z.boolean().describe("The chat's saved-cards switch (E37.7), carried over to the task"),
   parameters: z.array(taskParameterResponseSchema).describe("The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."),
   outputs: z.array(taskOutputResponseSchema).describe('The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping.'),
+  connections: z
+    .array(z.object({ connectionId: z.uuid(), access: z.enum(['read', 'read_write']) }))
+    .describe("E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one."),
 });
 export class ChatTaskDraftResponseDto extends createZodDto(chatTaskDraftResponseSchema) {}
 

@@ -46,6 +46,12 @@ export function AccountChoices({ connections, selections, onChange, disabled = f
                 <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                   {c.accountEmail}
                 </Typography>
+                {/* What an added server is for (E41.5): its own words, rendered as text. */}
+                {c.provider === 'mcp' && c.mcp?.purpose && (
+                  <Typography variant="body2" sx={{ overflowWrap: 'anywhere', mt: 0.25 }} aria-label={`What ${c.label} is for`}>
+                    {c.mcp.purpose}
+                  </Typography>
+                )}
                 <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }} aria-label="What it may do">
                   {capabilityChips(c).map((chip) => (
                     <Chip key={chip} size="small" label={chip} />

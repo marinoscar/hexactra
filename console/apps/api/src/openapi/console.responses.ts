@@ -367,6 +367,10 @@ export class RunDetailResponseDto extends createZodDto(
     memories: z
       .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
       .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),
+    suggestedConnections: z
+      .array(z.object({ connectionId: z.uuid(), label: z.string(), provider: z.string(), site: z.string(), scope: z.enum(['task', 'chat']), text: z.string() }))
+      .optional()
+      .describe('E41.5: the owner\'s connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied.'),
   }),
 ) {}
 

@@ -189,6 +189,20 @@ describe('the task form, opened from a chat', () => {
     expect(host.requests.some((r) => r.path.includes('task-link'))).toBe(false);
   });
 
+  it('preselects the accounts the chat used (E41.5), says where they came from, and lists them only when saved', async () => {
+    const CONN = '55555555-5555-4555-8555-555555555555';
+    const draft = { ...DRAFT, connections: [{ connectionId: CONN, access: 'read_write' as const }] };
+    expect(valuesFromDraft(draft).connections).toEqual([{ connectionId: CONN, access: 'read_write' }]);
+    expect(valuesFromDraft(DRAFT).connections).toEqual([]);
+    const host = mount({ entry: { pathname: '/tasks/new', state: { chatDraft: draft, chatId: CHAT_ID } } });
+    expect(await screen.findByText('Taken from the chat: check which accounts this task may use.')).toBeInTheDocument();
+    // Nothing is written until Save.
+    expect(sent(host, 'POST', '/tasks')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(sent(host, 'POST', '/tasks')).toHaveLength(1));
+    expect(sent(host, 'POST', '/tasks')[0]!.body).toMatchObject({ connections: [{ connectionId: CONN, access: 'read_write' }] });
+  });
+
   it('maps a draft to form values, clipping what is too long and ignoring what is not a draft', () => {
     expect(valuesFromDraft(DRAFT)).toMatchObject({ name: 'Cinema tickets', goal: DRAFT.goal, allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, schedules: [] });
     const long = valuesFromDraft({ ...DRAFT, name: 'n'.repeat(500), goal: 'g'.repeat(9000) });

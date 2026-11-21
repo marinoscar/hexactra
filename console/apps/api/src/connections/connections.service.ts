@@ -1,6 +1,7 @@
 // The owner's connections (E39.2, #599): list, read, rename, change what an account may do, make it the default, pause,
 // resume, test and remove. Every query is the caller's own (`forUser`, and an explicit `userId` in every `where`): another
 // user's id is a 404 like a missing one. Nothing here returns a token, a scope string or a provider message.
+import { sanitizeInstructions } from './mcp/mcp-text';
 import { Injectable, Logger } from '@nestjs/common';
 import type { Connection } from '@prisma/client';
 
@@ -68,10 +69,14 @@ export class ConnectionsService {
     return this.prisma.forUser({ userId });
   }
 
-  private view(row: Connection, mcp?: Map<string, { total: number; enabled: number; needsReview: number }>): ConnectionView {
+  private view(row: Connection, mcp?: Map<string, { total: number; enabled: number; needsReview: number; titles?: string[] }>): ConnectionView {
     if (row.provider === 'mcp') {
       const cfg = readMcpConfig(row.config);
-      return { ...toView(row, []), ...(cfg ? { mcp: { url: cfg.url, auth: cfg.auth.kind, serverName: cfg.server?.name ?? null, tools: mcp?.get(row.id) ?? { total: 0, enabled: 0, needsReview: 0 }, toolsFetchedAt: cfg.toolsFetchedAt ?? null } } : {}) };
+      const s = mcp?.get(row.id);
+      const tools = { total: s?.total ?? 0, enabled: s?.enabled ?? 0, needsReview: s?.needsReview ?? 0 };
+      // What it is for (E41.5): its own instructions, else its first enabled tools.
+      const purpose = sanitizeInstructions(cfg?.server?.instructions ?? '') || (s?.titles?.length ? s.titles.join(', ') : '') || null;
+      return { ...toView(row, []), ...(cfg ? { mcp: { url: cfg.url, auth: cfg.auth.kind, serverName: cfg.server?.name ?? null, tools, toolsFetchedAt: cfg.toolsFetchedAt ?? null, purpose } } : {}) };
     }
     const adapter = isProviderId(row.provider) ? this.registry.get(row.provider) : undefined;
     return toView(row, adapter ? adapter.capabilitiesGranted(row.grantedScopes) : capabilitiesOf(row));

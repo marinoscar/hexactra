@@ -12,7 +12,7 @@ import { McpClientError } from './mcp-client';
 import { readMcpConfig, type McpConfig } from './mcp-config';
 import { McpConnector, toConnectionError, disabledError } from './mcp-connector.service';
 import { MCP_TOOL_MODES, type McpToolMode, type McpToolReview } from './mcp.constants';
-import { sanitizeText } from './mcp-text';
+import { sanitizeInstructions, sanitizeText, sanitizeTitle } from './mcp-text';
 import { planRefresh, suggestedMode, type McpToolDescriptor } from './mcp-tools';
 
 export interface McpToolView {
@@ -93,15 +93,17 @@ export class McpCatalogService {
   }
 
   /** The counts the connection list shows, for several connections. */
-  async summaries(connectionIds: readonly string[]): Promise<Map<string, { total: number; enabled: number; needsReview: number }>> {
-    const out = new Map<string, { total: number; enabled: number; needsReview: number }>();
+  async summaries(connectionIds: readonly string[]): Promise<Map<string, { total: number; enabled: number; needsReview: number; titles?: string[] }>> {
+    const out = new Map<string, { total: number; enabled: number; needsReview: number; titles?: string[] }>();
     if (connectionIds.length === 0) return out;
-    const rows = await this.prisma.connectionMcpTool.findMany({ where: { connectionId: { in: [...connectionIds] } }, select: { connectionId: true, mode: true, review: true } });
+    const rows = await this.prisma.connectionMcpTool.findMany({ where: { connectionId: { in: [...connectionIds] } }, select: { connectionId: true, name: true, title: true, mode: true, review: true }, orderBy: { name: 'asc' } });
     for (const r of rows) {
-      const s = out.get(r.connectionId) ?? { total: 0, enabled: 0, needsReview: 0 };
+      const s = out.get(r.connectionId) ?? { total: 0, enabled: 0, needsReview: 0, titles: [] };
       s.total += 1;
       if (r.mode !== 'off') s.enabled += 1;
       if (r.review !== null) s.needsReview += 1;
+      // The first enabled tools by name (E41.5): what the server is for when it says nothing itself.
+      if (r.mode !== 'off' && s.titles!.length < 5) s.titles!.push(sanitizeTitle(r.title ?? r.name) || r.name);
       out.set(r.connectionId, s);
     }
     return out;

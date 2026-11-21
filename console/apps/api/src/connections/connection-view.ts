@@ -11,6 +11,8 @@ export interface McpConnectionInfo {
   serverName: string | null;
   tools: { total: number; enabled: number; needsReview: number };
   toolsFetchedAt: string | null;
+  /** What the server is for (E41.5): its own `instructions`, cleaned and capped, else its first enabled tool titles; null with neither. Third-party text: render as text. */
+  purpose: string | null;
 }
 
 export interface ConnectionView {

@@ -81,6 +81,7 @@ export const connectionViewSchema = z.object({
       serverName: z.string().nullable(),
       tools: z.object({ total: z.number().int(), enabled: z.number().int(), needsReview: z.number().int().describe('Tools that are new or changed since you last decided: they are off until you review them.') }),
       toolsFetchedAt: iso.nullable(),
+      purpose: z.string().nullable().describe("What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text."),
     })
     .optional()
     .describe('MCP servers only (`provider: mcp`): the address, how it signs in and what its tools stand at. Never a secret.'),

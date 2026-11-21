@@ -201,7 +201,9 @@ export class RunsController {
   @ApiDataResponse(RunDetailResponseDto)
   @Auth({ permissions: ['runs:read'] })
   async get(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
-    return runView(await this.tasks.getRun(userId, id));
+    const run = await this.tasks.getRun(userId, id);
+    // The owner's unlisted accounts that could have done this without the browser (E41.5): a line for the run page, never for the model.
+    return { ...runView(run), suggestedConnections: await this.tasks.suggestedConnections(userId, run) };
   }
 
   @Post(':id/cancel')

@@ -27,6 +27,10 @@
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
     },
+    "./account-hosts": {
+      "types": "./dist/account-hosts.d.ts",
+      "default": "./dist/account-hosts.js"
+    },
     "./browser-port": {
       "types": "./dist/browser-port.d.ts",
       "default": "./dist/browser-port.js"
