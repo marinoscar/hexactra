@@ -40,7 +40,7 @@ const PERMISSIONS = [
   'chat:read', 'chat:write', 'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
   'agent_policies:read', 'agent_policies:write', 'approvals:read', 'approvals:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
-  'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
+  'usage:read', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
   'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write',
 ];
@@ -538,6 +538,38 @@ const memories = [
   memory('a1000000-0000-4000-8000-000000000004', 'fact', 'Old address', { city: 'Example City' }, { status: 'archived' }),
 ];
 
+
+// AI usage and cost (#734): 30 days of three models, one unpriced, stacked by model.
+const usageDays = Array.from({ length: 30 }, (_, i) => new Date(now - (29 - i) * 86_400_000).toISOString().slice(0, 10));
+const usageWave = (base, i) => Math.round(base * (0.6 + 0.4 * Math.sin(i / 3) + (i % 7 === 5 ? 0.8 : 0)));
+const usageSeries = [
+  { key: 'openai:gpt-6.1-sol', label: 'gpt-6.1-sol', perDay: 180_000, price: 0.000004 },
+  { key: 'openai:gpt-6-luna', label: 'gpt-6-luna', perDay: 1_200_000, price: 0.00000015 },
+  { key: 'compatible:local-mixtral-with-a-long-model-name', label: 'local-mixtral-with-a-long-model-name', perDay: 90_000, price: 0 },
+].map((m) => {
+  const tokens = usageDays.map((_, i) => usageWave(m.perDay, i));
+  return { key: m.key, label: m.label, tokens, costUsd: tokens.map((t) => Math.round(t * m.price * 1e6) / 1e6), requests: tokens.map((t) => Math.max(1, Math.round(t / 9000))) };
+});
+const usageSum = (k) => usageSeries.reduce((a, s) => a + s[k].reduce((x, y) => x + y, 0), 0);
+const usageReport = {
+  range: '30d', scope: 'me', breakdown: 'model', timeZone: 'Etc/UTC', granularity: 'day',
+  from: usageDays[0], to: usageDays.at(-1), buckets: usageDays, series: usageSeries,
+  totals: {
+    requests: usageSum('requests'), failed: 12, inputTokens: Math.round(usageSum('tokens') * 0.9), cachedInputTokens: Math.round(usageSum('tokens') * 0.35),
+    outputTokens: Math.round(usageSum('tokens') * 0.1), reasoningTokens: Math.round(usageSum('tokens') * 0.02), tokens: usageSum('tokens'),
+    costUsd: Math.round(usageSum('costUsd') * 100) / 100, costKnown: false,
+    costByTokenType: { input: 14.2, cachedInput: 0.9, output: 9.4, reasoning: 1.1 },
+  },
+  byModel: usageSeries.map((s, i) => ({
+    key: s.key, provider: s.key.split(':')[0], model: s.label, requests: s.requests.reduce((a, b) => a + b, 0), failed: i, inputTokens: Math.round(s.tokens.reduce((a, b) => a + b, 0) * 0.9),
+    cachedInputTokens: Math.round(s.tokens.reduce((a, b) => a + b, 0) * 0.3), outputTokens: Math.round(s.tokens.reduce((a, b) => a + b, 0) * 0.1), reasoningTokens: 0,
+    tokens: s.tokens.reduce((a, b) => a + b, 0), costUsd: i === 2 ? null : Math.round(s.costUsd.reduce((a, b) => a + b, 0) * 100) / 100, costShare: i === 2 ? null : i === 0 ? 0.81 : 0.19,
+  })),
+  unpricedModels: ['compatible:local-mixtral-with-a-long-model-name'],
+  runs: { count: 214, succeeded: 187, costUsd: 22.8, avgSuccessCostUsd: 0.11 },
+  pricing: { overridesApplied: false },
+};
+
 export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
   'GET /auth/providers': { providers: [{ name: 'google', enabled: true }] },
@@ -557,6 +589,7 @@ export const RESPONSES = {
   'POST /schedules/preview': schedulePreview,
   'GET /schedules/defaults': { timezone: 'Etc/UTC', source: 'profile' },
   'GET /home/summary': homeSummary,
+  'GET /usage/report': usageReport,
   'GET /runs/counts': runCounts,
   'GET /runs/retention': { keepDays: 90, keepPerTask: 200, keepFailedDays: null, saved: true, maxKeepDays: 365, floorHours: 24 },
   'GET /runs/retention/preview': { wouldDelete: 1_840, finished: 5_010, oldestKept: iso(-89 * 86_400_000), costUsd: 412.5, maxKeepDays: 365, capped: false, floorHours: 24 },

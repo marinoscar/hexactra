@@ -264,9 +264,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; charts and tables of usage belong to the web app and the CLI"
       },
-      "web": {
-        "none": "Arrives with the Usage & Cost page (E43.4, #734)"
-      }
+      "web": [
+        "/settings/usage",
+        "/admin/settings/usage"
+      ]
     },
     {
       "id": "usage.export",
@@ -281,9 +282,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; a file download belongs to the web app and the CLI"
       },
-      "web": {
-        "none": "Arrives with the Usage & Cost page (E43.4, #734)"
-      }
+      "web": [
+        "/settings/usage",
+        "/admin/settings/usage"
+      ]
     },
     {
       "id": "policies.import",
