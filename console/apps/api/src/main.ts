@@ -10,6 +10,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { APP_NAME, REPO_URL } from '@app/shared';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
+import { registerBenchmarkSiteLogRedaction } from './benchmark/site/site.log-redaction';
 import { registerVaultCallbackLogRedaction } from './secrets/secrets.log-redaction';
 import { registerRequestSpanAttributes } from '@marinoscar/platform-api/otel-core';
 import { buildCorsOptions, isSameOriginOnly, registerPlatformDocs, resolveApiVersion, type PlatformOpenApiOptions } from '@marinoscar/platform-api/host';
@@ -71,6 +72,8 @@ export async function createApp(): Promise<NestFastifyApplication> {
   registerMcpTransport(app.getHttpAdapter().getInstance(), app.get(ConfigService).get<string>('appUrl'), { unauthenticated });
   // The OAuth callback's `code` and `state` stay out of the request log (E37.2).
   registerVaultCallbackLogRedaction(app.getHttpAdapter().getInstance());
+  // A trial's site token is a path segment of every challenge page: it stays out of the request log too (E44.2).
+  registerBenchmarkSiteLogRedaction(app.getHttpAdapter().getInstance());
   await app.register(fastifyCookie, { secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET });
   if (isSliceEnabled('storage')) {
     // The simple (single request) upload route reads multipart bodies; its size
