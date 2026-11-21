@@ -1557,6 +1557,49 @@
       "web": [
         "/tasks/:id"
       ]
+    },
+    {
+      "id": "benchmarks.read",
+      "description": "Read benchmarks (the same challenges run under several agent policies on a node, each trial graded from the challenge site's state): the suite, the list, one benchmark with its progress and spend, and its trials with verdict, checks and metrics",
+      "rest": [
+        "GET /api/benchmarks/suite",
+        "GET /api/benchmarks",
+        "GET /api/benchmarks/{id}",
+        "GET /api/benchmarks/{id}/trials"
+      ],
+      "cli": {
+        "none": "Arrives with the benchmark CLI (E44.8, #746); until then the REST API"
+      },
+      "mcp": {
+        "none": "Deliberate: a benchmark is an organization administrator's feature that spends on model calls; no hosted assistant reads or starts one (docs/decisions/benchmark.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; a benchmark is an administrator's report, read in the web app or the CLI"
+      },
+      "web": {
+        "none": "Arrives with the Benchmarks admin pages (E44.5, #743)"
+      }
+    },
+    {
+      "id": "benchmarks.run",
+      "description": "Start a benchmark (challenges, 1 to 8 agent policies, trials, node and profile, spend cap), cancel it and delete it",
+      "rest": [
+        "POST /api/benchmarks",
+        "POST /api/benchmarks/{id}/cancel",
+        "DELETE /api/benchmarks/{id}"
+      ],
+      "cli": {
+        "none": "Arrives with the benchmark CLI (E44.8, #746); until then the REST API"
+      },
+      "mcp": {
+        "none": "Deliberate: it runs agents on a node and spends on model calls; no hosted assistant starts, stops or deletes a benchmark (docs/decisions/benchmark.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; a benchmark is an administrator's report, read in the web app or the CLI"
+      },
+      "web": {
+        "none": "Arrives with the Benchmarks admin pages (E44.5, #743)"
+      }
     }
   ]
 }

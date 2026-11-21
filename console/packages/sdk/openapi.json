@@ -46611,6 +46611,657 @@
           "Benchmark site"
         ]
       }
+    },
+    "/api/benchmarks/suite": {
+      "get": {
+        "description": "The built-in challenges with their category and difficulty, which of them the agent can attempt (`supported`; the others are reported `unsupported`, never run), the defaults and limits of a new benchmark, and whether a node can reach the challenge site (`site.reachable`).\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "operationId": "benchmarks_suite",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkSuiteResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The benchmark suite",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:read"
+          ]
+        }
+      }
+    },
+    "/api/benchmarks": {
+      "get": {
+        "description": "Newest first, each with its settings, what it has spent and how many trials are in each state (`progress`).\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "operationId": "benchmarks_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List your benchmarks",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "operationId": "benchmarks_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBenchmarkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`CHALLENGE_UNKNOWN`, `POLICY_REF_INVALID`, `POLICY_DUPLICATE`, `BENCHMARK_HOST_NOT_FOUND`, `BENCHMARK_HOST_UNAVAILABLE` or `BENCHMARK_SITE_UNREACHABLE`: the message names the challenge, the policy, the node or the address. Nothing was started."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`BENCHMARK_RUNNING`: a benchmark is already running on that node and profile."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Start a benchmark",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:run"
+          ]
+        }
+      }
+    },
+    "/api/benchmarks/{id}": {
+      "get": {
+        "description": "Its settings, status, spend and trial counts. Poll it while `status` is `queued` or `running`.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "operationId": "benchmarks_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Get one benchmark",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:read"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Permanent. Only a benchmark that has ended.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "operationId": "benchmarks_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted, with its trials. The runs it started stay in the run history."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's."
+          },
+          "409": {
+            "description": "`BENCHMARK_RUNNING`: cancel it first."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a benchmark",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:run"
+          ]
+        }
+      }
+    },
+    "/api/benchmarks/{id}/trials": {
+      "get": {
+        "description": "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "operationId": "benchmarks_trials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "graded",
+                "skipped"
+              ]
+            }
+          },
+          {
+            "name": "verdict",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pass",
+                "fail",
+                "error",
+                "skipped",
+                "unsupported"
+              ]
+            }
+          },
+          {
+            "name": "policyRef",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "challengeId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkTrialListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List a benchmark's trials",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:read"
+          ]
+        }
+      }
+    },
+    "/api/benchmarks/{id}/cancel": {
+      "post": {
+        "description": "Nothing more starts, the trials that have not run are `skipped`, and the trial that is running is stopped like any run. A benchmark that already ended is returned unchanged.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "operationId": "benchmarks_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Cancel a benchmark",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:run"
+          ]
+        }
+      }
     }
   },
   "info": {
@@ -46952,6 +47603,13 @@
               "MAIL_TRIGGER_POLL_TOO_FAST",
               "MAIL_TRIGGER_INPUTS_INVALID",
               "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
+              "BENCHMARK_NOT_FOUND",
+              "BENCHMARK_RUNNING",
+              "BENCHMARK_SITE_UNREACHABLE",
+              "BENCHMARK_HOST_UNAVAILABLE",
+              "BENCHMARK_HOST_NOT_FOUND",
+              "CHALLENGE_UNKNOWN",
+              "POLICY_DUPLICATE",
               "ERROR"
             ]
           },
@@ -104040,6 +104698,1200 @@
           }
         },
         "additionalProperties": false
+      },
+      "BenchmarkSuiteResponseDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Two benchmarks compare only within one suite key and version."
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "navigation",
+                    "forms",
+                    "extraction",
+                    "pointer",
+                    "dynamic",
+                    "long",
+                    "safety"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "label"
+              ]
+            }
+          },
+          "challenges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "navigation",
+                    "forms",
+                    "extraction",
+                    "pointer",
+                    "dynamic",
+                    "long",
+                    "safety"
+                  ]
+                },
+                "difficulty": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3
+                },
+                "requires": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "pointer",
+                      "real_keys",
+                      "file_upload",
+                      "file_download"
+                    ]
+                  }
+                },
+                "supported": {
+                  "type": "boolean",
+                  "description": "False: the agent lacks a capability the challenge needs, so its trials are reported `unsupported` and never run."
+                },
+                "missing": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "pointer",
+                      "real_keys",
+                      "file_upload",
+                      "file_download"
+                    ]
+                  },
+                  "description": "The capabilities the agent lacks."
+                },
+                "confirmRiskyActions": {
+                  "type": "boolean",
+                  "description": "Whether the trial run asks before a risky step."
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "category",
+                "difficulty",
+                "requires",
+                "supported",
+                "missing",
+                "confirmRiskyActions"
+              ]
+            }
+          },
+          "defaults": {
+            "type": "object",
+            "properties": {
+              "trials": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "capUsd": {
+                "type": "number"
+              },
+              "trialTimeoutMinutes": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "trials",
+              "capUsd",
+              "trialTimeoutMinutes"
+            ]
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "maxPolicies": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxTrials": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "maxCapUsd": {
+                "type": "number"
+              },
+              "maxTrialTimeoutMinutes": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "maxPolicies",
+              "maxTrials",
+              "maxCapUsd",
+              "maxTrialTimeoutMinutes"
+            ]
+          },
+          "site": {
+            "type": "object",
+            "properties": {
+              "baseUrl": {
+                "type": "string",
+                "description": "Where a node's browser reaches the challenge site."
+              },
+              "reachable": {
+                "type": "boolean",
+                "description": "False: a node cannot reach that address, and a benchmark cannot start."
+              },
+              "problem": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "baseUrl",
+              "reachable",
+              "problem"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "categories",
+          "challenges",
+          "defaults",
+          "limits",
+          "site"
+        ]
+      },
+      "BenchmarkListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "completed",
+                    "cancelled",
+                    "failed"
+                  ]
+                },
+                "suiteKey": {
+                  "type": "string"
+                },
+                "suiteVersion": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "config": {
+                  "type": "object",
+                  "properties": {
+                    "challengeIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "policies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "ref",
+                          "label"
+                        ]
+                      }
+                    },
+                    "trials": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "hostId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "profile": {
+                      "type": "string"
+                    },
+                    "capUsd": {
+                      "type": "number"
+                    },
+                    "trialTimeoutMinutes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "challengeIds",
+                    "policies",
+                    "trials",
+                    "hostId",
+                    "profile",
+                    "capUsd",
+                    "trialTimeoutMinutes"
+                  ]
+                },
+                "appVersion": {
+                  "type": "string",
+                  "description": "The console version when the benchmark started."
+                },
+                "commit": {
+                  "description": "The build's commit when it started; null on a development build.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "spentUsd": {
+                  "type": "number",
+                  "description": "USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`."
+                },
+                "progress": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "pending": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "running": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "graded": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Trials that ran and were judged: `pass` + `fail` + `error`."
+                    },
+                    "skipped": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Trials that never ran, or were stopped: cancelled, the spend cap, an unsupported challenge."
+                    },
+                    "pass": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "fail": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "error": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "unsupported": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "pending",
+                    "running",
+                    "graded",
+                    "skipped",
+                    "pass",
+                    "fail",
+                    "error",
+                    "unsupported"
+                  ]
+                },
+                "totals": {
+                  "type": "object",
+                  "properties": {
+                    "inputTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "outputTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "cachedInputTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Input tokens served from the provider cache: a subset of `inputTokens`."
+                    },
+                    "modelCalls": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "costUsd": {
+                      "type": "number",
+                      "description": "USD on model calls. The same sum as `spentUsd`."
+                    },
+                    "costKnown": {
+                      "type": "boolean",
+                      "description": "False when a model call of any trial could not be priced: `costUsd` is then a lower bound."
+                    }
+                  },
+                  "required": [
+                    "inputTokens",
+                    "outputTokens",
+                    "cachedInputTokens",
+                    "modelCalls",
+                    "costUsd",
+                    "costKnown"
+                  ]
+                },
+                "baselineId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "startedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "finishedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status",
+                "suiteKey",
+                "suiteVersion",
+                "config",
+                "appVersion",
+                "commit",
+                "spentUsd",
+                "progress",
+                "totals",
+                "baselineId",
+                "createdAt",
+                "startedAt",
+                "finishedAt"
+              ]
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
+      },
+      "BenchmarkResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "suiteKey": {
+            "type": "string"
+          },
+          "suiteVersion": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "challengeIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "policies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ref": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ref",
+                    "label"
+                  ]
+                }
+              },
+              "trials": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "hostId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "profile": {
+                "type": "string"
+              },
+              "capUsd": {
+                "type": "number"
+              },
+              "trialTimeoutMinutes": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "challengeIds",
+              "policies",
+              "trials",
+              "hostId",
+              "profile",
+              "capUsd",
+              "trialTimeoutMinutes"
+            ]
+          },
+          "appVersion": {
+            "type": "string",
+            "description": "The console version when the benchmark started."
+          },
+          "commit": {
+            "description": "The build's commit when it started; null on a development build.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spentUsd": {
+            "type": "number",
+            "description": "USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`."
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "pending": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "running": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "graded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Trials that ran and were judged: `pass` + `fail` + `error`."
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Trials that never ran, or were stopped: cancelled, the spend cap, an unsupported challenge."
+              },
+              "pass": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "fail": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "error": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "unsupported": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "total",
+              "pending",
+              "running",
+              "graded",
+              "skipped",
+              "pass",
+              "fail",
+              "error",
+              "unsupported"
+            ]
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "inputTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cachedInputTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Input tokens served from the provider cache: a subset of `inputTokens`."
+              },
+              "modelCalls": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsd": {
+                "type": "number",
+                "description": "USD on model calls. The same sum as `spentUsd`."
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a model call of any trial could not be priced: `costUsd` is then a lower bound."
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cachedInputTokens",
+              "modelCalls",
+              "costUsd",
+              "costKnown"
+            ]
+          },
+          "baselineId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "suiteKey",
+          "suiteVersion",
+          "config",
+          "appVersion",
+          "commit",
+          "spentUsd",
+          "progress",
+          "totals",
+          "baselineId",
+          "createdAt",
+          "startedAt",
+          "finishedAt"
+        ]
+      },
+      "CreateBenchmarkDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Absent: \"Benchmark\" and the date.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "challengeIds": {
+            "description": "The challenges to run, by id (`GET /api/benchmarks/suite`). Absent: every challenge of the suite.",
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "policies": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "An agent policy: `builtin:<key>` or the id of one of your own."
+                },
+                "label": {
+                  "description": "The column's name in the scorecard. Absent: the policy's name.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": [
+                "ref"
+              ]
+            },
+            "description": "The agent policies to compare, 1 to 8. Each challenge runs under each of them."
+          },
+          "trials": {
+            "description": "Attempts per challenge and policy. Absent: the deployment default (`benchmark.defaultTrials`).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "hostId": {
+            "description": "The node every trial runs on. Absent: the fabric picks an available one for each trial.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profile": {
+            "default": "default",
+            "description": "The browser profile on the node.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+          },
+          "capUsd": {
+            "description": "No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`.",
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1000
+          },
+          "trialTimeoutMinutes": {
+            "description": "How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 120
+          }
+        },
+        "required": [
+          "policies"
+        ],
+        "additionalProperties": false
+      },
+      "BenchmarkTrialListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "challengeId": {
+                  "type": "string"
+                },
+                "challengeTitle": {
+                  "type": "string",
+                  "description": "The challenge's title; its id when the suite no longer has it."
+                },
+                "category": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "navigation",
+                        "forms",
+                        "extraction",
+                        "pointer",
+                        "dynamic",
+                        "long",
+                        "safety"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "policyRef": {
+                  "type": "string"
+                },
+                "policyLabel": {
+                  "type": "string"
+                },
+                "trialIndex": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "0-based attempt of this challenge under this policy."
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "running",
+                    "graded",
+                    "skipped"
+                  ]
+                },
+                "verdict": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "error",
+                        "skipped",
+                        "unsupported"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null until the trial is judged or skipped."
+                },
+                "failureReason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "wrong_result",
+                        "gave_up",
+                        "budget",
+                        "stalled",
+                        "asked_person",
+                        "timeout",
+                        "error",
+                        "no_model",
+                        "cancelled",
+                        "cap",
+                        "unsupported"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "checks": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "pass": {
+                            "type": "boolean"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "pass"
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The grader's named checks. A trial passes only when every check passes; `safety:<name>` guards an invariant."
+                },
+                "claimedSuccess": {
+                  "description": "Whether the agent said it succeeded: compared with the verdict for the false-success rate.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "runId": {
+                  "description": "The trial's run (`GET /api/runs/{id}`); null before it starts and after the run is deleted.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "durationMs": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "activeMs": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "steps": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "modelCalls": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "outputTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cachedInputTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model": {
+                  "description": "The model of the run's start tier (`provider:modelId`); null before grading or when unknown.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "models": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "startTier": {
+                          "type": "string"
+                        },
+                        "maxTier": {
+                          "type": "string"
+                        },
+                        "finalTier": {
+                          "type": "string",
+                          "description": "The tier the run was on when it ended."
+                        },
+                        "model": {
+                          "description": "The start tier's model, `provider:modelId`.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tiers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "tier": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "fallbackModel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "tier",
+                              "model",
+                              "fallbackModel"
+                            ]
+                          },
+                          "description": "The tiers from start to max: the only ones the run may use."
+                        }
+                      },
+                      "required": [
+                        "startTier",
+                        "maxTier",
+                        "finalTier",
+                        "model",
+                        "tiers"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "costUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "costKnown": {
+                  "description": "False when a model call could not be priced: `costUsd` is then a lower bound.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "stopReason": {
+                  "description": "The run's stop reason (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`).",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "questions": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Questions the agent asked a person."
+                },
+                "escalations": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "startedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "finishedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "challengeId",
+                "challengeTitle",
+                "category",
+                "policyRef",
+                "policyLabel",
+                "trialIndex",
+                "status",
+                "verdict",
+                "failureReason",
+                "checks",
+                "claimedSuccess",
+                "runId",
+                "durationMs",
+                "activeMs",
+                "steps",
+                "modelCalls",
+                "inputTokens",
+                "outputTokens",
+                "cachedInputTokens",
+                "model",
+                "models",
+                "costUsd",
+                "costKnown",
+                "stopReason",
+                "questions",
+                "escalations",
+                "startedAt",
+                "finishedAt"
+              ]
+            },
+            "description": "In the order the trials run."
+          }
+        },
+        "required": [
+          "items"
+        ]
       }
     }
   },

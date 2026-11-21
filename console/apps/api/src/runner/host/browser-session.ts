@@ -6,6 +6,7 @@ import { fabricAllowedSites } from '@marinoscar/hexactra-browser-agent/policy';
 import type { FabricSession } from '../fabric-session';
 import { chooseHost } from '../host-choice';
 import { freshStart } from './fresh-start';
+import { runLimits } from './run-limits';
 import type { HostDeps } from './deps';
 
 /** What opening a session needs of the run row. */
@@ -17,6 +18,8 @@ export interface SessionRun {
   appLimits?: unknown;
   trigger?: string | null;
   conversationId?: string | null;
+  /** `runs.context`: a benchmark trial's limits are read from it (`run-limits.ts`). */
+  context?: unknown;
   createdAt?: Date;
   task?: { allowedDomains: string[] } | null;
   conversation?: { allowedDomains: string[] } | null;
@@ -32,7 +35,7 @@ export async function openFabricSession(d: HostDeps, session: FabricSession, run
     if (choice.kind === 'fail') return { kind: 'fail', error: choice.error };
     if (choice.note) d.log.log(`run ${run.id}: ${choice.note}`);
     // The browser enforces the run's allowed sites too (#508), so a page cannot leave them on its own.
-    const sites = fabricAllowedSites(run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [], readAppLimits(run.appLimits)?.allowedDomains ?? []);
+    const sites = fabricAllowedSites(runLimits(run).allowedDomains, readAppLimits(run.appLimits)?.allowedDomains ?? []);
     const sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}`, allowedDomains: sites, ...(opts.ownerId ? { ownerId: opts.ownerId } : {}) });
     // A new chat or task starts with a fresh browser (E40.5); a follow-up or a resumed run keeps it.
     const fresh = await freshStart(d, session, run, sessionId, { resumed: opts.resumed ?? false });
