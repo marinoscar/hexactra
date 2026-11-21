@@ -1,7 +1,7 @@
 import { Global, Injectable, Logger, Module, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { buildDatabaseUrl, runInOrg, userScopeExtension, type Scope } from '@marinoscar/platform-api/core';
+import { buildDatabaseUrl, orgScopeExtension, runInOrg, userScopeExtension, type Scope } from '@marinoscar/platform-api/core';
 
 // The registry of user-owned models fills BEFORE the first scoped client is
 // built (src/platform/registrations.ts: the platform's models, then the app's).
@@ -34,6 +34,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   /** A client confined to `scope.userId` on every registered user-owned model (core's scoped data access). */
   forUser(scope: Scope) {
     return this.$extends(userScopeExtension(scope));
+  }
+
+  /**
+   * A client whose every operation runs in an organization's row-level-security
+   * scope (`app.org_id`, and `app.user_id` when `opts.userId` is given). The
+   * platform's `PLATFORM_PRISMA` port requires it (`AiPrisma.forOrg`): the AI
+   * usage recorder writes every model call's `ai_usage_events` row through it,
+   * and the AI limits, AI runs and credentials slices read through it. Without
+   * it those calls throw, and the recorder drops the row with only a warning
+   * (#731).
+   */
+  forOrg(orgId: string, opts: { userId?: string } = {}) {
+    return this.$extends(orgScopeExtension(this, { orgId, ...(opts.userId ? { userId: opts.userId } : {}) }));
   }
 
   /** One transaction in an organization's row-level-security scope (the settings slice's `SETTINGS_DATA` port). */
