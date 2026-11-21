@@ -12,8 +12,13 @@ import { RUN_ORIGINS } from '../connected-apps/request-client';
 import { TERMINAL_RUN_STATUSES, type RunStatus } from './run-status';
 
 export const RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled'] as const satisfies readonly RunStatus[];
-export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email'] as const;
+export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email', 'benchmark'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
+/**
+ * A benchmark's trial runs (E44, #738) are not the owner's own work: every run filter leaves them out unless it names the trigger
+ * (`runWhere`), and the home summary and task statistics never count them (`NOT_BENCHMARK_RUN_SQL`, runs.query.ts).
+ */
+export const HIDDEN_RUN_TRIGGERS = ['benchmark'] as const satisfies readonly RunTrigger[];
 
 /** A run that is not finished: it can still change, and is never deleted (#418). */
 export const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused'] as const satisfies readonly RunStatus[];
@@ -48,7 +53,7 @@ export const runFilterSchema = z.object({
   status: listOf(RUN_STATUSES, 'Run status.'),
   state: z.enum(['live', 'finished']).optional().describe('Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`.'),
   taskId: z.union([z.literal('none'), z.uuid()]).optional().describe("A task's id, or `none` for runs without a task (ad-hoc and external runs)."),
-  trigger: listOf(RUN_TRIGGERS, 'What started the run.'),
+  trigger: listOf(RUN_TRIGGERS, 'What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them.'),
   from: z.iso.datetime({ offset: true }).optional().describe('Runs created at or after this ISO 8601 date-time (inclusive).'),
   to: z.iso.datetime({ offset: true }).optional().describe('Runs created before this ISO 8601 date-time (exclusive).'),
   q: z
