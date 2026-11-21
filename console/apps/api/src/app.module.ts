@@ -41,6 +41,8 @@ import { isSliceEnabled } from './platform/slices/manifest';
 import { PrismaModule } from './prisma/prisma.service';
 // Last, so the MCP connection routes and schemas follow everything else in the generated OpenAPI document (E39.9).
 import { McpConnectionsModule } from './connections/mcp/mcp.module';
+// After everything else, so the benchmark routes (E44) follow the others in the generated OpenAPI document.
+import { BenchmarkModule } from './benchmark/benchmark.module';
 
 /**
  * The root module: framework modules, the platform (src/platform/platform.ts)
@@ -90,6 +92,8 @@ import { McpConnectionsModule } from './connections/mcp/mcp.module';
     ...(alertsMounted() ? [alertsModule, HexactraAlertsModule] : []),
     // Deliveries after a run (E39.6): an email with the report, a signed webhook, a spreadsheet row, files in a folder. Mounted with Connections; last, so its routes follow the others in the OpenAPI document.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule, McpConnectionsModule] : []),
+    // Benchmarks (E44, #738): the same challenges under several agent policies, graded from the challenge site's state.
+    BenchmarkModule,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

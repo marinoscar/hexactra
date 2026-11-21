@@ -27,6 +27,7 @@ import '../secrets/secrets.settings';
 import '../connections/connections.settings';
 import '../deliveries/deliveries.settings';
 import '../mail-triggers/mail-triggers.settings';
+import '../benchmark/benchmark.settings';
 import './storage.settings';
 // Everything the enabled slices add to the registries (settings namespaces,
 // credential purposes, storage prefixes, notifications, onboarding steps...).

@@ -28,6 +28,9 @@ enum RunTrigger {
   chat
   /// Started by an email that matched a mail trigger (E39.8, #605): the run carries `mail_trigger_id`; its origin is `system`.
   email
+  /// One trial of a benchmark (E44, #738): no task, origin `system`. Left out of the run list, the counts, the home summary and task
+  /// statistics unless `trigger=benchmark` is asked for.
+  benchmark
 
   @@map("run_trigger")
 }

@@ -48,9 +48,18 @@ describe('runFilterSchema', () => {
   });
 });
 
+/** What every filter without `trigger` carries (E44, #738). */
+const NOT_BENCHMARK = { trigger: { notIn: ['benchmark'] } };
+
 describe('runWhere', () => {
-  it('is empty for an empty filter', () => {
-    expect(runWhere({})).toEqual({});
+  it('leaves out benchmark runs for an empty filter, and for any filter without a trigger', () => {
+    expect(runWhere({})).toEqual(NOT_BENCHMARK);
+    expect(runWhere({ taskId: 'none', q: 'fare' })).toMatchObject(NOT_BENCHMARK);
+  });
+
+  it('selects benchmark runs when the trigger is named', () => {
+    expect(runWhere(runFilterSchema.parse({ trigger: 'benchmark' }))).toEqual({ trigger: { in: ['benchmark'] } });
+    expect(runWhere(runFilterSchema.parse({ trigger: 'manual,benchmark' }))).toEqual({ trigger: { in: ['manual', 'benchmark'] } });
   });
 
   it('builds one condition per filter', () => {
@@ -78,8 +87,8 @@ describe('runWhere', () => {
   });
 
   it('expands state to its statuses', () => {
-    expect(runWhere({ state: 'live' })).toEqual({ status: { in: ['queued', 'running', 'waiting_human', 'paused'] } });
-    expect(runWhere({ state: 'finished' })).toEqual({ status: { in: ['succeeded', 'failed', 'cancelled'] } });
+    expect(runWhere({ state: 'live' })).toEqual({ status: { in: ['queued', 'running', 'waiting_human', 'paused'] }, ...NOT_BENCHMARK });
+    expect(runWhere({ state: 'finished' })).toEqual({ status: { in: ['succeeded', 'failed', 'cancelled'] }, ...NOT_BENCHMARK });
   });
 
   it('rejects status with state, and from after to, with INVALID_FILTER', () => {

@@ -8,6 +8,7 @@ import { PolicyResolver } from '../policies/policy.resolver';
 import { PrismaService } from '../prisma/prisma.service';
 import { describeCron } from '../schedules/cron-describe';
 import { averageUsd, NO_SPEND, SPEND_WINDOW_DAYS, type TaskSpend } from './run-cost';
+import { NOT_BENCHMARK_RUN_SQL } from './runs.query';
 import { FAILING_AFTER, type ListTasksDto, type TaskSort } from './task-list.schemas';
 
 const DAY_MS = 86_400_000;
@@ -173,12 +174,12 @@ export class TaskSummaryService {
         ) sc ON TRUE
         LEFT JOIN LATERAL (
           SELECT r.status, r.created_at FROM runs r
-          WHERE r.task_id = t.id AND r.user_id = t.user_id
+          WHERE r.task_id = t.id AND r.user_id = t.user_id AND ${NOT_BENCHMARK_RUN_SQL}
           ORDER BY r.created_at DESC, r.id DESC LIMIT 1
         ) lr ON TRUE
         LEFT JOIN LATERAL (
           SELECT sum(r.cost_usd) AS cost FROM runs r
-          WHERE r.task_id = t.id AND r.user_id = t.user_id AND r.created_at >= ${since}
+          WHERE r.task_id = t.id AND r.user_id = t.user_id AND r.created_at >= ${since} AND ${NOT_BENCHMARK_RUN_SQL}
         ) sp ON TRUE
         WHERE ${Prisma.join(where, ' AND ')}
       )
@@ -236,7 +237,7 @@ export class TaskSummaryService {
              (count(*) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)} AND r.status = 'succeeded'))::int AS succeeded30,
              (sum(r.cost_usd) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)} AND r.status = 'succeeded'))::float8 AS "successCost30"
       FROM runs r
-      WHERE r.user_id = ${userId}::uuid AND r.task_id = ANY(${ids}::uuid[])
+      WHERE r.user_id = ${userId}::uuid AND r.task_id = ANY(${ids}::uuid[]) AND ${NOT_BENCHMARK_RUN_SQL}
       GROUP BY r.task_id`);
     return new Map(rows.map((r) => [r.taskId, r]));
   }
@@ -250,7 +251,7 @@ export class TaskSummaryService {
              r.id::text AS id, r.status::text AS status, r.trigger::text AS trigger,
              r.created_at AS "createdAt", r.finished_at AS "finishedAt"
       FROM runs r
-      WHERE r.user_id = ${userId}::uuid AND r.task_id = ANY(${ids}::uuid[])
+      WHERE r.user_id = ${userId}::uuid AND r.task_id = ANY(${ids}::uuid[]) AND ${NOT_BENCHMARK_RUN_SQL}
       ORDER BY r.task_id, (r.status IN ('queued', 'running', 'waiting_human', 'paused')), r.created_at DESC, r.id DESC`);
     const out = new Map<string, { last: (typeof rows)[number] | null; live: (typeof rows)[number] | null }>();
     for (const r of rows) {
@@ -350,7 +351,7 @@ export class TaskSummaryService {
     const today = zonedDateKey(now, timezone);
     const first = addDaysToDateKey(today, -(days - 1));
     const from = zonedDayStart(first, timezone);
-    const scope = Prisma.sql`r.user_id = ${userId}::uuid AND r.task_id = ${taskId}::uuid AND r.created_at >= ${from}`;
+    const scope = Prisma.sql`r.user_id = ${userId}::uuid AND r.task_id = ${taskId}::uuid AND r.created_at >= ${from} AND ${NOT_BENCHMARK_RUN_SQL}`;
     const finished = Prisma.sql`r.status IN ('succeeded', 'failed', 'cancelled')`;
     const timed = Prisma.sql`${finished} AND r.started_at IS NOT NULL AND r.finished_at IS NOT NULL`;
     const seconds = Prisma.sql`EXTRACT(EPOCH FROM (r.finished_at - r.started_at))`;

@@ -11,6 +11,7 @@ import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunEndHooks } from './run-end-hooks';
+import { HIDDEN_RUN_TRIGGERS } from './runs.schemas';
 import { TaskDeleteHooks } from './task-delete-hooks';
 import { RunEvents } from './run-events';
 import { suggestedConnections } from './run-suggestions';
@@ -79,7 +80,7 @@ export class TasksService {
     const out = new Map<string, TaskSpend>();
     if (taskIds.length === 0) return out;
     const db = this.db(userId);
-    const where = { taskId: { in: taskIds }, createdAt: { gte: new Date(Date.now() - SPEND_WINDOW_DAYS * 86_400_000) } };
+    const where = { taskId: { in: taskIds }, createdAt: { gte: new Date(Date.now() - SPEND_WINDOW_DAYS * 86_400_000) }, trigger: { notIn: [...HIDDEN_RUN_TRIGGERS] } };
     const [sums, unknown, successes] = await Promise.all([
       db.run.groupBy({ by: ['taskId'], where, _count: { _all: true }, _sum: { costUsd: true, inputTokens: true, outputTokens: true } }),
       db.run.groupBy({ by: ['taskId'], where: { ...where, costKnown: false }, _count: { _all: true } }),

@@ -147,7 +147,8 @@
             "mcp",
             "external",
             "chat",
-            "email"
+            "email",
+            "benchmark"
           ]
         },
         "origin": {

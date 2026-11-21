@@ -41,6 +41,9 @@ describe('the AI usage rollups (#732)', () => {
     const now = new Date();
     const hourStart = new Date(Math.floor(now.getTime() / H) * H);
     const at = (hoursAgo: number, min = 10) => new Date(hourStart.getTime() - hoursAgo * H + min * 60_000);
+    // The rows below are back-dated (a real ledger row is written at the time of its call), so the
+    // watermark starts before them, as it would for a fresh deployment; other suites may have rolled already.
+    await db.aiUsageRollupState.upsert({ where: { id: 1 }, create: { id: 1, rolledUntil: new Date(hourStart.getTime() - 6 * H) }, update: { rolledUntil: new Date(hourStart.getTime() - 6 * H) } });
     const base = { userId: user, provider: 'openai', modelId: model, operation: 'responses', keySource: 'user', latencyMs: 100, feature: 'browser_agent' };
     await db.aiUsageEvent.createMany({
       data: [

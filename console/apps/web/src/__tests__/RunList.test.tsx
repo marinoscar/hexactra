@@ -685,6 +685,12 @@ describe('the filters, as the URL and the API read them', () => {
     expect(ok({}, { taskId: uuid(5) })).toBe(false);
     expect(ok({ trigger: ['manual'] })).toBe(false);
     expect(ok({ stopReason: ['stalled'] })).toBe(false);
+    // A benchmark's trial run is in no list unless the trigger filter names it, as on the server (E44, #738).
+    const trial = run(2, { status: 'running', trigger: 'benchmark' });
+    expect(matchesFilters(trial, NO_FILTERS, {}, zone)).toBe(false);
+    expect(matchesFilters(trial, { ...NO_FILTERS, view: 'live' }, {}, zone)).toBe(false);
+    expect(matchesFilters(trial, { ...NO_FILTERS, trigger: ['benchmark'] }, {}, zone)).toBe(true);
+    expect(filtersFromParams(new URLSearchParams('trigger=benchmark')).trigger).toEqual(['benchmark']);
     expect(ok({ policyId: 'builtin:balanced' })).toBe(false);
     expect(ok({ from: '2026-11-17' })).toBe(false);
     expect(ok({ to: '2026-11-15' })).toBe(false);
