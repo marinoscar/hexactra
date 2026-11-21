@@ -49796,18 +49796,6 @@
               "keepFailedDays"
             ]
           },
-          "approvals": {
-            "type": "object",
-            "properties": {
-              "paused": {
-                "type": "boolean",
-                "description": "When true, no saved approval matches: every question is asked again until it is turned off."
-              }
-            },
-            "required": [
-              "paused"
-            ]
-          },
           "agentPricing": {
             "type": "object",
             "properties": {
@@ -49851,6 +49839,18 @@
             "required": [
               "currency",
               "models"
+            ]
+          },
+          "approvals": {
+            "type": "object",
+            "properties": {
+              "paused": {
+                "type": "boolean",
+                "description": "When true, no saved approval matches: every question is asked again until it is turned off."
+              }
+            },
+            "required": [
+              "paused"
             ]
           },
           "connections": {
@@ -50310,18 +50310,6 @@
               "keepFailedDays"
             ]
           },
-          "approvals": {
-            "type": "object",
-            "properties": {
-              "paused": {
-                "type": "boolean",
-                "description": "When true, no saved approval matches: every question is asked again until it is turned off."
-              }
-            },
-            "required": [
-              "paused"
-            ]
-          },
           "agentPricing": {
             "type": "object",
             "properties": {
@@ -50365,6 +50353,18 @@
             "required": [
               "currency",
               "models"
+            ]
+          },
+          "approvals": {
+            "type": "object",
+            "properties": {
+              "paused": {
+                "type": "boolean",
+                "description": "When true, no saved approval matches: every question is asked again until it is turned off."
+              }
+            },
+            "required": [
+              "paused"
             ]
           },
           "connections": {
@@ -50861,21 +50861,6 @@
               }
             ]
           },
-          "approvals": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "paused": {
-                    "type": "boolean"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "agentPricing": {
             "anyOf": [
               {
@@ -50925,6 +50910,21 @@
                     "type": "null"
                   }
                 ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvals": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "paused": {
+                    "type": "boolean"
+                  }
+                }
               },
               {
                 "type": "null"
@@ -51309,6 +51309,51 @@
               "maxKeepDays"
             ]
           },
+          "agentPricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "models": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "inputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "outputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "cachedInputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "inputPerMTok",
+                    "outputPerMTok"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "currency",
+              "models"
+            ]
+          },
           "notes": {
             "type": "object",
             "properties": {
@@ -51533,51 +51578,6 @@
               "frontier"
             ],
             "description": "The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck)."
-          },
-          "agentPricing": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "const": "USD"
-              },
-              "models": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string",
-                  "maxLength": 240,
-                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "inputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "outputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "cachedInputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    }
-                  },
-                  "required": [
-                    "inputPerMTok",
-                    "outputPerMTok"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "currency",
-              "models"
-            ]
           },
           "browserAgentCeilings": {
             "type": "object",
@@ -52441,9 +52441,9 @@
           "secrets",
           "mcp",
           "runs",
+          "agentPricing",
           "notes",
           "browserAgentTiers",
-          "agentPricing",
           "browserAgentCeilings",
           "connections",
           "deliveries",
@@ -52660,6 +52660,51 @@
             },
             "required": [
               "maxKeepDays"
+            ]
+          },
+          "agentPricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "models": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "inputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "outputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "cachedInputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "inputPerMTok",
+                    "outputPerMTok"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "currency",
+              "models"
             ]
           },
           "notes": {
@@ -52886,51 +52931,6 @@
               "frontier"
             ],
             "description": "The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck)."
-          },
-          "agentPricing": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "const": "USD"
-              },
-              "models": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string",
-                  "maxLength": 240,
-                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "inputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "outputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "cachedInputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    }
-                  },
-                  "required": [
-                    "inputPerMTok",
-                    "outputPerMTok"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "currency",
-              "models"
-            ]
           },
           "browserAgentCeilings": {
             "type": "object",
@@ -54069,6 +54069,47 @@
               }
             }
           },
+          "agentPricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "models": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "inputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "outputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "cachedInputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "inputPerMTok",
+                    "outputPerMTok"
+                  ]
+                }
+              }
+            }
+          },
           "notes": {
             "type": "object",
             "properties": {
@@ -54263,47 +54304,6 @@
                     ],
                     "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
                   }
-                }
-              }
-            }
-          },
-          "agentPricing": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": "string",
-                "const": "USD"
-              },
-              "models": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string",
-                  "maxLength": 240,
-                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
-                },
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "inputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "outputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    },
-                    "cachedInputPerMTok": {
-                      "type": "number",
-                      "minimum": 0,
-                      "maximum": 100000
-                    }
-                  },
-                  "required": [
-                    "inputPerMTok",
-                    "outputPerMTok"
-                  ]
                 }
               }
             }
@@ -56874,18 +56874,6 @@
                   "keepFailedDays"
                 ]
               },
-              "approvals": {
-                "type": "object",
-                "properties": {
-                  "paused": {
-                    "type": "boolean",
-                    "description": "When true, no saved approval matches: every question is asked again until it is turned off."
-                  }
-                },
-                "required": [
-                  "paused"
-                ]
-              },
               "agentPricing": {
                 "type": "object",
                 "properties": {
@@ -56929,6 +56917,18 @@
                 "required": [
                   "currency",
                   "models"
+                ]
+              },
+              "approvals": {
+                "type": "object",
+                "properties": {
+                  "paused": {
+                    "type": "boolean",
+                    "description": "When true, no saved approval matches: every question is asked again until it is turned off."
+                  }
+                },
+                "required": [
+                  "paused"
                 ]
               },
               "connections": {
