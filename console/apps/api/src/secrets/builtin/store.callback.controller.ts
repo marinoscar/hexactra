@@ -40,8 +40,12 @@ const base = z.object({ owner_id: z.string().uuid(), origin: z.string().min(1).m
 const lookupBody = base.extend({ kind: z.enum(['login', 'identity', 'card']).default('login') }).strict();
 const releaseBody = base.extend({ item_id: z.string().uuid(), field: z.enum(FIELDS), purpose: z.enum(PURPOSES) }).strict();
 const codeBody = base.extend({ item_id: z.string().uuid(), purpose: z.enum(PURPOSES) }).strict();
+/** `save` (#712): the owner's typed sign-in, sent by the fabric from the copy it holds. The only route whose body carries a value. */
+const saveBody = base
+  .extend({ name: z.string().trim().min(1).max(200), username: z.string().trim().min(1).max(200), password: z.string().min(1).max(1024), purpose: z.literal('save_login') })
+  .strict();
 
-const STATUS: Record<string, number> = { not_found: 404, origin_mismatch: 403, disabled: 403, rate_limited: 429, unauthorized: 401, refused: 403, unsupported: 422, unavailable: 503, unknown: 500 };
+const STATUS: Record<string, number> = { name_taken: 409, not_found: 404, origin_mismatch: 403, disabled: 403, rate_limited: 429, unauthorized: 401, refused: 403, unsupported: 422, unavailable: 503, unknown: 500 };
 
 interface CallbackRequest extends FastifyRequest {
   storeOwnerId?: string;
@@ -129,6 +133,29 @@ export class StoreCallbackController {
       const { value, expiresAt } = await this.provider.oneTimeCode({ ownerId: b.owner_id, itemId: b.item_id, origin: b.origin, purpose: b.purpose as SecretPurpose, runId: b.run_id, clientLabel: b.client_label });
       return this.sendBytes(reply, value, { 'x-expires-at': expiresAt.toISOString() });
     });
+  }
+
+  /**
+   * `save` (#712): the owner's sign-in typed by hand. Bound to the owner of the credential only: the owner presses Save on the
+   * card when they like, possibly after the run ended, so no live run is required (the fabric still refuses without its copy of
+   * the password, which it holds ten minutes). The body's password is taken into a buffer at once and wiped after the call.
+   */
+  @Post('save')
+  @HttpCode(201)
+  async save(@Body() raw: unknown, @Req() req: CallbackRequest, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    const parsed = saveBody.safeParse(raw);
+    if (!parsed.success) return reply.status(400).header('cache-control', 'no-store').send({ code: 'refused' });
+    const b = parsed.data;
+    const password = Buffer.from(b.password, 'utf8');
+    try {
+      if (!req.storeOwnerId || b.owner_id.toLowerCase() !== req.storeOwnerId) throw new SecretsProviderError('unauthorized', 'owner');
+      const saved = await this.provider.saveLogin({ ownerId: b.owner_id, name: b.name, username: b.username, origin: b.origin, password, ...(b.client_label ? { clientLabel: b.client_label } : {}) });
+      return reply.status(201).header('cache-control', 'no-store').send({ id: saved.id });
+    } catch (e) {
+      return this.fail(reply, e);
+    } finally {
+      password.fill(0);
+    }
   }
 
   /** Writes the bytes as the body and zeroes them once the response has gone out. Never a string. */

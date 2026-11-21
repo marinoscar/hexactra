@@ -86,7 +86,7 @@ async function register(s: Session): Promise<string> {
   return call.registration!.accessToken;
 }
 const liveRun = (userId: string) => prisma.run.create({ data: { userId, goal: 'Sign in to the shop', status: 'running' } as never });
-const internal = (token: string | null, route: 'lookup' | 'release' | 'code', body: Record<string, unknown>) =>
+const internal = (token: string | null, route: 'lookup' | 'release' | 'code' | 'save', body: Record<string, unknown>) =>
   call(null, 'POST', `${CALLBACK}/${route}`, body, token ? { authorization: `Bearer ${token}` } : {});
 
 beforeAll(async () => {
@@ -337,6 +337,30 @@ describe('the agent path: the provider and Vault’s rules', () => {
       const reg = fabricCalls.find((c) => c.op === 'register')!;
       expect(reg.registration).toMatchObject({ kind: 'console', baseUrl: expect.stringMatching(/\/api\/internal\/secrets-store\/v1$/) });
       expect(new Date(reg.registration!.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('saves a login the owner typed by hand (#712): open to the agent, bound to the page, its password released again; a taken name is 409', async () => {
+      const name = `Typed ${stamp}`;
+      const typed = `MARKER-typed-${randomUUID()}`;
+      // No live run is needed: the owner presses Save on the card when they like.
+      const r = await internal(token, 'save', { owner_id: owner.userId, name, username: 'person-a@example.test', origin: 'https://typed-login.test', password: typed, purpose: 'save_login', client_label: 'Hexactra' });
+      expect(r.statusCode).toBe(201);
+      expect(r.headers['cache-control']).toBe('no-store');
+      const id = (JSON.parse(r.text) as { id: string }).id;
+      expect(r.text).not.toContain(typed);
+      // The agent finds it on that page, and the store gives back what was typed.
+      const found = await provider.lookup(owner.userId, 'https://typed-login.test', 'login');
+      expect(found.map((f) => f.id)).toContain(id);
+      expect(text(await provider.release({ ownerId: owner.userId, itemId: id, field: 'password', origin: 'https://typed-login.test', purpose: 'login' }))).toBe(typed);
+      // The same name again: 409 name_taken, nothing created.
+      const again = await internal(token, 'save', { owner_id: owner.userId, name, username: 'x@example.test', origin: 'https://typed-login.test', password: 'other', purpose: 'save_login' });
+      expect(again.statusCode).toBe(409);
+      expect((JSON.parse(again.text) as { code: string }).code).toBe('name_taken');
+      // Another owner's id with this credential: refused.
+      expect((await internal(token, 'save', { owner_id: other.userId, name: `X ${stamp}`, username: 'x@example.test', origin: 'https://typed-login.test', password: 'p', purpose: 'save_login' })).statusCode).toBe(401);
+      // Ciphertext only in the database.
+      const rows = await prisma.$queryRawUnsafe<{ t: string }[]>(`SELECT (SELECT row_to_json(s)::text FROM secrets s WHERE id = $1::uuid) || (SELECT coalesce(string_agg(row_to_json(v)::text, ''), '') FROM secret_versions v WHERE v.secret_id = $1::uuid) AS t`, id);
+      expect(rows[0]!.t).not.toContain(typed);
     });
 
     it('releases one field as raw bytes, no-store, and nothing else', async () => {

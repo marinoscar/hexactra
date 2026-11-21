@@ -18,7 +18,7 @@
 // that Vault's service decrypted lives until the garbage collector frees it: the remote Vault path does not have this
 // exposure (docs/secrets.md, "What the built-in store cannot do").
 import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
-import { AGENT_RELEASE_PORT, type AgentReleasePort } from '@marinoscar/vault-api/agent';
+import { AGENT_RELEASE_PORT, AgentCredentialsService, type AgentReleasePort } from '@marinoscar/vault-api/agent';
 
 import { SecretsPolicyService } from '../secrets-policy.service';
 import {
@@ -59,6 +59,7 @@ export function mapStoreError(e: unknown): SecretsProviderError {
       return new SecretsProviderError((code && map[code]) || 'refused', 'The built-in store refused the request.');
     }
     if (status === 400) return new SecretsProviderError('refused', 'The request was not accepted.');
+    if (status === 409) return new SecretsProviderError('name_taken', 'A secret with that name already exists.');
   }
   return new SecretsProviderError('unavailable', 'The built-in store could not answer.');
 }
@@ -72,6 +73,7 @@ export class BuiltinSecretsProvider implements SecretsProviderPort {
     @Inject(AGENT_RELEASE_PORT) private readonly agent: AgentReleasePort,
     private readonly keys: SecretsStoreKeys,
     private readonly policy: SecretsPolicyService,
+    private readonly credentials: AgentCredentialsService,
   ) {}
 
   /** The console's own gate: both switches on and the built-in store chosen. A failure is `disabled`, with no detail. */
@@ -106,6 +108,27 @@ export class BuiltinSecretsProvider implements SecretsProviderPort {
     const { value } = await this.run(req.ownerId, () => this.agent.fill({ userId: req.ownerId, clientLabel: req.clientLabel || STORE_CLIENT_LABEL, secretId: req.itemId, field, origin: req.origin, purpose }));
     // The string is Vault's; take it into a Buffer now and let the caller wipe that.
     return SecretBytes.take(Buffer.from(value, 'utf8'));
+  }
+
+  /**
+   * "Save this login?" (#712): the owner's sign-in, typed by hand for the agent, created in the store as a Credential bound to the
+   * page's exact origin and open to the agent (the owner pressed Save on a card that says so). Vault's own create runs it: its
+   * kill switch, rate limit and audit row. The password arrives from the fabric and is handed to Vault's service at once; the
+   * caller wipes its buffer. A taken name is `name_taken`.
+   */
+  async saveLogin(req: { ownerId: string; name: string; username: string; origin: string; password: Buffer; clientLabel?: string }): Promise<{ id: string }> {
+    await this.gate(req.ownerId);
+    try {
+      // `create: true`: the owner's first saved login creates their data key.
+      return await this.keys.scope(req.ownerId, { create: true }, async () => {
+        const r = await this.credentials.create({ userId: req.ownerId, clientLabel: req.clientLabel || STORE_CLIENT_LABEL }, { name: req.name, username: req.username, origin: req.origin, password: req.password.toString('utf8'), purpose: 'login' });
+        return { id: r.id };
+      });
+    } catch (e) {
+      const mapped = mapStoreError(e);
+      if (mapped.code === 'unavailable') this.log.warn(`the built-in store could not save a login (${e instanceof Error ? e.name : 'error'})`);
+      throw mapped;
+    }
   }
 
   async oneTimeCode(req: CodeRequest): Promise<{ value: SecretBytes; expiresAt: Date }> {

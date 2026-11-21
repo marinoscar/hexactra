@@ -97,13 +97,15 @@ const finish: Call = ['finish', { success: true, result: 'Done.' }];
 const notifier = { finished: jest.fn(), needsYou: jest.fn(), started: jest.fn(), savedLoginUsed: jest.fn(), savedApprovalsUsed: jest.fn() };
 
 /** One owner's world: the in-memory fabric (holding the password as the real one does), the real broker and the Save carried out through them. */
-function world(opts: { supported?: boolean; page?: string } = {}) {
+function world(opts: { supported?: boolean; page?: string; provider?: 'vault' | 'builtin' } = {}) {
   const fabric: SecretsFabric = fakeSecretsFabric(opts.page ?? LOGIN_PAGE);
+  // The owner's active provider (#712): their Vault unless a test chose the built-in store.
+  const policy: { provider: 'vault' | 'builtin'; activeProvider: jest.Mock } = { provider: opts.provider ?? 'vault', activeProvider: jest.fn(async (): Promise<'vault' | 'builtin'> => policy.provider) };
   fabric.state.vault = { baseUrl: vault.baseUrl, token: vault.directAccessToken(WRITE_SCOPES) };
   const questions = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents());
   const registrar = { ensureRegistered: jest.fn(async () => 'registered') };
   const connection = { recordOutcome: jest.fn(async () => undefined) };
-  const saveLogins = new SaveLoginService(prisma, undefined as never, connection as never, undefined as never, undefined as never, registrar as never, fabric.client, app.get(SecretsEvents, { strict: false }), { get: () => questions } as never, app.get(UserSettingsService, { strict: false }));
+  const saveLogins = new SaveLoginService(prisma, policy as never, connection as never, undefined as never, undefined as never, registrar as never, fabric.client, app.get(SecretsEvents, { strict: false }), { get: () => questions } as never, app.get(UserSettingsService, { strict: false }));
   saveLogins.onModuleInit();
   const supported = jest.fn(async () => opts.supported ?? true);
   const seam = {
@@ -117,7 +119,7 @@ function world(opts: { supported?: boolean; page?: string } = {}) {
     r.secrets = seam;
     return r;
   };
-  return { fabric, questions, registrar, connection, saveLogins, supported, runnerWith };
+  return { fabric, questions, registrar, connection, saveLogins, supported, runnerWith, policy };
 }
 type World = ReturnType<typeof world>;
 
@@ -297,6 +299,32 @@ describe('Save', () => {
     expect(audit.map((a) => a.action).sort()).toEqual(['secrets.login.offered', 'secrets.login.saved']);
     expect(JSON.stringify(audit)).not.toMatch(new RegExp(`${PASSWORD}|${USERNAME}|Example sign-in`));
     expect(audit.find((a) => a.action === 'secrets.login.saved')!.meta).toEqual({ provider: 'vault', site: 'login.example.com' });
+  });
+
+  it('with the built-in store as the provider (#712): the card says so, Save sends it to the store through the fabric, and Vault is not touched', async () => {
+    const o = await owner('builtin');
+    const w = world({ provider: 'builtin' });
+    const { card } = await signedIn(o, w);
+    expect(card!.proposal).toMatchObject({ provider: 'builtin', origin: ORIGIN });
+    const before = vault.requests.length;
+    const view = await w.questions.answer({ id: o.userId }, card!.id, { outcome: 'completed', saveLogin: { name: 'Example sign-in' } }, { channel: 'web' });
+    expect(view).toMatchObject({ status: 'answered', response: { outcome: 'completed', savedAs: 'Example sign-in' } });
+    expect(w.fabric.saves).toEqual([expect.objectContaining({ owner: o.userId, provider: 'builtin', origin: ORIGIN, name: 'Example sign-in' })]);
+    expect(vault.requests.length).toBe(before);
+    expect(w.connection.recordOutcome).not.toHaveBeenCalled();
+    expect(await tablesHolding(PASSWORD)).toEqual([]);
+    const audit = await prisma.auditEvent.findMany({ where: { actorUserId: o.userId, action: 'secrets.login.saved' } });
+    expect(audit.map((a) => a.meta)).toEqual([{ provider: 'builtin', site: 'login.example.com' }]);
+  });
+
+  it('the owner switched provider after the card was made: Save is SAVE_DISABLED, nothing goes anywhere, the card stays', async () => {
+    const o = await owner('switched');
+    const w = world({ provider: 'builtin' });
+    const { card } = await signedIn(o, w);
+    w.policy.provider = 'vault';
+    expect(await rejected(w.questions.answer({ id: o.userId }, card!.id, { outcome: 'completed', saveLogin: { name: 'Example sign-in' } }, { channel: 'web' }))).toMatchObject({ status: 409, code: 'SAVE_DISABLED' });
+    expect(w.fabric.saves).toEqual([]);
+    expect((await prisma.question.findFirstOrThrow({ where: { id: card!.id } })).status).toBe('pending');
   });
 
   it('a name the owner already has asks for another name and keeps the card; the password is still held for the second try', async () => {
