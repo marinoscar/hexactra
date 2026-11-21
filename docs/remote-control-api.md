@@ -257,6 +257,10 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 | `desktop_type` | `text` | `{}`. Into whatever has the desktop focus (a native file dialog, another window) |
 | `desktop_key` | `key` | `{}`. xdotool chords: `Return`, `ctrl+l`, `alt+F4`, `ctrl+a BackSpace` |
 | `desktop_scroll` | `dy` (−100–100 wheel clicks), `x`? and `y`? (both or neither) | `{}` |
+| `record_start` | `max_width`? (320–1920, default 1280), `quality`? (10–100, default 70), `tab_id`? | `{ recording_id, tab_id }`. Starts a run recording (epic #755): a CDP screencast of the tab, encoded to VP8 in the extension's offscreen document. **Not masked** (see [Run recordings](#run-recordings)). `recording_active` if the tab is already recorded; `encoder_unavailable` without WebCodecs or offscreen documents |
+| `record_pull` | `recording_id` | `{ mime: "application/x-hexactra-recording", data, seq, frames, dropped, bytes_total, duration_ms, ended? }`: the encoded frames since the last pull (at most 8 MiB), stored as an artifact like a screenshot. `recording_not_found` for an unknown id |
+| `record_pause` | `recording_id`, `paused` | `{ paused }`. No frame is kept while paused |
+| `record_stop` | `recording_id` | Like `record_pull`, with the last bytes and `done: true`; the screencast ends |
 
 ### Full powers (#366)
 
@@ -283,6 +287,15 @@ A screenshot kept for a run's trace must not show a password, a one-time code, a
 - **Fail closed:** if the page cannot be masked (a page the extension cannot script, such as `chrome://` pages; a cross-origin frame or plugin that fills the viewport; the pattern file missing), the action fails with an error starting `mask_unavailable` and returns no image. It never falls back to an unmasked picture.
 - `marks` and `mask` together are allowed: both are drawn and both removed, and the marks' labels are masked as well. Trace captures use `mask` without `marks`; the screenshots the model sees are not masked. `desktop_screenshot` has no page and no `mask`.
 - The handoff rule is unchanged: a masked plain screenshot is taken while a handoff waits, except while it asks for a secret.
+
+### Run recordings
+
+A run the owner opted into **Record video** (epic #755, `docs/decisions/run-recordings.md`) is recorded with the `record_*` actions. The recording is **the one unmasked capture**: it is never a trace image, and the console keeps it owner-only and out of every export.
+
+- **What is kept out** (this reduces exposure; it is not masking): every frame while a `sensitive` `type` or `type_keys` runs (a handoff secret, a provider's value) and for one second after; every frame while the focused field is a password, one-time code, card, account or routing number field; every frame while the recording is paused.
+- **Handoffs and takeover:** `record_pull`, `record_pause` and `record_stop` always pass, so the runner can pause a recording while a secret is asked for and end it with its run. `record_start` is refused while a secret is asked for or typed, like a screenshot.
+- **Format:** a pull's bytes are whole records of a small framed stream (`HXR1` header with the frame size and codec, then one record per encoded frame with its key-frame flag and time). The chunks, in `seq` order, are one stream; the console muxes it into a seekable WebM (`apps/chrome-extension/src/recording-format.ts`).
+- **Rate:** frames only arrive when the page repaints, at most 10 a second; the latest frame of a burst is kept. A key frame at least every 2 seconds.
 
 ## Artifacts
 

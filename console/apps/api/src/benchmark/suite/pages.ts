@@ -73,6 +73,7 @@ export type SiteResponse =
   | { kind: 'page'; view: PageView; status: number; state?: SiteState }
   | { kind: 'json'; data: Json; status: number; state?: SiteState }
   | { kind: 'redirect'; to: string; state?: SiteState }
+  | { kind: 'file'; name: string; body: string; state?: SiteState }
   | { kind: 'not_found' };
 
 interface Options {
@@ -86,6 +87,14 @@ export const page = (view: PageView, options: Options = {}): SiteResponse => ({ 
 export const json = (data: Json, options: Options = {}): SiteResponse => ({ kind: 'json', data, status: options.status ?? 200, ...(options.state ? { state: options.state } : {}) });
 /** A 303 to another page of the trial; `to` is a path below the trial's root (`step/2`, or `` for the start page). */
 export const redirect = (to: string, options: Pick<Options, 'state'> = {}): SiteResponse => ({ kind: 'redirect', to, ...(options.state ? { state: options.state } : {}) });
+/**
+ * A plain-text file the browser downloads (`Content-Disposition: attachment`), for a challenge about a download. `name` is the file
+ * name the browser saves it under: letters, digits, dots, dashes and underscores only.
+ */
+export const file = (name: string, body: string, options: Pick<Options, 'state'> = {}): SiteResponse => {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(name)) throw new Error(`Benchmark site: ${name} is not a file name`);
+  return { kind: 'file', name, body, ...(options.state ? { state: options.state } : {}) };
+};
 /** The site's one 404. */
 export const notFound = (): SiteResponse => ({ kind: 'not_found' });
 

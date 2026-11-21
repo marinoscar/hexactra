@@ -6,10 +6,11 @@ import { CHALLENGES } from './challenges';
 import { CAPABILITIES, type Capability, type Challenge, type Seed, type Suite } from './types';
 
 /**
- * The suite: the ten starter challenges (#740). The second pack (#745) makes it `version` 2. The order of `challenges/index.ts` is
- * the order a benchmark lists and runs them in.
+ * The suite. Version 1 was the ten starter challenges (#740); version 2 adds the second pack (#745): twelve challenges and two
+ * placeholders that report `unsupported`. The changelog is in docs/benchmark.md ("Suite changelog"). The order of
+ * `challenges/index.ts` is the order a benchmark lists and runs them in.
  */
-export const SUITE: Suite = { key: 'core', version: 1, challenges: CHALLENGES };
+export const SUITE: Suite = { key: 'core', version: 2, challenges: CHALLENGES };
 
 /** A challenge of the suite, or undefined for an id it does not have. */
 export function challengeById(id: string, suite: Suite = SUITE): Challenge | undefined {
@@ -50,4 +51,13 @@ export function suiteProblems(suite: Suite = SUITE): string[] {
     for (const r of c.requires ?? []) if (!(CAPABILITIES as readonly string[]).includes(r)) problems.push(`${c.id}: unknown capability ${r}`);
   }
   return problems;
+}
+
+/**
+ * Whether two benchmarks ran the same suite, and so may be compared: the same `key` and the same `version`. A benchmark on suite 1
+ * (the starter pack) is never compared with one on suite 2 (#745): their challenges differ, so a difference in their results says
+ * nothing about the agent.
+ */
+export function sameSuite(a: { suiteKey: string; suiteVersion: number }, b: { suiteKey: string; suiteVersion: number }): boolean {
+  return a.suiteKey === b.suiteKey && a.suiteVersion === b.suiteVersion;
 }
