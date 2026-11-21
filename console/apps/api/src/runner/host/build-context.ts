@@ -43,6 +43,7 @@ import { readMasking } from './read-masking';
 import { aboutOwner } from './about-owner';
 import { buildSavedCardContext } from './card-context';
 import { mailContextLines } from './mail-context';
+import { runLimits } from './run-limits';
 import { priceTable } from './policy-snapshot';
 import { controlPort } from './control-port';
 import type { RunStart } from './start';
@@ -83,7 +84,9 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   const shotWindow = new ScreenshotWindow(context.screenshotsKept, context.pruneBatch);
 
   const unattended = !run.conversationId && run.trigger !== 'chat';
-  const allowedDomains = run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [];
+  // The run's own opt-ins: its task's, its chat's, or (a benchmark trial, which has neither) the ones its starter wrote (`run-limits.ts`).
+  const own = runLimits(run);
+  const allowedDomains = own.allowedDomains;
   const appDomains = app?.allowedDomains ?? [];
   const sites = {
     allowed: (url: string) => domainAllowed(url, allowedDomains) && domainAllowed(url, appDomains),
@@ -134,10 +137,10 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     // The opt-ins of the run's task, or of the chat that started it (#484); an ad-hoc run has none. An UNATTENDED run that signed in with a saved
     // login keeps it on whatever the task says, unless the task set `unattendedPayments: allow` (E37.3): it turns on the moment the run first uses one.
     confirmRisky: () => {
-      const own = (run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false) || app?.confirmPurchases === true;
+      const asks = own.confirmRiskyActions || app?.confirmPurchases === true;
       // A card was typed and the pay button is not pressed yet (E37.7): the click is gated, so the approval for the card is what lets it through.
       const cardTyped = memory.savedCards?.approval?.typed === true && memory.savedCards.approval.pay !== 'done';
-      return own || cardTyped || (used.logins.length > 0 && unattended && (run.task?.unattendedPayments ?? 'ask') !== 'allow');
+      return asks || cardTyped || (used.logins.length > 0 && unattended && (run.task?.unattendedPayments ?? 'ask') !== 'allow');
     },
     sensitiveParams: () => [...(readRunInputs(run.inputs)?.sensitive ?? []), ...(flags.savedIdentity ? [] : identityParams.map((p) => ({ key: p.key, label: p.label })))],
     masking,
