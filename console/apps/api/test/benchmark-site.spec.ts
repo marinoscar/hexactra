@@ -369,6 +369,14 @@ describe('the pages and their files', () => {
     for (const name of [...named, 'site.js', 'site.css']) expect(siteAsset(name)).not.toBeNull();
   });
 
+  it('is in the API image: the production stage copies apps/api, and the site reads its files beside dist/', () => {
+    const dockerfile = readFileSync(join(__dirname, '..', 'Dockerfile'), 'utf8');
+    const production = dockerfile.slice(dockerfile.indexOf('AS production'));
+    expect(production).toMatch(/^COPY apps\/api \.\/apps\/api$/m);
+    // src/benchmark/site and dist/benchmark/site are both three levels below apps/api.
+    expect(SITE_ASSET_DIR).toBe(join(__dirname, '..', 'assets', 'benchmark-site'));
+  });
+
   it('page scripts never build markup from text, evaluate text or name an absolute address', () => {
     for (const name of files.filter((f) => f.endsWith('.js'))) {
       const source = readFileSync(join(SITE_ASSET_DIR, name), 'utf8');
