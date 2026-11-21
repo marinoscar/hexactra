@@ -9,7 +9,7 @@ import { createApp } from '../src/main';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 
 /** The path prefixes of this app's own controllers (the platform's are its own business). */
-const APP_PREFIXES = ['/api/agent-policies', '/api/tasks', '/api/runs', '/api/chats', '/api/inbox', '/api/questions', '/api/schedules', '/api/browser', '/api/fleet', '/api/fabric', '/api/home', '/api/mcp', '/api/notification-actions', '/api/connected-apps', '/api/approval-rules', '/api/secrets', '/api/connections', '/api/delivery-recipients', '/api/deliveries', '/api/reports', '/api/mail-triggers', '/api/task-builder', '/api/benchmark-site'];
+const APP_PREFIXES = ['/api/agent-policies', '/api/tasks', '/api/runs', '/api/chats', '/api/inbox', '/api/questions', '/api/schedules', '/api/browser', '/api/fleet', '/api/fabric', '/api/home', '/api/mcp', '/api/notification-actions', '/api/connected-apps', '/api/approval-rules', '/api/secrets', '/api/connections', '/api/delivery-recipients', '/api/deliveries', '/api/reports', '/api/mail-triggers', '/api/task-builder', '/api/benchmark-site', '/api/benchmarks'];
 const values = (s: CapabilitySurface): readonly string[] => (typeof s === 'string' ? [s] : 'none' in s ? [] : s);
 
 let app: NestFastifyApplication;

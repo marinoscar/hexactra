@@ -96,7 +96,53 @@ How the site is served and how to add a challenge: [benchmark.md](../benchmark.m
 | Static files | `/benchmark/assets/<file>`, without a token, the same for every trial. | They carry no data, and a browser can cache them across trials. |
 | When a site opens | `issueToken` accepts a `pending` or `running` trial and resets the state; the pages answer only while it is `running`. | The orchestration (#741) needs the token to word the goal before the run starts. |
 
+## Running a benchmark (#741)
+
+How a benchmark runs, the scripted owner and the API: [benchmark.md](../benchmark.md). What was decided while building it:
+
+### How a run without a task carries its allowed sites and `confirmRiskyActions`
+
+A trial run has no task and no chat. Before this, a run read its two opt-ins from one of those and an ad-hoc run had none, so a trial run would have been free to visit any site.
+
+**Decision.** The run starter writes `runs.context.benchmark = { benchmarkId, trialId, allowedDomains, confirmRiskyActions }`, and one helper, `runLimits(run)` (`apps/api/src/runner/host/run-limits.ts`), is now the only place a run's own limits are read. The two call sites that read the task's values before (`runner/host/browser-session.ts` for the browser's own enforcement, `runner/host/build-context.ts` for the site gate and the risk gate) call it instead.
+
+| Property | How it holds |
+|---|---|
+| It changes nothing for any other run | `runLimits` reads the context only when `run.trigger === 'benchmark'`. For every other trigger it returns the same expression the two call sites had: the task's values, else the chat's, else none. `test/benchmark-run.spec.ts` checks every trigger, with the same context on the row. |
+| No request can make a benchmark run | `trigger: 'benchmark'` is written in one file, `benchmark/benchmark-run-starter.ts`, and `benchmarkRunContext()` is called in one file. A unit test scans `src/` for both. No route takes a trigger or a context in its body: `POST /api/runs` with both is checked in `test/benchmark-run.db.spec.ts`, and `POST /api/benchmarks` is a strict schema with no field for a site, a context or a confirmation setting. |
+| It can only narrow | The context names sites; it has no "any site" value. A benchmark run whose context is missing or unreadable is allowed `no-site.invalid` only (`NO_SITE`), never the empty list that means "any site". `benchmarkRunContext()` refuses to build a context without a site. |
+| The agent is unchanged | The gates, the tools and the loop are the packages' and were not touched. `test/architecture/no-agent-logic.spec.ts`, `test/runner-characterisation.db.spec.ts` and `test/agent-host-conformance.db.spec.ts` pass unchanged. The model reads the same "Allowed sites:" line a task's run reads. |
+
+**Rejected.** (a) A hidden task per trial: it would appear in the owner's tasks, statistics and schedules, and a task has switches (connections, saved logins) that would then have to be forced off. (b) The AI app limits column (`runs.app_limits`), which already narrows sites and asks before purchases: it means "an AI app started this run", shows as one in the run's views, and words the allowed sites differently to the model, so a benchmark would measure a slightly different agent. (c) A new column: the context column already exists for "what started the run beside the task", and a benchmark is the second case of it after an email.
+
+The allowed site is the challenge site's host (the host of `benchmark.siteBaseUrl`, by default the console's own). The site gate matches by host, so on the default address a trial run could also open the console's own pages; it has no session there. A separate host for the site removes even that (the setting exists for it).
+
+### What a trial run cannot use
+
+Nothing was switched off for a benchmark run: it has no task and no chat, and each of these is turned on only by a task's or a chat's own switch.
+
+| | Why a trial run has none |
+|---|---|
+| Connections | `runConnections` reads the task's list, else the chat's. The owner's new-chat default (`connections.newChats`) attaches accounts to a chat row when a chat is created; a trial run has no chat. |
+| Saved logins, identity details, cards | `runner/host/start.ts` reads `useSavedLogins`, `useSavedIdentity` and `useSavedCards` from the task, else the chat, else off. |
+| Saved approvals, memories | The scripted owner never ticks "remember" and passes `rememberAllowed: false`; the broker refuses a memory or a saved-login card on the `benchmark` channel, saved or declined. A card the run leaves for its owner is withdrawn unanswered when the trial is graded. |
+
+### Other decisions
+
+| Topic | Decision | Why |
+|---|---|---|
+| One trial at a time | One live benchmark per node and profile (409 otherwise; a benchmark that lets the fabric pick the node conflicts with any other on that profile), and one running trial per benchmark. | Two runs in one browser profile would spoil both. |
+| The job | `benchmark.advance` is never deduplicated. Passes of one benchmark are serialised with a transaction-scoped advisory lock, and every write is conditional on the state read. | A pass that is already running may be past the check a new one is queued for; collapsing into it would leave the benchmark waiting until the timeout. An extra pass costs a few reads. |
+| Grading | In the run-end hook, and again by any pass that finds a running trial with an ended run. One conditional write moves the trial out of `running`; only its writer adds the cost. | The hook is the fast path; the pass covers a hook that failed or a process that died. |
+| Why the benchmark stopped a run | Written on the trial (`failureReason`: `timeout`, `asked_person`, `cancelled`) before the run is cancelled; the grader reads it. | The run only says "cancelled". |
+| The verdict | The checks decide `pass` or `fail`, whatever the agent claimed, so a false failure (it said it failed and the state is right) is visible. A timeout and an unscripted question are always `fail`. A run that could not work (no browser, no model, a provider error), a grader that threw and a deleted run are `error`. A cancelled benchmark or a run somebody stopped is `skipped`. | `error` and `skipped` say nothing about the agent and are left out of its rates (#742). |
+| A timeout | Wall-clock from the trial's start, including time in the queue. The run is stopped through the ordinary cancel path; if it has not ended a minute later (no job holds it), the benchmark ends it. | A benchmark must not wait for a run nobody is driving. |
+| Site reachability | A check of the settings, never a network call: a loopback default is refused, an address the administrator set is taken as given. | The API cannot tell what a node on another network reaches; a development default obviously fails. |
+| Cached tokens | `benchmark_trials.cached_input_tokens`, copied from the run with the other metrics. | The scorecard reports them (#742) and the run may be gone by then. |
+| Which models served a trial | `benchmark_trials.models`, written at grading from the run's policy snapshot: the tiers from the start tier to the max tier with each tier's model and fallback model, the start tier's model as `model`, and the tier the run ended on. | The run row records its tier and its escalations, not the model of each call, and the usage ledger is not keyed by run. The snapshot's resolved tiers are what every call of the run was built from (`tierRequest`), so they are exact for a policy pinned to one tier (the way to compare models) and a complete list otherwise. |
+| Totals | `GET /api/benchmarks/{id}` sums the trials' input, output and cached tokens, model calls and cost (`totals`), with `costKnown: false` when any trial had an unpriced call. Computed from the trial rows on each read. | The numbers are on the trials already; a second stored copy could drift. |
+| The scripted owner's rules | Which rules are spent is recomputed from the run's questions, oldest first; nothing is stored. | The same questions give the same answers on any replica and after a crash. |
+
 ## Still to decide, by the issue that builds it
 
-- **How a run without a task carries its allowed sites and `confirmRiskyActions`** (#741): a field in `Run.context` read where the task's value is read today, or an equivalent. It must not widen anything for any other run.
 - **The scorecard's exact definitions** (#742): the interval method, cost per success with unpriced runs, what counts as a false success.

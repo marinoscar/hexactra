@@ -58,6 +58,8 @@ const epicChildren = new Map([
   [730, [731, 732, 733, 734, 735, 736]],
   // E44 benchmarks: agent policies compared on a real node, graded from the challenge site's state (E44.1 to E44.8, in order).
   [738, [739, 740, 741, 742, 743, 744, 745, 746]],
+  // E45 run recordings: opt-in video of a run, playback, and an admin retention policy (E45.1 to E45.6, in order).
+  [755, [756, 757, 758, 759, 760, 761]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

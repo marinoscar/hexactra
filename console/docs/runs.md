@@ -192,6 +192,7 @@ The sections below are one chapter: what a run records and when it keeps a pictu
 - **Never recorded or exported:** a secret's or a sign-in's value, the model's working memory (`runs.transcript`), tokens, an AI app's grant or limits, object keys.
 - **Storage:** 5 to 15 pictures per run, at most 40, about 150 kB each (≈ 1.5 MB per run kept).
 - **The trace is not the audit trail.** The durable audit events stay that ([VISION.MD §13.5](../../VISION.MD)).
+- **A recording is not the trace.** A run the owner opted into **Record video** also keeps a continuous video of its tab. That video is **not masked**, is owner-only and never in an export: [recordings.md](recordings.md).
 
 ## What a run records
 
