@@ -18,9 +18,10 @@ import { BenchmarkMetrics } from './benchmark.metrics';
 import { BenchmarkRunner, STOP_GRACE_MS } from './benchmark-runner.service';
 import { BenchmarkSiteAddress } from './benchmark-site-address';
 import { BENCHMARK_LIMITS } from './benchmark.settings';
-import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTrialView, type BenchmarkView, type CreateBenchmarkInput } from './benchmarks.schemas';
+import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTotals, type BenchmarkTrialView, type BenchmarkView, type CreateBenchmarkInput } from './benchmarks.schemas';
 import { SUITE, challengeById, missingCapabilities, seedFrom } from './suite/registry';
 import { CATEGORIES, CATEGORY_LABELS, type Check } from './suite/types';
+import { readTrialModels } from './trial-models';
 
 /** Who is asking. */
 export interface BenchmarkActor {
@@ -33,6 +34,7 @@ export const BENCHMARK_AUDIT = { started: 'benchmarks.started', cancelled: 'benc
 
 const oneOf = <T extends string>(list: readonly T[], value: unknown): T | null => (list.includes(value as T) ? (value as T) : null);
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+const EMPTY_TOTALS: BenchmarkTotals = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, modelCalls: 0, costUsd: 0, costKnown: true };
 const EMPTY_PROGRESS: BenchmarkProgress = { total: 0, pending: 0, running: 0, graded: 0, skipped: 0, pass: 0, fail: 0, error: 0, unsupported: 0 };
 
 /** Two benchmarks would drive the same browser: the same profile on the same node, or on a node the fabric picks. */
@@ -173,7 +175,7 @@ export class BenchmarksService {
     await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd });
     await enqueueBenchmarkAdvance(this.jobs, id, orgId, 'benchmark_started');
     this.log.log(`benchmark ${id}: started (${rows.length} trials)`);
-    return this.view(created, await this.progressOf([id]));
+    return this.view(created, await this.factsOf([id]));
   }
 
   // ---- Read ----
@@ -183,8 +185,8 @@ export class BenchmarksService {
       this.db(userId).benchmark.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: q.limit, skip: q.offset }),
       this.db(userId).benchmark.count(),
     ]);
-    const progress = await this.progressOf(rows.map((r) => r.id));
-    return { items: rows.map((r) => this.view(r, progress)), total };
+    const facts = await this.factsOf(rows.map((r) => r.id));
+    return { items: rows.map((r) => this.view(r, facts)), total };
   }
 
   private async find(userId: string, id: string): Promise<Benchmark> {
@@ -195,7 +197,7 @@ export class BenchmarksService {
 
   async get(userId: string, id: string): Promise<BenchmarkView> {
     const b = await this.find(userId, id);
-    return this.view(b, await this.progressOf([id]));
+    return this.view(b, await this.factsOf([id]));
   }
 
   /** The trials of a benchmark, in the order they run. */
@@ -263,7 +265,27 @@ export class BenchmarksService {
     return out;
   }
 
-  private view(b: Benchmark, progress: Map<string, BenchmarkProgress>): BenchmarkView {
+  /** What the trials that ended used, by benchmark: the sums of the metrics copied from their runs. */
+  private async totalsOf(ids: string[]): Promise<Map<string, BenchmarkTotals>> {
+    const out = new Map<string, BenchmarkTotals>();
+    if (ids.length === 0) return out;
+    const [sums, unpriced] = await Promise.all([
+      this.prisma.benchmarkTrial.groupBy({ by: ['benchmarkId'], where: { benchmarkId: { in: ids } }, _sum: { inputTokens: true, outputTokens: true, cachedInputTokens: true, modelCalls: true, costUsd: true } }),
+      this.prisma.benchmarkTrial.groupBy({ by: ['benchmarkId'], where: { benchmarkId: { in: ids }, costKnown: false }, _count: { _all: true } }),
+    ]);
+    const unknown = new Set(unpriced.map((g) => g.benchmarkId));
+    for (const g of sums) {
+      out.set(g.benchmarkId, { inputTokens: g._sum.inputTokens ?? 0, outputTokens: g._sum.outputTokens ?? 0, cachedInputTokens: g._sum.cachedInputTokens ?? 0, modelCalls: g._sum.modelCalls ?? 0, costUsd: Number(g._sum.costUsd ?? 0), costKnown: !unknown.has(g.benchmarkId) });
+    }
+    return out;
+  }
+
+  private async factsOf(ids: string[]) {
+    const [progress, totals] = await Promise.all([this.progressOf(ids), this.totalsOf(ids)]);
+    return { progress, totals };
+  }
+
+  private view(b: Benchmark, facts: { progress: Map<string, BenchmarkProgress>; totals: Map<string, BenchmarkTotals> }): BenchmarkView {
     return {
       id: b.id,
       name: b.name,
@@ -274,7 +296,8 @@ export class BenchmarksService {
       appVersion: b.appVersion,
       commit: b.commit,
       spentUsd: Number(b.spentUsd),
-      progress: progress.get(b.id) ?? { ...EMPTY_PROGRESS },
+      progress: facts.progress.get(b.id) ?? { ...EMPTY_PROGRESS },
+      totals: facts.totals.get(b.id) ?? { ...EMPTY_TOTALS },
       baselineId: b.baselineId,
       createdAt: b.createdAt.toISOString(),
       startedAt: iso(b.startedAt),
@@ -326,6 +349,8 @@ export function trialView(t: TrialRow): BenchmarkTrialView {
     inputTokens: t.inputTokens,
     outputTokens: t.outputTokens,
     cachedInputTokens: t.cachedInputTokens,
+    model: readTrialModels(t.models)?.model ?? null,
+    models: readTrialModels(t.models),
     costUsd: t.costUsd === null ? null : Number(t.costUsd),
     costKnown: t.costKnown,
     stopReason: t.stopReason,

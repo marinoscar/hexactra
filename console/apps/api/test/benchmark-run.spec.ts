@@ -10,7 +10,9 @@ import { siteAddress } from '../src/benchmark/benchmark-site-address';
 import { createBenchmarkSchema } from '../src/benchmark/benchmarks.schemas';
 import { BENCHMARK_ANSWER_CHANNEL, askedQuestions, brokerAnswer, scriptRules, type ScriptQuestion } from '../src/benchmark/owner-script';
 import type { OwnerRule } from '../src/benchmark/suite/types';
+import { readTrialModels, trialModels } from '../src/benchmark/trial-models';
 import { trialOutcome } from '../src/benchmark/trial-verdict';
+import { balancedSpec } from '../src/policies/builtin-policies';
 import { mayAnswerOn } from '../src/questions/channels/channel-rules';
 import { benchmarkLimits, benchmarkRunContext, runLimits } from '../src/runner/host/run-limits';
 
@@ -247,5 +249,34 @@ describe("the challenge site's address", () => {
 
   it('takes a loopback address an administrator set deliberately (a node on the same machine)', () => {
     expect(siteAddress({ siteBaseUrl: 'http://localhost:3535/benchmark' }, 'http://localhost:3535')).toMatchObject({ reachable: true, host: 'localhost' });
+  });
+});
+
+describe("the models of a trial's run (benchmark/trial-models.ts)", () => {
+  const tier = (model: string | null, fallbackModel: string | null = null) => ({ model, fallbackModel });
+  const snapshot = (startTier: string, maxTier: string) => ({
+    schemaVersion: 1, ref: 'builtin:balanced', name: 'Balanced', version: 1, builtin: true, source: 'run', takenAt: '2026-11-21T00:00:00.000Z', tiers: null,
+    spec: { ...balancedSpec(), models: { ...balancedSpec().models, startTier, maxTier } },
+    resolvedTiers: { fast: tier('provider-a:small'), standard: tier('provider-a:medium', 'provider-b:medium'), frontier: tier('provider-a:large') },
+  });
+
+  it('lists the tiers from start to max with their models, the start tier\'s model first, and the tier the run ended on', () => {
+    expect(trialModels(snapshot('fast', 'frontier'), 'standard')).toEqual({
+      startTier: 'fast', maxTier: 'frontier', finalTier: 'standard', model: 'provider-a:small',
+      tiers: [{ tier: 'fast', model: 'provider-a:small', fallbackModel: null }, { tier: 'standard', model: 'provider-a:medium', fallbackModel: 'provider-b:medium' }, { tier: 'frontier', model: 'provider-a:large', fallbackModel: null }],
+    });
+  });
+
+  it('a policy pinned to one tier names one model', () => {
+    const pinned = trialModels(snapshot('standard', 'standard'), null)!;
+    expect(pinned).toMatchObject({ model: 'provider-a:medium', finalTier: 'standard' });
+    expect(pinned.tiers).toHaveLength(1);
+    expect(readTrialModels(JSON.parse(JSON.stringify(pinned)))).toEqual(pinned);
+  });
+
+  it('is null for a run that never got a snapshot, and for a stored value it cannot read', () => {
+    expect(trialModels(null, 'fast')).toBeNull();
+    expect(readTrialModels(null)).toBeNull();
+    expect(readTrialModels({ startTier: 'x' })).toBeNull();
   });
 });

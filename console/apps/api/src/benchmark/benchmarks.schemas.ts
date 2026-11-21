@@ -61,6 +61,26 @@ export const benchmarkProgressSchema = z.object({
 });
 export type BenchmarkProgress = z.infer<typeof benchmarkProgressSchema>;
 
+/** What the trials that ended used, summed. */
+export const benchmarkTotalsSchema = z.object({
+  inputTokens: z.number().int(),
+  outputTokens: z.number().int(),
+  cachedInputTokens: z.number().int().describe('Input tokens served from the provider cache: a subset of `inputTokens`.'),
+  modelCalls: z.number().int(),
+  costUsd: z.number().describe('USD on model calls. The same sum as `spentUsd`.'),
+  costKnown: z.boolean().describe('False when a model call of any trial could not be priced: `costUsd` is then a lower bound.'),
+});
+export type BenchmarkTotals = z.infer<typeof benchmarkTotalsSchema>;
+
+/** The models a trial's run could call, from its policy snapshot. */
+export const trialModelsSchema = z.object({
+  startTier: z.string(),
+  maxTier: z.string(),
+  finalTier: z.string().describe('The tier the run was on when it ended.'),
+  model: z.string().nullable().describe("The start tier's model, `provider:modelId`."),
+  tiers: z.array(z.object({ tier: z.string(), model: z.string().nullable(), fallbackModel: z.string().nullable() })).describe('The tiers from start to max: the only ones the run may use.'),
+});
+
 export const benchmarkSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -72,6 +92,7 @@ export const benchmarkSchema = z.object({
   commit: z.string().nullable().describe("The build's commit when it started; null on a development build."),
   spentUsd: z.number().describe('USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`.'),
   progress: benchmarkProgressSchema,
+  totals: benchmarkTotalsSchema,
   baselineId: z.string().nullable(),
   createdAt: z.string(),
   startedAt: z.string().nullable(),
@@ -112,6 +133,8 @@ export const benchmarkTrialSchema = z.object({
   inputTokens: z.number().int().nullable(),
   outputTokens: z.number().int().nullable(),
   cachedInputTokens: z.number().int().nullable(),
+  model: z.string().nullable().describe("The model of the run's start tier (`provider:modelId`); null before grading or when unknown."),
+  models: trialModelsSchema.nullable(),
   costUsd: z.number().nullable(),
   costKnown: z.boolean().nullable().describe('False when a model call could not be priced: `costUsd` is then a lower bound.'),
   stopReason: z.string().nullable().describe("The run's stop reason (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`)."),

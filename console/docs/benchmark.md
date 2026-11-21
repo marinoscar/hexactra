@@ -70,8 +70,8 @@ Every route is under `/api/benchmarks`. Reading needs `benchmarks:read`; startin
 | `GET /suite` | The challenges with category, difficulty and `supported`, the defaults and limits of a new benchmark, and `site.reachable` |
 | `GET /` | The administrator's benchmarks, newest first (`limit`, `offset`) |
 | `POST /` | Start one |
-| `GET /{id}` | One benchmark: settings, status, `spentUsd`, `progress` (trial counts by status and verdict), `appVersion` and `commit` |
-| `GET /{id}/trials` | Its trials in run order: verdict, failure reason, checks, `claimedSuccess`, the metrics copied from the run, `runId`. Filters: `status`, `verdict`, `policyRef`, `challengeId` |
+| `GET /{id}` | One benchmark: settings, status, `spentUsd`, `progress` (trial counts by status and verdict), `totals` (input, output and cached tokens, model calls and cost of the trials that ended; `costKnown: false` when any call had no price), `appVersion` and `commit` |
+| `GET /{id}/trials` | Its trials in run order: verdict, failure reason, checks, `claimedSuccess`, the metrics copied from the run (`durationMs`, `activeMs`, `steps`, `modelCalls`, `inputTokens`, `outputTokens`, `cachedInputTokens`, `costUsd`, `costKnown`, `stopReason`, `questions`, `escalations`), `model` and `models` (the models its policy resolved to: each tier from start to max, and the tier it ended on), `runId`. Filters: `status`, `verdict`, `policyRef`, `challengeId` |
 | `POST /{id}/cancel` | Cancel it |
 | `DELETE /{id}` | Delete one that has ended, with its trials. Its runs stay in the run history |
 

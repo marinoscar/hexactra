@@ -255,6 +255,20 @@ describe('a benchmark, end to end', () => {
       expect(t.runId).not.toBeNull();
       expect(Object.keys(t)).not.toEqual(expect.arrayContaining(['seed']));
     }
+    // Tokens, cost and the models of each run are on the trial, and summed on the benchmark.
+    for (const t of trials) {
+      const run = await prisma.run.findUniqueOrThrow({ where: { id: t.runId! } });
+      expect([t.inputTokens, t.outputTokens, t.cachedInputTokens, t.modelCalls, t.costUsd, t.costKnown]).toEqual([run.inputTokens, run.outputTokens, run.cachedInputTokens, run.modelCalls, Number(run.costUsd), run.costKnown]);
+      const spec = (run.policySnapshot as { spec: { models: { startTier: string; maxTier: string } } }).spec.models;
+      expect(t.models).toMatchObject({ startTier: spec.startTier, maxTier: spec.maxTier, finalTier: run.currentTier });
+      expect(t.models!.tiers[0]!.tier).toBe(spec.startTier);
+      expect(t.model).toBe(t.models!.model);
+    }
+    const sum = (pick: (t: BenchmarkTrialView) => number | null) => trials.reduce((n, t) => n + (pick(t) ?? 0), 0);
+    expect(done.totals).toEqual({ inputTokens: sum((t) => t.inputTokens), outputTokens: sum((t) => t.outputTokens), cachedInputTokens: sum((t) => t.cachedInputTokens), modelCalls: sum((t) => t.modelCalls), costUsd: done.spentUsd, costKnown: trials.every((t) => t.costKnown === true) });
+    expect(done.totals.inputTokens).toBeGreaterThan(0);
+    expect(started.totals).toEqual({ inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, modelCalls: 0, costUsd: 0, costKnown: true });
+
     // A claimed success with a wrong state is a fail with `claimedSuccess: true`.
     const liar = trials[4]!;
     expect(liar).toMatchObject({ verdict: 'fail', failureReason: 'wrong_result', claimedSuccess: true });
@@ -654,6 +668,9 @@ describe('no other run can carry a benchmark run\'s limits', () => {
     const b = await service.get(admin.id, made.id);
     expect(b).toMatchObject({ status: 'completed', progress: { total: 12, graded: 12, pass: 10, fail: 2 } });
     expect(b.spentUsd).toBeCloseTo(0.12, 6);
+    expect(b.totals).toMatchObject({ inputTokens: 144_000, outputTokens: 7_200, cachedInputTokens: 48_000, modelCalls: 48, costKnown: true });
+    expect(b.totals.costUsd).toBeCloseTo(0.12, 6);
+    expect((await service.trials(admin.id, made.id)).items[0]).toMatchObject({ model: 'fixture:builtin:economy', models: { startTier: 'standard' } });
     expect((await service.trials(admin.id, made.id, { verdict: 'fail' })).items.map((t) => [t.policyRef, t.trialIndex, t.failureReason, t.claimedSuccess])).toEqual([['builtin:economy', 0, 'wrong_result', true], ['builtin:economy', 0, 'wrong_result', true]]);
   });
 });

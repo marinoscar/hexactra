@@ -20,6 +20,7 @@ import { OWNER_CARD_INPUTS, askedQuestions } from './owner-script';
 import { TrialStateService } from './site/trial-state.service';
 import { challengeById } from './suite/registry';
 import type { Check } from './suite/types';
+import { trialModels } from './trial-models';
 import { trialOutcome, type TrialOutcomeInput } from './trial-verdict';
 
 @Injectable()
@@ -80,6 +81,7 @@ export class BenchmarkGrader implements OnModuleInit, OnModuleDestroy {
     }
     const outcome = trialOutcome({ preset: trial.failureReason, run: { status: run.status, stopReason: run.stopReason, error: run.error }, grade });
     const finishedAt = run.finishedAt ?? new Date();
+    const models = trialModels(run.policySnapshot, run.currentTier);
     const { count } = await this.prisma.benchmarkTrial.updateMany({
       where: { id: trialId, status: 'running' },
       data: {
@@ -101,6 +103,7 @@ export class BenchmarkGrader implements OnModuleInit, OnModuleDestroy {
         questions: questions.filter((q) => !OWNER_CARD_INPUTS.includes(q.input)).length,
         escalations: run.escalations,
         policySnapshot: run.policySnapshot === null ? Prisma.DbNull : (run.policySnapshot as Prisma.InputJsonValue),
+        models: models ? (models as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         finishedAt,
       },
     });

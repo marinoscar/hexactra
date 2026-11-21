@@ -29,6 +29,8 @@ export interface FixtureTrial {
   questions?: number;
   escalations?: number;
   runId?: string | null;
+  /** The start tier's model, `provider:modelId` (default: one per policy, `fixture:<policy ref>`). */
+  model?: string;
 }
 
 export interface FixtureBenchmark {
@@ -97,6 +99,7 @@ export async function createGradedBenchmark(prisma: PrismaService, userId: strin
                 questions: r.questions ?? 0,
                 escalations: r.escalations ?? 0,
                 runId: r.runId ?? null,
+                models: { startTier: 'standard', maxTier: 'standard', finalTier: 'standard', model: r.model ?? `fixture:${p.ref}`, tiers: [{ tier: 'standard', model: r.model ?? `fixture:${p.ref}`, fallbackModel: null }] } as unknown as Prisma.InputJsonValue,
                 startedAt: new Date(at),
               }
             : {}),

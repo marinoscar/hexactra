@@ -104879,6 +104879,48 @@
                     "unsupported"
                   ]
                 },
+                "totals": {
+                  "type": "object",
+                  "properties": {
+                    "inputTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "outputTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "cachedInputTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Input tokens served from the provider cache: a subset of `inputTokens`."
+                    },
+                    "modelCalls": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "costUsd": {
+                      "type": "number",
+                      "description": "USD on model calls. The same sum as `spentUsd`."
+                    },
+                    "costKnown": {
+                      "type": "boolean",
+                      "description": "False when a model call of any trial could not be priced: `costUsd` is then a lower bound."
+                    }
+                  },
+                  "required": [
+                    "inputTokens",
+                    "outputTokens",
+                    "cachedInputTokens",
+                    "modelCalls",
+                    "costUsd",
+                    "costKnown"
+                  ]
+                },
                 "baselineId": {
                   "type": [
                     "string",
@@ -104912,6 +104954,7 @@
                 "commit",
                 "spentUsd",
                 "progress",
+                "totals",
                 "baselineId",
                 "createdAt",
                 "startedAt",
@@ -105095,6 +105138,48 @@
               "unsupported"
             ]
           },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "inputTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cachedInputTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Input tokens served from the provider cache: a subset of `inputTokens`."
+              },
+              "modelCalls": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsd": {
+                "type": "number",
+                "description": "USD on model calls. The same sum as `spentUsd`."
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a model call of any trial could not be priced: `costUsd` is then a lower bound."
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cachedInputTokens",
+              "modelCalls",
+              "costUsd",
+              "costKnown"
+            ]
+          },
           "baselineId": {
             "type": [
               "string",
@@ -105128,6 +105213,7 @@
           "commit",
           "spentUsd",
           "progress",
+          "totals",
           "baselineId",
           "createdAt",
           "startedAt",
@@ -105448,6 +105534,78 @@
                     }
                   ]
                 },
+                "model": {
+                  "description": "The model of the run's start tier (`provider:modelId`); null before grading or when unknown.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "models": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "startTier": {
+                          "type": "string"
+                        },
+                        "maxTier": {
+                          "type": "string"
+                        },
+                        "finalTier": {
+                          "type": "string",
+                          "description": "The tier the run was on when it ended."
+                        },
+                        "model": {
+                          "description": "The start tier's model, `provider:modelId`.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tiers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "tier": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "fallbackModel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "tier",
+                              "model",
+                              "fallbackModel"
+                            ]
+                          },
+                          "description": "The tiers from start to max: the only ones the run may use."
+                        }
+                      },
+                      "required": [
+                        "startTier",
+                        "maxTier",
+                        "finalTier",
+                        "model",
+                        "tiers"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "costUsd": {
                   "type": [
                     "number",
@@ -105527,6 +105685,8 @@
                 "inputTokens",
                 "outputTokens",
                 "cachedInputTokens",
+                "model",
+                "models",
                 "costUsd",
                 "costKnown",
                 "stopReason",

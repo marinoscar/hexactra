@@ -22779,6 +22779,17 @@ export interface components {
                     error: number;
                     unsupported: number;
                 };
+                totals: {
+                    inputTokens: number;
+                    outputTokens: number;
+                    /** @description Input tokens served from the provider cache: a subset of `inputTokens`. */
+                    cachedInputTokens: number;
+                    modelCalls: number;
+                    /** @description USD on model calls. The same sum as `spentUsd`. */
+                    costUsd: number;
+                    /** @description False when a model call of any trial could not be priced: `costUsd` is then a lower bound. */
+                    costKnown: boolean;
+                };
                 baselineId: string | null;
                 createdAt: string;
                 startedAt: string | null;
@@ -22823,6 +22834,17 @@ export interface components {
                 fail: number;
                 error: number;
                 unsupported: number;
+            };
+            totals: {
+                inputTokens: number;
+                outputTokens: number;
+                /** @description Input tokens served from the provider cache: a subset of `inputTokens`. */
+                cachedInputTokens: number;
+                modelCalls: number;
+                /** @description USD on model calls. The same sum as `spentUsd`. */
+                costUsd: number;
+                /** @description False when a model call of any trial could not be priced: `costUsd` is then a lower bound. */
+                costKnown: boolean;
             };
             baselineId: string | null;
             createdAt: string;
@@ -22889,6 +22911,22 @@ export interface components {
                 inputTokens: number | null;
                 outputTokens: number | null;
                 cachedInputTokens: number | null;
+                /** @description The model of the run's start tier (`provider:modelId`); null before grading or when unknown. */
+                model: string | null;
+                models: {
+                    startTier: string;
+                    maxTier: string;
+                    /** @description The tier the run was on when it ended. */
+                    finalTier: string;
+                    /** @description The start tier's model, `provider:modelId`. */
+                    model: string | null;
+                    /** @description The tiers from start to max: the only ones the run may use. */
+                    tiers: {
+                        tier: string;
+                        model: string | null;
+                        fallbackModel: string | null;
+                    }[];
+                } | null;
                 costUsd: number | null;
                 /** @description False when a model call could not be priced: `costUsd` is then a lower bound. */
                 costKnown: boolean | null;
