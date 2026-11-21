@@ -55,6 +55,7 @@ const epicChildren = new Map([
   [684, [685, 686, 687, 688, 689]],
   [697, [698, 699, 700, 701, 702, 703]],
   [717, [718, 719, 720, 721, 722, 723]],
+  [730, [731, 732, 733, 734, 735, 736]],
   // E44 benchmarks: agent policies compared on a real node, graded from the challenge site's state (E44.1 to E44.8, in order).
   [738, [739, 740, 741, 742, 743, 744, 745, 746]],
 ]);

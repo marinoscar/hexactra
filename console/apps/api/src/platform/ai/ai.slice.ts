@@ -42,6 +42,10 @@ export const aiSlice: ApiSlice = {
     /** Where the example feature's service is provided; delete with the example. */
     @Module({ imports: [AiModule], providers: [NotesSummaryService], exports: [NotesSummaryService] })
     class NotesSummaryModule {}
-    return [AiModule, NotesSummaryModule];
+    const { AiUsageLedgerDoctorCheck } = require('./ai-usage-ledger.doctor-check') as typeof import('./ai-usage-ledger.doctor-check');
+    /** `ai.usage_ledger` in the admin Doctor (#731): whether model calls reach the AI usage ledger. */
+    @Module({ providers: [AiUsageLedgerDoctorCheck] })
+    class AiUsageHealthModule {}
+    return [AiModule, NotesSummaryModule, AiUsageHealthModule];
   },
 };
