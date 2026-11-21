@@ -16,6 +16,7 @@ const challenge = (over: Partial<Challenge> = {}): Challenge => ({
   setup: (seed) => ({ code: seeded(seed).code() }),
   goal: (_seed, baseUrl) => `Open ${baseUrl}/ and report the code.`,
   grade: ({ seed, result }) => [{ name: 'reported-code', pass: result.trim() === seeded(seed).code() }],
+  site: { handle: () => ({ kind: 'not_found' }) },
   ...over,
 });
 

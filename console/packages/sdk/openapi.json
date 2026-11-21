@@ -46458,6 +46458,159 @@
           ]
         }
       }
+    },
+    "/api/benchmark-site/assets/{file}": {
+      "get": {
+        "description": "The static files the challenge pages link: the same for every trial, with no token and no data.",
+        "operationId": "benchmarkSite_asset",
+        "parameters": [
+          {
+            "name": "file",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file."
+          },
+          "404": {
+            "description": "The same page for an unknown, closed or malformed token and for a page the challenge does not have."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A script or stylesheet of the challenge site",
+        "tags": [
+          "Benchmark site"
+        ]
+      }
+    },
+    "/api/benchmark-site/t/{token}": {
+      "get": {
+        "description": "Redirects to the trial's start page, `t/{token}/`: the pages link each other relatively.",
+        "operationId": "benchmarkSite_bare",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "The trial's site token, from the trial's goal.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "308": {
+            "description": "To `t/{token}/`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A trial's site, without the trailing slash",
+        "tags": [
+          "Benchmark site"
+        ]
+      }
+    },
+    "/api/benchmark-site/t/{token}/{path}": {
+      "get": {
+        "description": "No session: the token in the path is the authority, and it opens one benchmark trial's challenge pages (seeded fixture data) while that trial is running. Answers an HTML page, or JSON for a call made by the page's own script. Rate limited per trial.",
+        "operationId": "benchmarkSite_page",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "The trial's site token, from the trial's goal.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page, or JSON."
+          },
+          "404": {
+            "description": "The same page for an unknown, closed or malformed token and for a page the challenge does not have."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A page of a trial's challenge",
+        "tags": [
+          "Benchmark site"
+        ]
+      },
+      "post": {
+        "description": "Changes the trial's own site state, the way the challenge's page does: a form post (answered with a redirect or the page with its errors) or a small JSON call. At most 64 KB. Refused with the same 404 once the trial is closed.",
+        "operationId": "benchmarkSite_act",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "The trial's site token, from the trial's goal.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page, or JSON."
+          },
+          "303": {
+            "description": "To the next page of the challenge."
+          },
+          "404": {
+            "description": "The same page for an unknown, closed or malformed token and for a page the challenge does not have."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A form post or script call of a trial's challenge",
+        "tags": [
+          "Benchmark site"
+        ]
+      }
     }
   },
   "info": {

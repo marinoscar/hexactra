@@ -9054,6 +9054,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/benchmark-site/assets/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A script or stylesheet of the challenge site
+         * @description The static files the challenge pages link: the same for every trial, with no token and no data.
+         */
+        get: operations["benchmarkSite_asset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmark-site/t/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A trial's site, without the trailing slash
+         * @description Redirects to the trial's start page, `t/{token}/`: the pages link each other relatively.
+         */
+        get: operations["benchmarkSite_bare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmark-site/t/{token}/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A page of a trial's challenge
+         * @description No session: the token in the path is the authority, and it opens one benchmark trial's challenge pages (seeded fixture data) while that trial is running. Answers an HTML page, or JSON for a call made by the page's own script. Rate limited per trial.
+         */
+        get: operations["benchmarkSite_page"];
+        put?: never;
+        /**
+         * A form post or script call of a trial's challenge
+         * @description Changes the trial's own site state, the way the challenge's page does: a form post (answered with a redirect or the page with its errors) or a small JSON call. At most 64 KB. Refused with the same 404 once the trial is closed.
+         */
+        post: operations["benchmarkSite_act"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -51223,6 +51287,153 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarkSite_asset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The same page for an unknown, closed or malformed token and for a page the challenge does not have. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarkSite_bare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The trial's site token, from the trial's goal. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To `t/{token}/`. */
+            308: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarkSite_page: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The trial's site token, from the trial's goal. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An HTML page, or JSON. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The same page for an unknown, closed or malformed token and for a page the challenge does not have. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarkSite_act: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The trial's site token, from the trial's goal. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An HTML page, or JSON. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description To the next page of the challenge. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The same page for an unknown, closed or malformed token and for a page the challenge does not have. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
