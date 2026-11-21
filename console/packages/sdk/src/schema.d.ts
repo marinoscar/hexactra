@@ -10648,6 +10648,12 @@ export interface components {
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
             };
+            recordings: {
+                /** @description Finished run recordings are deleted this many days after they were made. null keeps them indefinitely. Default 30. */
+                keepDays: number | null;
+                /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
+                maxMinutes: number;
+            };
             connections: {
                 mcp?: {
                     enabled?: boolean;
@@ -10938,6 +10944,12 @@ export interface components {
                 maxOutputTokens: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
+            };
+            recordings?: {
+                /** @description Finished run recordings are deleted this many days after they were made. null keeps them indefinitely. Default 30. */
+                keepDays: number | null;
+                /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
+                maxMinutes: number;
             };
             connections?: {
                 mcp?: {
@@ -11233,6 +11245,12 @@ export interface components {
                 maxOutputTokens?: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd?: number | null;
+            };
+            recordings?: {
+                /** @description Finished run recordings are deleted this many days after they were made. null keeps them indefinitely. Default 30. */
+                keepDays?: number | null;
+                /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
+                maxMinutes?: number;
             };
             connections?: {
                 mcp?: {
@@ -17110,6 +17128,8 @@ export interface components {
              * @enum {string}
              */
             needsBrowser: "auto" | "always" | "never";
+            /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
+            recordVideo: boolean;
             /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
             connections: {
                 /**
@@ -17308,6 +17328,8 @@ export interface components {
                  * @enum {string}
                  */
                 needsBrowser: "auto" | "always" | "never";
+                /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
+                recordVideo: boolean;
                 /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
                 connections: {
                     /**
@@ -17561,6 +17583,8 @@ export interface components {
              * @enum {string}
              */
             needsBrowser: "auto" | "always" | "never";
+            /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
+            recordVideo: boolean;
             /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
             connections: {
                 /**
@@ -17846,6 +17870,11 @@ export interface components {
                  */
                 access: "read" | "read_write";
             }[];
+            /**
+             * @description Record a video of each run's browser tab (epic #755). Off by default. The video is NOT masked (a card number or an address on the page is visible), is played only by the owner on the run page, is never exported or delivered, and is deleted after the admin's retention period (30 days by default).
+             * @default false
+             */
+            recordVideo?: boolean;
             /** @description Schedules created with the task, in the same transaction: one invalid schedule and nothing is created. */
             schedules?: {
                 /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
@@ -17906,6 +17935,8 @@ export interface components {
              * @enum {string}
              */
             needsBrowser: "auto" | "always" | "never";
+            /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
+            recordVideo: boolean;
             /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
             connections: {
                 /**
@@ -18115,6 +18146,8 @@ export interface components {
                  */
                 access: "read" | "read_write";
             }[];
+            /** @description Record a video of each run's browser tab (epic #755). Off by default. The video is NOT masked (a card number or an address on the page is visible), is played only by the owner on the run page, is never exported or delivered, and is deleted after the admin's retention period (30 days by default). */
+            recordVideo?: boolean;
         };
         ReplaceTaskSchedulesDto: {
             schedules: {
@@ -18181,6 +18214,8 @@ export interface components {
              * @enum {string}
              */
             needsBrowser: "auto" | "always" | "never";
+            /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
+            recordVideo: boolean;
             /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
             connections: {
                 /**
@@ -20971,6 +21006,8 @@ export interface components {
             inputs?: {
                 [key: string]: string | number;
             };
+            /** @description Record a video of this run's browser tab (epic #755), or not, instead of the task's `recordVideo`. The video is not masked and is owner-only. */
+            record?: boolean;
         };
         StartRunDto: {
             goal: string;
@@ -20981,6 +21018,11 @@ export interface components {
             hostFallback?: boolean;
             /** @description Run under this agent policy instead of the task's or the user's default. */
             policyId?: string;
+            /**
+             * @description Record a video of the run's browser tab (epic #755). The video is not masked and is owner-only.
+             * @default false
+             */
+            record?: boolean;
         };
         ScheduleResponseDto: {
             /** Format: uuid */

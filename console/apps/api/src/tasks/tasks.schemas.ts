@@ -66,6 +66,11 @@ const taskFields = {
       "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened.",
     ),
   connections: connectionSelectionsField,
+  recordVideo: z
+    .boolean()
+    .describe(
+      "Record a video of each run's browser tab (epic #755). Off by default. The video is NOT masked (a card number or an address on the page is visible), is played only by the owner on the run page, is never exported or delivered, and is deleted after the admin's retention period (30 days by default).",
+    ),
 };
 
 export const createTaskSchema = z.object({
@@ -90,6 +95,7 @@ export const createTaskSchema = z.object({
   unattendedPayments: taskFields.unattendedPayments.default('ask'),
   needsBrowser: taskFields.needsBrowser.default('auto'),
   connections: taskFields.connections.optional(),
+  recordVideo: taskFields.recordVideo.default(false),
   schedules: taskSchedulesField.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}

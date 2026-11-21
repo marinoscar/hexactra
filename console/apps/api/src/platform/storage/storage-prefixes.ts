@@ -26,5 +26,17 @@ export const RUN_TRACE_KEY_PREFIX: StorageKeyPrefixDef = {
   description: 'Masked screenshots of the key moments of a run, under runs/<userId>/<runId>/',
 };
 
+/**
+ * The video recordings of runs (epic #755), `run-recordings/<userId>/<runId>/part-NNNNN.hxr` while recording, then
+ * `run-recordings/<userId>/<runId>/recording.webm`. NOT masked. Removed with the run and by the recordings retention job.
+ */
+export const RUN_RECORDING_KEY_PREFIX: StorageKeyPrefixDef = {
+  id: 'run-recordings',
+  prefix: 'run-recordings/',
+  owner: 'recordings',
+  scope: 'user',
+  description: 'Video recordings of runs the owner chose to record (not masked), under run-recordings/<userId>/<runId>/',
+};
+
 /** Every prefix this app adds. Append here. */
-export const APP_STORAGE_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [NOTE_ATTACHMENTS_KEY_PREFIX, RUN_TRACE_KEY_PREFIX];
+export const APP_STORAGE_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [NOTE_ATTACHMENTS_KEY_PREFIX, RUN_TRACE_KEY_PREFIX, RUN_RECORDING_KEY_PREFIX];
