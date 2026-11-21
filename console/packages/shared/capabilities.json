@@ -254,6 +254,38 @@
       }
     },
     {
+      "id": "usage.report",
+      "description": "See AI token use and cost (own, or everyone for an AI administrator) over 7, 30 or 90 days or a year by month, by model, token type or feature",
+      "rest": [
+        "GET /api/usage/report"
+      ],
+      "cli": "usage report",
+      "mcp": "usage_report",
+      "tui": {
+        "none": "The TUI is for watching and answering; charts and tables of usage belong to the web app and the CLI"
+      },
+      "web": {
+        "none": "Arrives with the Usage & Cost page (E43.4, #734)"
+      }
+    },
+    {
+      "id": "usage.export",
+      "description": "Download AI token use and cost as a CSV file (one line per period, model and feature)",
+      "rest": [
+        "GET /api/usage/export.csv"
+      ],
+      "cli": "usage export",
+      "mcp": {
+        "none": "A file download: an assistant reads the same numbers with usage_report"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; a file download belongs to the web app and the CLI"
+      },
+      "web": {
+        "none": "Arrives with the Usage & Cost page (E43.4, #734)"
+      }
+    },
+    {
       "id": "policies.import",
       "description": "Import agent policies from a JSON file (rename, skip or replace on a name clash)",
       "rest": [

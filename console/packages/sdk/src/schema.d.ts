@@ -7208,6 +7208,50 @@ export interface paths {
         patch: operations["connectedApps_patch"];
         trace?: never;
     };
+    "/api/usage/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI usage and cost
+         * @description Tokens (uncached input, cached input, output, reasoning), requests and cost per day (or per month for `range=1y`), split by model, token type, feature, provider or user, with totals, a per-model table and the runs' own counters. Cost uses the admin's model prices (and, for `scope=me`, the caller's own overrides); a model with no price makes `costKnown` false and the cost a lower bound. `scope=me` is always the caller's own usage; `scope=all` (every user) needs `ai_config:read`. Catalogue syncs are left out.
+         *
+         *     **Requires:** authentication, plus permission `usage:read`.
+         */
+        get: operations["usage_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI usage and cost as a CSV file
+         * @description The same range, scope and filters as `GET /api/usage/report`, one line per period × provider × model × feature (× user for `scope=all`): requests, failed, input, cached input, output, reasoning and total tokens, cost in USD (empty when the model has no price) and `cost_known`. Sent as an attachment.
+         *
+         *     **Requires:** authentication, plus permission `usage:read`.
+         */
+        get: operations["usage_exportCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser/sessions": {
         parameters: {
             query?: never;
@@ -20225,6 +20269,79 @@ export interface components {
             allowSavedCards?: boolean;
             allowConnections?: boolean;
             paused?: boolean;
+        };
+        UsageReportResponseDto: {
+            /** @enum {string} */
+            range: "7d" | "30d" | "90d" | "1y";
+            /** @enum {string} */
+            scope: "me" | "all";
+            /** @enum {string} */
+            breakdown: "none" | "model" | "tokenType" | "feature" | "provider" | "user";
+            timeZone: string;
+            /** @enum {string} */
+            granularity: "day" | "month";
+            /** @description First day covered (YYYY-MM-DD, in `timeZone`). */
+            from: string;
+            /** @description Last day covered (YYYY-MM-DD, in `timeZone`). */
+            to: string;
+            /** @description The periods, oldest first: `YYYY-MM-DD` days, or `YYYY-MM` months for `1y`. */
+            buckets: string[];
+            /** @description One per breakdown key; each array is aligned with `buckets`. */
+            series: {
+                key: string;
+                label: string;
+                costUsd: number[];
+                tokens: number[];
+                requests: number[];
+            }[];
+            totals: {
+                requests: number;
+                failed: number;
+                inputTokens: number;
+                /** @description Part of `inputTokens`. */
+                cachedInputTokens: number;
+                outputTokens: number;
+                /** @description Part of `outputTokens`. */
+                reasoningTokens: number;
+                /** @description `inputTokens + outputTokens`. */
+                tokens: number;
+                costUsd: number;
+                /** @description False when a call was on a model with no price: `costUsd` is then a lower bound ("at least"). */
+                costKnown: boolean;
+                costByTokenType: {
+                    input: number;
+                    cachedInput: number;
+                    output: number;
+                    reasoning: number;
+                };
+            };
+            byModel: {
+                key: string;
+                provider: string;
+                model: string;
+                requests: number;
+                failed: number;
+                inputTokens: number;
+                cachedInputTokens: number;
+                outputTokens: number;
+                reasoningTokens: number;
+                tokens: number;
+                costUsd: number | null;
+                costShare: number | null;
+            }[];
+            /** @description `<provider>:<model>` keys with usage but no price. */
+            unpricedModels: string[];
+            /** @description Browser-agent runs started in the range (their own cost counters). */
+            runs: {
+                count: number;
+                succeeded: number;
+                costUsd: number;
+                avgSuccessCostUsd: number | null;
+            };
+            pricing: {
+                /** @description True when the caller's own model prices replaced the deployment's for this report. */
+                overridesApplied: boolean;
+            };
         };
         OpenDto: {
             /** @default default */
@@ -45261,6 +45378,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    usage_report: {
+        parameters: {
+            query?: {
+                /** @description `7d`, `30d` and `90d` are whole days ending today; `1y` is the 12 calendar months ending this month, one bucket per month. */
+                range?: "7d" | "30d" | "90d" | "1y";
+                /** @description `me`: the caller's own usage (`usage:read`). `all`: every user's (also needs `ai_config:read`). */
+                scope?: "me" | "all";
+                /** @description How the series are split: by model, by token type (uncached input, cached input, output, reasoning), by feature, by provider, by user (`scope=all` only) or not at all. */
+                breakdown?: "none" | "model" | "tokenType" | "feature" | "provider" | "user";
+                /** @description IANA time zone the days and months are in; default the caller's time zone setting. */
+                tz?: string;
+                /** @description Only this user (`scope=all` only). */
+                userId?: string;
+                provider?: string;
+                /** @description Only this model id, as the provider reports it. */
+                model?: string;
+                /** @description Only this AI feature (`browser_agent`, `chat_orchestrator`, `task_builder`, ...). */
+                feature?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["UsageReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    usage_exportCsv: {
+        parameters: {
+            query?: {
+                /** @description `7d`, `30d` and `90d` are whole days ending today; `1y` is the 12 calendar months ending this month, one bucket per month. */
+                range?: "7d" | "30d" | "90d" | "1y";
+                /** @description `me`: the caller's own usage (`usage:read`). `all`: every user's (also needs `ai_config:read`). */
+                scope?: "me" | "all";
+                /** @description How the series are split: by model, by token type (uncached input, cached input, output, reasoning), by feature, by provider, by user (`scope=all` only) or not at all. */
+                breakdown?: "none" | "model" | "tokenType" | "feature" | "provider" | "user";
+                /** @description IANA time zone the days and months are in; default the caller's time zone setting. */
+                tz?: string;
+                /** @description Only this user (`scope=all` only). */
+                userId?: string;
+                provider?: string;
+                /** @description Only this model id, as the provider reports it. */
+                model?: string;
+                /** @description Only this AI feature (`browser_agent`, `chat_orchestrator`, `task_builder`, ...). */
+                feature?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A UTF-8 CSV file (`text/csv`), not wrapped in the `data` envelope. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

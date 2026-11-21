@@ -26,6 +26,7 @@ import { POLICIES_PERMISSIONS } from '../policies/policies.permissions';
 import { APPROVALS_PERMISSIONS } from '../approvals/approvals.permissions';
 import { SECRETS_PERMISSIONS } from '../secrets/secrets.permissions';
 import { TASKS_PERMISSIONS } from '../tasks/tasks.permissions';
+import { USAGE_PERMISSIONS } from '../usage/usage.permissions';
 import { alertsMounted } from './alerts/alerts.enabled';
 import { enabledPermissionSlices, isSliceEnabled } from './slices/manifest';
 
@@ -40,7 +41,7 @@ export const PERMISSION_OPTIONS = {
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
     ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS, CONNECTIONS_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS, CONNECTIONS_PERMISSIONS, USAGE_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
 
 // The permission id type. `@marinoscar/vault-api` (the built-in secrets store, E37.5) augments the platform's
@@ -52,6 +53,7 @@ type AppPermissionSet =
   | typeof FABRIC_PERMISSIONS
   | typeof FLEET_PERMISSIONS
   | typeof TASKS_PERMISSIONS
+  | typeof USAGE_PERMISSIONS
   | typeof POLICIES_PERMISSIONS
   | typeof CHAT_PERMISSIONS
   | typeof CONNECTED_APPS_PERMISSIONS

@@ -132,7 +132,7 @@
       "openWorldHint": false
     },
     "inputSchema": "59f41b1e4f9a07f3",
-    "outputSchema": "f5157821f78d8a3e"
+    "outputSchema": "52301ab8b3c24fc3"
   },
   {
     "name": "task_create",
@@ -267,7 +267,7 @@
       "openWorldHint": false
     },
     "inputSchema": "b5ceb7c3c697ea95",
-    "outputSchema": "a6703e55c56a78fa"
+    "outputSchema": "cd4919f0b2b3a48a"
   },
   {
     "name": "inbox_answer",
@@ -282,7 +282,7 @@
       "openWorldHint": false
     },
     "inputSchema": "c5cb75215b11476a",
-    "outputSchema": "8cc9c42713dcfd2a"
+    "outputSchema": "09dcfc640edb2146"
   },
   {
     "name": "ask_human",
@@ -297,7 +297,7 @@
       "openWorldHint": false
     },
     "inputSchema": "fa4a7b268154e9d1",
-    "outputSchema": "73220c09353c8e52"
+    "outputSchema": "eb2597669126c8a1"
   },
   {
     "name": "question_status",
@@ -312,7 +312,22 @@
       "openWorldHint": false
     },
     "inputSchema": "34cc820d1a592623",
-    "outputSchema": "73220c09353c8e52"
+    "outputSchema": "eb2597669126c8a1"
+  },
+  {
+    "name": "usage_report",
+    "title": "Read your AI usage and cost",
+    "scope": "usage:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Read your AI usage and cost",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "d6cbbcb2dbdc86f1",
+    "outputSchema": "0fb30f22997e3c72"
   },
   {
     "name": "policies_list",
@@ -897,6 +912,6 @@
       "openWorldHint": false
     },
     "inputSchema": "58d3555a5ec2c48e",
-    "outputSchema": "8cc9c42713dcfd2a"
+    "outputSchema": "09dcfc640edb2146"
   }
 ]

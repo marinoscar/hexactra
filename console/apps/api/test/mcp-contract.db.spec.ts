@@ -111,6 +111,7 @@ describe('structured results validate against the output schemas (real REST answ
       const q2 = await call(t, 'ask_human', { prompt: 'Which one?', input: 'multi_choice', options: ['A', 'B', 'C'] });
       expect(await call(t, 'question_card_answer', { question_id: q2.question_id, outcome: 'completed', values: ['A', 'C'] })).toMatchObject({ status: 'answered', values: ['A', 'C'], channel: expect.stringMatching(/^mcp-app/) });
 
+      expect(await call(t, 'usage_report', { range: '1y' })).toMatchObject({ range: '1y', totals: { cost_known: true } });
       expect((await call(t, 'policies_list', {})).items!.map((p) => p.id)).toContain('builtin:balanced');
       const policy = await call(t, 'policy_get', { policy_id: 'builtin:balanced' });
       const created = await call(t, 'policy_create', { name: `Contract policy ${stamp}`, spec: policy.spec });

@@ -57,6 +57,7 @@ Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its s
 | Scope | Consent page | Risk | Default | Also needs | Tools | Console permissions |
 |---|---|---|---|---|---|---|
 | `runs:read` | See your runs, tasks, schedules and machines | low | yes | — | `run_status`, `run_wait`, `runs_list`, `run_export`, `tasks_list`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
+| `usage:read` | See your AI usage and cost | low | yes | — | `usage_report` | `usage:read` |
 | `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `run_pause`, `run_resume`, `task_run` | `runs:write`, `runs:read` |
 | `tasks:write` | Create and change tasks and schedules | low | yes | — | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
 | `inbox:read` | See questions your agent is waiting on | low | yes | — | `inbox_list`, `question_status` | `runs:read` |
@@ -283,6 +284,7 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `inbox_answer` | Pass on the user's answer | `inbox:write` | write | no | no | yes |
 | `ask_human` | Ask the user a question | `inbox:write` | write | no | no | yes |
 | `question_status` | Check a question | `inbox:read` | read | no | yes | yes |
+| `usage_report` | Read your AI usage and cost | `usage:read` | read | no | yes | yes |
 | `policies_list` | List agent policies | `runs:read` | read | no | yes | yes |
 | `policy_get` | Read an agent policy | `runs:read` | read | no | yes | yes |
 | `policy_create` | Create an agent policy | `policies:write` | write | no | no | yes |

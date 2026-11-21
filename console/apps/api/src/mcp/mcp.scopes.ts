@@ -9,7 +9,7 @@
 import type { OAuthScopeRisk } from '@marinoscar/platform-api/identity';
 
 /** Every scope a tool may name, in consent order (low risk first). */
-export const MCP_SCOPE_IDS = ['runs:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write', 'browser:drive', 'browser:evaluate', 'desktop:control', 'policies:write'] as const;
+export const MCP_SCOPE_IDS = ['runs:read', 'usage:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write', 'browser:drive', 'browser:evaluate', 'desktop:control', 'policies:write'] as const;
 export type McpScope = (typeof MCP_SCOPE_IDS)[number];
 
 /** The id of the protected resource `/api/mcp` (an `oat_` token's audience). */
@@ -66,6 +66,15 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     default: true,
     // runs and screenshots; tasks, schedules and the schedule preview; machines; policies and their export.
     permissions: ['runs:read', 'tasks:read', 'fleet:read', 'agent_policies:read'],
+  },
+  {
+    id: 'usage:read',
+    title: 'See your AI usage and cost',
+    description: 'See how many AI tokens your account used and what they cost, by day, month and model.',
+    risk: 'low',
+    default: true,
+    // GET /usage/report (#733): the caller's own usage only.
+    permissions: ['usage:read'],
   },
   {
     id: 'runs:write',
