@@ -34,6 +34,11 @@ if (fs.existsSync(sidepanelHtmlPath)) {
   console.log('Copied sidepanel.html');
 }
 
+// Copy the offscreen recorder page (run recordings, #755)
+const offscreenHtmlPath = path.join(__dirname, 'offscreen-recorder.html');
+fs.copyFileSync(offscreenHtmlPath, path.join(distDir, 'offscreen-recorder.html'));
+console.log('Copied offscreen-recorder.html');
+
 // Compile TypeScript files
 console.log('Compiling TypeScript...');
 
