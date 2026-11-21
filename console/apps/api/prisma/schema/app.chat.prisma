@@ -39,9 +39,22 @@ enum ChatMessageKind {
   @@map("chat_message_kind")
 }
 
+/// What a conversation is for (E42.1, #718): an ordinary chat, or the task
+/// builder, which interviews the owner and drafts a task (it never starts a
+/// run and never appears in the chat list).
+enum ConversationMode {
+  chat
+  task_builder
+
+  @@map("conversation_mode")
+}
+
 model Conversation {
   id            String             @id @default(uuid()) @db.Uuid
   userId        String             @map("user_id") @db.Uuid
+  mode          ConversationMode   @default(chat)
+  /// The task builder's live task spec (`taskBuilderSpecSchema`, src/task-builder/): null for a chat. Never a secret.
+  builderSpec   Json?              @map("builder_spec")
   /// Empty until the first message names it (or the owner does).
   title         String             @default("") @db.VarChar(200)
   status        ConversationStatus @default(active)
@@ -79,6 +92,8 @@ model Conversation {
 
   /// The chat list: one status, most recent first.
   @@index([userId, status, lastMessageAt])
+  /// The chat list reads one mode.
+  @@index([userId, mode, status, lastMessageAt])
   @@map("conversations")
 }
 

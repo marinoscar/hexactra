@@ -7802,6 +7802,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/task-builder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        post: operations["taskBuilder_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-builder/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        get: operations["taskBuilder_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-builder/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        post: operations["taskBuilder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-builder/{id}/spec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        patch: operations["taskBuilder_patchSpec"];
+        trace?: never;
+    };
     "/api/webhooks/events": {
         parameters: {
             query?: never;
@@ -9057,6 +9125,9 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
+             * @example TASK_BUILDER_NOT_FOUND
+             * @example TASK_BUILDER_ARCHIVED
+             * @example INVALID_TASK_SPEC
              * @example SECRETS_VAULT_NOT_CONFIGURED
              * @example SECRETS_VAULT_URL_REFUSED
              * @example SECRETS_VAULT_DISCONNECT_FIRST
@@ -21121,6 +21192,373 @@ export interface components {
              * @description A task of the caller, saved from this chat.
              */
             taskId: string;
+        };
+        TaskBuilderResponseDto: {
+            /**
+             * Format: uuid
+             * @description The builder's id (a conversation's: its live updates are `GET /chats/{id}/stream`)
+             */
+            id: string;
+            /** @description Empty until the first message names it */
+            title: string;
+            /**
+             * @description Archived once its task is saved
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** @description What the builder has learned about the task so far. Every field is optional; never a secret. */
+            spec: {
+                name?: string;
+                /** @description What the task achieves and how the owner knows it is done. */
+                objective?: string;
+                /** @description The standalone instruction so far, with a {{Name}} for each parameter. */
+                goal?: string;
+                /** @description The sites or services involved, in words. */
+                sites?: string[];
+                allowedDomains?: string[];
+                accounts?: {
+                    /** @description The connection's label, as the owner sees it. */
+                    label: string;
+                    /**
+                     * @default read
+                     * @enum {string}
+                     */
+                    access?: "read" | "read_write";
+                }[];
+                parameters?: {
+                    /** @description The placeholder's name, as it appears in the goal ("Amount" for {{Amount}}). */
+                    name: string;
+                    /**
+                     * @default text
+                     * @enum {string}
+                     */
+                    type?: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                    /** @description A fixed default value. Never a secret. */
+                    default?: string;
+                    /** @description The label of the owner's memory that holds the default. */
+                    memory?: string;
+                    /** @description The name of that memory's value. */
+                    attribute?: string;
+                    /** @description Why it varies, in a few words. */
+                    why?: string;
+                }[];
+                outputs?: {
+                    label: string;
+                    /**
+                     * @default text
+                     * @enum {string}
+                     */
+                    type?: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url";
+                    help?: string;
+                }[];
+                guardrails?: {
+                    confirmRiskyActions?: boolean;
+                    useSavedLogins?: boolean;
+                    useSavedIdentity?: boolean;
+                    useSavedCards?: boolean;
+                    /** @enum {string} */
+                    unattendedPayments?: "ask" | "allow";
+                };
+                /** @enum {string} */
+                needsBrowser?: "auto" | "always" | "never";
+                policy?: {
+                    /** @description An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default. */
+                    ref: string | null;
+                    why?: string;
+                };
+                schedules?: {
+                    /** @description A 5-field cron expression, e.g. "0 9 * * 1-5". */
+                    cron: string;
+                    /** @description An IANA time zone, e.g. "America/Costa_Rica". */
+                    timezone: string;
+                    /** @description Preset values for the task's parameters, by parameter name. */
+                    inputs?: {
+                        [key: string]: string;
+                    };
+                    description?: string;
+                }[];
+                /** @description What the agent does when something goes wrong (sold out, a login needed). */
+                edgeCases?: string[];
+                openQuestions?: string[];
+                suggestions?: string[];
+                ready?: boolean;
+            };
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+        };
+        CreateTaskBuilderDto: {
+            /** @description The owner's first message (what the task should do): the builder answers it at once. Never a password or a code. */
+            seed?: string;
+        };
+        TaskBuilderDetailResponseDto: {
+            /**
+             * Format: uuid
+             * @description The builder's id (a conversation's: its live updates are `GET /chats/{id}/stream`)
+             */
+            id: string;
+            /** @description Empty until the first message names it */
+            title: string;
+            /**
+             * @description Archived once its task is saved
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** @description What the builder has learned about the task so far. Every field is optional; never a secret. */
+            spec: {
+                name?: string;
+                /** @description What the task achieves and how the owner knows it is done. */
+                objective?: string;
+                /** @description The standalone instruction so far, with a {{Name}} for each parameter. */
+                goal?: string;
+                /** @description The sites or services involved, in words. */
+                sites?: string[];
+                allowedDomains?: string[];
+                accounts?: {
+                    /** @description The connection's label, as the owner sees it. */
+                    label: string;
+                    /**
+                     * @default read
+                     * @enum {string}
+                     */
+                    access?: "read" | "read_write";
+                }[];
+                parameters?: {
+                    /** @description The placeholder's name, as it appears in the goal ("Amount" for {{Amount}}). */
+                    name: string;
+                    /**
+                     * @default text
+                     * @enum {string}
+                     */
+                    type?: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                    /** @description A fixed default value. Never a secret. */
+                    default?: string;
+                    /** @description The label of the owner's memory that holds the default. */
+                    memory?: string;
+                    /** @description The name of that memory's value. */
+                    attribute?: string;
+                    /** @description Why it varies, in a few words. */
+                    why?: string;
+                }[];
+                outputs?: {
+                    label: string;
+                    /**
+                     * @default text
+                     * @enum {string}
+                     */
+                    type?: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url";
+                    help?: string;
+                }[];
+                guardrails?: {
+                    confirmRiskyActions?: boolean;
+                    useSavedLogins?: boolean;
+                    useSavedIdentity?: boolean;
+                    useSavedCards?: boolean;
+                    /** @enum {string} */
+                    unattendedPayments?: "ask" | "allow";
+                };
+                /** @enum {string} */
+                needsBrowser?: "auto" | "always" | "never";
+                policy?: {
+                    /** @description An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default. */
+                    ref: string | null;
+                    why?: string;
+                };
+                schedules?: {
+                    /** @description A 5-field cron expression, e.g. "0 9 * * 1-5". */
+                    cron: string;
+                    /** @description An IANA time zone, e.g. "America/Costa_Rica". */
+                    timezone: string;
+                    /** @description Preset values for the task's parameters, by parameter name. */
+                    inputs?: {
+                        [key: string]: string;
+                    };
+                    description?: string;
+                }[];
+                /** @description What the agent does when something goes wrong (sold out, a login needed). */
+                edgeCases?: string[];
+                openQuestions?: string[];
+                suggestions?: string[];
+                ready?: boolean;
+            };
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+            messages: {
+                /** Format: uuid */
+                id: string;
+                /** @description Order within the chat, from 1 */
+                seq: number;
+                /** @enum {string} */
+                role: "user" | "assistant" | "system";
+                /**
+                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                 * @enum {string}
+                 */
+                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
+                text: string;
+                /** @description The run a `run` or `result` message is about */
+                runId: string | null;
+                /** @description Kind-specific data; null for plain text */
+                meta: unknown | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+            }[];
+            /** @description True when more messages follow the last one returned: read on with `afterSeq` */
+            hasMore: boolean;
+            /** @description True while the builder is working on its reply */
+            thinking: boolean;
+        };
+        /** @description What the builder has learned about the task so far. Every field is optional; never a secret. */
+        TaskBuilderSpecResponseDto: {
+            name?: string;
+            /** @description What the task achieves and how the owner knows it is done. */
+            objective?: string;
+            /** @description The standalone instruction so far, with a {{Name}} for each parameter. */
+            goal?: string;
+            /** @description The sites or services involved, in words. */
+            sites?: string[];
+            allowedDomains?: string[];
+            accounts?: {
+                /** @description The connection's label, as the owner sees it. */
+                label: string;
+                /**
+                 * @default read
+                 * @enum {string}
+                 */
+                access?: "read" | "read_write";
+            }[];
+            parameters?: {
+                /** @description The placeholder's name, as it appears in the goal ("Amount" for {{Amount}}). */
+                name: string;
+                /**
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                /** @description A fixed default value. Never a secret. */
+                default?: string;
+                /** @description The label of the owner's memory that holds the default. */
+                memory?: string;
+                /** @description The name of that memory's value. */
+                attribute?: string;
+                /** @description Why it varies, in a few words. */
+                why?: string;
+            }[];
+            outputs?: {
+                label: string;
+                /**
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url";
+                help?: string;
+            }[];
+            guardrails?: {
+                confirmRiskyActions?: boolean;
+                useSavedLogins?: boolean;
+                useSavedIdentity?: boolean;
+                useSavedCards?: boolean;
+                /** @enum {string} */
+                unattendedPayments?: "ask" | "allow";
+            };
+            /** @enum {string} */
+            needsBrowser?: "auto" | "always" | "never";
+            policy?: {
+                /** @description An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default. */
+                ref: string | null;
+                why?: string;
+            };
+            schedules?: {
+                /** @description A 5-field cron expression, e.g. "0 9 * * 1-5". */
+                cron: string;
+                /** @description An IANA time zone, e.g. "America/Costa_Rica". */
+                timezone: string;
+                /** @description Preset values for the task's parameters, by parameter name. */
+                inputs?: {
+                    [key: string]: string;
+                };
+                description?: string;
+            }[];
+            /** @description What the agent does when something goes wrong (sold out, a login needed). */
+            edgeCases?: string[];
+            openQuestions?: string[];
+            suggestions?: string[];
+            ready?: boolean;
+        };
+        PatchTaskSpecDto: {
+            name?: string | null;
+            objective?: string | null;
+            goal?: string | null;
+            sites?: string[] | null;
+            allowedDomains?: string[] | null;
+            accounts?: {
+                /** @description The connection's label, as the owner sees it. */
+                label: string;
+                /**
+                 * @default read
+                 * @enum {string}
+                 */
+                access?: "read" | "read_write";
+            }[] | null;
+            parameters?: {
+                /** @description The placeholder's name, as it appears in the goal ("Amount" for {{Amount}}). */
+                name: string;
+                /**
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                /** @description A fixed default value. Never a secret. */
+                default?: string;
+                /** @description The label of the owner's memory that holds the default. */
+                memory?: string;
+                /** @description The name of that memory's value. */
+                attribute?: string;
+                /** @description Why it varies, in a few words. */
+                why?: string;
+            }[] | null;
+            outputs?: {
+                label: string;
+                /**
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url";
+                help?: string;
+            }[] | null;
+            guardrails?: {
+                confirmRiskyActions?: boolean;
+                useSavedLogins?: boolean;
+                useSavedIdentity?: boolean;
+                useSavedCards?: boolean;
+                /** @enum {string} */
+                unattendedPayments?: "ask" | "allow";
+            } | null;
+            needsBrowser?: ("auto" | "always" | "never") | null;
+            policy?: {
+                /** @description An agent policy: an own policy's UUID or `builtin:<key>`; null follows the owner's default. */
+                ref: string | null;
+                why?: string;
+            } | null;
+            schedules?: {
+                /** @description A 5-field cron expression, e.g. "0 9 * * 1-5". */
+                cron: string;
+                /** @description An IANA time zone, e.g. "America/Costa_Rica". */
+                timezone: string;
+                /** @description Preset values for the task's parameters, by parameter name. */
+                inputs?: {
+                    [key: string]: string;
+                };
+                description?: string;
+            }[] | null;
+            edgeCases?: string[] | null;
+            openQuestions?: string[] | null;
+            suggestions?: string[] | null;
+            ready?: boolean | null;
         };
         WebhookEventCatalogDto: {
             items: {
@@ -46475,6 +46913,219 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ChatMessageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskBuilder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskBuilderDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskBuilderResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskBuilder_get: {
+        parameters: {
+            query?: {
+                /** @description Only messages with a `seq` greater than this: `0` (the default) is the whole thread. */
+                afterSeq?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskBuilderDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskBuilder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostMessageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatMessageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskBuilder_patchSpec: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchTaskSpecDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskBuilderSpecResponseDto"];
                     };
                 };
             };

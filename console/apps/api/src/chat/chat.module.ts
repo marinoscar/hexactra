@@ -26,6 +26,6 @@ import { ChatService } from './chat.service';
   // ChatStreamController first: its fixed `:id/stream` path is declared before the `:id` routes.
   controllers: [ChatStreamController, ChatController],
   providers: [ChatOwnerGuard, ChatStreamService, ChatTaskDraftService, ChatService, ChatResults, ChatTurnService, ChatTurnQueue, ChatTurnHandler],
-  exports: [ChatService, ChatTurnService, ChatResults, ChatTaskDraftService],
+  exports: [ChatService, ChatTurnService, ChatResults, ChatTaskDraftService, ChatTurnQueue],
 })
 export class ChatModule {}

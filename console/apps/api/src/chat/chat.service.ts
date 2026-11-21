@@ -151,6 +151,8 @@ export class ChatService {
     const after = q.cursor ? decodeCursor(q.cursor) : null;
     const rows = await this.db(userId).conversation.findMany({
       where: {
+        // A task builder (E42) is a conversation too, but never a chat in the list.
+        mode: 'chat',
         status: q.status,
         ...(after ? { OR: [{ lastMessageAt: { lt: new Date(after.at) } }, { lastMessageAt: new Date(after.at), id: { lt: after.id } }] } : {}),
       },

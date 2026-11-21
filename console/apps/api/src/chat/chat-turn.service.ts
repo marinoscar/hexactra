@@ -116,13 +116,14 @@ export class ChatTurnService {
     const db = this.prisma.forUser({ userId });
     const now = new Date();
     const claimed = await db.conversation.updateMany({
-      where: { id: conversationId, status: 'active', OR: [{ turnLeaseUntil: null }, { turnLeaseUntil: { lt: now } }] },
+      // Only a chat: a task builder (E42) has its own turn engine and never reaches start_run.
+      where: { id: conversationId, mode: 'chat', status: 'active', OR: [{ turnLeaseUntil: null }, { turnLeaseUntil: { lt: now } }] },
       data: { turnLeaseUntil: new Date(now.getTime() + CHAT_TURN_LEASE_MS) },
     });
     if (claimed.count === 0) {
-      // Not claimed: gone, archived (nothing to do), or another turn is working (come back).
-      const c = await db.conversation.findFirst({ where: { id: conversationId }, select: { status: true } });
-      return c?.status === 'active' ? 'busy' : 'idle';
+      // Not claimed: gone, archived or not a chat (nothing to do), or another turn is working (come back).
+      const c = await db.conversation.findFirst({ where: { id: conversationId }, select: { status: true, mode: true } });
+      return c?.status === 'active' && c.mode === 'chat' ? 'busy' : 'idle';
     }
     try {
       let outcome: ChatTurnOutcome = 'idle';
