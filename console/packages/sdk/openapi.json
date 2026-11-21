@@ -78090,6 +78090,13 @@
                     "type": "null"
                   }
                 ]
+              },
+              "purpose": {
+                "description": "What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text.",
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -78097,7 +78104,8 @@
               "auth",
               "serverName",
               "tools",
-              "toolsFetchedAt"
+              "toolsFetchedAt",
+              "purpose"
             ]
           }
         },
@@ -78524,6 +78532,13 @@
                     "type": "null"
                   }
                 ]
+              },
+              "purpose": {
+                "description": "What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text.",
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -78531,7 +78546,8 @@
               "auth",
               "serverName",
               "tools",
-              "toolsFetchedAt"
+              "toolsFetchedAt",
+              "purpose"
             ]
           },
           "usedBy": {
@@ -78749,6 +78765,13 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "purpose": {
+                    "description": "What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -78756,7 +78779,8 @@
                   "auth",
                   "serverName",
                   "tools",
-                  "toolsFetchedAt"
+                  "toolsFetchedAt",
+                  "purpose"
                 ]
               }
             },
@@ -90047,6 +90071,47 @@
               ]
             },
             "description": "The memories of `memoryIds` that still exist, with their labels (#553): the run page says \"Used: …\""
+          },
+          "suggestedConnections": {
+            "description": "E41.5: the owner's connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "site": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "task",
+                    "chat"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "connectionId",
+                "label",
+                "provider",
+                "site",
+                "scope",
+                "text"
+              ]
+            }
           }
         },
         "required": [
@@ -97167,6 +97232,31 @@
               ]
             },
             "description": "The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping."
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ]
+                }
+              },
+              "required": [
+                "connectionId",
+                "access"
+              ]
+            },
+            "description": "E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one."
           }
         },
         "required": [
@@ -97182,7 +97272,8 @@
           "useSavedIdentity",
           "useSavedCards",
           "parameters",
-          "outputs"
+          "outputs",
+          "connections"
         ]
       },
       "LinkTaskDto": {
@@ -99298,6 +99389,13 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "purpose": {
+                        "description": "What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -99305,7 +99403,8 @@
                       "auth",
                       "serverName",
                       "tools",
-                      "toolsFetchedAt"
+                      "toolsFetchedAt",
+                      "purpose"
                     ]
                   }
                 },
@@ -100135,6 +100234,13 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "purpose": {
+                    "description": "What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -100142,7 +100248,8 @@
                   "auth",
                   "serverName",
                   "tools",
-                  "toolsFetchedAt"
+                  "toolsFetchedAt",
+                  "purpose"
                 ]
               }
             },

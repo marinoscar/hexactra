@@ -16321,6 +16321,8 @@ export interface components {
                     needsReview: number;
                 };
                 toolsFetchedAt: string | null;
+                /** @description What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text. */
+                purpose: string | null;
             };
         };
         ProviderAvailabilityResponseDto: {
@@ -16420,6 +16422,8 @@ export interface components {
                     needsReview: number;
                 };
                 toolsFetchedAt: string | null;
+                /** @description What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text. */
+                purpose: string | null;
             };
             /** @description What uses this connection (tasks, deliveries): removing it clears these and they show "connection removed". */
             usedBy: {
@@ -16463,6 +16467,8 @@ export interface components {
                         needsReview: number;
                     };
                     toolsFetchedAt: string | null;
+                    /** @description What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text. */
+                    purpose: string | null;
                 };
             };
             consent: {
@@ -19298,6 +19304,17 @@ export interface components {
                 /** @enum {string} */
                 status: "active" | "superseded" | "archived";
             }[];
+            /** @description E41.5: the owner's connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied. */
+            suggestedConnections?: {
+                /** Format: uuid */
+                connectionId: string;
+                label: string;
+                provider: string;
+                site: string;
+                /** @enum {string} */
+                scope: "task" | "chat";
+                text: string;
+            }[];
         };
         RunResponseDto: {
             /** Format: uuid */
@@ -21043,6 +21060,13 @@ export interface components {
                 /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[];
+            /** @description E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one. */
+            connections: {
+                /** Format: uuid */
+                connectionId: string;
+                /** @enum {string} */
+                access: "read" | "read_write";
+            }[];
         };
         LinkTaskDto: {
             /**
@@ -21502,6 +21526,8 @@ export interface components {
                         needsReview: number;
                     };
                     toolsFetchedAt: string | null;
+                    /** @description What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text. */
+                    purpose: string | null;
                 };
             } | null;
             catalog: {
@@ -21689,6 +21715,8 @@ export interface components {
                         needsReview: number;
                     };
                     toolsFetchedAt: string | null;
+                    /** @description What the server is for (E41.5): its own instructions (cleaned, at most 300 characters), else its first enabled tool titles. The server's words: render as text. */
+                    purpose: string | null;
                 };
             };
             consent: {

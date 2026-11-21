@@ -36,6 +36,8 @@ export interface McpInfo {
   serverName: string | null;
   tools: { total: number; enabled: number; needsReview: number };
   toolsFetchedAt: string | null;
+  /** What the server is for (E41.5): its own instructions, else its first enabled tool titles. Absent from an older console. */
+  purpose?: string | null;
 }
 
 /** A tool of an MCP server. The description is the server's own text, already plain; render it as text only. */

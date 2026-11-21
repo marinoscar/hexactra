@@ -1,5 +1,6 @@
 import { RunInputs } from '../taskParams/RunInputs';
 import { RunOutputs } from '../taskOutputs/RunOutputs';
+import { SuggestedConnections } from '../components/SuggestedConnections';
 import { RunDeliveries } from '../deliveries/RunDeliveries';
 import { StartedByEmail } from '../mailTriggers/StartedByEmail';
 import { useCallback, useEffect, useId, useRef, useState, type ElementType, type MouseEvent } from 'react';
@@ -372,6 +373,8 @@ export function RunDetailPage() {
       <RunHeaderChips policy={run.policy} tier={run.tier} />
       <RunInputs inputs={run.inputs} />
       <UsedMemories memories={run.memories} />
+      {/* The owner's unlisted account that could have done this without the browser (E41.5): information only. */}
+      <SuggestedConnections items={run.suggestedConnections} taskId={run.taskId} />
       <UsedSavedLogins logins={run.usedSavedLogins} />
       <UsedSavedIdentity details={run.usedSavedIdentity} />
       <UsedSavedCards cards={run.usedSavedCards} />

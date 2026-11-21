@@ -138,6 +138,15 @@ describe('the three-way choice', () => {
     );
     expect(screen.getByText('3 tools')).toBeInTheDocument();
   });
+
+  it('shows what an MCP server is for, as text (E41.5)', () => {
+    render(
+      <MemoryRouter>
+        <AccountChoices connections={[{ ...conn({ id: 'mcp-2', provider: 'mcp', label: 'Notes', capabilities: [] }), mcp: { url: 'https://mcp.example.test/mcp', auth: 'none', serverName: 'Notes', tools: { total: 2, enabled: 2, needsReview: 0 }, toolsFetchedAt: null, purpose: 'Create and search <b>notes</b>.' } } as Connection]} selections={[]} onChange={() => undefined} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText('What Notes is for')).toHaveTextContent('Create and search <b>notes</b>.');
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------

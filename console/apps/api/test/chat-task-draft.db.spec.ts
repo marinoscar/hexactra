@@ -1,6 +1,7 @@
 // The db tier: saving a chat as a task (#489) against a real, migrated and
 // seeded database: the draft the AI writes, what it falls back to, what it is
 // shown, the `draft_task` tool, and the line that links the saved task.
+import { suggestedConnections } from '../src/tasks/run-suggestions';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { AiService } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
@@ -105,6 +106,8 @@ describe('the task draft the AI writes', () => {
       // Nothing in it varies between runs: no parameters.
       parameters: [],
       outputs: [],
+      // The chat lists no account: none proposed (E41.5).
+      connections: [],
     });
     expect(model.features).toEqual([{ feature: 'chat_orchestrator', orgId: 'org-1' }]);
     expect(model.asked[0]!.instructions).toBe(TASK_DRAFT_INSTRUCTIONS);
@@ -310,7 +313,7 @@ describe('the draft_task tool', () => {
     expect(outputs).toEqual(['Drafted. The owner reviews and saves it from the chat.']);
     const last = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id }, orderBy: { seq: 'desc' } });
     expect(last).toMatchObject({ role: 'assistant', kind: 'task_draft', text: 'Book 2 tickets for the 7:30 PM showing.' });
-    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, parameters: [], outputs: [] });
+    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, parameters: [], outputs: [], connections: [] });
   });
 });
 
@@ -341,5 +344,65 @@ describe('POST /chats/:id/task-link', () => {
     expect((await post(alice, `/chats/${chat.id}/task-link`, { taskId: 'nope' })).statusCode).toBe(400);
     expect((await post(alice, `/chats/${chat.id}/task-link`, { taskId: mine.id })).statusCode).toBe(201);
     expect(await prisma.chatMessage.count({ where: { conversationId: chat.id, role: 'system' } })).toBe(1);
+  });
+});
+
+describe('the accounts a drafted task proposes (E41.5)', () => {
+  async function connect(userId: string, label: string, provider: 'google' | 'microsoft' = 'google') {
+    return prisma.connection.create({ data: { userId, provider, accountId: `acct-${label}-${Date.now()}-${Math.random()}`, accountEmail: `${label.toLowerCase()}@example.test`, label, capabilities: ['mail_read', 'mail_send', 'calendar_read'], grantedScopes: [], status: 'active' } });
+  }
+
+  it('proposes only the chat\'s connections its runs used, at the access they needed, and writes nothing', async () => {
+    const alice = await login('accounts');
+    const { chat, run } = await finishedChat(alice);
+    const [work, home, idle] = [await connect(alice.userId, 'Work'), await connect(alice.userId, 'Home'), await connect(alice.userId, 'Idle')];
+    await prisma.conversationConnection.createMany({ data: [work, home, idle].map((c) => ({ conversationId: chat.id, connectionId: c.id, access: 'read_write' })) });
+    await prisma.runStep.createMany({
+      data: [
+        { runId: run.id, seq: 1, kind: 'action', action: 'mail_search', args: { connection: 'Work' }, ok: true },
+        { runId: run.id, seq: 2, kind: 'action', action: 'mail_send', args: { connection: 'Work', to: ['person-b@example.test'] }, ok: true },
+        { runId: run.id, seq: 3, kind: 'action', action: 'calendar_list', args: { connection: 'Home' }, ok: true },
+        // A refused call does not count.
+        { runId: run.id, seq: 4, kind: 'action', action: 'mail_send', args: { connection: 'Home' }, ok: false },
+        // A label the chat does not list is never proposed.
+        { runId: run.id, seq: 5, kind: 'action', action: 'mail_search', args: { connection: 'Someone else' }, ok: true },
+      ],
+    });
+    const before = await prisma.taskConnection.count();
+    const draft = await new ChatTaskDraftService(prisma, writer(new Error('no model')).ai).draft(alice.userId, chat.id, null);
+    expect(draft.connections).toEqual(expect.arrayContaining([{ connectionId: work.id, access: 'read_write' }, { connectionId: home.id, access: 'read' }]));
+    expect(draft.connections).toHaveLength(2);
+    expect(await prisma.taskConnection.count()).toBe(before);
+  });
+
+  it('proposes none when the chat\'s runs used no account', async () => {
+    const bob = await login('accounts-none');
+    const { chat } = await finishedChat(bob);
+    const c = await connect(bob.userId, 'Work');
+    await prisma.conversationConnection.create({ data: { conversationId: chat.id, connectionId: c.id, access: 'read' } });
+    const draft = await new ChatTaskDraftService(prisma, writer(new Error('no model')).ai).draft(bob.userId, chat.id, null);
+    expect(draft.connections).toEqual([]);
+  });
+});
+
+describe('"this could have used your account" (E41.5)', () => {
+  it('suggests the owner\'s unlisted Google account after a run that used Google Mail in the browser, and not once the run had one', async () => {
+    const carol = await login('suggest');
+    const { chat, run } = await finishedChat(carol);
+    const marin = await prisma.connection.create({ data: { userId: carol.userId, provider: 'google', accountId: `acct-s-${stamp}`, accountEmail: 'marin@example.test', label: 'Marin', capabilities: ['mail_read', 'mail_send'], grantedScopes: [], status: 'active' } });
+    await prisma.runStep.create({ data: { runId: run.id, seq: 1, kind: 'action', action: 'navigate', args: { url: 'https://mail.google.com/mail/u/0/' }, ok: true } });
+    const got = await suggestedConnections(prisma, carol.userId, { id: run.id, taskId: null, conversationId: chat.id, policySnapshot: null });
+    expect(got).toEqual([{ connectionId: marin.id, label: 'Marin', provider: 'google', site: 'Google Mail', scope: 'chat', text: 'This used the browser for Google Mail. You have "Marin" connected: allow it for this chat to do this without the browser.' }]);
+    // The chat's result card carries it (never the model).
+    await prisma.chatMessage.deleteMany({ where: { conversationId: chat.id, kind: 'result' } });
+    await app.get(ChatResults, { strict: false }).recordRunEnd(carol.userId, run.id);
+    const result = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id, kind: 'result' } });
+    expect((result.meta as { suggestedConnections?: unknown[] }).suggestedConnections).toHaveLength(1);
+    // The run page: GET /runs/:id.
+    const res = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: { authorization: `Bearer ${carol.token}` } });
+    expect(res.json<{ data: { suggestedConnections: { label: string }[] } }>().data.suggestedConnections.map((s) => s.label)).toEqual(['Marin']);
+    // A run that listed a Google mail account: nothing to suggest.
+    const snapshot = { connections: [{ connectionId: marin.id, access: 'read', label: 'Marin', provider: 'google', capabilities: ['mail_read'] }] };
+    expect(await suggestedConnections(prisma, carol.userId, { id: run.id, taskId: null, conversationId: chat.id, policySnapshot: snapshot })).toEqual([]);
   });
 });

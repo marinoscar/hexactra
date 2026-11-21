@@ -102,6 +102,8 @@ export interface ChatRun {
 
 /** A task drafted from a chat (`POST /chats/:id/task-draft`, and the `meta` of a `task_draft` message). */
 export interface ChatTaskDraft {
+  /** The chat's accounts its runs used, at the access they needed (E41.5): preselected in the form, saved only when the owner saves. Absent from an older console. */
+  connections?: { connectionId: string; access: 'read' | 'read_write' }[];
   name: string;
   goal: string;
   profile: string;
