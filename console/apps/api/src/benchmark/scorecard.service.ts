@@ -10,6 +10,7 @@ import { readBenchmarkConfig } from './benchmark-config';
 import { BENCHMARK_STATUSES, LIVE_BENCHMARK_STATUSES, type BenchmarkStatus } from './benchmark.constants';
 import { compareScorecards, computeScorecard, type CompareSide, type ScoreBenchmark } from './scorecard';
 import { SCORECARD_FORMAT, SCORECARD_VERSION, scorecardSchema, type BenchmarkComparison, type Scorecard } from './scorecard.schemas';
+import { sameSuite } from './suite/registry';
 import { TRIAL_VIEW_OMIT, iso, oneOf, trialView } from './trial-view';
 
 const isLive = (status: string): boolean => (LIVE_BENCHMARK_STATUSES as readonly string[]).includes(status);
@@ -45,7 +46,7 @@ export class ScorecardService {
   /** Compares one of the user's benchmarks with an earlier one of theirs. 409 when the suite key or version differ. */
   async compare(userId: string, id: string, baselineId: string): Promise<BenchmarkComparison> {
     const [b, base] = [await this.find(userId, id), await this.find(userId, baselineId)];
-    if (b.suiteKey !== base.suiteKey || b.suiteVersion !== base.suiteVersion) {
+    if (!sameSuite(b, base)) {
       throw new ConflictException({
         code: 'BENCHMARK_SUITE_MISMATCH',
         message: `The benchmark is on suite ${b.suiteKey} version ${b.suiteVersion} and the baseline on ${base.suiteKey} version ${base.suiteVersion}: they cannot be compared`,

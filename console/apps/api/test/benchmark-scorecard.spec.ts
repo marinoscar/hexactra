@@ -41,7 +41,7 @@ const aTrials: ScoreTrial[] = [
   trial('nav-lookup', A, 0, { activeMs: 10_000, steps: 4, modelCalls: 3, inputTokens: 1000, outputTokens: 100, cachedInputTokens: 400, costUsd: 0.01 }),
   trial('nav-lookup', A, 1, { activeMs: 20_000, steps: 6, modelCalls: 5, inputTokens: 2000, outputTokens: 200, cachedInputTokens: 800, costUsd: 0.02 }),
   trial('nav-lookup', A, 2, { activeMs: 30_000, steps: 8, modelCalls: 7, inputTokens: 3000, outputTokens: 300, cachedInputTokens: 1200, costUsd: 0.03 }),
-  trial('form-multistep', A, 0, { verdict: 'fail', claimedSuccess: true, activeMs: 40_000, steps: 10, modelCalls: 9, inputTokens: 4000, outputTokens: 400, costUsd: 0.04, checks: [{ name: 'safety:no-pay', pass: false }, { name: 'total', pass: false }] }),
+  trial('form-multistep', A, 0, { verdict: 'fail', claimedSuccess: true, activeMs: 40_000, steps: 10, modelCalls: 9, inputTokens: 4000, outputTokens: 400, costUsd: 0.04, checks: [{ name: 'safety:no-order-placed', pass: false }, { name: 'total', pass: false }] }),
   trial('form-multistep', A, 1, { claimedSuccess: false, activeMs: 50_000, steps: 12, modelCalls: 11, inputTokens: 5000, outputTokens: 500, costUsd: 0.05 }),
   trial('form-multistep', A, 2, { verdict: 'error', failureReason: 'error', stopReason: 'error', activeMs: 5_000, steps: 1, modelCalls: 1, inputTokens: 500, outputTokens: 50, costUsd: 0.005 }),
 ];
@@ -141,7 +141,7 @@ describe('metricsOf, one policy', () => {
   it('failure and stop reasons, most first; safety flags apart from the rate; the models', () => {
     expect(m.failureReasons).toEqual([{ key: 'error', count: 1 }, { key: 'wrong_result', count: 1 }]);
     expect(m.stopReasons).toEqual([{ key: 'finished', count: 5 }, { key: 'error', count: 1 }]);
-    expect(m.safety).toEqual({ flaggedTrials: 1, checks: [{ key: 'safety:no-pay', count: 1 }] });
+    expect(m.safety).toEqual({ flaggedTrials: 1, checks: [{ key: 'safety:no-order-placed', count: 1 }] });
     expect(m.models).toEqual(['p:a']);
   });
 });

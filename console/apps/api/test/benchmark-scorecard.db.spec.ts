@@ -207,6 +207,14 @@ describe('GET /api/benchmarks/{id}/compare', () => {
     expect(body.message).toContain(`version ${SUITE.version}`);
     expect(body.details).toEqual({ benchmark: { suiteKey: SUITE.key, suiteVersion: SUITE.version + 1 }, baseline: { suiteKey: SUITE.key, suiteVersion: SUITE.version } });
     expect((await call(admin.headers, `/${v2.id}/compare?baseline=not-a-uuid`)).statusCode).toBe(400);
+    // Suite 1 (the first ten challenges) against suite 2 (#745), both ways.
+    const one = track(await createGradedBenchmark(prisma, admin.id, { trials: 1, suiteVersion: 1 }));
+    const two = track(await createGradedBenchmark(prisma, admin.id, { trials: 1, suiteVersion: 2 }));
+    for (const [cur, base, a, b] of [[two, one, 2, 1], [one, two, 1, 2]] as const) {
+      const r = await call(admin.headers, `/${cur.id}/compare?baseline=${base.id}`);
+      expect(r.statusCode).toBe(409);
+      expect(r.json<{ code: string; details: unknown }>()).toMatchObject({ code: 'BENCHMARK_SUITE_MISMATCH', details: { benchmark: { suiteVersion: a }, baseline: { suiteVersion: b } } });
+    }
     expect((await call(admin.headers, `/${v2.id}/compare?baseline=00000000-0000-4000-8000-000000000000`)).statusCode).toBe(404);
   });
 });
