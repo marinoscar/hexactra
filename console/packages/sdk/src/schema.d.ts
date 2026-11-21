@@ -10285,6 +10285,17 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            agentPricing?: {
+                /** @constant */
+                currency: "USD";
+                models: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            };
             connections?: {
                 /**
                  * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
@@ -10401,6 +10412,17 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            agentPricing?: {
+                /** @constant */
+                currency: "USD";
+                models: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            };
             connections?: {
                 /**
                  * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
@@ -10512,6 +10534,17 @@ export interface components {
             approvals?: {
                 paused?: boolean;
             } | null;
+            agentPricing?: ({
+                /** @constant */
+                currency?: "USD";
+                models?: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            } | null) | null;
             connections?: {
                 /**
                  * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
@@ -11802,6 +11835,17 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
+                };
+                agentPricing?: {
+                    /** @constant */
+                    currency: "USD";
+                    models: {
+                        [key: string]: {
+                            inputPerMTok: number;
+                            outputPerMTok: number;
+                            cachedInputPerMTok?: number;
+                        };
+                    };
                 };
                 connections?: {
                     /**
