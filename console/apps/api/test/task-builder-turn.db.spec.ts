@@ -14,6 +14,7 @@ import { TASK_BUILDER_INSTRUCTIONS } from '../src/task-builder/task-builder-inst
 import { TASK_BUILDER_TOOL_NAMES } from '../src/task-builder/task-builder-tools';
 import { TaskBuilderTurnService } from '../src/task-builder/task-builder-turn.service';
 import { TaskBuilderService } from '../src/task-builder/task-builder.service';
+import { scriptedBuilderAi, type BuilderRound } from './helpers/task-builder-ai';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -42,46 +43,8 @@ async function login(name: string): Promise<{ userId: string }> {
   return { userId: me.json<{ data: { id: string } }>().data.id };
 }
 
-type Call = [name: string, args: Record<string, unknown>];
-type Round = Call[] | { say: string } | { fail: Error };
-interface ToolRequest {
-  instructions: string;
-  input: string;
-  tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[];
-  onStep?: (s: unknown) => void;
-}
-
-/** A model that, per `runTools` call, makes the scripted tool calls, says a sentence, or fails. */
-export function scriptedAi(rounds: Round[]) {
-  const outputs: string[] = [];
-  const requests: ToolRequest[] = [];
-  const features: unknown[] = [];
-  const runTools = jest.fn(async (req: ToolRequest) => {
-    requests.push(req);
-    const round = rounds.shift() ?? [];
-    if ('fail' in round) throw round.fail;
-    if ('say' in round) return { final: { outputText: round.say }, steps: [], stopReason: 'done' };
-    let step = 0;
-    for (const [name, args] of round) {
-      const t = req.tools.find((x) => x.tool.name === name);
-      if (!t) {
-        outputs.push(`no such tool: ${name}`);
-        continue;
-      }
-      outputs.push(String(await t.execute(args, { userId: 'u' })));
-      try {
-        req.onStep?.({ step: ++step, response: { usage: { inputTokens: 10, outputTokens: 5 } }, calls: [] });
-      } catch {
-        break;
-      }
-    }
-    return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
-  });
-  // A draft's goal, written by the same model's `respond`.
-  const respond = jest.fn(async () => ({ outputText: '' }));
-  const ai = { forUser: (_u: string, opts: unknown) => (features.push(opts), { runTools, respond }) } as unknown as AiService;
-  return { ai, outputs, requests, features };
-}
+/** The shared scripted model (test/helpers/task-builder-ai.ts). */
+const scriptedAi = (rounds: BuilderRound[]) => scriptedBuilderAi(rounds);
 
 function engine(ai: AiService): TaskBuilderTurnService {
   const chatDrafts = app.get(ChatTaskDraftService, { strict: false });
