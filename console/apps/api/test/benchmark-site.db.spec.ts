@@ -11,7 +11,7 @@ import { navSpaPlan } from '../src/benchmark/suite/challenges/nav-spa';
 import { SUITE, challengeById, seedFrom } from '../src/benchmark/suite/registry';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { SOLVERS, SiteBrowser, inlineProblems, type SiteResult, type SiteTransport } from './support/benchmark-solvers';
+import { SOLVERS, SiteBrowser, inlineProblems, solution, type SiteResult, type SiteTransport } from './support/benchmark-solvers';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -66,16 +66,20 @@ afterAll(async () => {
 });
 
 describe('every challenge, solved over HTTP', () => {
-  it.each(SUITE.challenges.map((c) => c.id))('%s is completed with app.inject and passes its own grader', async (id) => {
+  it('has a solver for every challenge but the upload placeholder, which needs a capability the agent lacks', () => {
+    expect(SUITE.challenges.filter((c) => !SOLVERS[c.id]).map((c) => c.id)).toEqual(['form-upload']);
+  });
+
+  it.each(SUITE.challenges.filter((c) => SOLVERS[c.id]).map((c) => c.id))('%s is completed with app.inject and passes its own grader', async (id) => {
     const challenge = challengeById(id)!;
     const trial = await newTrial(id);
     const browser = new SiteBrowser(transportOf(trial.token));
-    const result = await SOLVERS[id]!(browser, trial.seed, { wait: (ms) => void (clock += ms) });
+    const { result, claimedSuccess, asked } = solution(await SOLVERS[id]!(browser, trial.seed, { wait: (ms) => void (clock += ms) }));
 
     // The grader reads what the site stored, after the site is closed.
     await trials.closeToken(trial.id);
     const stored = await trials.read(trial.id);
-    const checks = challenge.grade({ seed: trial.seed, state: stored!.state, result, outputs: null, asked: [], claimedSuccess: true });
+    const checks = challenge.grade({ seed: trial.seed, state: stored!.state, result, outputs: null, asked, claimedSuccess });
     expect(checks.filter((c) => !c.pass)).toEqual([]);
     expect(browser.pages.length).toBeGreaterThan(0);
     for (const markup of browser.pages) expect(inlineProblems(markup)).toEqual([]);
@@ -215,7 +219,7 @@ describe("a trial's site", () => {
     logged.length = 0;
     const trial = await newTrial('nav-lookup', 8);
     const browser = new SiteBrowser(transportOf(trial.token));
-    const result = await SOLVERS['nav-lookup']!(browser, trial.seed, { wait: () => undefined });
+    const { result } = solution(await SOLVERS['nav-lookup']!(browser, trial.seed, { wait: () => undefined }));
     await send(trial.token, 'GET', 'no/such/page');
     await send('Z'.repeat(43), 'GET', '');
     const closed = await newTrial('nav-spa', 9);
