@@ -868,6 +868,61 @@ mod tests {
         assert!(s.enqueue(sess, shot(), Duration::from_secs(1)).is_ok());
     }
 
+    // #755: a run recording is paused, pulled and stopped while a secret is
+    // asked for, but a new one does not start then.
+    #[tokio::test]
+    async fn a_recording_is_controlled_but_not_started_while_a_secret_is_asked_for() {
+        let (s, sess) = setup();
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
+        let id = || "rec-1".to_string();
+        for control in [
+            RemoteAction::RecordPause {
+                recording_id: id(),
+                paused: true,
+            },
+            RemoteAction::RecordPull { recording_id: id() },
+            RemoteAction::RecordStop { recording_id: id() },
+        ] {
+            assert!(s.enqueue(sess, control, Duration::from_secs(1)).is_ok());
+        }
+        let start = || RemoteAction::RecordStart {
+            max_width: None,
+            quality: None,
+            tab_id: None,
+        };
+        assert!(matches!(
+            s.enqueue(sess, start(), Duration::from_secs(1)),
+            Err(StoreError::HandoffPending(x)) if x == h.id
+        ));
+        s.respond_handoff(h.id, Responder::Operator, answer(Some("424242"), None))
+            .unwrap();
+        assert!(s.enqueue(sess, start(), Duration::from_secs(1)).is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_recording_continues_while_a_person_holds_the_desktop() {
+        let (s, sess) = setup();
+        let host = s.get_session(sess).unwrap().host_id;
+        s.take_over(
+            host,
+            crate::runtime::takeover::TakeoverActor {
+                user_id: "u1".into(),
+                display_name: None,
+            },
+            None,
+        )
+        .unwrap();
+        assert!(s
+            .enqueue(
+                sess,
+                RemoteAction::RecordPull {
+                    recording_id: "rec-1".into()
+                },
+                Duration::from_secs(1)
+            )
+            .is_ok());
+    }
+
     #[tokio::test]
     async fn a_plain_screenshot_is_taken_while_a_person_holds_the_desktop() {
         let (s, sess) = setup();
