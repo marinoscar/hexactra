@@ -130,6 +130,10 @@ runPlatformConformance({
           why: 'The `ai.usage_ledger` Doctor check (#731) compares deployment-wide totals: counts and sums over `ai_usage_events` (FILTER per operation and feature) and `sum(runs.input_tokens)`, for the last 7 days, through the system client. Admin-only (Doctor), aggregates only, no row content; every value is a bound parameter and no id comes from a request.',
         },
         {
+          file: 'usage/usage-rollup.service.ts',
+          why: 'The AI usage rollups (#732) replace a window of hours with the ledger\'s sums in one statement (GROUP BY per hour and dimension, jsonb unit sums, date_trunc in UTC) and read reports as the rollups UNION ALL the unrolled ledger, which Prisma cannot express. The tables hold counts and ids only; every value is a bound parameter; a user\'s report is filtered to the caller\'s own `user_id` by the service.',
+        },
+        {
           file: 'tasks/run-retention.service.ts',
           why: 'Run retention (#422) ranks a user\'s finished runs per task with a window function (ROW_NUMBER() OVER (PARTITION BY task_id)) to find those beyond the newest N, in one statement shared by the preview and the job. Every value is a bound parameter and the statement is bound to one `user_id`: the caller in the routes, the user being processed in the system job.',
         },
