@@ -6,6 +6,8 @@ import { KgraphEnabledService } from './kgraph-enabled.service';
 import { KgraphController } from './kgraph.controller';
 import { KgraphService } from './kgraph.service';
 import { PrismaProcedureStore } from './prisma-procedure-store';
+import { KgraphReviewsController } from './reviews.controller';
+import { KgraphReviewsService } from './reviews.service';
 import './kgraph.errors';
 
 /**
@@ -13,8 +15,8 @@ import './kgraph.errors';
  * `KgraphEnabledService.modeFor` and nothing else whether a run uses it.
  */
 @Module({
-  controllers: [KgraphController],
-  providers: [KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
+  controllers: [KgraphController, KgraphReviewsController],
+  providers: [KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
   exports: [KgraphEnabledService, PrismaProcedureStore, KgraphAfterRun],
 })
 export class KgraphModule {}

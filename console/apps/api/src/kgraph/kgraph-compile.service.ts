@@ -5,15 +5,16 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { compileTrace, type Tool, type TraceBinding, type TraceEvent } from '@marinoscar/hexactra-kgraph';
+import { classifyRepair, compileTrace, diffVersions, type ProcedureVersion, type Tool, type TraceBinding, type TraceEvent } from '@marinoscar/hexactra-kgraph';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { consoleIsSensitive } from '../runner/host/kgraph/observer-port';
 import { readOutputs } from '../tasks/task-outputs.schemas';
 import { readParameters } from '../tasks/task-params.schemas';
 import { PrismaProcedureStore } from './prisma-procedure-store';
+import { changeSignature, KgraphReviewsService } from './reviews.service';
 
-export type CompileOutcome = 'compiled' | 'rejected' | 'empty' | 'skipped_not_clean' | 'skipped_has_version' | 'skipped_done' | 'skipped_no_trace';
+export type CompileOutcome = 'compiled' | 'repaired_structural' | 'repaired_sensitive' | 'repair_suppressed' | 'rejected' | 'empty' | 'skipped_not_clean' | 'skipped_has_version' | 'skipped_done' | 'skipped_no_trace';
 
 @Injectable()
 export class KgraphCompileService {
@@ -22,6 +23,7 @@ export class KgraphCompileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly store: PrismaProcedureStore,
+    private readonly reviews: KgraphReviewsService,
   ) {}
 
   async compileRun(userId: string, runId: string): Promise<CompileOutcome> {
@@ -38,7 +40,10 @@ export class KgraphCompileService {
 
     const existing = await this.store.findProcedureForTask(userId, run.task.id);
     const versions = existing ? await this.store.listVersions(userId, existing.id) : [];
-    if (versions.some((v) => v.state === 'candidate' || v.state === 'verified' || v.state === 'active')) return 'skipped_has_version';
+    // A repair (E46.17): the run replayed a version, handed over, and the agent finished it. Its trace becomes a proposed new version.
+    const kg = await db.kgRun.findFirst({ where: { runId, userId, outcome: { in: ['fell_back', 'outcome_failed'] } }, select: { procedureVersionId: true } });
+    const repairOf: ProcedureVersion | null = (kg?.procedureVersionId && versions.find((v) => v.id === kg.procedureVersionId && (v.state === 'active' || v.state === 'verified'))) || null;
+    if (!repairOf && versions.some((v) => v.state === 'candidate' || v.state === 'verified' || v.state === 'active')) return 'skipped_has_version';
 
     const rows = await db.kgTrace.findMany({ where: { runId, userId }, orderBy: { seq: 'asc' } });
     if (rows.length === 0) return 'skipped_no_trace';
@@ -54,12 +59,26 @@ export class KgraphCompileService {
       number: (versions[0]?.number ?? 0) + 1,
       createdAt: now,
       sourceRun: runId,
+      parent: repairOf?.id ?? null,
       trace,
       tools: [...tools.values()],
       parameters: readParameters(run.task.parameters).map((p) => ({ key: p.key, name: p.label ?? p.key, sensitive: p.sensitive === true })),
       outputs: declared.map((o) => ({ name: (o as { key?: string }).key ?? o.label })),
       isSensitive: consoleIsSensitive,
     });
+    if (result.status === 'candidate' && repairOf) {
+      const classification = classifyRepair(repairOf, result.version, diffVersions(repairOf, result.version), [...tools.values()]);
+      if (classification.changeClass === 'sensitive' && (await this.reviews.recentlyDeclined(userId, changeSignature(procedure.id, classification)))) return 'repair_suppressed';
+      const version = { ...result.version, changeClass: classification.changeClass };
+      await this.store.putVersion(userId, version);
+      if (classification.changeClass === 'sensitive') {
+        await this.reviews.open(userId, version.id, procedure.id, classification);
+        this.log.log(`run ${runId}: sensitive repair ${version.id} waits for the owner (${classification.reasons.length} change(s))`);
+        return 'repaired_sensitive';
+      }
+      this.log.log(`run ${runId}: structural repair ${version.id}: its next clean replay verifies it`);
+      return 'repaired_structural';
+    }
     if (result.status === 'candidate') {
       if (!existing) await this.store.putProcedure(procedure);
       await this.store.putVersion(userId, result.version);

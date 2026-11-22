@@ -19,9 +19,16 @@ import type { RunStart } from '../start';
 
 type KgMemory = { kgraphReplay?: ReplayMemory };
 
-/** The version a reuse run replays: active, else verified, else the newest candidate (its verification run). */
-export function usableVersion(versions: readonly ProcedureVersion[]): ProcedureVersion | null {
-  return versions.find((v) => v.state === 'active') ?? versions.find((v) => v.state === 'verified') ?? versions.find((v) => v.state === 'candidate') ?? null;
+/**
+ * The version a reuse run replays (newest first in `versions`): a repair candidate of the active version (its verification run), else the
+ * active one, else a verified one, else the newest candidate. A sensitive candidate (E46.17) is never chosen until the owner approved its
+ * review; even then it is verified first and passes every gate on every run.
+ */
+export function usableVersion(versions: readonly ProcedureVersion[], approved: ReadonlySet<string> = new Set()): ProcedureVersion | null {
+  const allowed = (v: ProcedureVersion) => v.state === 'candidate' && (v.changeClass !== 'sensitive' || approved.has(v.id));
+  const active = versions.find((v) => v.state === 'active');
+  const repair = active ? versions.find((v) => allowed(v) && v.parent === active.id) : undefined;
+  return repair ?? active ?? versions.find((v) => v.state === 'verified') ?? versions.find(allowed) ?? null;
 }
 
 export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Promise<RunOutcome | null> {
@@ -38,7 +45,8 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
     if (!procedure) return null;
     const versions = await d.kgraphStore.listVersions(userId, procedure.id);
     const pinned = memory.kgraphReplay?.version;
-    version = (pinned ? versions.find((v) => v.id === pinned) : null) ?? usableVersion(versions);
+    const approved = new Set((await d.prisma.forUser({ userId }).kgReview.findMany({ where: { userId, status: 'approved' }, select: { versionId: true } })).map((r) => r.versionId));
+    version = (pinned ? versions.find((v) => v.id === pinned) : null) ?? usableVersion(versions, approved);
     if (!version) {
       // A suspended procedure (E46.12): the run skips replay and is recorded as AI only; its success compiles a fresh candidate.
       const suspended = versions.find((v) => v.state === 'suspended');
