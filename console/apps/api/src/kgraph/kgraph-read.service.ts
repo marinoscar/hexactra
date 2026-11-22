@@ -67,6 +67,22 @@ export class KgraphReadService {
     return out;
   }
 
+  /** Per procedure: its `everyday` ledger rows (chats and one-off runs in which one of its versions ran, E46.28). */
+  private async everydayOf(userId: string, procedureIds: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (procedureIds.length === 0) return out;
+    const db = this.db(userId);
+    const versions = await db.kgProcedureVersion.findMany({ where: { userId, procedureId: { in: procedureIds } }, select: { id: true, procedureId: true } });
+    if (versions.length === 0) return out;
+    const owner = new Map(versions.map((v) => [v.id, v.procedureId]));
+    const groups = await db.kgLedger.groupBy({ by: ['procedureVersionId'], where: { userId, mode: 'everyday', procedureVersionId: { in: [...owner.keys()] } }, _count: { _all: true } });
+    for (const g of groups) {
+      const pid = g.procedureVersionId ? owner.get(g.procedureVersionId) : undefined;
+      if (pid) out.set(pid, (out.get(pid) ?? 0) + g._count._all);
+    }
+    return out;
+  }
+
   private async taskNames(userId: string, ids: string[]): Promise<Map<string, string>> {
     return new Map((await this.db(userId).task.findMany({ where: { userId, id: { in: ids } }, select: { id: true, name: true } })).map((t) => [t.id, t.name]));
   }
@@ -90,7 +106,12 @@ export class KgraphReadService {
   }
 
   private async items(userId: string, rows: ShownRow[]) {
-    const [names, ledger, ev] = await Promise.all([this.taskNames(userId, [...new Set(rows.map((r) => r.task_id))]), this.ledgerOf(userId, [...new Set(rows.map((r) => r.task_id))]), this.evidence(userId, rows.flatMap((r) => (r.version_id ? [r.version_id] : [])))]);
+    const [names, ledger, ev, everyday] = await Promise.all([
+      this.taskNames(userId, [...new Set(rows.map((r) => r.task_id))]),
+      this.ledgerOf(userId, [...new Set(rows.map((r) => r.task_id))]),
+      this.evidence(userId, rows.flatMap((r) => (r.version_id ? [r.version_id] : []))),
+      this.everydayOf(userId, rows.map((r) => r.id)),
+    ]);
     return rows
       .filter((r) => names.has(r.task_id))
       .map((r) => ({
@@ -104,7 +125,7 @@ export class KgraphReadService {
         health: r.version_id ? healthOf(toEvidence(ev.find((e) => e.versionId === r.version_id)), r.state as VersionState) : ('unknown' as const),
         steps: r.steps ?? 0,
         updatedAt: r.updated_at.toISOString(),
-        ledger: ledger.get(r.task_id) ?? { runs: 0, procedureRuns: 0, cleanReplayRate: null },
+        ledger: { ...(ledger.get(r.task_id) ?? { runs: 0, procedureRuns: 0, cleanReplayRate: null }), everydayRuns: everyday.get(r.id) ?? 0 },
       }));
   }
 
@@ -277,6 +298,7 @@ export class KgraphReadService {
     const db = this.db(userId);
     const [enabled, kg, ledger] = await Promise.all([this.enabled(userId), db.kgRun.findFirst({ where: { runId, userId } }), db.kgLedger.findFirst({ where: { runId, userId }, select: { stepsReplayed: true, stepsRecovered: true, stepsJudge: true, stepsAgent: true } })]);
     const version = kg?.procedureVersionId ? await this.store.getVersion(userId, kg.procedureVersionId) : null;
+    const procedure = version ? await db.kgProcedure.findFirst({ where: { userId, id: version.procedure }, select: { name: true } }) : null;
     const replay = row.replay && row.replay.version === version?.id ? row.replay : null;
     const done = new Set(arr<string>(replay?.done));
     const recovered = version
@@ -296,6 +318,7 @@ export class KgraphReadService {
       aiOnly: kg?.aiOnly ?? false,
       outcome: kg?.outcome ?? null,
       procedureId: version?.procedure ?? null,
+      procedureName: procedure ? mask(procedure.name) : null,
       versionId: version?.id ?? kg?.procedureVersionId ?? null,
       versionNumber: version?.number ?? null,
       steps,
