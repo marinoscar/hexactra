@@ -70,6 +70,18 @@ export class InMemoryProcedureStore implements ProcedureStorePort {
     if (step !== null) v.version.stepEvidence[step] = bump(v.version.stepEvidence[step] ?? emptyEvidence(), outcome, at);
     return clone(v.version.evidence);
   }
+  async listActiveProceduresForSites(owner: string, sites: readonly string[]) {
+    const wanted = new Set(sites);
+    const out: { procedure: Procedure; version: ProcedureVersion }[] = [];
+    if (wanted.size === 0) return out;
+    for (const p of this.procedures.values()) {
+      if (p.owner !== owner || p.activeVersion === null) continue;
+      const v = this.versions.get(p.activeVersion);
+      if (!v || v.owner !== owner || v.version.procedure !== p.id || v.version.state !== 'active') continue;
+      if (v.version.sites.some((s) => wanted.has(s.domain))) out.push({ procedure: clone(p), version: clone(v.version) });
+    }
+    return out.sort((a, b) => (a.procedure.id < b.procedure.id ? -1 : a.procedure.id > b.procedure.id ? 1 : 0));
+  }
   async deleteAll(owner: string) {
     let n = 0;
     for (const [id, p] of this.procedures) if (p.owner === owner) {
