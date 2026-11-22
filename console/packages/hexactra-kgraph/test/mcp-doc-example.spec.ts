@@ -1,4 +1,4 @@
-// docs/mcp.md's example runs as written (E46.22): the ```ts example block is transpiled and run with the package's own sources standing in for
+// docs/mcp.md's example runs as written (E46.22): the ```ts runnable block is transpiled and run with the package's own sources standing in for
 // `@marinoscar/hexactra-kgraph/*`, so the documented way to expose the tools stays true.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ const MODULES: Record<string, () => unknown> = {
 
 it('the example of docs/mcp.md exposes the three tools and starts a run against the fakes', async () => {
   const doc = readFileSync(DOC, 'utf8');
-  const block = /```ts example\n([\s\S]*?)```/.exec(doc)?.[1];
+  const block = /```ts runnable\n([\s\S]*?)```/.exec(doc)?.[1];
   expect(block).toBeDefined();
   // Top-level await: wrap the module body in an async function after transpiling to CommonJS.
   const js = ts.transpileModule(`export {};\n${block}`, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
