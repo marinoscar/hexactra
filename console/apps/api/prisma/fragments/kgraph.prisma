@@ -1,0 +1,177 @@
+// The Knowledge Graph (epic E46, #770; console docs/decisions/knowledge-graph.md): per owner, the procedures the agent learned from the
+// owner's own saved-task runs, their versions and evidence, and the per-task and per-run settings. New tables only (prefix `kg_`): no
+// column of an existing table changes; the relation fields on Task, Run and User are virtual. No Secret Material: a version's graph holds
+// labels and references, never a typed value (the package's validator refuses one). Every row has `user_id` and is deleted with its user.
+// Registered in the user-owned data registry (src/kgraph/kgraph.ownership.ts).
+
+/// The Knowledge Graph mode of one saved task (`off` | `learn` | `reuse`). No row: `off`.
+model KgTaskSettings {
+  taskId    String   @id @map("task_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  mode      String   @default("off") @db.VarChar(8)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("kg_task_settings")
+}
+
+/// The Knowledge Graph facts of one run: its effective mode, whether the owner chose AI only, the version it replayed and how it ended.
+model KgRun {
+  runId              String   @id @map("run_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  mode               String   @default("off") @db.VarChar(8)
+  aiOnly             Boolean  @default(false) @map("ai_only")
+  procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
+  /// null while running; then `replayed` | `fell_back` | `learned` | `ai_only` | `failed` (a short code, never page text).
+  outcome            String?  @db.VarChar(32)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("kg_runs")
+}
+
+/// A node of the owner's graph (a site, a screen, an element, a tool, an account reference, ...), keyed by type and a stable key.
+model KgNode {
+  id        String   @id @db.VarChar(200)
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(32)
+  key       String   @db.VarChar(500)
+  label     String   @db.VarChar(200)
+  props     Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, key])
+  @@map("kg_nodes")
+}
+
+/// An edge of the owner's graph.
+model KgEdge {
+  id        String   @id @db.VarChar(200)
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(32)
+  fromId    String   @map("from_id") @db.VarChar(200)
+  toId      String   @map("to_id") @db.VarChar(200)
+  props     Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, fromId, type])
+  @@index([userId, toId, type])
+  @@map("kg_edges")
+}
+
+/// One saved task's learned procedure across versions.
+model KgProcedure {
+  id              String   @id @db.VarChar(200)
+  userId          String   @map("user_id") @db.Uuid
+  taskId          String   @map("task_id") @db.Uuid
+  name            String   @db.VarChar(200)
+  activeVersionId String?  @map("active_version_id") @db.VarChar(200)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task     Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  versions KgProcedureVersion[]
+
+  @@unique([userId, taskId])
+  @@map("kg_procedures")
+}
+
+/// One immutable version of a procedure: `graph` is the package's ProcedureVersion without its state and evidence (those are columns and
+/// kg_evidence rows). Only `state` changes after it is written.
+model KgProcedureVersion {
+  id              String   @id @db.VarChar(200)
+  userId          String   @map("user_id") @db.Uuid
+  procedureId     String   @map("procedure_id") @db.VarChar(200)
+  seq             Int
+  /// candidate | verified | active | suspended | retired
+  state           String   @db.VarChar(12)
+  graph           Json
+  /// initial | structural | sensitive
+  changeClass     String   @map("change_class") @db.VarChar(12)
+  /// The run it was compiled or repaired from: a plain id, kept when the run is deleted.
+  sourceRunId     String?  @map("source_run_id") @db.VarChar(200)
+  parentVersionId String?  @map("parent_version_id") @db.VarChar(200)
+  createdAt       DateTime @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  procedure KgProcedure  @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  evidence  KgEvidence[]
+
+  @@unique([procedureId, seq])
+  @@index([userId, procedureId])
+  @@map("kg_procedure_versions")
+}
+
+/// Counters of one version (`step_id` empty) or one of its steps.
+model KgEvidence {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  versionId     String    @map("version_id") @db.VarChar(200)
+  stepId        String    @default("") @map("step_id") @db.VarChar(200)
+  successes     Int       @default(0)
+  failures      Int       @default(0)
+  repairs       Int       @default(0)
+  lastSuccessAt DateTime? @map("last_success_at") @db.Timestamptz
+  lastFailureAt DateTime? @map("last_failure_at") @db.Timestamptz
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version KgProcedureVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, stepId])
+  @@index([userId, versionId])
+  @@map("kg_evidence")
+}
+
+/// A proposed sensitive change waiting for the owner (E46.17): the proposed version, a summary of what changes, and the question asked.
+model KgReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  versionId  String   @map("version_id") @db.VarChar(200)
+  /// Labels and kinds of what changes: never a typed value.
+  summary    Json     @default("[]")
+  /// pending | approved | declined | expired
+  status     String   @default("pending") @db.VarChar(12)
+  questionId String?  @map("question_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("kg_reviews")
+}
+
+extend model User {
+  kgTaskSettings     KgTaskSettings[]
+  kgRuns             KgRun[]
+  kgNodes            KgNode[]
+  kgEdges            KgEdge[]
+  kgProcedures       KgProcedure[]
+  kgProcedureVersions KgProcedureVersion[]
+  kgEvidence         KgEvidence[]
+  kgReviews          KgReview[]
+}
+
+extend model Task {
+  kgSettings   KgTaskSettings?
+  kgProcedures KgProcedure[]
+}
+
+extend model Run {
+  kg KgRun?
+}

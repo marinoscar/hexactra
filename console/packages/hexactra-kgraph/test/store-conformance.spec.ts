@@ -3,5 +3,5 @@ import { InMemoryProcedureStore, runStoreConformance } from '../src/testing';
 
 runStoreConformance({
   name: 'in-memory',
-  open: async () => ({ store: new InMemoryProcedureStore(), owners: ['owner-a', 'owner-b'], close: async () => undefined }),
+  open: async () => ({ store: new InMemoryProcedureStore(), owners: ['owner-a', 'owner-b'], task: async (_owner: string, key: string) => key, close: async () => undefined }),
 });

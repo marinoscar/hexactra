@@ -29313,6 +29313,336 @@
         }
       }
     },
+    "/api/kgraph/status": {
+      "get": {
+        "description": "The deployment switch (your administrator), your own switch, and whether both are on. Both are off by default.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraph_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/KgraphStatusResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Whether the Knowledge Graph is available to you",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph": {
+      "delete": {
+        "description": "Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes and run records. Nobody else's. Turning a switch off deletes nothing; this does.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraph_purge",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/KgraphPurgeResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete everything learned",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/kgraph": {
+      "get": {
+        "description": "`off` (default), `learn` or `reuse`, and whether the switches above it are on.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraph_getTask",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskKgraphResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's Knowledge Graph mode",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      },
+      "put": {
+        "description": "Refused with `409 KGRAPH_OFF` while the deployment or your own switch is off.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraph_putTask",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutTaskKgraphDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskKgraphResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set a task's Knowledge Graph mode",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
     "/api/approval-rules": {
       "get": {
         "description": "Steps you told the agent not to ask about again, newest first, and whether \"Pause all\" is on (`paused`). A rule matches only on its site (the registrable domain of the page's real address), its kind and category and the exact label of the element (digits compared as `#`), within its limits. Rules are made only by ticking \"Don't ask again\" on a request; nothing here creates one.\n\n**Requires:** authentication, plus permission `approvals:read`.",
@@ -47883,6 +48213,8 @@
               "MAIL_TRIGGER_POLL_TOO_FAST",
               "MAIL_TRIGGER_INPUTS_INVALID",
               "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
+              "KGRAPH_TASK_NOT_FOUND",
+              "KGRAPH_OFF",
               "BENCHMARK_NOT_FOUND",
               "BENCHMARK_RUNNING",
               "BENCHMARK_SITE_UNREACHABLE",
@@ -50944,6 +51276,18 @@
               "paused"
             ]
           },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "connections": {
             "type": "object",
             "properties": {
@@ -51456,6 +51800,18 @@
             },
             "required": [
               "paused"
+            ]
+          },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              }
+            },
+            "required": [
+              "enabled"
             ]
           },
           "connections": {
@@ -52014,6 +52370,22 @@
                 "properties": {
                   "paused": {
                     "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kgraph": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
                   }
                 }
               },
@@ -52787,6 +53159,46 @@
             "required": [
               "keepDays",
               "maxMinutes"
+            ]
+          },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+              },
+              "auditEvery": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 1000,
+                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+              },
+              "suspendAfterFailures": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+              },
+              "retentionDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              }
+            },
+            "required": [
+              "enabled",
+              "auditEvery",
+              "suspendAfterFailures",
+              "retentionDays"
             ]
           },
           "connections": {
@@ -53565,6 +53977,7 @@
           "browserAgentTiers",
           "browserAgentCeilings",
           "recordings",
+          "kgraph",
           "connections",
           "deliveries",
           "mailTriggers",
@@ -54169,6 +54582,46 @@
             "required": [
               "keepDays",
               "maxMinutes"
+            ]
+          },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+              },
+              "auditEvery": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 1000,
+                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+              },
+              "suspendAfterFailures": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+              },
+              "retentionDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              }
+            },
+            "required": [
+              "enabled",
+              "auditEvery",
+              "suspendAfterFailures",
+              "retentionDays"
             ]
           },
           "connections": {
@@ -55560,6 +56013,40 @@
                 "minimum": 1,
                 "maximum": 480,
                 "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
+              }
+            }
+          },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+              },
+              "auditEvery": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 1000,
+                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+              },
+              "suspendAfterFailures": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+              },
+              "retentionDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
               }
             }
           },
@@ -58101,6 +58588,18 @@
                 },
                 "required": [
                   "paused"
+                ]
+              },
+              "kgraph": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  }
+                },
+                "required": [
+                  "enabled"
                 ]
               },
               "connections": {
@@ -78712,6 +79211,120 @@
         },
         "required": [
           "attributes"
+        ],
+        "additionalProperties": false
+      },
+      "KgraphStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "boolean",
+            "description": "Your administrator allows the Knowledge Graph (system setting `kgraph.enabled`)."
+          },
+          "user": {
+            "type": "boolean",
+            "description": "You turned it on (your setting `kgraph.enabled`)."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Both are on."
+          }
+        },
+        "required": [
+          "deployment",
+          "user",
+          "available"
+        ]
+      },
+      "KgraphPurgeResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "object",
+            "properties": {
+              "procedures": {
+                "type": "number"
+              },
+              "versions": {
+                "type": "number"
+              },
+              "nodes": {
+                "type": "number"
+              },
+              "edges": {
+                "type": "number"
+              },
+              "tasks": {
+                "type": "number"
+              },
+              "runs": {
+                "type": "number"
+              },
+              "reviews": {
+                "type": "number"
+              },
+              "evidence": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "procedures",
+              "versions",
+              "nodes",
+              "edges",
+              "tasks",
+              "runs",
+              "reviews",
+              "evidence"
+            ]
+          }
+        },
+        "required": [
+          "deleted"
+        ]
+      },
+      "TaskKgraphResponseDto": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "learn",
+              "reuse"
+            ],
+            "description": "`off`: AI only, nothing captured. `learn`: the AI runs as before and a procedure is compiled, never executed. `reuse`: compiled steps run without the model; the AI repairs."
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false, the stored mode is kept and unused."
+          }
+        },
+        "required": [
+          "taskId",
+          "mode",
+          "available"
+        ]
+      },
+      "PutTaskKgraphDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "learn",
+              "reuse"
+            ]
+          }
+        },
+        "required": [
+          "mode"
         ],
         "additionalProperties": false
       },

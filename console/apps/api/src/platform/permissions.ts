@@ -18,6 +18,7 @@ import { BENCHMARKS_PERMISSIONS } from '../benchmark/benchmark.permissions';
 import { CHAT_PERMISSIONS } from '../chat/chat.permissions';
 import { CONNECTIONS_PERMISSIONS } from '../connections/connections.permissions';
 import { CONNECTED_APPS_PERMISSIONS } from '../connected-apps/connected-apps.permissions';
+import { KGRAPH_PERMISSIONS } from '../kgraph/kgraph.permissions';
 import { MEMORIES_PERMISSIONS } from '../memories/memories.permissions';
 import { MCP_PERMISSIONS } from '../mcp/mcp.permissions';
 import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
@@ -42,7 +43,7 @@ export const PERMISSION_OPTIONS = {
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
     ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS, CONNECTIONS_PERMISSIONS, BENCHMARKS_PERMISSIONS, USAGE_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS, CONNECTIONS_PERMISSIONS, BENCHMARKS_PERMISSIONS, USAGE_PERMISSIONS, KGRAPH_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
 
 // The permission id type. `@marinoscar/vault-api` (the built-in secrets store, E37.5) augments the platform's
@@ -63,7 +64,8 @@ type AppPermissionSet =
   | typeof APPROVALS_PERMISSIONS
   | typeof SECRETS_PERMISSIONS
   | typeof CONNECTIONS_PERMISSIONS
-  | typeof BENCHMARKS_PERMISSIONS;
+  | typeof BENCHMARKS_PERMISSIONS
+  | typeof KGRAPH_PERMISSIONS;
 // Distributive over the union (`keyof (A | B)` would keep only the keys both sets share).
 type IdsOf<T> = T extends Record<string, { readonly id: infer I }> ? I : never;
 type AppPermissionId = IdsOf<AppPermissionSet>;

@@ -5795,6 +5795,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether the Knowledge Graph is available to you
+         * @description The deployment switch (your administrator), your own switch, and whether both are on. Both are off by default.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraph_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete everything learned
+         * @description Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes and run records. Nobody else's. Turning a switch off deletes nothing; this does.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        delete: operations["kgraph_purge"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/kgraph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's Knowledge Graph mode
+         * @description `off` (default), `learn` or `reuse`, and whether the switches above it are on.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraph_getTask"];
+        /**
+         * Set a task's Knowledge Graph mode
+         * @description Refused with `409 KGRAPH_OFF` while the deployment or your own switch is off.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        put: operations["kgraph_putTask"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approval-rules": {
         parameters: {
             query?: never;
@@ -9484,6 +9556,8 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
+             * @example KGRAPH_TASK_NOT_FOUND
+             * @example KGRAPH_OFF
              * @example BENCHMARK_NOT_FOUND
              * @example BENCHMARK_RUNNING
              * @example BENCHMARK_SITE_UNREACHABLE
@@ -10484,6 +10558,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled: boolean;
+            };
             connections?: {
                 /**
                  * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
@@ -10600,6 +10678,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled: boolean;
+            };
             connections?: {
                 /**
                  * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
@@ -10710,6 +10792,10 @@ export interface components {
             } | null) | null;
             approvals?: {
                 paused?: boolean;
+            } | null;
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled?: boolean;
             } | null;
             connections?: {
                 /**
@@ -10852,6 +10938,16 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
+            };
+            kgraph: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled: boolean;
+                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                auditEvery: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays: number | null;
             };
             connections: {
                 mcp?: {
@@ -11149,6 +11245,16 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
+            };
+            kgraph?: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled: boolean;
+                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                auditEvery: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays: number | null;
             };
             connections?: {
                 mcp?: {
@@ -11450,6 +11556,16 @@ export interface components {
                 keepDays?: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes?: number;
+            };
+            kgraph?: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled?: boolean;
+                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                auditEvery?: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures?: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays?: number | null;
             };
             connections?: {
                 mcp?: {
@@ -12019,6 +12135,10 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
+                };
+                kgraph?: {
+                    /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                    enabled: boolean;
                 };
                 connections?: {
                     /**
@@ -16405,6 +16525,41 @@ export interface components {
             aliases?: string[];
             /** @description Free text you add. At most 1000 characters. Shown as plain text. */
             note?: string | null;
+        };
+        KgraphStatusResponseDto: {
+            /** @description Your administrator allows the Knowledge Graph (system setting `kgraph.enabled`). */
+            deployment: boolean;
+            /** @description You turned it on (your setting `kgraph.enabled`). */
+            user: boolean;
+            /** @description Both are on. */
+            available: boolean;
+        };
+        KgraphPurgeResponseDto: {
+            deleted: {
+                procedures: number;
+                versions: number;
+                nodes: number;
+                edges: number;
+                tasks: number;
+                runs: number;
+                reviews: number;
+                evidence: number;
+            };
+        };
+        TaskKgraphResponseDto: {
+            /** Format: uuid */
+            taskId: string;
+            /**
+             * @description `off`: AI only, nothing captured. `learn`: the AI runs as before and a procedure is compiled, never executed. `reuse`: compiled steps run without the model; the AI repairs.
+             * @enum {string}
+             */
+            mode: "off" | "learn" | "reuse";
+            /** @description Both the deployment and your own switch are on. While false, the stored mode is kept and unused. */
+            available: boolean;
+        };
+        PutTaskKgraphDto: {
+            /** @enum {string} */
+            mode: "off" | "learn" | "reuse";
         };
         ApprovalRulesListResponseDto: {
             /** @description Whether "Pause all" is on: while it is, no rule matches. */
@@ -41794,6 +41949,206 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["MemoryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["KgraphStatusResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_purge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["KgraphPurgeResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskKgraphResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_putTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutTaskKgraphDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskKgraphResponseDto"];
                     };
                 };
             };
