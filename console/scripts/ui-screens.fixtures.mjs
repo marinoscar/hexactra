@@ -43,6 +43,7 @@ const PERMISSIONS = [
   'usage:read', 'user_settings:read', 'user_settings:write', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
   'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write',
+  'kgraph:read', 'kgraph:write', 'kgraph:admin',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -845,5 +846,35 @@ RESPONSES[`GET /task-builder/${IDS.builder}`] = {
   ],
 };
 RESPONSES[`POST /task-builder`] = { id: IDS.builder };
+
+// ---- The Knowledge Graph (E46.20, #794): both switches on, two procedures (one with a long name), a pending review, a run's panel ----
+const KG_PROC = 'kgp-ui-1';
+const kgCounts = (s, f, r) => ({ successes: s, failures: f, repairs: r });
+const kgProcedures = [
+  { id: KG_PROC, taskId: IDS.task, taskName: 'Export the open orders from the supplier portal and count the ones due this week', name: 'orders', versionId: 'kgv-ui-3', versionNumber: 3, state: 'active', health: 'healthy', steps: 6, updatedAt: iso(-3_600_000), ledger: { runs: 14, procedureRuns: 11, cleanReplayRate: 0.82 } },
+  { id: 'kgp-ui-2', taskId: SECOND_TASK, taskName: 'Weekly report', name: 'report', versionId: 'kgv-ui-9', versionNumber: 1, state: 'candidate', health: 'unknown', steps: 4, updatedAt: iso(-86_400_000), ledger: { runs: 0, procedureRuns: 0, cleanReplayRate: null } },
+];
+const kgSteps = [
+  { id: 's1', kind: 'call', label: 'open the orders page', tool: 'browser_navigate', target: 'portal.example.test', usesAi: false, commitClass: false, health: 'healthy', counts: kgCounts(11, 0, 0), args: [{ name: 'url', source: 'literal', detail: 'https://portal.example.test/orders/2026/11/overview?tab=open&sort=due' }] },
+  { id: 's2', kind: 'call', label: 'sign in', tool: 'browser_type_secret', target: 'Password field', usesAi: false, commitClass: false, health: 'healthy', counts: kgCounts(11, 0, 0), args: [{ name: 'value', source: 'secret', detail: 'login: Supplier portal' }] },
+  { id: 's3', kind: 'foreach', label: 'for each open order', tool: null, target: null, usesAi: false, commitClass: false, health: 'healthy', counts: kgCounts(11, 0, 0), args: [] },
+  { id: 's4', kind: 'call', label: 'press Export', tool: 'browser_click', target: "Button 'Export as spreadsheet'", usesAi: false, commitClass: false, health: 'degraded', counts: kgCounts(10, 1, 1), args: [] },
+  { id: 's5', kind: 'judge', label: 'count the orders due this week', tool: null, target: null, usesAi: true, commitClass: false, health: 'healthy', counts: kgCounts(11, 0, 0), args: [] },
+  { id: 's6', kind: 'agent', label: 'the agent continues from here', tool: null, target: null, usesAi: true, commitClass: false, health: 'unknown', counts: kgCounts(0, 0, 0), args: [] },
+];
+const kgVersion = (number, state, changeClass, parentId, ageMs) => ({ id: `kgv-ui-${number}`, number, state, changeClass, parentId, sourceRunId: IDS.finishedRun, createdAt: iso(-ageMs), health: state === 'active' ? 'healthy' : 'unknown', counts: kgCounts(number * 3, 1, number - 1), steps: 6 });
+const kgVersions = [kgVersion(3, 'active', 'structural', 'kgv-ui-2', 3_600_000), kgVersion(2, 'retired', 'structural', 'kgv-ui-1', 5 * 86_400_000), kgVersion(1, 'retired', 'initial', null, 12 * 86_400_000)];
+const kgReview = { id: '7e000000-0000-4000-8000-000000000001', versionId: 'kgv-ui-4', procedureId: KG_PROC, status: 'pending', changes: [{ reason: 'recipient', text: 'Step 5 would send the spreadsheet to a new recipient: p***@example.test' }, { reason: 'new_site', text: 'Step 2 would open a site it did not use before: billing.example.test' }], createdAt: iso(-7_200_000), expiresAt: iso(28 * 86_400_000) };
+RESPONSES['GET /kgraph/status'] = { deployment: true, user: true, available: true };
+RESPONSES['GET /kgraph/procedures'] = { enabled: true, procedures: kgProcedures };
+RESPONSES[`GET /kgraph/procedures/${KG_PROC}`] = { ...kgProcedures[0], enabled: true, versions: 3, activeVersion: { ...kgVersion(3, 'active', 'structural', 'kgv-ui-2', 3_600_000), steps: kgSteps, parameters: [{ name: 'week', type: 'string', sensitive: false, required: true }], outputs: [{ name: 'due', sensitive: false }], sites: ['portal.example.test'], accounts: [], savedLogins: [{ kind: 'login', label: 'Supplier portal' }] } };
+RESPONSES[`GET /kgraph/procedures/${KG_PROC}/versions`] = { enabled: true, procedureId: KG_PROC, versions: kgVersions };
+RESPONSES['GET /kgraph/procedures/kgp-ui-2/versions'] = { enabled: true, procedureId: 'kgp-ui-2', versions: [] };
+RESPONSES[`GET /kgraph/procedures/${KG_PROC}/versions/3/diff`] = { enabled: true, procedureId: KG_PROC, from: 2, to: 3, changes: [{ change: 'retargeted', before: null, after: null, args: [], text: "Step 4 now finds the button by its label 'Export as spreadsheet'" }] };
+RESPONSES['GET /kgraph/summary'] = { tasks: [{ taskId: IDS.task, taskName: kgProcedures[0].taskName, runs: 14, procedureRuns: 11, cleanReplayRate: 0.82, baseline: { runs: 3, modelCalls: 22, costUsd: 0.91, costKnown: true, activeMs: 240_000 }, note: null, procedureFigures: { runs: 11, modelCalls: 3, costUsd: 0.12, costKnown: true, activeMs: 70_000 }, saving: { modelCalls: 19, costUsd: 0.79, costKnown: true, activeMs: 170_000 } }] };
+RESPONSES['GET /kgraph/reviews'] = (url) => (url.searchParams.get('status') && url.searchParams.get('status') !== 'pending' ? [] : [kgReview]);
+RESPONSES[`GET /tasks/${IDS.task}/kgraph`] = { taskId: IDS.task, mode: 'reuse', available: true };
+RESPONSES[`GET /kgraph/runs/${IDS.finishedRun}`] = { enabled: true, runId: IDS.finishedRun, taskId: IDS.task, mode: 'reuse', aiOnly: false, outcome: 'replayed', procedureId: KG_PROC, versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st, i) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: ['replayed', 'replayed', 'replayed', 'recovered', 'judged', 'not_reached'][i] })), ledger: null };
+RESPONSES['GET /admin/kgraph/settings'] = { enabled: true, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' };
 
 export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id };
