@@ -27,7 +27,7 @@ export const recordingViewSchema = z.object({
   bytes: z.number().int(),
   durationMs: z.number().int(),
   mime: z.string(),
-  droppedFrames: z.number().int().describe('Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit'),
+  droppedFrames: z.number().int().describe('Frames left out while the owner paused the run, or over the rate limit'),
   note: z.string().nullable().describe('Why it ended early or failed: max_minutes, tab_closed, restarted, encoder_unavailable, storage_error, empty, …'),
   startedAt: z.string(),
   endedAt: z.string().nullable(),

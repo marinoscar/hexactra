@@ -20801,7 +20801,7 @@ export interface components {
             bytes: number;
             durationMs: number;
             mime: string;
-            /** @description Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit */
+            /** @description Frames left out while the owner paused the run, or over the rate limit */
             droppedFrames: number;
             /** @description Why it ended early or failed: max_minutes, tab_closed, restarted, encoder_unavailable, storage_error, empty, … */
             note: string | null;
