@@ -86,8 +86,6 @@ Rules:
 - Do not delegate to sub-agents for now; the session working the issue does the work itself in its branch.
 - Remove the branch once the PR is merged. `git branch -a` shows what exists.
 
-**E46 integration branch (owner-approved exception, epic #770 only).** Knowledge Graph work (E46, #775–#799) branches `issue/<n>-<slug>` from `epic/e46-kgraph` and opens its PR against `epic/e46-kgraph`, not `main`; after the merge the issue is closed by hand (a closing keyword does not fire on a non-default branch). `origin/main` is merged into the epic branch through a PR before each issue. One final PR (E46.25) merges `epic/e46-kgraph` to `main`, the console version is bumped once there, and this exception ends when that PR merges.
-
 ## Commits
 
 Conventional Commits: `<type>(<scope>): <imperative summary>` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`). Small, single-intent commits; behavior changes ship with their tests. Reference the issue (`#<n>`) in the PR, and in commits where useful.
@@ -151,7 +149,7 @@ Design invariants to preserve when writing docs or code:
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).
-- The Knowledge Graph (epic E46) switched off at any level is byte-identical to `main`: `console/apps/api/test/runner-characterisation.db.spec.ts` passes unchanged.
+- The Knowledge Graph (epic E46) switched off at any level leaves runs byte-identical to how they ran before the epic: `console/apps/api/test/runner-characterisation.db.spec.ts` passes unchanged.
 - The Knowledge Graph adds only new `kg_` tables and new routes; no existing table, API response or MCP tool changes shape for it.
 - A Knowledge Graph failure (capture, compile, replay, check, repair) is logged and counted and never fails a run: the run continues with the agent loop.
 - Every tool a replayed procedure runs goes through `executeTool`, with Stop, Pause, the gates, the span and intent recording exactly as for a model-chosen call.

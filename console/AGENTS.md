@@ -57,7 +57,7 @@ The agent harness and the browser toolset are workspace packages that the API **
 
 ## MANDATORY: Knowledge Graph
 
-The Knowledge Graph (epic E46, [decision record](docs/decisions/knowledge-graph.md)) learns a saved task's procedure from the owner's own runs and replays it. It is off by default at four levels (deployment, user, task, run). A later change must keep:
+The Knowledge Graph (epic E46, [owner guide](docs/knowledge-graph.md), [threat model](docs/security-kgraph.md), [decision record](docs/decisions/knowledge-graph.md)) learns a saved task's procedure from the owner's own runs and replays it. It is experimental and off by default at four levels (deployment, user, task, run; the run level is not yet offered on the start-run form or API, #794). The engine is the package `@marinoscar/hexactra-kgraph` ([README](packages/hexactra-kgraph/README.md)); the host is `apps/api/src/kgraph/` and `apps/api/src/runner/host/kgraph/`. A later change must keep:
 
 1. **Off is byte-identical.** With the feature off at any level, `apps/api/test/runner-characterisation.db.spec.ts` passes unchanged: same instructions, tool list and schemas, round input, fabric actions, step rows and run row.
 2. **New tables only.** Knowledge Graph data lives in new `kg_` tables (per-task and per-run settings keyed by `task_id` / `run_id`); no column of an existing table changes, and no existing route, response or MCP tool changes shape.

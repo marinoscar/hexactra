@@ -136,14 +136,17 @@ Phases, the counters (`app.runs.recovered`) and the alert rule: [runs.md, Crash 
 
 ## Replay: a saved procedure before the loop (E46.9)
 
-A task in the Knowledge Graph's `reuse` mode ([decision record](decisions/knowledge-graph.md)) may replay a learned procedure before the loop, inside the same run: the same lease, step rows, run page and Stop.
+A task in the Knowledge Graph's `reuse` mode ([owner guide](knowledge-graph.md), [decision record](decisions/knowledge-graph.md), [threat model](security-kgraph.md)) may replay a learned procedure before the loop, inside the same run: the same lease, step rows, run page and Stop. The feature ships off at every level.
 
 - **When.** `GoalRunnerService.advance` calls `maybeReplay` (`host/kgraph/replay.ts`) between `beforeLoop` and `loop.run`. It returns `null` at once unless `KgraphEnabledService.modeFor` is `reuse` and the task has an `active`, `verified` or `candidate` version. With the feature off at any level nothing of it is entered.
 - **How.** The executor (`@marinoscar/hexactra-kgraph/execute`) walks the version; the bridge (`@marinoscar/hexactra-kgraph/harness`) gives it `harnessToolInvoker`, which looks the tool up in the run's registry (a tool not offered is a refusal) and calls **`executeTool`**: Stop, Pause, the site and risk gates, saved approvals, the span, intent recording and the step row apply exactly as for a model-chosen call. `before(step)` uses `ctx.preflight()` and the hop deadline. A `judge` step is one model call on the `fast` tier, counted like any other.
 - **Handover.** A failed check, a refusal, an `agent` step, an owner question or an error hands the run to the loop with one line in the model's log: "A saved procedure did steps 1 to N without the model. Step N+1 did not match: … Look at the page and continue toward the goal." The run memory's `kgraphReplay.handedOver` stops a later job from replaying again.
 - **Finish.** A procedure that reaches its end closes the run (`closeRun`, `succeeded`, with the task's outputs when declared).
 - **Crash and hop.** `kgraphReplay` in the run memory keeps the ids of the steps done and of a commit-class step whose intent was recorded. A later job skips the done steps; a step left in intent is never sent again (the agent takes over, the gates ask the owner). A hop mid-procedure resumes at the next step.
-- **Errors never fail the run:** anything thrown is caught, logged and handed over. `kg_runs` records the version and the outcome (`replayed`, `fell_back`).
+- **Verification.** A `candidate` version replays with `verify`: every commit-class step asks the owner first through the run's own confirmation flow, whatever the task's confirmation setting and saved approvals say.
+- **Recovery and segments.** Before a mismatch hands over, the recovery ladder tries its rungs (wait, interrupts, re-resolve the element, one model-located step; never the model rung for a commit-class step). After a handover, the walk resumes at the next segment once its first step can run, at most `MAX_HAND_BACKS` (3) times per run.
+- **Audit and suspension.** Every `kgraph.auditEvery`-th run, and every run whose procedure is suspended, runs with AI only (`kg_runs.ai_only`).
+- **Errors never fail the run:** anything thrown is caught, logged and handed over. `kg_runs` records the version and the outcome (`replayed`, `fell_back`, `outcome_failed`, `ai_only`).
 
 ## Traces (E38.4)
 

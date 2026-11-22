@@ -30,7 +30,7 @@ A handler returns `{ ok, summary, structured, code?, untrusted }`. It never thro
 
 Exposing the three tools from any server, against the package's fakes. `server.tool` stands for your server's own registration call.
 
-```ts example
+```ts runnable
 import { z } from 'zod';
 import { PROCEDURE_TOOL_DESCRIPTORS, procedureToolHandlers } from '@marinoscar/hexactra-kgraph/mcp';
 import { aProcedure, aVersion, call, InMemoryProcedureStore, lit } from '@marinoscar/hexactra-kgraph/testing';

@@ -1,6 +1,6 @@
 # Decision record: the Knowledge Graph (epic E46, #770)
 
-**Status:** accepted, being built on the integration branch `epic/e46-kgraph` (#775). Experimental and off by default until E46.25 merges.
+**Status:** accepted and built (E46.1 to E46.24, on the integration branch `epic/e46-kgraph`, merged to `main` by E46.25, #799). Experimental, and off by default at every level. Owner guide: [knowledge-graph.md](../knowledge-graph.md); threat model: [security-kgraph.md](../security-kgraph.md).
 
 ## Problem
 
@@ -16,7 +16,7 @@ The model's job changes from *interpreter* (decides every step of every run) to 
 |---|---|
 | Name | Feature: **Knowledge Graph**. Package: `@marinoscar/hexactra-kgraph` in `console/packages/hexactra-kgraph`. One learned, runnable unit: a **procedure**. |
 | Optional | Off by default at four levels: deployment (admin), user, task, run. The agent loop stays the default and the fallback. |
-| Admin kill switch | An admin can turn the feature off for the whole deployment. Off means no capture, no replay, no tools, no pages. |
+| Admin kill switch | An admin can turn the feature off for the whole deployment. Off means no capture, no replay and no tools; the pages are hidden from the navigation and say the feature is off. |
 | User opt-out | A user can opt out completely. The user switch is **opt-in** (default off) even after the admin enables the feature. |
 | Turning off | Learned data is **kept and unused**. A separate, explicit "Delete everything learned" action removes it. |
 | Must not affect what exists | The no-impact contract below. It is an acceptance criterion of every E46 child. |
@@ -74,7 +74,7 @@ apps/api/src/runner/host/kgraph/   bindings only: ToolInvokerPort -> executeTool
 | Deployment | Admin setting `kgraph.enabled` (a settings card, `kgraph:admin`) | **off** | No capture, replay, job, agent tool or MCP tool. Pages show "turned off by your administrator". Data kept. |
 | User | User setting `kgraph.enabled` | **off** (opt-in) | Same, for that user. Data kept. |
 | Task | `kg_task_settings.mode`: `off`, `learn`, `reuse` (route `/api/tasks/{id}/kgraph`) | **off** | That task runs AI only. |
-| Run | "Run with AI only this time" on the start form and API | n/a | That run ignores the procedure. |
+| Run | "Run with AI only this time" on the start form and API | n/a | That run ignores the procedure. **Not built yet** (#794): the package's `effectiveMode` takes the flag, but the start form and `POST /api/tasks/{id}/runs` have no field for it. Audit runs and runs of a suspended procedure are the only AI-only runs today. |
 
 Chat goals never use the feature: only saved tasks can opt in.
 
@@ -124,11 +124,6 @@ The surface graph (screens, element fingerprints, re-resolution) is browser-spec
 
 ## The API, the view model and the CLI (E46.19)
 
-## Procedures as callable tools (E46.22)
-
-- **For other agents, over MCP.** `procedures_list`, `procedure_get` (scope `procedures:read`) and `procedure_run` (scope `procedures:run`), built from the package's host-neutral descriptors (`@marinoscar/hexactra-kgraph/mcp`, no MCP SDK). They are listed and callable only while the deployment and the caller's switches are on (per-request availability in the one registry, `McpTool.feature`); otherwise `tools/list` is the list of before and a call answers "turned off". `procedure_run` starts an ordinary run of the procedure's task and returns its id at once. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, or changes a switch.
-- **For the agent inside a run.** In a run whose mode is `reuse`, the tool family `procedures` adds `procedures_list` and `run_procedure`, registered last (a run with the feature off is offered exactly the tools of before). `run_procedure` walks another **active** procedure of the same owner (never the task's own) with the package's `runSubProcedure`: every step through the run's tool wrapper (Stop, Pause, the gates, intent recording), parameters bound from the call (a sensitive one only from the run's own inputs), and depth 1 (a sub-procedure that reaches `run_procedure` is refused). Its own calls are not captured; the capture records the one `run_procedure` call.
-
 The pages, the CLI and (later) MCP read the graph through REST routes behind `kgraph:read` (`apps/api/src/kgraph/kgraph-read.controller.ts`): procedures, one procedure as an ordered step list, versions, a readable diff (`diffVersions` in words), the Map's view model and how a run's steps ran. The deployment switch has its own route behind `kgraph:admin` (`GET/PUT /api/admin/kgraph/settings`), reading and writing the same `kgraph` system-settings namespace. The full list is in [parity.md](../parity.md#what-the-knowledge-graph-added-e46).
 
 - **Off.** A read answers with the stored data and `enabled: false`; restore, forget and a task's mode answer `409 KGRAPH_OFF`; "Delete everything learned" and the admin settings answer whatever the switches.
@@ -136,6 +131,11 @@ The pages, the CLI and (later) MCP read the graph through REST routes behind `kg
 - **The view model** lives in the package (`@marinoscar/hexactra-kgraph/view`: `buildGraphView`, `stepList`, `readableDiff`, `healthOf`), pure and tested there. Nodes have a type, a label, a health and counts; edges are `has`, `then`, `feeds`, `uses`; clusters are per site and per account. The host adds the owner's connected accounts, the MCP tools they switched on and the saved logins their runs signed in with; the ones no procedure uses are flagged `unused`. The console lists no saved-login provider's items, so a saved login never used by any run is not on the map.
 - **Cost of the map.** The graph route reads one row per procedure: its shown version's steps without their checks, guards and element references, and none of its screens or elements, plus counters. Above 2,000 nodes the view folds steps, parameters and outputs into their procedures, then pages over procedures (`nextCursor`).
 - **CLI.** `hexactra kgraph status | list | show | versions | restore | forget | off | on`; `off` and `on` set the user setting `kgraph.enabled`.
+
+## Procedures as callable tools (E46.22)
+
+- **For other agents, over MCP.** `procedures_list`, `procedure_get` (scope `procedures:read`) and `procedure_run` (scope `procedures:run`), built from the package's host-neutral descriptors (`@marinoscar/hexactra-kgraph/mcp`, no MCP SDK). They are listed and callable only while the deployment and the caller's switches are on (per-request availability in the one registry, `McpTool.feature`); otherwise `tools/list` is the list of before and a call answers "turned off". `procedure_run` starts an ordinary run of the procedure's task and returns its id at once. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, or changes a switch.
+- **For the agent inside a run.** In a run whose mode is `reuse`, the tool family `procedures` adds `procedures_list` and `run_procedure`, registered last (a run with the feature off is offered exactly the tools of before). `run_procedure` walks another **active** procedure of the same owner (never the task's own) with the package's `runSubProcedure`: every step through the run's tool wrapper (Stop, Pause, the gates, intent recording), parameters bound from the call (a sensitive one only from the run's own inputs), and depth 1 (a sub-procedure that reaches `run_procedure` is refused). Its own calls are not captured; the capture records the one `run_procedure` call.
 
 ## The Map (E46.21)
 
@@ -156,4 +156,4 @@ Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross
 
 ## Load test results (E46.4)
 
-Recorded by #778.
+Recorded by #778. The load test met its pass bars except one: the heavy owner's Map query (query 4, heavy owner) had a **warm p95 of 2,083 ms against a bar of 2,000 ms**, with about 130 ms of it in the database. **Whether to accept this miss is pending the owner's decision**; it is not accepted. The live AI-only vs reuse comparison ([runbooks/kgraph-measurement.md](../runbooks/kgraph-measurement.md)) was **not measured**: there was no AI provider key in the session that prepared E46.25.
