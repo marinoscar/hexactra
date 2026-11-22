@@ -879,7 +879,7 @@ RESPONSES[`GET /kgraph/procedures/${KG_PROC}/versions/3/diff`] = { enabled: true
 RESPONSES['GET /kgraph/summary'] = { tasks: [{ taskId: IDS.task, taskName: kgProcedures[0].taskName, runs: 14, procedureRuns: 11, cleanReplayRate: 0.82, baseline: { runs: 3, modelCalls: 22, costUsd: 0.91, costKnown: true, activeMs: 240_000 }, note: null, procedureFigures: { runs: 11, modelCalls: 3, costUsd: 0.12, costKnown: true, activeMs: 70_000 }, saving: { modelCalls: 19, costUsd: 0.79, costKnown: true, activeMs: 170_000 } }] };
 RESPONSES['GET /kgraph/reviews'] = (url) => (url.searchParams.get('status') && url.searchParams.get('status') !== 'pending' ? [] : [kgReview]);
 RESPONSES[`GET /tasks/${IDS.task}/kgraph`] = { taskId: IDS.task, mode: 'reuse', available: true };
-RESPONSES[`GET /kgraph/runs/${IDS.finishedRun}`] = { enabled: true, runId: IDS.finishedRun, taskId: IDS.task, mode: 'reuse', aiOnly: false, outcome: 'replayed', procedureId: KG_PROC, versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st, i) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: ['replayed', 'replayed', 'replayed', 'recovered', 'judged', 'not_reached'][i] })), ledger: null };
+RESPONSES[`GET /kgraph/runs/${IDS.finishedRun}`] = { enabled: true, runId: IDS.finishedRun, taskId: IDS.task, mode: 'reuse', aiOnly: false, outcome: 'replayed', procedureId: KG_PROC, versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st, i) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: ['replayed', 'replayed', 'replayed', 'recovered', 'judged', 'not_reached'][i] })), ledger: null, kgFactIds: ['kgsf-ui-1', 'kgsf-ui-3'] };
 // The Map (E46.21, #795): the two procedures above with their steps, two sites, a work account with one used and one unused tool, a saved
 // login, and an unused account and saved login (drawn faint).
 const kgNode = (id, type, label, over = {}) => ({ id, type, label, health: 'unknown', counts: { successes: 0, failures: 0, repairs: 0, uses: 0 }, unused: false, cluster: null, procedure: null, ...over });
@@ -933,6 +933,27 @@ RESPONSES['GET /kgraph/graph'] = {
   nodeLimit: 2000,
   nextCursor: null,
 };
+// Site facts (E46.33, #855): two sites, one with facts of three kinds (one long, one archived, one with HTML-like text shown as text), a
+// derived proposal waiting in Reviews, and the Map's Site node portal.example.test matching example.test.
+const kgFact = (id, site, kind, text, over = {}) => ({ id, site, kind, text, source: 'owner', status: 'active', evidence: { runId: null, steps: 0, screens: 0 }, declinedAt: null, lastUsedAt: iso(-86_400_000), createdAt: iso(-20 * 86_400_000), updatedAt: iso(-20 * 86_400_000), ...over });
+const kgFacts = [
+  kgFact('kgsf-ui-1', 'example.test', 'navigation', 'Open orders are under Orders, then Open; the export button is at the bottom of the list, below the totals and the page size picker, which can be easy to miss on a small screen'),
+  kgFact('kgsf-ui-2', 'example.test', 'sign_in', 'Sign-in asks for a one-time code sent by text message', { source: 'derived', evidence: { runId: IDS.finishedRun, steps: 2, screens: 1 }, lastUsedAt: null }),
+  kgFact('kgsf-ui-3', 'example.test', 'quirk', 'A <b>cookie banner</b> covers the footer until it is closed'),
+  kgFact('kgsf-ui-4', 'example.test', 'timing', 'Reports take about a minute to load', { status: 'archived', lastUsedAt: null }),
+];
+const kgFactProposal = kgFact('kgsf-ui-9', 'example.test', 'timing', 'The orders export takes up to 30 seconds after pressing Export', { source: 'derived', status: 'proposed', evidence: { runId: IDS.finishedRun, steps: 3, screens: 0 }, lastUsedAt: null, createdAt: iso(-3_600_000) });
+RESPONSES['GET /kgraph/sites'] = [
+  { site: 'example.test', active: 3, proposed: 1, archived: 1 },
+  { site: 'a-very-long-registrable-domain-name-for-a-supplier.example', active: 1, proposed: 0, archived: 0 },
+];
+RESPONSES['GET /kgraph/sites/example.test/facts'] = (url) => {
+  const all = [...kgFacts, kgFactProposal];
+  const status = url.searchParams.get('status');
+  return status ? all.filter((f) => f.status === status) : all;
+};
+RESPONSES['GET /kgraph/reviews/site-facts'] = [kgFactProposal];
+RESPONSES['GET /kgraph/sites/a-very-long-registrable-domain-name-for-a-supplier.example/facts'] = [kgFact('kgsf-ui-5', 'a-very-long-registrable-domain-name-for-a-supplier.example', 'other', 'Closed on public holidays')];
 RESPONSES['GET /admin/kgraph/settings'] ={ enabled: true, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' };
 
 // ---- Benchmarks (E44.5, #743): the list, the new form, a completed benchmark's scorecard and trials, a live one, the comparison ----
