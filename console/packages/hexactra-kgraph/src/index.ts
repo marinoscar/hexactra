@@ -1,0 +1,5 @@
+// @marinoscar/hexactra-kgraph: a generic Knowledge Graph of learned procedures behind ports. Entry points: ./schema, ./validate, ./ports,
+// ./testing, ./mcp, ./harness. See README.md and docs/.
+export * from './schema';
+export * from './validate';
+export * from './ports';

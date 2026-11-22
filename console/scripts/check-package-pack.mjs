@@ -12,7 +12,7 @@
 //   manifest   name @marinoscar/<folder>; MIT; engines.node >=24; not private; publishConfig access public and provenance; a `0.1.0-next.N` or later
 //              semver; `files` names dist, README.md, CHANGELOG.md and LICENSE; "./package.json" exported.
 //   present    the tarball holds package.json, README.md, LICENSE and every file an `exports` entry (or `main`, `types`) points at.
-//   only       the tarball holds package.json, README.md, CHANGELOG.md, LICENSE and files under dist/: no sources, tests, fixtures, source maps or .env.
+//   only       the tarball holds package.json, README.md, CHANGELOG.md, LICENSE, files under dist/ and, when `files` names docs, Markdown under docs/: no sources, tests, fixtures, source maps or .env.
 //
 // Usage: node scripts/check-package-pack.mjs [--list]
 // Exit: 0 clean, 1 violations. Node built-ins and npm only.
@@ -54,6 +54,9 @@ export function checkManifest(dir, m) {
   return problems;
 }
 
+/** Whether the manifest ships its docs/ folder (Markdown only), as @marinoscar/hexactra-kgraph does. */
+const docsShip = (m) => (m.files ?? []).includes('docs');
+
 /** Problems of a tarball's file list (paths relative to the package) against the manifest. */
 export function checkTarball(m, files) {
   const problems = [];
@@ -61,7 +64,7 @@ export function checkTarball(m, files) {
   for (const f of REQUIRED) if (!have.has(f)) problems.push(`the tarball lacks ${f}`);
   for (const t of exportTargets(m)) if (!have.has(t)) problems.push(`the tarball lacks ${t}, which package.json points at`);
   for (const f of files) {
-    const allowed = f === 'package.json' || f === 'README.md' || f === 'CHANGELOG.md' || f === 'LICENSE' || f.startsWith('dist/');
+    const allowed = f === 'package.json' || f === 'README.md' || f === 'CHANGELOG.md' || f === 'LICENSE' || f.startsWith('dist/') || (docsShip(m) && /^docs\/[^/]+\.md$/.test(f));
     if (!allowed) problems.push(`the tarball holds ${f}, which \`files\` does not name`);
     if (FORBIDDEN.some((re) => re.test(f))) problems.push(`the tarball holds ${f}: no sources, tests, fixtures, maps or config ship`);
   }
