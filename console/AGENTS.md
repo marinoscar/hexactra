@@ -66,6 +66,8 @@ The Knowledge Graph (epic E46, [owner guide](docs/knowledge-graph.md), [threat m
 5. **The graph grants nothing.** The gates read the run's own limits, never the graph: no widened site, connection, recipient, secret or saved approval comes from it.
 6. **Sensitive changes need the owner.** A change that adds or changes a send, a payment, a recipient, a site, an account or a credential is approved only by the owner, signed in, in the console.
 7. **The package core imports no harness.** `@marinoscar/hexactra-kgraph` imports only itself, `zod`, `@opentelemetry/api` and `node:` built-ins; only `src/harness/` may import `@marinoscar/hexactra-agent` (a test scans the built output).
+8. **A site fact is data, made active only by the owner** (phase 5, #847). It is never an instruction or a permission, never holds Secret Material (the memories secret rules and `sensitive-patterns` refuse it), and never widens a run's sites, accounts, recipients, secrets or approvals. A derived or agent-proposed fact stays `proposed` until the owner approves it, signed in, in the console.
+9. **Reuse across goals only offers.** With `kgraph.everyday` on, a chat or one-off run is offered matched procedures (exact registrable domain, `active` only, deterministic, no model) and site facts; a procedure runs only when the agent calls `run_procedure`, through `executeTool`. With it off, the run is byte-identical.
 
 ## MANDATORY: MCP tools
 
