@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
-import { KgraphPurgeResponseDto, KgraphStatusResponseDto, PutTaskKgraphDto, TaskKgraphResponseDto } from './kgraph.schemas';
+import { ForgottenResponseDto, KgraphPurgeResponseDto, KgraphStatusResponseDto, PutTaskKgraphDto, RestoredResponseDto, RestoreVersionDto, TaskKgraphResponseDto } from './kgraph.schemas';
 import { KgraphService } from './kgraph.service';
 
 /**
@@ -45,5 +45,23 @@ export class KgraphController {
   @ApiOperation({ summary: "Set a task's Knowledge Graph mode", description: 'Refused with `409 KGRAPH_OFF` while the deployment or your own switch is off.' })
   putTask(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: PutTaskKgraphDto) {
     return this.kgraph.setTaskMode(userId, id, body.mode);
+  }
+
+  @Post('kgraph/procedures/:id/restore')
+  @HttpCode(200)
+  @ApiDataResponse(RestoredResponseDto)
+  @Auth({ permissions: ['kgraph:write'] })
+  @ApiOperation({ summary: 'Restore an earlier version of a procedure', description: 'A retired or suspended version comes back as a new candidate copy; the other usable versions retire. Its next run is a verification run (it asks before every step that sends or pays), then it is active. `409 KGRAPH_VERSION_NOT_RESTORABLE` otherwise.' })
+  restore(@CurrentUser('id') userId: string, @Param('id') id: string, @Body() body: RestoreVersionDto) {
+    return this.kgraph.restore(userId, id, body.versionId);
+  }
+
+  @Post('kgraph/procedures/:id/forget')
+  @HttpCode(200)
+  @ApiDataResponse(ForgottenResponseDto)
+  @Auth({ permissions: ['kgraph:write'] })
+  @ApiOperation({ summary: 'Forget a procedure', description: 'Every version retires (kept for history); the task learns again from its next successful run.' })
+  forget(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.kgraph.forget(userId, id);
   }
 }

@@ -1643,10 +1643,12 @@
     },
     {
       "id": "kgraph.manage",
-      "description": "Choose a task's Knowledge Graph mode (off, learn, reuse) and delete everything learned",
+      "description": "Choose a task's Knowledge Graph mode (off, learn, reuse), restore an earlier version of a procedure or forget it, and delete everything learned",
       "rest": [
         "PUT /api/tasks/{id}/kgraph",
-        "DELETE /api/kgraph"
+        "DELETE /api/kgraph",
+        "POST /api/kgraph/procedures/{id}/restore",
+        "POST /api/kgraph/procedures/{id}/forget"
       ],
       "cli": {
         "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"

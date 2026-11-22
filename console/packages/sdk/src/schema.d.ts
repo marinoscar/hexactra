@@ -5867,6 +5867,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/procedures/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an earlier version of a procedure
+         * @description A retired or suspended version comes back as a new candidate copy; the other usable versions retire. Its next run is a verification run (it asks before every step that sends or pays), then it is active. `409 KGRAPH_VERSION_NOT_RESTORABLE` otherwise.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraph_restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/procedures/{id}/forget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forget a procedure
+         * @description Every version retires (kept for history); the task learns again from its next successful run.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraph_forget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approval-rules": {
         parameters: {
             query?: never;
@@ -9542,6 +9586,10 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example KGRAPH_TASK_NOT_FOUND
+             * @example KGRAPH_OFF
+             * @example KGRAPH_PROCEDURE_NOT_FOUND
+             * @example KGRAPH_VERSION_NOT_RESTORABLE
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -9556,8 +9604,6 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
-             * @example KGRAPH_TASK_NOT_FOUND
-             * @example KGRAPH_OFF
              * @example BENCHMARK_NOT_FOUND
              * @example BENCHMARK_RUNNING
              * @example BENCHMARK_SITE_UNREACHABLE
@@ -10942,7 +10988,7 @@ export interface components {
             kgraph: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures: number;
@@ -11249,7 +11295,7 @@ export interface components {
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures: number;
@@ -11560,7 +11606,7 @@ export interface components {
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled?: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery?: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures?: number;
@@ -16544,6 +16590,7 @@ export interface components {
                 runs: number;
                 reviews: number;
                 evidence: number;
+                traces: number;
             };
         };
         TaskKgraphResponseDto: {
@@ -16560,6 +16607,21 @@ export interface components {
         PutTaskKgraphDto: {
             /** @enum {string} */
             mode: "off" | "learn" | "reuse";
+        };
+        RestoredResponseDto: {
+            procedureId: string;
+            /** @description The retired or suspended version chosen. */
+            restoredFrom: string;
+            /** @description The new candidate copy: its first run is a verification run (it asks before every commit-class step), then it is active. */
+            versionId: string;
+        };
+        RestoreVersionDto: {
+            versionId: string;
+        };
+        ForgottenResponseDto: {
+            procedureId: string;
+            /** @description Versions retired: the task learns again. */
+            retired: number;
         };
         ApprovalRulesListResponseDto: {
             /** @description Whether "Pause all" is on: while it is, no rule matches. */
@@ -42149,6 +42211,110 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["TaskKgraphResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_restore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreVersionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RestoredResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_forget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ForgottenResponseDto"];
                     };
                 };
             };
