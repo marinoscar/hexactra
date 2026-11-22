@@ -435,6 +435,10 @@ describe('when the model fails', () => {
     expect(failureText(new Error('boom'))).toBe('Something went wrong while answering. Send your message again.');
   });
 
+  it('sends the owner to their own default model when none is selected (#806): there is no per-feature admin setting', () => {
+    expect(failureText(new AiError('AI_INVALID_REQUEST', 'No model selected.'))).toBe('No AI model is selected. Choose your default model under Settings → AI Keys, then send your message again.');
+  });
+
   // #675: OpenAI answered 400 to every chat message and the owner, the job and the log said only "AI_INVALID_REQUEST".
   it('names the provider code and the field it objected to, as identifiers only, never its message', () => {
     const rejected = (details: Record<string, unknown>) => new AiError('AI_INVALID_REQUEST', 'OpenAI rejected the request as invalid.', { details, cause: new Error('Invalid schema for function pause_run: secret-marker-1 sk-live-999') });

@@ -467,7 +467,7 @@ export class ChatTurnService {
 /** Why the AI did not answer, in words for the owner. Never the provider's raw message: it can carry request details. */
 export function failureText(e: unknown): string {
   if (e instanceof AiError) {
-    if (/^No model selected/.test(e.message)) return 'No AI model is set up for the chat yet. An administrator can choose one under Administration → AI. Then send your message again.';
+    if (/^No model selected/.test(e.message)) return 'No AI model is selected. Choose your default model under Settings → AI Keys, then send your message again.';
     const why = providerWhy(e);
     return `The AI could not answer (${e.code}${why ? `: ${why}` : ''}). Send your message again in a moment.`;
   }
