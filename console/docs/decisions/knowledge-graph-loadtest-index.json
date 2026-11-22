@@ -1,0 +1,249 @@
+{
+  "note": "Run 2 of E46.4: measured with two extra covering indexes created in the throwaway database only (not a migration): kg_nodes (user_id) INCLUDE (id, type, key, label) and kg_edges (user_id) INCLUDE (id, type, from_id, to_id), then VACUUM (ANALYZE).",
+  "issue": "E46.4 (#778)",
+  "startedAt": "2026-11-22T04:31:39.525Z",
+  "finishedAt": "2026-11-22T05:03:20.776Z",
+  "command": "node scripts/kgraph-loadtest.mjs --database hexactra_kgraph_load --owners 200 --heavy 1 --queries 4 --q4-variants map --out knowledge-graph-loadtest-index.json",
+  "postgres": {
+    "version": "PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+    "settings": {
+      "effective_cache_size": "524288 x 8kB",
+      "jit": "on",
+      "max_connections": "100",
+      "random_page_cost": "4",
+      "shared_buffers": "16384 x 8kB",
+      "work_mem": "4096 x kB"
+    }
+  },
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "memTotalKb": 16473744,
+    "node": "v22.23.5"
+  },
+  "dataset": {
+    "owners": 200,
+    "heavyOwners": 1,
+    "heavyFactor": 10,
+    "normalShape": {
+      "tasks": 100,
+      "steps": 30,
+      "versions": 10,
+      "sites": 50,
+      "screens": 30,
+      "elements": 20
+    },
+    "heavyShape": {
+      "tasks": 1000,
+      "steps": 30,
+      "versions": 10,
+      "sites": 500,
+      "screens": 30,
+      "elements": 20
+    },
+    "build": {
+      "loaded": false,
+      "seconds": 0
+    },
+    "counts": {
+      "tables": {
+        "users": {
+          "rows": 200,
+          "totalBytes": 98304
+        },
+        "tasks": {
+          "rows": 20900,
+          "totalBytes": 5087232
+        },
+        "runs": {
+          "rows": 200,
+          "totalBytes": 253952
+        },
+        "run_steps": {
+          "rows": 2040,
+          "totalBytes": 1228800
+        },
+        "kg_procedures": {
+          "rows": 20900,
+          "totalBytes": 5701632
+        },
+        "kg_procedure_versions": {
+          "rows": 209000,
+          "totalBytes": 503635968
+        },
+        "kg_evidence": {
+          "rows": 6479000,
+          "totalBytes": 1474838528
+        },
+        "kg_nodes": {
+          "rows": 7241850,
+          "totalBytes": 4042924032
+        },
+        "kg_edges": {
+          "rows": 7900200,
+          "totalBytes": 3522420736
+        }
+      },
+      "heavyOwner": {
+        "kg_procedures": 1000,
+        "kg_procedure_versions": 10000,
+        "kg_evidence": 310000,
+        "kg_nodes": 346500,
+        "kg_edges": 378000
+      },
+      "expectedPerNormalOwner": {
+        "kg_procedures": 100,
+        "kg_procedure_versions": 1000,
+        "kg_evidence": 31000,
+        "kg_nodes": 34650,
+        "kg_edges": 37800
+      },
+      "expectedPerHeavyOwner": {
+        "kg_procedures": 1000,
+        "kg_procedure_versions": 10000,
+        "kg_evidence": 310000,
+        "kg_nodes": 346500,
+        "kg_edges": 378000
+      }
+    }
+  },
+  "method": {
+    "iterations": 1000,
+    "heavyIterations": 1000,
+    "heavyColdSamples": 5,
+    "warmKeys": 20,
+    "cold": [
+      "shared_buffers (128 MB) overwritten with a 256 MB scratch table through pg_prewarm",
+      "OS page cache dropped (sync; echo 3 > /proc/sys/vm/drop_caches)"
+    ],
+    "timing": "client wall time of the Prisma calls, ms",
+    "percentiles": "nearest rank"
+  },
+  "q2Fidelity": null,
+  "results": {
+    "4m": {
+      "name": "Load the whole graph of one owner, Map columns only (node id, type, key, label; edge id, type, from, to)",
+      "normal": {
+        "bar": {
+          "warmP95Ms": 500
+        },
+        "cold": {
+          "n": 199,
+          "p50": 177.7427919999991,
+          "p95": 269.8418390000006,
+          "p99": 298.24869599999874,
+          "mean": 187.32398594472366,
+          "min": 127.99415899999985,
+          "max": 332.5322789999991
+        },
+        "warm": {
+          "n": 1000,
+          "p50": 168.76719199999934,
+          "p95": 254.1571929999991,
+          "p99": 310.1149250000017,
+          "mean": 176.25950547300025,
+          "min": 120.2108040000021,
+          "max": 335.1465240000107
+        },
+        "plans": {
+          "cold": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_edges_user_id_map_idx on kg_edges  (cost=0.56..2815.52 rows=37655 width=71) (actual time=4.114..10.970 rows=37800 loops=1)\n  Index Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n  Heap Fetches: 0\n  Buffers: shared read=518\nPlanning:\n  Buffers: shared hit=6 read=6\nPlanning Time: 3.762 ms\nExecution Time: 12.701 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_nodes_user_id_map_idx on kg_nodes  (cost=0.56..2645.07 rows=34315 width=74) (actual time=2.952..14.970 rows=34650 loops=1)\n  Index Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n  Heap Fetches: 0\n  Buffers: shared read=514\nPlanning:\n  Buffers: shared hit=6 read=3\nPlanning Time: 0.530 ms\nExecution Time: 16.938 ms"
+            }
+          ],
+          "warm": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_edges_user_id_map_idx on kg_edges  (cost=0.56..2815.52 rows=37655 width=71) (actual time=0.020..6.132 rows=37800 loops=1)\n  Index Cond: (user_id = 'f2034cff-d729-798a-75ba-d53ff5594a5b'::uuid)\n  Heap Fetches: 0\n  Buffers: shared hit=554\nPlanning Time: 0.060 ms\nExecution Time: 8.098 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_nodes_user_id_map_idx on kg_nodes  (cost=0.56..2645.07 rows=34315 width=74) (actual time=0.016..6.524 rows=34650 loops=1)\n  Index Cond: (user_id = 'f2034cff-d729-798a-75ba-d53ff5594a5b'::uuid)\n  Heap Fetches: 0\n  Buffers: shared hit=519\nPlanning Time: 0.064 ms\nExecution Time: 8.543 ms"
+            }
+          ]
+        }
+      },
+      "heavyNodePostgres": {
+        "note": "diagnostic: the same SQL through node-postgres, one statement after the other, warm",
+        "warm": {
+          "n": 100,
+          "p50": 745.7024109999184,
+          "p95": 954.04145099991,
+          "p99": 1090.8806789999362,
+          "mean": 768.6504343999829,
+          "min": 533.5014600001741,
+          "max": 1121.7365560000762
+        }
+      },
+      "heavy": {
+        "bar": {
+          "warmP95Ms": 2000
+        },
+        "cold": {
+          "n": 5,
+          "p50": 1594.4402249999985,
+          "p95": 1807.4046949999756,
+          "p99": 1807.4046949999756,
+          "mean": 1616.7183681999916,
+          "min": 1500.8673699999927,
+          "max": 1807.4046949999756
+        },
+        "warm": {
+          "n": 1000,
+          "p50": 1511.2480569999898,
+          "p95": 2083.4072989998385,
+          "p99": 2472.9173439999577,
+          "mean": 1591.0107150190006,
+          "min": 1211.6721890000626,
+          "max": 2894.575898000039
+        },
+        "plans": {
+          "cold": [
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_nodes_user_id_map_idx on kg_nodes  (cost=0.56..26443.31 rows=343243 width=74) (actual time=0.574..95.716 rows=346500 loops=1)\n  Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n  Heap Fetches: 0\n  Buffers: shared hit=1 read=5131\nPlanning Time: 0.106 ms\nExecution Time: 116.762 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_edges_user_id_map_idx on kg_edges  (cost=0.56..29291.40 rows=391934 width=71) (actual time=0.571..89.593 rows=378000 loops=1)\n  Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n  Heap Fetches: 0\n  Buffers: shared hit=1 read=5280 written=6\nPlanning Time: 0.137 ms\nExecution Time: 111.184 ms"
+            }
+          ],
+          "warm": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_edges_user_id_map_idx on kg_edges  (cost=0.56..29291.40 rows=391934 width=71) (actual time=0.035..55.011 rows=378000 loops=1)\n  Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n  Heap Fetches: 0\n  Buffers: shared hit=5281\nPlanning Time: 0.097 ms\nExecution Time: 71.079 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Index Only Scan using kg_nodes_user_id_map_idx on kg_nodes  (cost=0.56..26443.31 rows=343243 width=74) (actual time=0.023..44.911 rows=346500 loops=1)\n  Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n  Heap Fetches: 0\n  Buffers: shared hit=5132\nPlanning Time: 0.106 ms\nExecution Time: 59.689 ms"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "verdicts": [
+    {
+      "query": "q4 normal owner, Map columns",
+      "bar": "warm p95 <= 500 ms",
+      "warmP95Ms": 254.1571929999991,
+      "coldP95Ms": 269.8418390000006,
+      "met": true,
+      "coldWithinBar": true
+    },
+    {
+      "query": "q4 heavy owner, Map columns",
+      "bar": "warm p95 <= 2000 ms",
+      "warmP95Ms": 2083.4072989998385,
+      "coldP95Ms": 1807.4046949999756,
+      "met": false,
+      "coldWithinBar": true
+    }
+  ],
+  "allMet": false
+}
