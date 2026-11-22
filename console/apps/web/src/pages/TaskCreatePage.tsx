@@ -51,6 +51,7 @@ export function valuesFromBuilderDraft(draft: TaskBuilderDraft): TaskFormValues 
     ...base,
     unattendedPayments: draft.unattendedPayments === 'allow' ? 'allow' : 'ask',
     needsBrowser: draft.needsBrowser === 'always' || draft.needsBrowser === 'never' ? draft.needsBrowser : 'auto',
+    recordVideo: false,
     schedules,
   };
 }

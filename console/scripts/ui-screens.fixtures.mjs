@@ -783,6 +783,9 @@ const carFiles = (url) => {
 RESPONSES[`GET /tasks/${IDS.carTask}`] = carTask;
 RESPONSES[`GET /tasks/${IDS.carTask}/stats`] = RESPONSES[`GET /tasks/${IDS.task}/stats`];
 RESPONSES[`GET /tasks/${IDS.carTask}/outputs`] = outputsPage;
+// A finished run's video (epic #755): the Recording card on the run page.
+RESPONSES[`GET /runs/${IDS.finishedRun}/recording`] = { status: 'ready', bytes: 6_400_000, durationMs: 212_000, mime: 'video/webm', droppedFrames: 4, note: 'restarted', startedAt: iso(-19 * 3_600_000), endedAt: iso(-19 * 3_600_000 + 212_000), expiresAt: iso(11 * 86_400_000), masked: false };
+RESPONSES[`POST /runs/${IDS.finishedRun}/recording/link`] = { url: '/api/recordings/ui-screens', expiresAt: iso(900_000) };
 RESPONSES[`GET /tasks/${IDS.carTask}/deliveries`] = carDeliveries;
 RESPONSES[`GET /tasks/${IDS.carTask}/mail-triggers`] = [carTrigger];
 RESPONSES[`GET /mail-triggers/${carTrigger.id}/events`] = [{ id: 'ev1', outcome: 'started', reason: null, runId: IDS.carRun, messageAt: iso(-90_000), createdAt: iso(-80_000) }];

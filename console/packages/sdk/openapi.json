@@ -37068,6 +37068,286 @@
         }
       }
     },
+    "/api/runs/{id}/recording": {
+      "get": {
+        "description": "Owner only. The video is NOT masked. 404 `RECORDING_NOT_FOUND` when the run has none (it was not opted in, or it was deleted).\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "runRecording_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RecordingViewDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A run's video recording: its status and when it is deleted",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Owner only. The run and its masked trace stay. Audited as `runs.recording_deleted`.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runRecording_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a run's video recording",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}/recording/link": {
+      "post": {
+        "description": "Owner only, a ready recording only. The link is valid for 15 minutes and names this recording; the browser's video player reads it with HTTP Range.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "runRecording_link",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RecordingLinkDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A short-lived link to play a run's video",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/recordings/{token}": {
+      "get": {
+        "description": "No session: the signed token from `POST /runs/{id}/recording/link` is the authority, for 15 minutes. Streams `video/webm` with HTTP Range (206) and `Cache-Control: private, no-store`. An expired, altered or unknown link, and a deleted recording, are all 404.",
+        "operationId": "recordingLink_play",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "description": "The signed token of the playback link.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The whole video (not masked)."
+          },
+          "206": {
+            "description": "The requested byte range."
+          },
+          "404": {
+            "description": "`RECORDING_LINK_INVALID`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A run's video, by its playback link",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
     "/api/browser/sessions": {
       "post": {
         "operationId": "externalBrowser_open",
@@ -95841,6 +96121,96 @@
           "unpricedModels",
           "runs",
           "pricing"
+        ]
+      },
+      "RecordingViewDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "recording",
+              "processing",
+              "ready",
+              "failed"
+            ],
+            "description": "recording: the run works; processing: the video is being made; ready: playable; failed: no video"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "mime": {
+            "type": "string"
+          },
+          "droppedFrames": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit"
+          },
+          "note": {
+            "description": "Why it ended early or failed: max_minutes, tab_closed, restarted, encoder_unavailable, storage_error, empty, …",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "description": "When the retention policy deletes it; null while recordings are kept indefinitely, or while it records",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "masked": {
+            "type": "boolean",
+            "const": false,
+            "description": "A run recording is never masked"
+          }
+        },
+        "required": [
+          "status",
+          "bytes",
+          "durationMs",
+          "mime",
+          "droppedFrames",
+          "note",
+          "startedAt",
+          "endedAt",
+          "expiresAt",
+          "masked"
+        ]
+      },
+      "RecordingLinkDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "A same-origin path to the video, valid until expiresAt"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expiresAt"
         ]
       },
       "OpenDto": {

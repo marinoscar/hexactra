@@ -698,6 +698,15 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             />
             <FormHelperText sx={{ mt: 0 }}>The agent pauses and asks in your Inbox.</FormHelperText>
           </Box>
+          <Box data-field="recordVideo">
+            <FormControlLabel
+              control={<Switch checked={fields.recordVideo} disabled={busy} onChange={(e) => setFields({ recordVideo: e.target.checked })} slotProps={{ input: { 'aria-describedby': `${uid}-record-help` } }} />}
+              label="Record a video of each run"
+            />
+            <FormHelperText sx={{ mt: 0 }} id={`${uid}-record-help`}>
+              Watch the run afterwards on its page. The video is not masked: card numbers, addresses and anything else on the page are visible (typed passwords show as dots). Only you can watch it, and it is deleted after your administrator's retention period.
+            </FormHelperText>
+          </Box>
         </Section>
 
         <Section title="Saved logins and details" id={`${uid}-saved-logins`}>
