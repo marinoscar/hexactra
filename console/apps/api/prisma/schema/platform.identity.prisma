@@ -182,6 +182,7 @@ model User {
   // composed from app:tasks.prisma
   tasks Task[]
   runs  Run[]
+  runRecordings RunRecording[]
 
   // composed from app:vault.backups.prisma
   backupSchedulesUpdated BackupSchedule[] @relation("BackupScheduleUpdater")

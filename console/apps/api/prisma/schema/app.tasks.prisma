@@ -117,6 +117,9 @@ model Task {
   /// Whether the task's runs open a browser (E39.7): `auto` opens it when the first browser tool is called if the run has connections (a
   /// run without any connection is a browser job and opens it at the start, as before), `always` opens it at the start, `never` offers no browser tool.
   needsBrowser   String   @default("auto") @map("needs_browser") @db.VarChar(8)
+  /// Record a video of the run's browser tab (epic #755, docs/recordings.md): an opt-in, off by default. The video is NOT masked,
+  /// owner-only and never exported. A run copies it to `runs.record_video` when it is created.
+  recordVideo    Boolean  @default(false) @map("record_video")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -278,6 +281,9 @@ model Run {
   spanId           String?       @map("span_id") @db.VarChar(16)
   /// Every job's trace id, oldest first, the newest 100 (the export lists them).
   traceIds         String[]      @default([]) @map("trace_ids") @db.VarChar(32)
+  /// Whether this run records a video of its browser tab (epic #755): the task's `record_video`, or the start request's `record`, fixed
+  /// when the run is created. Nothing the run reads (a page, the model, a task parameter, a policy) can change it.
+  recordVideo      Boolean       @default(false) @map("record_video")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
@@ -285,6 +291,7 @@ model Run {
   steps        RunStep[]
   chatMessages ChatMessage[]
   guidance     RunGuidance[]
+  recording    RunRecording?
 
   // composed from app:benchmarks.prisma
   benchmarkTrials BenchmarkTrial[]
@@ -346,4 +353,41 @@ model RunStep {
   @@unique([runId, seq])
   @@index([questionId])
   @@map("run_steps")
+}
+
+/// The video recording of one run (epic #755, docs/recordings.md). NOT masked: owner-only, never in an export, a delivery, run files,
+/// an agent tool or the MCP server. Removed with its run, and by the recordings retention job (`recordings.keepDays`).
+model RunRecording {
+  id         String    @id @default(uuid()) @db.Uuid
+  runId      String    @unique @map("run_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// recording (the run works; parts are stored) | processing (the finalize job joins them) | ready | failed
+  status     String    @default("recording") @db.VarChar(12)
+  /// The extension's id of the recording (`rec-…`), while it records.
+  fabricId   String?   @map("fabric_id") @db.VarChar(64)
+  /// The finished video's object key (`run-recordings/<userId>/<runId>/recording.webm`). Never returned by the API.
+  objectKey  String?   @map("object_key") @db.VarChar(500)
+  /// How many part objects were stored (`part-00000` …); the finalize job joins and deletes them.
+  partCount  Int       @default(0) @map("part_count")
+  /// Bytes of the parts while recording, of the video once ready.
+  bytes      BigInt    @default(0)
+  durationMs Int       @default(0) @map("duration_ms")
+  /// `video/webm` once ready.
+  mime       String    @default("video/webm") @db.VarChar(64)
+  /// Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit.
+  droppedFrames Int    @default(0) @map("dropped_frames")
+  /// Why it ended early or failed: a short code (`max_minutes`, `tab_closed`, `encoder_unavailable`, `storage_error`, …). Never page text.
+  note       String?   @db.VarChar(64)
+  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt    DateTime? @map("ended_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The retention job: finished recordings, oldest first.
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("run_recordings")
 }
