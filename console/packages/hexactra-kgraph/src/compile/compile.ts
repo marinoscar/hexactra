@@ -2,6 +2,8 @@
 // trace, catalogue and task give the same bytes. It reads only server-recorded facts (`TraceEvent`s: tool names, argument provenance, post-state)
 // — never the model's reasoning, never page text — so a poisoned page cannot write itself into a procedure. What it cannot express safely
 // stays with the agent as an `agent` step. The first version is linear: branches and loops are not inferred (E46.18).
+import { createHash } from 'node:crypto';
+
 import { type Binding, type Check, type Parameter, procedureVersionSchema, type ProcedureVersion, type Step, type Tool } from '../schema';
 import type { SensitivePredicate } from '../validate/sensitive';
 import { validateVersion, type Violation } from '../validate/validate';
@@ -11,6 +13,8 @@ import type { TraceBinding, TraceEvent } from './trace';
 export const OBSERVE_TOOLS = new Set(['look', 'observe_elements', 'read_text', 'tabs', 'screenshot', 'wait_for']);
 /** Raw-coordinate tools: not compilable without element facts. */
 const COORDINATE_TOOLS = new Set(['click_at', 'hover_at', 'drag', 'scroll_at', 'click_mark']);
+/** The pointer clicks that replay as a click on the element found again, when the page described it. */
+const POINTER_CLICKS = new Set(['click_at', 'click_mark']);
 /** Tools whose arguments are model-written code. */
 const CODE_TOOLS = new Set(['run_javascript']);
 /** The tool that ends a run: its arguments feed the outputs, it is not a step. */
@@ -68,9 +72,17 @@ export function notCompilableReason(e: TraceEvent, tool: Tool | undefined): stri
   if (!tool) return 'unknown tool';
   if (Object.values(e.bindings).some((b) => b.kind === 'withheld')) return 'a withheld value';
   if (tool.family === 'desktop') return 'a desktop action';
-  if (COORDINATE_TOOLS.has(e.tool)) return 'raw coordinates';
+  // A pointer action is compilable only with element facts from the page (E46.13): it replays as a click on the element found again.
+  if (COORDINATE_TOOLS.has(e.tool) && !(POINTER_CLICKS.has(e.tool) && hasElement(e))) return 'raw coordinates';
   if (CODE_TOOLS.has(e.tool)) return 'model-written code';
   return null;
+}
+
+const hasElement = (e: TraceEvent) => Boolean(e.post.element && (e.post.element.selectors.length > 0 || (e.post.element.role && e.post.element.name)));
+
+/** A stable element id from its fingerprint (the same element on the same site gets the same id in every procedure of the owner). */
+export function elementId(site: string, fp: NonNullable<TraceEvent['post']['element']>): string {
+  return `el:${createHash('sha256').update(JSON.stringify([site, fp.selectors[0] ?? null, fp.role, fp.name, fp.tag, fp.anchor])).digest('hex').slice(0, 16)}`;
 }
 
 /** The registrable domain of a host (a best-effort public-suffix rule: `a.b.co.uk` → `b.co.uk`). */
@@ -137,6 +149,8 @@ export function compileTrace(input: CompileInput): CompileResult {
     return sites.get(d)!;
   };
   const usedParams = new Set<string>();
+  const screens = new Map<string, ProcedureVersion['screens'][number]>();
+  const elements = new Map<string, ProcedureVersion['elements'][number]>();
   let segment = 1;
   let inAgent = false;
   let notCompilable = 0;
@@ -236,8 +250,30 @@ export function compileTrace(input: CompileInput): CompileResult {
       pushAgent(e);
       continue;
     }
+    // The element acted on (E46.13): a screen and an element of the surface graph; a pointer action replays as a click on it.
+    let callTool = e.tool;
+    let on: { screen?: string; element?: string } = {};
+    const fp = e.post.element;
+    if (fp && e.post.host && hasElement(e)) {
+      const site = siteId(e.post.host);
+      const screenId = `sc:${createHash('sha256').update(`${site}|${pathPattern(e.post.path ?? '/')}`).digest('hex').slice(0, 16)}`;
+      if (!screens.has(screenId)) screens.set(screenId, { id: screenId, site, label: `${e.post.host}${pathPattern(e.post.path ?? '/')}`.slice(0, 200), pathPattern: pathPattern(e.post.path ?? '/') });
+      const elId = elementId(site, fp);
+      elements.set(elId, { id: elId, screen: screenId, ...(fp.role ? { role: fp.role.slice(0, 64) } : {}), ...(fp.name ? { label: fp.name.slice(0, 200) } : {}), ...(fp.tag ? { tag: fp.tag.slice(0, 40) } : {}), ...(fp.inputType ? { inputType: fp.inputType.slice(0, 40) } : {}), ...(fp.anchor ? { anchor: fp.anchor.slice(0, 200) } : {}), selectors: fp.selectors.slice(0, 3) });
+      on = { screen: screenId, element: elId };
+      if (POINTER_CLICKS.has(e.tool)) {
+        if (!tools.has('click')) {
+          pushAgent(e);
+          continue;
+        }
+        callTool = 'click';
+        for (const k of Object.keys(args)) delete args[k];
+        args.selector = { kind: 'literal', value: fp.selectors[0] ?? '' };
+        args.reason = { kind: 'literal', value: 'the saved procedure' };
+      }
+    }
     steps.push(...pre);
-    steps.push({ id, kind: 'call', label: `${e.tool}`, tool: e.tool, args, sites: [...stepSites].sort(), commitClass: tool.commits === true || e.commits, checks, segment: `seg${segment}` });
+    steps.push({ id, kind: 'call', label: `${callTool}`, tool: callTool, args, sites: [...stepSites].sort(), commitClass: tool.commits === true || e.commits, checks, segment: `seg${segment}`, ...on });
     stepOfSeq.set(e.seq, id);
     if (events.some((x) => Object.values(x.bindings).some((b) => b.kind === 'output' && b.seq === e.seq))) reads.push(id);
   }
@@ -295,6 +331,8 @@ export function compileTrace(input: CompileInput): CompileResult {
     sites: [...sites.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([domain, id]) => ({ id, domain })),
     parameters,
     outputs,
+    screens: [...screens.values()],
+    elements: [...elements.values()],
   };
   // 8. Validate.
   const violations = validateVersion(raw, { tools: input.tools, isSensitive: input.isSensitive });
@@ -314,8 +352,8 @@ function feedsOf(s: Step): { type: 'feeds'; from: string; to: string; arg: strin
 /** 5. Checks from the post-state. */
 function checksOf(e: TraceEvent, id: string, siteId: (host: string) => string): Check[] {
   const checks: Check[] = [];
-  if (e.post.host) {
-    siteId(e.post.host);
+  if (e.post.host) siteId(e.post.host);
+  if (e.post.host && e.post.path !== undefined) {
     checks.push({ kind: 'location', host: e.post.host, pathPattern: pathPattern(e.post.path ?? '/'), tolerance: 0 });
   }
   if (e.post.viewDigest) checks.push({ kind: 'view_digest', digest: e.post.viewDigest.slice(0, 200), tolerance: 0.3 });

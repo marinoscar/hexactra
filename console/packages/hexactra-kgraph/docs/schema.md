@@ -2793,6 +2793,18 @@ One version: the whole runnable graph. Immutable once stored, except its state a
             "type": "string",
             "maxLength": 200
           },
+          "tag": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "inputType": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "anchor": {
+            "type": "string",
+            "maxLength": 200
+          },
           "selectors": {
             "default": [],
             "maxItems": 10,
@@ -5952,6 +5964,18 @@ An element on a screen.
       "maxLength": 64
     },
     "label": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "tag": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "inputType": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "anchor": {
       "type": "string",
       "maxLength": 200
     },
