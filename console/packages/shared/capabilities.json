@@ -1580,14 +1580,15 @@
     },
     {
       "id": "benchmarks.read",
-      "description": "Read benchmarks (the same challenges run under several agent policies on a node, each trial graded from the challenge site's state): the suite, the list, one benchmark with its progress and spend, its trials with verdict, checks and metrics, its scorecard (success, reliability, speed, tokens and cost per policy and category) and its comparison with a baseline on the same suite version",
+      "description": "Read benchmarks (the same challenges run under several agent policies on a node, each trial graded from the challenge site's state): the suite, the list, one benchmark with its progress and spend, its trials with verdict, checks and metrics, its scorecard (success, reliability, speed, tokens and cost per policy and category), its comparison with a baseline on the same suite version, and its report exported as JSON, CSV or PDF (masked)",
       "rest": [
         "GET /api/benchmarks/suite",
         "GET /api/benchmarks",
         "GET /api/benchmarks/{id}",
         "GET /api/benchmarks/{id}/trials",
         "GET /api/benchmarks/{id}/scorecard",
-        "GET /api/benchmarks/{id}/compare"
+        "GET /api/benchmarks/{id}/compare",
+        "GET /api/benchmarks/{id}/export"
       ],
       "cli": [
         "benchmarks suite",
