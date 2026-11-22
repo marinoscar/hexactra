@@ -239,6 +239,9 @@ const METRIC_LABELS: Record<string, string> = {
   totalCostUsd: 'total cost',
   costPerSuccessUsd: 'cost per success',
   totalTokens: 'total tokens',
+  inputTokens: 'input tokens',
+  outputTokens: 'output tokens',
+  cachedInputTokens: 'cached tokens',
   tokensPerSuccess: 'tokens per success',
 };
 
@@ -264,29 +267,31 @@ export function deltaLine(d: MetricDeltaView): string {
 }
 
 /**
- * `compare`: both benchmarks, the whole benchmark's tokens and cost side by side, every matched policy's deltas with its token split
- * and cost on both sides, what did not match, and the challenges that flipped.
+ * One side's tokens and cost, read from a list of deltas (the comparison carries the input, output and cached input split and the total cost
+ * for both sides). Null when the list lacks any of them, as from a console older than the split.
  */
-export function comparisonText(c: ComparisonView, current: ScorecardView, baseline: ScorecardView): string[] {
+function sideTokens(ds: readonly MetricDeltaView[], side: 'baseline' | 'current'): string | null {
+  const by = new Map(ds.map((d) => [d.metric, d]));
+  const [input, output, cached, cost] = [by.get('inputTokens'), by.get('outputTokens'), by.get('cachedInputTokens'), by.get('totalCostUsd')];
+  if (!input || !output || !cached || !cost || input[side] === null || output[side] === null || cached[side] === null) return null;
+  return `${tokenSplit(input[side]!, output[side]!, cached[side]!)}, ${usd(cost[side], !cost.atLeast)}`;
+}
+
+/**
+ * `compare`: both benchmarks, the whole benchmark's tokens and cost side by side, every matched policy's deltas with its token split
+ * and cost on both sides, what did not match, and the challenges that flipped. Everything comes from the comparison itself.
+ */
+export function comparisonText(c: ComparisonView): string[] {
   const side = (s: ComparisonView['current']) => `${s.name} (${s.id.slice(0, 8)}, console ${s.appVersion}${s.commit ? ` ${s.commit.slice(0, 7)}` : ''})`;
-  const tokensOf = (s: ScorecardView) => `${tokenSplit(s.totals.inputTokens, s.totals.outputTokens, s.totals.cachedInputTokens)}, ${usd(s.totals.costUsd, s.totals.costKnown)}`;
-  const lines = [
-    `${side(c.current)}`,
-    `  against ${side(c.baseline)}, suite ${c.current.suiteKey} v${c.current.suiteVersion}`,
-    '',
-    'Whole benchmark',
-    `  baseline  ${tokensOf(baseline)}`,
-    `  current   ${tokensOf(current)}`,
-    ...c.totals.map((d) => `  ${deltaLine(d)}`),
-  ];
-  const cur = new Map(current.policies.map((p) => [p.ref, p]));
-  const base = new Map(baseline.policies.map((p) => [p.ref, p]));
+  const both = (ds: readonly MetricDeltaView[]): string[] =>
+    (['baseline', 'current'] as const).flatMap((k) => {
+      const t = sideTokens(ds, k);
+      return t ? [`  ${k.padEnd(8)}  ${t}`] : [];
+    });
+  const lines = [`${side(c.current)}`, `  against ${side(c.baseline)}, suite ${c.current.suiteKey} v${c.current.suiteVersion}`, '', 'Whole benchmark', ...both(c.totals), ...c.totals.map((d) => `  ${deltaLine(d)}`)];
   for (const p of c.policies) {
     lines.push('', `${p.label}${p.baselineLabel !== p.label || p.baselineRef !== p.ref ? `  (baseline: ${p.baselineLabel}, matched by ${p.matchedBy})` : ''}`);
-    const b = base.get(p.baselineRef)?.metrics;
-    const n = cur.get(p.ref)?.metrics;
-    if (b) lines.push(`  baseline  ${tokenSplit(b.tokens.input, b.tokens.output, b.tokens.cached)}, ${usd(b.cost.totalUsd, b.cost.known)}`);
-    if (n) lines.push(`  current   ${tokenSplit(n.tokens.input, n.tokens.output, n.tokens.cached)}, ${usd(n.cost.totalUsd, n.cost.known)}`);
+    lines.push(...both(p.deltas));
     for (const d of p.deltas) lines.push(`  ${deltaLine(d)}`);
   }
   if (c.unmatched.current.length || c.unmatched.baseline.length) {

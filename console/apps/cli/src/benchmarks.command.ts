@@ -201,8 +201,7 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         const baseline = await resolveBenchmarkId(api, baselineRef);
         const comparison = await api.get<ComparisonView>(`/benchmarks/${id}/compare`, { query: { baseline } });
         if (o.json) return json(comparison);
-        const [cur, base] = await Promise.all([api.get<ScorecardView>(`/benchmarks/${id}/scorecard`), api.get<ScorecardView>(`/benchmarks/${baseline}/scorecard`)]);
-        comparisonText(comparison, cur, base).forEach(out);
+        comparisonText(comparison).forEach(out);
       }),
     );
 

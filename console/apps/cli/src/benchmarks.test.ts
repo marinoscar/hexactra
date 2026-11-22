@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { benchmarkRequest, benchmarksCommand, setBenchmarkExportTarget, setBenchmarkPollMs } from './benchmarks.command.js';
-import { deltaLine, exportFilename, parsePolicyFlag, rate, scorecardText, usd, withCode, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
+import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, scorecardText, usd, withCode, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
 import { setConsoleApiFactory } from './console-api.js';
 
 resetCliForTests();
@@ -104,6 +104,9 @@ const COMPARISON: ComparisonView = {
   totals: [
     { metric: 'totalCostUsd', current: 1.5, baseline: 2, delta: -0.5, better: 'lower', improved: true, withinNoise: null, atLeast: false },
     { metric: 'totalTokens', current: 128_000, baseline: 100_000, delta: 28_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
+    { metric: 'inputTokens', current: 120_000, baseline: 90_000, delta: 30_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
+    { metric: 'outputTokens', current: 8_000, baseline: 10_000, delta: -2_000, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+    { metric: 'cachedInputTokens', current: 40_000, baseline: 0, delta: 40_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
   ],
   policies: [
     {
@@ -112,7 +115,13 @@ const COMPARISON: ComparisonView = {
       baselineRef: 'builtin:economy',
       baselineLabel: 'Economy',
       matchedBy: 'ref',
-      deltas: [{ metric: 'successRate', current: 0.5, baseline: 0.33, delta: 0.17, better: 'higher', improved: null, withinNoise: true, atLeast: false }],
+      deltas: [
+        { metric: 'successRate', current: 0.5, baseline: 0.33, delta: 0.17, better: 'higher', improved: null, withinNoise: true, atLeast: false },
+        { metric: 'totalCostUsd', current: 0.2, baseline: 0.25, delta: -0.05, better: 'lower', improved: true, withinNoise: null, atLeast: true },
+        { metric: 'inputTokens', current: 25_000, baseline: 30_000, delta: -5_000, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+        { metric: 'outputTokens', current: 2_500, baseline: 3_000, delta: -500, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+        { metric: 'cachedInputTokens', current: 12_000, baseline: 10_000, delta: 2_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
+      ],
     },
   ],
   unmatched: { current: [{ ref: 'builtin:thorough', label: 'Thorough' }], baseline: [] },
@@ -325,20 +334,26 @@ describe('hexactra benchmarks', () => {
     await expect(run('benchmarks', 'show', ID)).rejects.toThrow('404 BENCHMARK_NOT_FOUND: No such benchmark.');
   });
 
-  it('compare prints the deltas and both sides\' tokens and cost', async () => {
-    const { seen } = fakeConsole((u) => {
-      if (u.pathname === `/api/benchmarks/${ID}/compare`) return { body: COMPARISON };
-      if (u.pathname === `/api/benchmarks/${ID}/scorecard`) return { body: scorecard() };
-      if (u.pathname === `/api/benchmarks/${BASE}/scorecard`) return { body: scorecard({ totals: { ...scorecard().totals, inputTokens: 90_000, outputTokens: 10_000, cachedInputTokens: 0, costUsd: 2, costKnown: true } }) };
-      return undefined;
-    });
+  it('compare prints the deltas and both sides\' tokens and cost from the comparison alone', async () => {
+    const { seen } = fakeConsole((u) => (u.pathname === `/api/benchmarks/${ID}/compare` ? { body: COMPARISON } : undefined));
     const { out } = await run('benchmarks', 'compare', ID, BASE);
+    expect(seen.map((r) => r.url.pathname)).toEqual([`/api/benchmarks/${ID}/compare`]);
     expect(seen[0]!.url.searchParams.get('baseline')).toBe(BASE);
     expect(out).toContain('baseline  in 90,000 / out 10,000 / cached 0, $2.00');
-    expect(out).toContain('current   in 120,000 / out 8,000 / cached 40,000, ≥ $1.50');
-    expect(out).toMatch(/Economy\n {2}baseline {2}in 30,000 \/ out 3,000 \/ cached 10,000, ≥ \$0\.25/);
+    expect(out).toContain('current   in 120,000 / out 8,000 / cached 40,000, $1.50');
+    expect(out).toMatch(/input tokens\s+90,000 -> 120,000\s+\+30,000\s+worse/);
+    expect(out).toMatch(/output tokens\s+10,000 -> 8,000\s+-2,000\s+better/);
+    expect(out).toMatch(/cached tokens\s+0 -> 40,000\s+\+40,000\s+worse/);
+    expect(out).toMatch(/Economy\n {2}baseline {2}in 30,000 \/ out 3,000 \/ cached 10,000, ≥ \$0\.25\n {2}current {3}in 25,000 \/ out 2,500 \/ cached 12,000, ≥ \$0\.20/);
     expect(out).toContain('only in this benchmark: Thorough (builtin:thorough)');
     expect(out).toMatch(/\+ nav-lookup .*fail \(0\/3\) -> pass \(3\/3\)/);
+  });
+
+  it('compare leaves out the side lines when the comparison has no split (an older console)', () => {
+    const old = { ...COMPARISON, totals: COMPARISON.totals.slice(0, 2), policies: [{ ...COMPARISON.policies[0]!, deltas: COMPARISON.policies[0]!.deltas.slice(0, 1) }] };
+    const text = comparisonText(old).join('\n');
+    expect(text).not.toContain('baseline  in');
+    expect(text).toMatch(/total tokens\s+100,000 -> 128,000/);
   });
 
   it('compare reports a suite mismatch with its code', async () => {

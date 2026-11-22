@@ -257,7 +257,7 @@ export interface Scorecard {
 
 // ---- Compare (#742) ----
 
-export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'tokensPerSuccess'] as const;
+export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'tokensPerSuccess'] as const;
 export type ComparedMetric = (typeof COMPARED_METRICS)[number];
 
 export interface MetricDelta {

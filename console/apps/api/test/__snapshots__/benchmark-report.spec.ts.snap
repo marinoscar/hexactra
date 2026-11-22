@@ -1380,6 +1380,60 @@ Forms",
               "text": "0 (no change)",
             },
           ],
+          [
+            {
+              "style": "td",
+              "text": "Input tokens",
+            },
+            {
+              "style": "td",
+              "text": "127,800",
+            },
+            {
+              "style": "td",
+              "text": "127,800",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Output tokens",
+            },
+            {
+              "style": "td",
+              "text": "6,780",
+            },
+            {
+              "style": "td",
+              "text": "6,780",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cached input tokens",
+            },
+            {
+              "style": "td",
+              "text": "48,780",
+            },
+            {
+              "style": "td",
+              "text": "48,780",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
         ],
         "dontBreakRows": true,
         "headerRows": 1,
@@ -1575,6 +1629,60 @@ Forms",
             {
               "style": "td",
               "text": "66,960",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Input tokens",
+            },
+            {
+              "style": "td",
+              "text": "63,600",
+            },
+            {
+              "style": "td",
+              "text": "63,600",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Output tokens",
+            },
+            {
+              "style": "td",
+              "text": "3,360",
+            },
+            {
+              "style": "td",
+              "text": "3,360",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cached input tokens",
+            },
+            {
+              "style": "td",
+              "text": "24,360",
+            },
+            {
+              "style": "td",
+              "text": "24,360",
             },
             {
               "style": "td",
@@ -1794,6 +1902,60 @@ Forms",
             {
               "style": "td",
               "text": "67,620",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Input tokens",
+            },
+            {
+              "style": "td",
+              "text": "64,200",
+            },
+            {
+              "style": "td",
+              "text": "64,200",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Output tokens",
+            },
+            {
+              "style": "td",
+              "text": "3,420",
+            },
+            {
+              "style": "td",
+              "text": "3,420",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cached input tokens",
+            },
+            {
+              "style": "td",
+              "text": "24,420",
+            },
+            {
+              "style": "td",
+              "text": "24,420",
             },
             {
               "style": "td",

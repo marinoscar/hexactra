@@ -108346,6 +108346,9 @@
                     "totalCostUsd",
                     "costPerSuccessUsd",
                     "totalTokens",
+                    "inputTokens",
+                    "outputTokens",
+                    "cachedInputTokens",
                     "tokensPerSuccess"
                   ]
                 },
@@ -108406,7 +108409,7 @@
                 "atLeast"
               ]
             },
-            "description": "The whole benchmark: total cost and total tokens."
+            "description": "The whole benchmark: total cost, total tokens and the input, output and cached input split."
           },
           "policies": {
             "type": "array",
@@ -108449,6 +108452,9 @@
                           "totalCostUsd",
                           "costPerSuccessUsd",
                           "totalTokens",
+                          "inputTokens",
+                          "outputTokens",
+                          "cachedInputTokens",
                           "tokensPerSuccess"
                         ]
                       },
@@ -111018,6 +111024,9 @@
                             "totalCostUsd",
                             "costPerSuccessUsd",
                             "totalTokens",
+                            "inputTokens",
+                            "outputTokens",
+                            "cachedInputTokens",
                             "tokensPerSuccess"
                           ]
                         },
@@ -111078,7 +111087,7 @@
                         "atLeast"
                       ]
                     },
-                    "description": "The whole benchmark: total cost and total tokens."
+                    "description": "The whole benchmark: total cost, total tokens and the input, output and cached input split."
                   },
                   "policies": {
                     "type": "array",
@@ -111121,6 +111130,9 @@
                                   "totalCostUsd",
                                   "costPerSuccessUsd",
                                   "totalTokens",
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "cachedInputTokens",
                                   "tokensPerSuccess"
                                 ]
                               },

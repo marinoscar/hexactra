@@ -62,6 +62,11 @@ describe('buildBenchmarkReport', () => {
     const withBase = buildBenchmarkReport(reportInput({ baseline: true }));
     expect(withBase.baseline?.baseline.name).toBe('Last week');
     expect(withBase.baseline?.flipped.length).toBeGreaterThan(0);
+    // The comparison carries the token split, for the whole benchmark and per policy (#829).
+    const split = ['inputTokens', 'outputTokens', 'cachedInputTokens'];
+    const t = withBase.scorecard.totals;
+    expect(withBase.baseline!.totals.filter((d) => split.includes(d.metric)).map((d) => [d.metric, d.current])).toEqual([['inputTokens', t.inputTokens], ['outputTokens', t.outputTokens], ['cachedInputTokens', t.cachedInputTokens]]);
+    for (const p of withBase.baseline!.policies) expect(p.deltas.filter((d) => split.includes(d.metric)).map((d) => d.metric)).toEqual(split);
   });
 
   it('hides every trial site token in a text, and leaves other paths alone', () => {
@@ -177,6 +182,10 @@ describe('the rendered PDF', () => {
     expect(all).toContain(`Whole benchmark ${count(t.inputTokens)} ${count(t.outputTokens)} ${count(t.cachedInputTokens)}`);
     expect(all).toContain('Economy: fixture:small');
     expect(all).toContain('Last week');
+    const delta = (metric: string) => report.baseline!.totals.find((d) => d.metric === metric)!;
+    for (const [label, metric] of [['Input tokens', 'inputTokens'], ['Output tokens', 'outputTokens'], ['Cached input tokens', 'cachedInputTokens']] as const) {
+      expect(all).toContain(`${label} ${count(delta(metric).baseline!)} ${count(delta(metric).current!)}`);
+    }
     expect(all).not.toContain(BENCHMARK_REPORT_PARTIAL_BANNER);
     expectMasked(all);
   });

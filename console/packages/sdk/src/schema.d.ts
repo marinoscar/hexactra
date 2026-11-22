@@ -23575,10 +23575,10 @@ export interface components {
                 commit: string | null;
                 finishedAt: string | null;
             };
-            /** @description The whole benchmark: total cost and total tokens. */
+            /** @description The whole benchmark: total cost, total tokens and the input, output and cached input split. */
             totals: {
                 /** @enum {string} */
-                metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "tokensPerSuccess";
+                metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
                 current: number | null;
                 baseline: number | null;
                 /** @description current - baseline; null when either is null. */
@@ -23605,7 +23605,7 @@ export interface components {
                 matchedBy: "ref" | "label";
                 deltas: {
                     /** @enum {string} */
-                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "tokensPerSuccess";
+                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
                     current: number | null;
                     baseline: number | null;
                     /** @description current - baseline; null when either is null. */
@@ -24193,10 +24193,10 @@ export interface components {
                     commit: string | null;
                     finishedAt: string | null;
                 };
-                /** @description The whole benchmark: total cost and total tokens. */
+                /** @description The whole benchmark: total cost, total tokens and the input, output and cached input split. */
                 totals: {
                     /** @enum {string} */
-                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "tokensPerSuccess";
+                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
                     current: number | null;
                     baseline: number | null;
                     /** @description current - baseline; null when either is null. */
@@ -24223,7 +24223,7 @@ export interface components {
                     matchedBy: "ref" | "label";
                     deltas: {
                         /** @enum {string} */
-                        metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "tokensPerSuccess";
+                        metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
                         current: number | null;
                         baseline: number | null;
                         /** @description current - baseline; null when either is null. */

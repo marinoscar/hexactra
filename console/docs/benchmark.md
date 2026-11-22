@@ -157,7 +157,7 @@ A status or verdict is a word and an icon as well as a colour. The pages are che
 Tokens and cost are printed next to every result:
 
 - `show` (and `run --wait`) prints the whole benchmark's tokens (`in` / `out` / `cached`, cached being part of input), model calls and cost against the cap; then, ranked, each policy's success rate with its 95% interval, pass^k and false-success rate, its tokens (total, the split, the median per trial and per success), its cost (total, median per trial, per success) and speed; then each category of that policy with its success rate, tokens and cost.
-- `compare` prints both benchmarks' tokens and cost side by side, for the whole benchmark and for each matched policy, then each delta (success rate, pass^k, false success, median time, median cost, total cost, cost per success, total tokens, tokens per success) with `better`, `worse`, `same` or `within noise`, the policies that did not match, and the challenges that flipped.
+- `compare` prints both benchmarks' tokens and cost side by side, for the whole benchmark and for each matched policy, then each delta (success rate, pass^k, false success, median time, median cost, total cost, cost per success, total tokens, input, output and cached tokens, tokens per success) with `better`, `worse`, `same` or `within noise`, the policies that did not match, and the challenges that flipped.
 - A cost shown as `≥ $1.50` is a lower bound: a model call had no price (`costKnown: false`). Set the price in Administration → Model prices.
 
 | Exit | When |
@@ -247,7 +247,7 @@ How the statistics are computed:
 
 - **Same suite only.** A different suite key or version is refused with `409 BENCHMARK_SUITE_MISMATCH`; the message and `details` (`benchmark`, `baseline`) name both. A challenge's meaning may change between versions, so a comparison across them would mislead.
 - **Policies** are matched by ref, then by label among those left. The rest are listed in `unmatched`.
-- **Deltas** (`current − baseline`) per matched policy: success rate, pass^k, false-success rate, median active time, median cost per trial, total cost, cost per success, total tokens and tokens per success; and for the whole benchmark, total cost and total tokens. Each says which way is better (`better`) and whether it went that way (`improved`). A rate's delta is `withinNoise` when the two Wilson intervals overlap: the change is not shown to be real, and `improved` is then null. A cost's delta is `atLeast` when either side has an unknown cost.
+- **Deltas** (`current − baseline`) per matched policy: success rate, pass^k, false-success rate, median active time, median cost per trial, total cost, cost per success, total tokens, input tokens, output tokens, cached input tokens and tokens per success; and for the whole benchmark, total cost, total tokens and the input, output and cached input split (#829). Each token delta carries both sides' values, so the comparison alone shows what each benchmark used: the compare page, the report's baseline section and `hexactra benchmarks compare` read the split from it. Each says which way is better (`better`) and whether it went that way (`improved`). A rate's delta is `withinNoise` when the two Wilson intervals overlap: the change is not shown to be real, and `improved` is then null. A cost's delta is `atLeast` when either side has an unknown cost.
 - **Flipped challenges**: for a matched policy, a challenge whose outcome changed between "all judged trials passed", "none passed" and "mixed", with the passes of each side and whether it got better or worse.
 - Both sides carry their `appVersion` and `commit`, so a regression can be traced to a change.
 
@@ -256,7 +256,7 @@ How the statistics are computed:
 | `scorecard.ts` | The formulas, pure: `wilson`, `median`, `percentile`, `metricsOf`, `rankPolicies`, `computeScorecard`, `compareScorecards` |
 | `scorecard.schemas.ts` | The shapes, for the pages and the report |
 | `scorecard.service.ts` | `ScorecardService`: `scorecard(userId, id)`, `compare(userId, id, baselineId)`, `cacheIfEnded(id)` |
-| Tests (`apps/api/test/`) | `benchmark-scorecard.spec.ts` (every formula with hand-computed numbers; the Wilson bounds against reference values to three decimals), `benchmark-scorecard.db.spec.ts` (the routes, the cache, a deleted run, the refusal and the flipped challenges) |
+| Tests (`apps/api/test/`) | `benchmark-scorecard.spec.ts` (every formula with hand-computed numbers; the Wilson bounds against reference values to three decimals), `benchmark-scorecard.db.spec.ts` (the routes, the cache, a deleted run, the refusal, the flipped challenges and the token split) |
 
 ## Exporting a report
 

@@ -85,6 +85,9 @@ const METRIC_LABEL: Record<MetricDelta['metric'], string> = {
   totalCostUsd: 'Total cost',
   costPerSuccessUsd: 'Cost per success',
   totalTokens: 'Total tokens',
+  inputTokens: 'Input tokens',
+  outputTokens: 'Output tokens',
+  cachedInputTokens: 'Cached input tokens',
   tokensPerSuccess: 'Tokens per success',
 };
 
