@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { KgraphAfterRun, KgraphCompileHandler } from './kgraph-compile.job';
+import { KgraphCompileService } from './kgraph-compile.service';
 import { KgraphEnabledService } from './kgraph-enabled.service';
 import { KgraphController } from './kgraph.controller';
 import { KgraphService } from './kgraph.service';
@@ -12,7 +14,7 @@ import './kgraph.errors';
  */
 @Module({
   controllers: [KgraphController],
-  providers: [KgraphEnabledService, KgraphService, PrismaProcedureStore],
-  exports: [KgraphEnabledService, PrismaProcedureStore],
+  providers: [KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
+  exports: [KgraphEnabledService, PrismaProcedureStore, KgraphAfterRun],
 })
 export class KgraphModule {}

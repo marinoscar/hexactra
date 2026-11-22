@@ -1,0 +1,29 @@
+{
+  "goal": "Every morning: find the daily numbers email, open its link, read the total, append it to the Numbers sheet and send a summary to finance@example.com",
+  "parameters": [{ "key": "sheet", "name": "Sheet", "sensitive": false }],
+  "outputs": [{ "name": "total" }],
+  "tools": [
+    { "name": "mail_search", "family": "accounts", "commits": false },
+    { "name": "navigate", "family": "browser", "commits": false },
+    { "name": "read_text", "family": "browser", "commits": false },
+    { "name": "look", "family": "browser", "commits": false },
+    { "name": "click", "family": "browser", "commits": false },
+    { "name": "click_at", "family": "browser", "commits": false },
+    { "name": "go_back", "family": "browser", "commits": false },
+    { "name": "sheet_append", "family": "accounts", "commits": false },
+    { "name": "mail_send", "family": "accounts", "commits": true },
+    { "name": "finish", "family": "control", "commits": false }
+  ],
+  "trace": [
+    { "seq": 1, "tool": "mail_search", "family": "accounts", "commits": false, "ok": true, "outcome": "ran", "bindings": { "q": { "kind": "literal", "value": "daily numbers" } }, "post": { "resultShape": "{items:[{id:string,link:string,subject:string}]}" } },
+    { "seq": 2, "tool": "look", "family": "browser", "commits": false, "ok": true, "outcome": "ran", "bindings": {}, "post": {} },
+    { "seq": 3, "tool": "navigate", "family": "browser", "commits": false, "ok": false, "outcome": "ran", "bindings": { "url": { "kind": "literal", "value": "https://reports.example.com/wrong" } }, "post": {} },
+    { "seq": 4, "tool": "navigate", "family": "browser", "commits": false, "ok": true, "outcome": "ran", "bindings": { "url": { "kind": "output", "seq": 1, "path": "items.0.link" } }, "post": { "host": "reports.example.com", "path": "/daily/20261121", "viewDigest": "v:4f2a" } },
+    { "seq": 5, "tool": "click", "family": "browser", "commits": false, "ok": true, "outcome": "ran", "bindings": { "selector": { "kind": "literal", "value": "#archive" } }, "post": { "host": "reports.example.com", "path": "/archive" } },
+    { "seq": 6, "tool": "go_back", "family": "browser", "commits": false, "ok": true, "outcome": "ran", "bindings": {}, "post": { "host": "reports.example.com", "path": "/daily/20261121" } },
+    { "seq": 7, "tool": "read_text", "family": "browser", "commits": false, "ok": true, "outcome": "ran", "bindings": { "selector": { "kind": "literal", "value": "#total" } }, "post": { "host": "reports.example.com", "path": "/daily/20261121", "viewDigest": "v:4f2a" } },
+    { "seq": 8, "tool": "sheet_append", "family": "accounts", "commits": false, "ok": true, "outcome": "ran", "bindings": { "sheet": { "kind": "parameter", "parameter": "sheet" }, "values.0": { "kind": "output", "seq": 7, "pattern": "\\d\\,\\d{3}\\.\\d{2}" } }, "post": { "resultShape": "{appended:number}" } },
+    { "seq": 9, "tool": "mail_send", "family": "accounts", "commits": true, "ok": true, "outcome": "ran", "bindings": { "to.0": { "kind": "literal", "value": "finance@example.com" }, "subject": { "kind": "literal", "value": "daily numbers" }, "body": { "kind": "model" } }, "post": { "resultShape": "{id:string}" } },
+    { "seq": 10, "tool": "finish", "family": "control", "commits": false, "ok": true, "outcome": "ran", "bindings": { "success": { "kind": "literal", "value": true }, "result": { "kind": "model" }, "outputs.total": { "kind": "output", "seq": 7, "pattern": "\\d\\,\\d{3}\\.\\d{2}" } }, "post": {} }
+  ]
+}
