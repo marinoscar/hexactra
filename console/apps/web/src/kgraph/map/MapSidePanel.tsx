@@ -4,7 +4,7 @@ import { Box, Button, Chip, Divider, Link, Paper, Stack, Typography } from '@mui
 import { Link as RouterLink } from 'react-router-dom';
 
 import type { KgGraph, KgReview } from '../api';
-import { HealthChip, StateChip } from '../labels';
+import { everydayUsesText, HealthChip, StateChip } from '../labels';
 import { MAP_KIND_LABEL, procedureIdOf, tasksUsing, type MapNode, type MapProcedureInfo } from './mapModel';
 
 const procedurePath = (id: string) => `/kgraph/procedures/${encodeURIComponent(id)}`;
@@ -77,6 +77,11 @@ export function MapSidePanel({ node, graph, info, reviews, focus, impactSite, on
         {(node.kind === 'task' || node.kind === 'step') && (
           <Typography variant="body2">
             {node.counts.successes} successful, {node.counts.failures} failed, {node.counts.repairs} repaired
+          </Typography>
+        )}
+        {pinfo?.everydayRuns !== undefined && (
+          <Typography variant="body2" data-testid="map-everyday-uses">
+            {everydayUsesText(pinfo.everydayRuns)}
           </Typography>
         )}
         {node.kind !== 'task' && node.kind !== 'step' && !node.unused && (

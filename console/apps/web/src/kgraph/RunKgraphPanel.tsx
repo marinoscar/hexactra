@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { getKgRun, type KgRun } from './api';
-import { HowChip, kindLabel, MODE_LABEL } from './labels';
+import { HowChip, kindLabel, RUN_MODE_LABEL } from './labels';
 
 /** "14 of 17 steps without AI; 1 repaired": from the ledger once written, else from the steps' tags. */
 export function runSummary(run: KgRun): string {
   if (run.aiOnly) return 'This run used AI only: the learned procedure was not used.';
   if (run.mode === 'learn') return 'The agent did this run; its steps were saved for the procedure.';
+  if (run.mode === 'everyday' && !run.ledger) return 'The agent ran a saved procedure in this run.';
   const counts = run.ledger ?? {
     replayed: run.steps.filter((s) => s.how === 'replayed').length,
     recovered: run.steps.filter((s) => s.how === 'recovered').length,
@@ -50,10 +51,18 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
       <Typography variant="body2" sx={{ mb: 0.5 }} data-testid="run-kgraph-summary">
         {runSummary(run)}
       </Typography>
+      {run.mode === 'everyday' && run.procedureId && (
+        <Typography variant="body2" sx={{ mb: 0.5, overflowWrap: 'anywhere' }} data-testid="run-kgraph-everyday">
+          {'Used saved procedure: '}
+          <Link component={RouterLink} to={`/kgraph/procedures/${encodeURIComponent(run.procedureId)}`}>
+            {run.procedureName ?? 'the procedure'}
+          </Link>
+        </Typography>
+      )}
       <Typography variant="caption" color="text.secondary" component="p">
-        {MODE_LABEL[run.mode]}
+        {RUN_MODE_LABEL[run.mode]}
         {run.versionNumber !== null && ` · version ${run.versionNumber}`}
-        {run.procedureId && (
+        {run.procedureId && run.mode !== 'everyday' && (
           <>
             {' · '}
             <Link component={RouterLink} to={`/kgraph/procedures/${encodeURIComponent(run.procedureId)}`}>
@@ -62,7 +71,7 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
           </>
         )}
       </Typography>
-      {run.steps.length > 0 && (
+      {run.steps.length > 0 && run.mode !== 'everyday' && (
         <List dense disablePadding aria-label="Procedure steps in this run">
           {run.steps.map((s, i) => (
             <ListItem key={s.id} divider disableGutters sx={{ alignItems: 'flex-start' }}>
