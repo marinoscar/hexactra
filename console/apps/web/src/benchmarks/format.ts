@@ -2,7 +2,7 @@
 // Pure: the pages and their tests share them.
 import { formatCost } from '../ui';
 import { formatTokens } from '../usage/api';
-import type { Benchmark, BenchmarkStatus, BenchmarkSuite, ComparedMetric, MetricDelta, Rate, ScoreMetrics, TrialVerdict } from '../types/benchmarks';
+import type { Benchmark, BenchmarkConfig, BenchmarkStatus, BenchmarkSuite, ComparedMetric, MetricDelta, Rate, ScoreMetrics, TrialVerdict } from '../types/benchmarks';
 
 export { formatTokens };
 
@@ -80,14 +80,13 @@ export function plannedRuns(supportedChallenges: number, policies: number, trial
 export interface NewBenchmarkForm {
   name: string;
   challengeIds: string[];
-  policies: { ref: string; label: string }[];
+  /** `recordVideo`: the policy's "Record video" tick (#845). */
+  policies: { ref: string; label: string; recordVideo: boolean }[];
   trials: string;
   hostId: string | null;
   profile: string;
   /** The budget in USD (#844): empty or 0 is no budget, the benchmark runs every trial, each run within its own policy budget. */
   capUsd: string;
-  /** Record a video of each trial run (#841). */
-  recordVideo: boolean;
 }
 
 export type NewFormField = 'name' | 'challenges' | 'policies' | 'trials' | 'profile' | 'capUsd';
@@ -190,4 +189,11 @@ export const costOf = (m: ScoreMetrics) => money(m.cost.totalUsd, m.cost.known);
 /** "$5.00 of $20.00", or "$5.00 (no cap)". */
 export function spendOfCap(spent: string, capUsd: number | null, money: (n: number) => string): string {
   return capUsd === null ? `${spent} (no cap)` : `${spent} of ${money(capUsd)}`;
+}
+
+/** The policies whose trial runs record a video (#841, #845): `null` for none, "all policies", or their labels. */
+export function recordedPoliciesText(config: Pick<BenchmarkConfig, 'policies' | 'recordVideo'>): string | null {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : recorded.map((p) => p.label).join(', ');
 }

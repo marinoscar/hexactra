@@ -9,7 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { cancelBenchmark, deleteBenchmark, getBenchmark, getScorecard, listBenchmarks, listTrials } from '../benchmarks/api';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
 import { BenchmarkExportButton } from '../components/BenchmarkExportMenu';
-import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, tokens } from '../benchmarks/format';
+import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, recordedPoliciesText, tokens } from '../benchmarks/format';
 import { ScorecardView } from '../benchmarks/ScorecardView';
 import { TrialList } from '../benchmarks/TrialList';
 import { errorText } from '../policies/usePolicyCatalog';
@@ -46,6 +46,7 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
   const output = t ? t.outputTokens : b.totals.outputTokens;
   const cached = t ? t.cachedInputTokens : b.totals.cachedInputTokens;
   const share = b.config.capUsd !== null && b.config.capUsd > 0 ? Math.min(1, b.spentUsd / b.config.capUsd) : 0;
+  const recorded = recordedPoliciesText(b.config);
   return (
     <Box component="section" aria-label="Totals" sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' } }}>
       <Tile testId="total-cost" label="Total cost" value={money(cost, costKnown)} detail={costKnown ? `${(t?.modelCalls ?? b.totals.modelCalls).toLocaleString('en-US')} model calls` : 'At least: a model call had no price'} />
@@ -58,9 +59,13 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
         </Typography>
         <Typography variant="h6" component="div" sx={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
           {b.config.capUsd === null ? <>{money(b.spentUsd, b.totals.costKnown)} (no cap)</> : <>{money(b.spentUsd, b.totals.costKnown)} of {money(b.config.capUsd)}</>}
-          {b.config.recordVideo ? ' · runs recorded' : ''}
         </Typography>
         <LinearProgress variant="determinate" value={share * 100} aria-label={`${Math.round(share * 100)}% of the spend cap`} sx={{ mt: 0.75 }} />
+        {recorded && (
+          <Typography variant="caption" color="text.secondary" component="div" data-testid="recorded-policies" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
+            Videos recorded: {recorded}
+          </Typography>
+        )}
       </Paper>
     </Box>
   );

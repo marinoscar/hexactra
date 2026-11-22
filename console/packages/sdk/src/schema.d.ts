@@ -23004,6 +23004,11 @@ export interface components {
                     policies: {
                         ref: string;
                         label: string;
+                        /**
+                         * @description This policy's trial runs record a video of their browser tab (not masked, owner-only).
+                         * @default false
+                         */
+                        recordVideo?: boolean;
                     }[];
                     trials: number;
                     hostId: string | null;
@@ -23012,7 +23017,7 @@ export interface components {
                     capUsd: number | null;
                     trialTimeoutMinutes: number;
                     /**
-                     * @description Every trial's run records a video of its browser tab (not masked, owner-only).
+                     * @description Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).
                      * @default false
                      */
                     recordVideo?: boolean;
@@ -23066,6 +23071,11 @@ export interface components {
                 policies: {
                     ref: string;
                     label: string;
+                    /**
+                     * @description This policy's trial runs record a video of their browser tab (not masked, owner-only).
+                     * @default false
+                     */
+                    recordVideo?: boolean;
                 }[];
                 trials: number;
                 hostId: string | null;
@@ -23074,7 +23084,7 @@ export interface components {
                 capUsd: number | null;
                 trialTimeoutMinutes: number;
                 /**
-                 * @description Every trial's run records a video of its browser tab (not masked, owner-only).
+                 * @description Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).
                  * @default false
                  */
                 recordVideo?: boolean;
@@ -23125,6 +23135,8 @@ export interface components {
                 ref: string;
                 /** @description The column's name in the scorecard. Absent: the policy's name. */
                 label?: string;
+                /** @description Record a video of the browser tab of this policy's trial runs (run recordings, epic #755; #845). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false. */
+                recordVideo?: boolean;
             }[];
             /** @description Attempts per challenge and policy. Absent: the deployment default (`benchmark.defaultTrials`). */
             trials?: number;
@@ -23139,7 +23151,7 @@ export interface components {
             capUsd?: number | null;
             /** @description How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`. */
             trialTimeoutMinutes?: number;
-            /** @description Record a video of each trial's browser tab (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false. */
+            /** @description `true`: record a video of every trial's browser tab, for every policy, whatever each policy's own `recordVideo` says (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false: only the policies that set `recordVideo` are recorded (#845). */
             recordVideo?: boolean;
         };
         BenchmarkTrialListResponseDto: {
@@ -23724,6 +23736,11 @@ export interface components {
                     policies: {
                         ref: string;
                         label: string;
+                        /**
+                         * @description This policy's trial runs record a video of their browser tab (not masked, owner-only).
+                         * @default false
+                         */
+                        recordVideo?: boolean;
                     }[];
                     trials: number;
                     hostId: string | null;
@@ -23732,7 +23749,7 @@ export interface components {
                     capUsd: number | null;
                     trialTimeoutMinutes: number;
                     /**
-                     * @description Every trial's run records a video of its browser tab (not masked, owner-only).
+                     * @description Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).
                      * @default false
                      */
                     recordVideo?: boolean;

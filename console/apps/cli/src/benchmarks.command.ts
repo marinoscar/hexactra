@@ -12,6 +12,7 @@ import {
   comparisonText,
   exportBenchmark,
   parsePolicyFlag,
+  recordedText,
   budget,
   positive,
   resolveBenchmarkId,
@@ -59,6 +60,8 @@ function coded<A extends unknown[]>(fn: (...args: A) => Promise<void>): (...args
 }
 
 const collect = (v: string, prev: string[] = []): string[] => [...prev, v];
+/** `--record` alone is every policy and wins; `--record <policy>` adds that one (#845). */
+const recordFlag = (v: string, prev: boolean | string[] | undefined): boolean | string[] => (prev === true ? true : [...(Array.isArray(prev) ? prev : []), v]);
 
 /** The CLI's configured console URL (the web app), or null when it is not configured. */
 function webBase(): string | null {
@@ -88,7 +91,8 @@ interface RunOpts {
   /** `--cap`, the short spelling of `--cap-usd` (#844). */
   cap?: string;
   timeoutMinutes?: string;
-  record?: boolean;
+  /** `--record`: every policy (`true`); `--record <policy>` (repeatable): only those (#845). */
+  record?: boolean | string[];
   host?: string;
   profile?: string;
   name?: string;
@@ -96,13 +100,34 @@ interface RunOpts {
   json?: boolean;
 }
 
+/** "started <id> (12 trials, cap $5, recording Economy)". */
+export function startedLine(b: BenchmarkView): string {
+  const recorded = recordedText(b.config);
+  return `started ${b.id} (${b.progress.total} trials, ${b.config.capUsd === null ? 'no cap' : `cap $${b.config.capUsd}`}${recorded ? `, recording ${recorded}` : ''})`;
+}
+
 /** The body of `POST /benchmarks` from the flags; policy names and prefixes are resolved to ids. */
 export async function benchmarkRequest(o: RunOpts): Promise<Record<string, unknown>> {
   if (!o.policy?.length) throw new Error('Name at least one policy: --policy builtin:economy --policy builtin:thorough (hexactra policies list shows them).');
-  const policies = [];
+  const policies: { ref: string; label?: string; recordVideo?: boolean }[] = [];
+  const given: string[] = [];
   for (const raw of o.policy) {
     const p = parsePolicyFlag(raw);
+    given.push(p.ref);
     policies.push({ ...p, ref: await resolvePolicyId(p.ref) });
+  }
+  // `--record <policy>` (#845): one of the --policy values, its label, or anything that resolves to the same policy.
+  if (Array.isArray(o.record)) {
+    for (const want of o.record) {
+      const w = want.trim().toLowerCase();
+      let i = policies.findIndex((p, n) => given[n]!.toLowerCase() === w || p.ref.toLowerCase() === w || p.label?.toLowerCase() === w);
+      if (i < 0) {
+        const id = await resolvePolicyId(want.trim()).catch(() => null);
+        i = id ? policies.findIndex((p) => p.ref === id) : -1;
+      }
+      if (i < 0) throw new Error(`--record ${want}: not one of the --policy values (give its ref, id, name or label, or --record alone for every policy).`);
+      policies[i]!.recordVideo = true;
+    }
   }
   const body: Record<string, unknown> = { policies };
   if (o.name) body.name = o.name;
@@ -113,8 +138,8 @@ export async function benchmarkRequest(o: RunOpts): Promise<Record<string, unkno
   const cap = o.cap ?? o.capUsd;
   if (cap !== undefined) body.capUsd = budget(o.cap !== undefined ? '--cap' : '--cap-usd', cap);
   if (o.timeoutMinutes !== undefined) body.trialTimeoutMinutes = positive('--timeout-minutes', o.timeoutMinutes, true);
-  // `--record` (#841): every trial's run records a video (not masked, owner-only).
-  if (o.record) body.recordVideo = true;
+  // `--record` alone (#841): every policy's trial runs record a video (not masked, owner-only).
+  if (o.record === true) body.recordVideo = true;
   if (o.host && o.host !== 'any') body.hostId = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), o.host).id;
   if (o.profile) body.profile = o.profile;
   return body;
@@ -157,7 +182,7 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--cap-usd <usd|none>', 'the budget: no new trial starts once this much is spent; 0 or "none": no budget (default: the deployment setting)')
     .option('--cap <usd|none>', 'the same as --cap-usd')
     .option('--timeout-minutes <n>', 'how long one trial may take (default: the deployment setting)')
-    .option('--record', 'record a video of each trial run (not masked; watch it on the run page)')
+    .option('--record [policy]', 'record a video of the trial runs (not masked; watch it on the run page): alone, of every policy; with a policy (repeatable), of that one only', recordFlag)
     .option('--host <name|id>', 'the node every trial runs on ("any": the fabric picks one per trial)')
     .option('--profile <name>', 'the browser profile on the node', 'default')
     .option('--name <name>', 'the benchmark\'s name (default: "Benchmark" and the date)')
@@ -169,11 +194,11 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         const b = await api.post<BenchmarkView>('/benchmarks', await benchmarkRequest(o));
         if (!o.wait) {
           if (o.json) return json(b);
-          out(`started ${b.id} (${b.progress.total} trials, ${b.config.capUsd === null ? 'no cap' : `cap $${b.config.capUsd}`})`);
+          out(startedLine(b));
           const link = webLink(b.id);
           return out(`follow it: hexactra benchmarks show ${b.id.slice(0, 8)}${link ? ` or ${link}` : ''}`);
         }
-        if (!o.json) out(`started ${b.id} (${b.progress.total} trials, ${b.config.capUsd === null ? 'no cap' : `cap $${b.config.capUsd}`})`);
+        if (!o.json) out(startedLine(b));
         const ended = await waitForBenchmark(api, b.id, { intervalMs: pollMs, onChange: (line) => (o.json ? undefined : out(line)) });
         const scorecard = await api.get<ScorecardView>(`/benchmarks/${b.id}/scorecard`);
         if (o.json) json({ benchmark: ended, scorecard });

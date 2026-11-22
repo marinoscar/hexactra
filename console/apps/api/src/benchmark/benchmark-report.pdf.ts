@@ -389,11 +389,19 @@ function baselineSection(r: BenchmarkReport): Content[] {
   return out;
 }
 
-/** The Method row: how many trials were recorded, pointing to the section that lists them (#863). */
+/** Which policies' trial runs record a video (#841, #845): "all policies", their labels, or `null` for none. */
+export function recordedPolicies(config: { recordVideo?: boolean; policies: { label: string; recordVideo?: boolean }[] }): string | null {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : `${recorded.length === 1 ? 'policy' : 'policies'} ${recorded.map((p) => p.label).join(', ')}`;
+}
+
+/** The Method row: which policies were recorded (#845) and how many trials, pointing to the section that lists them (#863). */
 function recordingsRow(r: BenchmarkReport): string {
   const n = recordedTrials(r).length;
-  if (n) return `${n} of ${r.trials.length} trial${r.trials.length === 1 ? '' : 's'} recorded a video of the browser tab: listed under "${BENCHMARK_REPORT_SECTIONS.recordings}", each played on its run page (not in this report).`;
-  return r.benchmark.config.recordVideo ? 'On: each trial run records a video of its browser tab, played on its run page (not in this report). No recording is listed here.' : 'Off.';
+  const who = recordedPolicies(r.benchmark.config);
+  if (n) return `${n} of ${r.trials.length} trial${r.trials.length === 1 ? '' : 's'} recorded a video of the browser tab${who ? ` (${who})` : ''}: listed under "${BENCHMARK_REPORT_SECTIONS.recordings}", each played on its run page (not in this report).`;
+  return who ? `On for ${who}: each of their trial runs records a video of its browser tab, played on its run page (not in this report). No recording is listed here.` : 'Off.';
 }
 
 function methodSection(r: BenchmarkReport): Content[] {

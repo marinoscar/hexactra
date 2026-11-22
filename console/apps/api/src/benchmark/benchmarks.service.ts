@@ -11,7 +11,7 @@ import { FabricClient } from '../fabric/fabric.client';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
-import { inRunOrder, publicConfig, readBenchmarkConfig, type StoredBenchmarkConfig } from './benchmark-config';
+import { inRunOrder, publicConfig, readBenchmarkConfig, withRecordings, type StoredBenchmarkConfig } from './benchmark-config';
 import { BENCHMARK_STATUSES, LIVE_BENCHMARK_STATUSES, TRIAL_STATUSES, type BenchmarkStatus } from './benchmark.constants';
 import { enqueueBenchmarkAdvance } from './benchmark.jobs.enqueue';
 import { BenchmarkMetrics } from './benchmark.metrics';
@@ -98,13 +98,13 @@ export class BenchmarksService {
     // The suite's own order, whatever order they were named in.
     const challengeIds = SUITE.challenges.map((c) => c.id).filter((id) => asked.includes(id));
 
-    const policies: { ref: string; label: string }[] = [];
+    const policies: StoredBenchmarkConfig['policies'] = [];
     for (const [i, p] of dto.policies.entries()) {
       await this.policies.assertAssignable(userId, p.ref, `policies[${i}].ref (${p.ref})`);
       const label = p.label ?? (await this.policies.find(userId, p.ref))?.name ?? p.ref;
       if (policies.some((x) => x.ref === p.ref)) throw new BadRequestException({ code: 'POLICY_DUPLICATE', message: `The policy ${p.ref} is listed twice` });
       if (policies.some((x) => x.label === label)) throw new BadRequestException({ code: 'POLICY_DUPLICATE', message: `Two policies have the label "${label}": give one of them another label` });
-      policies.push({ ref: p.ref, label: label.slice(0, 200) });
+      policies.push({ ref: p.ref, label: label.slice(0, 200), recordVideo: p.recordVideo ?? false });
     }
 
     const hostId = dto.hostId ?? null;
@@ -115,7 +115,8 @@ export class BenchmarksService {
       if (!hosts.some((h) => h.id === hostId)) throw new BadRequestException({ code: 'BENCHMARK_HOST_NOT_FOUND', message: `No node ${hostId} is in the fleet` });
     }
 
-    const config: StoredBenchmarkConfig = {
+    // The owner's opt-in per policy (#845), or for every policy (#841), copied onto each trial's run when it is created, as a task's choice is.
+    const config: StoredBenchmarkConfig = withRecordings({
       challengeIds,
       policies,
       trials: dto.trials ?? settings.defaultTrials,
@@ -124,10 +125,9 @@ export class BenchmarksService {
       // `null` or 0 is the owner's choice of no budget (#840, #844), stored as `null`; only an absent cap takes the deployment default.
       capUsd: dto.capUsd === undefined ? settings.defaultCapUsd : dto.capUsd || null,
       trialTimeoutMinutes: dto.trialTimeoutMinutes ?? settings.trialTimeoutMinutes,
-      // The owner's opt-in (#841), copied onto every trial's run when it is created, as a task's choice is.
       recordVideo: dto.recordVideo ?? false,
       orgId,
-    };
+    });
     const id = randomUUID();
     const name = dto.name ?? `Benchmark ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
     const now = new Date();
@@ -175,7 +175,7 @@ export class BenchmarksService {
 
     this.metrics.started();
     this.metrics.trials('unsupported', rows.filter((r) => r.verdict === 'unsupported').length);
-    await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd, recordVideo: config.recordVideo });
+    await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd, recordVideo: config.recordVideo, recordedPolicies: config.policies.filter((p) => p.recordVideo).length });
     await enqueueBenchmarkAdvance(this.jobs, id, orgId, 'benchmark_started');
     this.log.log(`benchmark ${id}: started (${rows.length} trials)`);
     return this.view(created, await this.factsOf([id]));

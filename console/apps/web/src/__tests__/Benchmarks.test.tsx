@@ -8,7 +8,7 @@ import type { ReactElement } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { budgetOf, deltaText, deltaVerdict, newFormProblems, plannedRuns, rateText, type NewBenchmarkForm } from '../benchmarks/format';
+import { budgetOf, deltaText, deltaVerdict, newFormProblems, plannedRuns, rateText, recordedPoliciesText, type NewBenchmarkForm } from '../benchmarks/format';
 import { BenchmarkComparePage } from '../pages/BenchmarkComparePage';
 import { BenchmarkNewPage } from '../pages/BenchmarkNewPage';
 import { BenchmarkPage } from '../pages/BenchmarkPage';
@@ -188,14 +188,14 @@ function mount(element: ReactElement, path: string, routePath: string, permissio
 }
 
 describe('the benchmark helpers', () => {
-  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25', recordVideo: false };
+  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy', recordVideo: false }], trials: '3', hostId: null, profile: 'default', capUsd: '25' };
 
   it('accepts a complete form and names each problem', () => {
     expect(newFormProblems(form, suite)).toEqual({});
     expect(newFormProblems({ ...form, challengeIds: ['form-upload'] }, suite).challenges).toMatch(/at least one challenge/);
     expect(newFormProblems({ ...form, policies: [] }, suite).policies).toMatch(/at least one agent policy/);
-    expect(newFormProblems({ ...form, policies: Array.from({ length: 9 }, (_, i) => ({ ref: `p${i}`, label: `P${i}` })) }, suite).policies).toBe('At most 8 policies.');
-    expect(newFormProblems({ ...form, policies: [{ ref: 'a', label: 'Same' }, { ref: 'b', label: 'same' }] }, suite).policies).toMatch(/its own label/);
+    expect(newFormProblems({ ...form, policies: Array.from({ length: 9 }, (_, i) => ({ ref: `p${i}`, label: `P${i}`, recordVideo: false })) }, suite).policies).toBe('At most 8 policies.');
+    expect(newFormProblems({ ...form, policies: [{ ref: 'a', label: 'Same', recordVideo: false }, { ref: 'b', label: 'same', recordVideo: false }] }, suite).policies).toMatch(/its own label/);
     expect(newFormProblems({ ...form, trials: '0' }, suite).trials).toMatch(/1 to 10/);
     expect(newFormProblems({ ...form, trials: '11' }, suite).trials).toMatch(/1 to 10/);
     expect(newFormProblems({ ...form, trials: '2.5' }, suite).trials).toBeDefined();
@@ -325,19 +325,58 @@ describe('a new benchmark', () => {
     expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: 7.5 });
   });
 
-  it('records a video of each run when the owner switches it on, with the not-masked warning (#841)', async () => {
+  it('records the video of one chosen policy when its tick is on, with the not-masked warning, and names it before starting (#845)', async () => {
     const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
-    fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
-    expect(screen.getByText(/The video is not masked/)).toBeInTheDocument();
-    const record = screen.getByRole('switch', { name: 'Record a video of each run' });
-    expect(record).not.toBeChecked();
-    fireEvent.click(record);
+    const recordAll = await screen.findByRole('checkbox', { name: 'Record all' });
+    expect(recordAll).toBeDisabled();
+    expect(screen.queryByRole('checkbox', { name: /Record video for/ })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Economy/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Thorough/ }));
+    const economy = screen.getByRole('checkbox', { name: 'Record video for Economy' });
+    expect(economy).not.toBeChecked();
+    expect(screen.queryByTestId('benchmark-record-warning')).toBeNull();
+    fireEvent.click(economy);
+    expect(screen.getByTestId('benchmark-record-warning')).toHaveTextContent(/The trial runs of Economy will record a video.*not masked.*Only you can play it.*retention.*storage/);
+    expect(recordAll).not.toBeChecked();
+    expect(recordAll).toHaveAttribute('data-indeterminate', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('Every run records a video of its browser tab (not masked).');
+    expect(dialog).toHaveTextContent('The runs of Economy record a video of the browser tab (not masked).');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
     await screen.findByTestId('elsewhere');
-    expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ recordVideo: true });
+    const body = host.requests.find((r) => r.method === 'POST')!.body as { policies: unknown[]; recordVideo?: boolean };
+    expect(body.policies).toEqual([{ ref: 'builtin:economy', label: 'Economy', recordVideo: true }, { ref: 'builtin:thorough', label: 'Thorough' }]);
+    expect(body.recordVideo).toBeUndefined();
+  });
+
+  it('"Record all" ticks every chosen policy and clears them again (#845)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /^Economy/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Thorough/ }));
+    const recordAll = screen.getByRole('checkbox', { name: 'Record all' });
+    fireEvent.click(recordAll);
+    expect(screen.getByRole('checkbox', { name: 'Record video for Economy' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Record video for Thorough' })).toBeChecked();
+    expect(recordAll).toBeChecked();
+    expect(screen.getByTestId('benchmark-record-warning')).toHaveTextContent(/^Every trial run will record a video/);
+    fireEvent.click(recordAll);
+    expect(screen.getByRole('checkbox', { name: 'Record video for Economy' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Record video for Thorough' })).not.toBeChecked();
+    expect(screen.queryByTestId('benchmark-record-warning')).toBeNull();
+    fireEvent.click(recordAll);
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Every run records a video of the browser tab (not masked).');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect((host.requests.find((r) => r.method === 'POST')!.body as { policies: { recordVideo?: boolean }[] }).policies.map((p) => p.recordVideo)).toEqual([true, true]);
+  });
+
+  it('names the recorded policies on the benchmark page, or "all policies" (#845)', () => {
+    const config = benchmark().config;
+    expect(recordedPoliciesText(config)).toBeNull();
+    expect(recordedPoliciesText({ ...config, policies: config.policies.map((p, i) => ({ ...p, recordVideo: i === 0 })) })).toBe('Economy');
+    expect(recordedPoliciesText({ ...config, recordVideo: true })).toBe('all policies');
   });
 
   it('names the benchmark already running on that node', async () => {
@@ -401,6 +440,12 @@ describe('a benchmark', () => {
     expect(screen.getByText('run removed')).toBeInTheDocument();
     expect(screen.getByText(/Checks: 0 of 2 passed; failed: answer, safety:no-injected-order/)).toBeInTheDocument();
     expect(screen.getByText(/Cost: ≥ \$0.05/)).toBeInTheDocument();
+  });
+
+  it('names the policies whose runs were recorded (#845)', async () => {
+    const config = benchmark().config;
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses({ config: { ...config, policies: [{ ...config.policies[0]!, recordVideo: false }, { ...config.policies[1]!, recordVideo: true }] } }));
+    expect(await screen.findByTestId('recorded-policies')).toHaveTextContent('Videos recorded: Thorough');
   });
 
   it('offers only benchmarks on the same suite version as a baseline', async () => {
