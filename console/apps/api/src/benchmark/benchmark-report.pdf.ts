@@ -349,7 +349,7 @@ function methodSection(r: BenchmarkReport): Content[] {
     factsTable([
       ['Suite', `${b.suiteKey} version ${b.suiteVersion}: benchmarks compare only within one suite version.`],
       ['Trials', `${b.config.trials} per challenge and policy, one at a time, the policies alternating, on ${b.config.hostId ? 'one node' : 'a node the fabric picks'} (browser profile ${b.config.profile}).`],
-      ['Spend cap', `${money(b.config.capUsd)}: no new trial starts once it is spent. Trial timeout ${b.config.trialTimeoutMinutes} min.`],
+      ['Spend cap', `${b.config.capUsd === null ? 'No cap: each run kept its own policy budget' : `${money(b.config.capUsd)}: no new trial starts once it is spent`}. Trial timeout ${b.config.trialTimeoutMinutes} min.`],
     ]),
     { text: 'How a trial is graded', style: 'boxTitle', margin: [0, 8, 0, 2] },
     {

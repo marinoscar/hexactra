@@ -85,6 +85,8 @@ export interface NewBenchmarkForm {
   hostId: string | null;
   profile: string;
   capUsd: string;
+  /** No spend cap (#840): the benchmark runs until its trials are done, each run within its own policy budget. */
+  noCap: boolean;
 }
 
 export type NewFormField = 'name' | 'challenges' | 'policies' | 'trials' | 'profile' | 'capUsd';
@@ -108,7 +110,7 @@ export function newFormProblems(form: NewBenchmarkForm, suite: Pick<BenchmarkSui
   if (!/^\d+$/.test(form.trials.trim()) || trials < 1 || trials > suite.limits.maxTrials) out.trials = `A whole number from 1 to ${suite.limits.maxTrials}.`;
   if (!PROFILE_NAME.test(form.profile)) out.profile = 'Use 1-32 lowercase letters, digits, - and _.';
   const cap = Number(form.capUsd);
-  if (!form.capUsd.trim() || !Number.isFinite(cap) || cap <= 0 || cap > suite.limits.maxCapUsd) out.capUsd = `More than $0 and at most $${suite.limits.maxCapUsd.toLocaleString('en-US')}.`;
+  if (!form.noCap && (!form.capUsd.trim() || !Number.isFinite(cap) || cap <= 0 || cap > suite.limits.maxCapUsd)) out.capUsd = `More than $0 and at most $${suite.limits.maxCapUsd.toLocaleString('en-US')}.`;
   return out;
 }
 
@@ -171,3 +173,8 @@ export const DELTA_VERDICT_LABEL: Record<DeltaVerdict, string> = { noise: 'withi
 
 /** The headline cost of a group of trials: "$1.20" or "≥ $1.20". */
 export const costOf = (m: ScoreMetrics) => money(m.cost.totalUsd, m.cost.known);
+
+/** "$5.00 of $20.00", or "$5.00 (no cap)". */
+export function spendOfCap(spent: string, capUsd: number | null, money: (n: number) => string): string {
+  return capUsd === null ? `${spent} (no cap)` : `${spent} of ${money(capUsd)}`;
+}

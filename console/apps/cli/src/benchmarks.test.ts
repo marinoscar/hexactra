@@ -266,6 +266,8 @@ describe('hexactra benchmarks', () => {
     await expect(benchmarkRequest({})).rejects.toThrow(/at least one policy/);
     await expect(benchmarkRequest({ policy: ['builtin:economy'], trials: '1.5' })).rejects.toThrow(/--trials takes a whole number/);
     await expect(benchmarkRequest({ policy: ['builtin:economy'], capUsd: '0' })).rejects.toThrow(/--cap-usd/);
+    // `--cap-usd none`: no spend cap (#840).
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], capUsd: 'none' })).capUsd).toBeNull();
   });
 
   it('run --wait follows the benchmark, prints the scorecard and exits 0 when it completes', async () => {

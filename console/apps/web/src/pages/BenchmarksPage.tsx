@@ -50,7 +50,7 @@ export function BenchmarksPage() {
   }, [load]);
 
   const policiesText = (b: Benchmark) => b.config.policies.map((p) => p.label).join(', ');
-  const spend = (b: Benchmark) => `${money(b.spentUsd, b.totals.costKnown)} of ${money(b.config.capUsd)}`;
+  const spend = (b: Benchmark) => (b.config.capUsd === null ? `${money(b.spentUsd, b.totals.costKnown)} (no cap)` : `${money(b.spentUsd, b.totals.costKnown)} of ${money(b.config.capUsd)}`);
   const date = (b: Benchmark) => formatDateTime(b.startedAt ?? b.createdAt, { timeZone: tz, dateStyle: 'medium' });
 
   const columns: Column<Benchmark>[] = [

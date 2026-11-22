@@ -187,7 +187,7 @@ function mount(element: ReactElement, path: string, routePath: string, permissio
 }
 
 describe('the benchmark helpers', () => {
-  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25' };
+  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25', noCap: false };
 
   it('accepts a complete form and names each problem', () => {
     expect(newFormProblems(form, suite)).toEqual({});
@@ -201,6 +201,8 @@ describe('the benchmark helpers', () => {
     expect(newFormProblems({ ...form, profile: 'Bad Name' }, suite).profile).toBeDefined();
     expect(newFormProblems({ ...form, capUsd: '0' }, suite).capUsd).toBeDefined();
     expect(newFormProblems({ ...form, capUsd: '1001' }, suite).capUsd).toBeDefined();
+    // No cap (#840): the amount is not checked.
+    expect(newFormProblems({ ...form, noCap: true, capUsd: '' }, suite).capUsd).toBeUndefined();
     expect(plannedRuns(9, 3, 3)).toBe(81);
   });
 
@@ -279,6 +281,20 @@ describe('a new benchmark', () => {
     await screen.findByTestId('elsewhere');
     const post = host.requests.find((r) => r.method === 'POST')!;
     expect(post.body).toEqual({ challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25 });
+  });
+
+  it('starts with no spend cap when the owner chooses so, and says so before it starts (#840)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
+    expect(screen.getByRole('textbox', { name: 'Spend cap' })).toHaveValue('25');
+    fireEvent.click(screen.getByRole('switch', { name: 'No spend cap' }));
+    expect(screen.getByRole('textbox', { name: 'Spend cap' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('there is no spend cap');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: null });
   });
 
   it('names the benchmark already running on that node', async () => {

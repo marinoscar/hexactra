@@ -47067,7 +47067,7 @@
         }
       },
       "post": {
-        "description": "Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "description": "Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null`: no cap; absent: the deployment default).\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
         "operationId": "benchmarks_start",
         "parameters": [],
         "requestBody": {
@@ -105828,7 +105828,11 @@
                       "type": "string"
                     },
                     "capUsd": {
-                      "type": "number"
+                      "description": "The spend cap in USD; `null`: no cap.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "trialTimeoutMinutes": {
                       "type": "integer",
@@ -106087,7 +106091,11 @@
                 "type": "string"
               },
               "capUsd": {
-                "type": "number"
+                "description": "The spend cap in USD; `null`: no cap.",
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "trialTimeoutMinutes": {
                 "type": "integer",
@@ -106336,10 +106344,17 @@
             "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
           },
           "capUsd": {
-            "description": "No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`.",
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "maximum": 1000
+            "description": "No new trial starts once the benchmark has spent this much on model calls. `null`: no cap (each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.",
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "trialTimeoutMinutes": {
             "description": "How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.",
@@ -108841,7 +108856,11 @@
                     "type": "string"
                   },
                   "capUsd": {
-                    "type": "number"
+                    "description": "The spend cap in USD; `null`: no cap.",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
                   },
                   "trialTimeoutMinutes": {
                     "type": "integer",

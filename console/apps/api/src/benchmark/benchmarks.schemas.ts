@@ -28,7 +28,13 @@ export const createBenchmarkSchema = z
     trials: z.number().int().min(1).max(BENCHMARK_LIMITS.maxTrials).optional().describe('Attempts per challenge and policy. Absent: the deployment default (`benchmark.defaultTrials`).'),
     hostId: z.uuid().nullable().optional().describe('The node every trial runs on. Absent: the fabric picks an available one for each trial.'),
     profile: profileNameSchema.default('default').describe('The browser profile on the node.'),
-    capUsd: z.number().positive().max(BENCHMARK_LIMITS.maxCapUsd).optional().describe('No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`.'),
+    capUsd: z
+      .number()
+      .positive()
+      .max(BENCHMARK_LIMITS.maxCapUsd)
+      .nullable()
+      .optional()
+      .describe('No new trial starts once the benchmark has spent this much on model calls. `null`: no cap (each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.'),
     trialTimeoutMinutes: z.number().int().min(1).max(BENCHMARK_LIMITS.maxTrialTimeoutMinutes).optional().describe('How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.'),
   })
   .strict();
@@ -42,7 +48,7 @@ export const benchmarkConfigSchema = z.object({
   trials: z.number().int(),
   hostId: z.string().nullable(),
   profile: z.string(),
-  capUsd: z.number(),
+  capUsd: z.number().nullable().describe('The spend cap in USD; `null`: no cap.'),
   trialTimeoutMinutes: z.number().int(),
 });
 export type BenchmarkConfig = z.infer<typeof benchmarkConfigSchema>;

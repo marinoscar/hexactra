@@ -45,7 +45,7 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
   const input = t ? t.inputTokens : b.totals.inputTokens;
   const output = t ? t.outputTokens : b.totals.outputTokens;
   const cached = t ? t.cachedInputTokens : b.totals.cachedInputTokens;
-  const share = b.config.capUsd > 0 ? Math.min(1, b.spentUsd / b.config.capUsd) : 0;
+  const share = b.config.capUsd !== null && b.config.capUsd > 0 ? Math.min(1, b.spentUsd / b.config.capUsd) : 0;
   return (
     <Box component="section" aria-label="Totals" sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' } }}>
       <Tile testId="total-cost" label="Total cost" value={money(cost, costKnown)} detail={costKnown ? `${(t?.modelCalls ?? b.totals.modelCalls).toLocaleString('en-US')} model calls` : 'At least: a model call had no price'} />
@@ -57,7 +57,7 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
           Spend against the cap
         </Typography>
         <Typography variant="h6" component="div" sx={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
-          {money(b.spentUsd, b.totals.costKnown)} of {money(b.config.capUsd)}
+          {b.config.capUsd === null ? <>{money(b.spentUsd, b.totals.costKnown)} (no cap)</> : <>{money(b.spentUsd, b.totals.costKnown)} of {money(b.config.capUsd)}</>}
         </Typography>
         <LinearProgress variant="determinate" value={share * 100} aria-label={`${Math.round(share * 100)}% of the spend cap`} sx={{ mt: 0.75 }} />
       </Paper>

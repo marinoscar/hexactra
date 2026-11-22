@@ -229,6 +229,8 @@ describe('the stored config and the order of trials', () => {
     expect(stored.orgId).toBe('org-1');
     expect(publicConfig(stored)).toEqual(config);
     expect(readBenchmarkConfig({})).toMatchObject({ challengeIds: [], policies: [], capUsd: 0 });
+    // No cap (#840) is kept as the owner's choice.
+    expect(readBenchmarkConfig({ ...config, capUsd: null, orgId: null }).capUsd).toBeNull();
   });
 });
 
