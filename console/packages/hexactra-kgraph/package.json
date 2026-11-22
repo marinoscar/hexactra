@@ -1,0 +1,88 @@
+{
+  "name": "@marinoscar/hexactra-kgraph",
+  "version": "0.1.0-next.0",
+  "description": "A generic Knowledge Graph of learned procedures behind ports: the typed graph (schema), the rules a procedure must satisfy before it runs, and the ports a host binds (CommonJS). Knows nothing about browsers, a database or a framework.",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marinoscar/hexactra.git",
+    "directory": "console/packages/hexactra-kgraph"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    },
+    "./validate": {
+      "types": "./dist/validate/index.d.ts",
+      "default": "./dist/validate/index.js"
+    },
+    "./ports": {
+      "types": "./dist/ports/index.d.ts",
+      "default": "./dist/ports/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "default": "./dist/mcp/index.js"
+    },
+    "./harness": {
+      "types": "./dist/harness/index.d.ts",
+      "default": "./dist/harness/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/copy-license.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "docs:schema": "npm run build && node scripts/write-schema-doc.js",
+    "test": "jest --config ./test/jest.config.js",
+    "test:run": "jest --config ./test/jest.config.js --ci"
+  },
+  "peerDependencies": {
+    "@marinoscar/hexactra-agent": "0.1.0-next.0",
+    "@opentelemetry/api": "^1.9.1",
+    "zod": "^4.4.3"
+  },
+  "peerDependenciesMeta": {
+    "@marinoscar/hexactra-agent": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.32",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  }
+}
