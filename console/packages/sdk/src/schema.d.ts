@@ -10942,7 +10942,7 @@ export interface components {
             kgraph: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures: number;
@@ -11249,7 +11249,7 @@ export interface components {
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures: number;
@@ -11560,7 +11560,7 @@ export interface components {
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled?: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery?: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures?: number;

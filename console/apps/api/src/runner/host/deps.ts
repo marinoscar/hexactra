@@ -49,7 +49,7 @@ export interface HostDeps {
   /** The run's trace and PDF report (E35): `file_upload` hands the report to a connection. */
   traces?: Pick<RunTraceService, 'exportPdf'>;
   /** The Knowledge Graph's gate (E46): absent, or `off` for the run, and nothing watches its tool calls. */
-  kgraph?: Pick<KgraphEnabledService, 'modeFor'>;
+  kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'>;
   /** The Knowledge Graph's store (E46.9): absent, and no run replays a procedure. */
   kgraphStore?: PrismaProcedureStore;
   /** After a run's final transition (E46.7): enqueues the compile job when the run was captured. Best effort. */
