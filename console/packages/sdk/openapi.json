@@ -48199,6 +48199,8 @@
               "SECRETS_VAULT_NEEDS_RECONNECT",
               "SECRETS_VAULT_UNAVAILABLE",
               "SECRETS_VAULT_CONNECT_FAILED",
+              "KGRAPH_TASK_NOT_FOUND",
+              "KGRAPH_OFF",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -48213,8 +48215,6 @@
               "MAIL_TRIGGER_POLL_TOO_FAST",
               "MAIL_TRIGGER_INPUTS_INVALID",
               "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
-              "KGRAPH_TASK_NOT_FOUND",
-              "KGRAPH_OFF",
               "BENCHMARK_NOT_FOUND",
               "BENCHMARK_RUNNING",
               "BENCHMARK_SITE_UNREACHABLE",
@@ -79265,6 +79265,9 @@
               },
               "evidence": {
                 "type": "number"
+              },
+              "traces": {
+                "type": "number"
               }
             },
             "required": [
@@ -79275,7 +79278,8 @@
               "tasks",
               "runs",
               "reviews",
-              "evidence"
+              "evidence",
+              "traces"
             ]
           }
         },
