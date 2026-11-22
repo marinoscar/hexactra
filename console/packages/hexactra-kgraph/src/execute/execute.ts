@@ -5,6 +5,7 @@
 // whose outcome is unknown is never invoked again.
 import type { KgraphPorts, ToolInvocation } from '../ports';
 import type { Binding, Check, ProcedureVersion, Step } from '../schema';
+import type { RecoveryLadder, Rung } from './recovery';
 
 export type StepStatus = 'done' | 'skipped' | 'failed_check' | 'refused' | 'stopped' | 'paused' | 'error' | 'needs_owner' | 'agent';
 export type ExecutionStatus = 'completed' | 'failed_check' | 'refused' | 'stopped' | 'paused' | 'error' | 'needs_owner' | 'agent' | 'missing_input' | 'halted';
@@ -28,6 +29,8 @@ export interface StepReport {
   notes?: string[];
   /** For an `error`: a short reason, never page text. */
   reason?: string;
+  /** The recovery rung that put the step back on its path (E46.16). */
+  recoveredBy?: Rung;
 }
 
 /** What a step produced, kept in memory for later bindings. Never stored by the executor. */
@@ -74,6 +77,8 @@ export interface ExecuteOptions {
   evidence?: { owner: string };
   /** Most steps one walk may take (a loop guard). Default 1000. */
   maxSteps?: number;
+  /** The recovery ladder (E46.15–E46.16): tried on a failed check or a missed precondition before the walk stops. */
+  recovery?: RecoveryLadder;
 }
 
 const MAX_TEXT = 100_000;
@@ -208,17 +213,7 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
     }
   };
 
-  const runStep = async (s: Step): Promise<string | null> => {
-    const started = ports.clock.now().getTime();
-    const finish = (status: StepStatus, extra: Partial<StepReport> = {}): StepReport => ({ step: s.id, kind: s.kind, status, durationMs: ports.clock.now().getTime() - started, ...extra });
-    if (options.done && s.id in options.done) {
-      report.steps.push(finish('skipped'));
-      return s.kind === 'branch' ? null : follow(s.id);
-    }
-    if ((await options.before?.(s)) === 'stop') throw new Halt('halted', finish('stopped', { reason: 'the host stopped the walk' }), { step: s.id });
-    switch (s.kind) {
-      case 'call': {
-        if (s.commitClass && unknown.has(s.id)) throw new Halt('needs_owner', finish('needs_owner', { reason: 'a commit-class step whose outcome is unknown is never sent again' }), { step: s.id });
+  const runCall = async (s: Extract<Step, { kind: 'call' }>, finish: (status: StepStatus, extra?: Partial<StepReport>) => StepReport, recoveredBy: Rung | undefined): Promise<void> => {
         const args = resolveAll(s.args, s);
         if (s.commitClass) await options.onCommitIntent?.(s);
         report.toolCalls++;
@@ -242,8 +237,33 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
           throw new Halt('failed_check', finish('failed_check', { resultDigest: r.digest, failed: c.failed, ...(c.notes.length ? { notes: c.notes } : {}) }), { step: s.id, expected: c.failed.expected, observed: c.failed.observed });
         }
         await evidence(s.id, 'success');
-        report.steps.push(finish('done', { resultDigest: r.digest, ...(c.notes.length ? { notes: c.notes } : {}) }));
-        return follow(s.id);
+        report.steps.push(finish('done', { resultDigest: r.digest, ...(c.notes.length ? { notes: c.notes } : {}), ...(recoveredBy ? { recoveredBy } : {}) }));
+  };
+
+  const runStep = async (s: Step): Promise<string | null> => {
+    const started = ports.clock.now().getTime();
+    const finish = (status: StepStatus, extra: Partial<StepReport> = {}): StepReport => ({ step: s.id, kind: s.kind, status, durationMs: ports.clock.now().getTime() - started, ...extra });
+    if (options.done && s.id in options.done) {
+      report.steps.push(finish('skipped'));
+      return s.kind === 'branch' ? null : follow(s.id);
+    }
+    if ((await options.before?.(s)) === 'stop') throw new Halt('halted', finish('stopped', { reason: 'the host stopped the walk' }), { step: s.id });
+    switch (s.kind) {
+      case 'call': {
+        if (s.commitClass && unknown.has(s.id)) throw new Halt('needs_owner', finish('needs_owner', { reason: 'a commit-class step whose outcome is unknown is never sent again' }), { step: s.id });
+        let recoveredBy: Rung | undefined;
+        for (;;) {
+          try {
+            await runCall(s, finish, recoveredBy);
+            return follow(s.id);
+          } catch (err) {
+            if (!(err instanceof Halt) || err.status !== 'failed_check' || !options.recovery) throw err;
+            const precondition = err.report.resultDigest?.startsWith('element:') === true;
+            const r = await options.recovery.recover({ step: s, kind: precondition ? 'precondition' : 'failed_check', expected: err.resume.expected, observed: err.resume.observed });
+            if (!r.recovered) throw err;
+            recoveredBy = r.rung;
+          }
+        }
       }
       case 'extract': {
         const src = report.results[s.from];

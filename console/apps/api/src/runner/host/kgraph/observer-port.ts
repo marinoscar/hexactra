@@ -11,6 +11,8 @@ import type { Prisma } from '@prisma/client';
 
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { maskSensitive } from '../../../tasks/mask';
+import { isConsentChoice } from '@marinoscar/hexactra-browser-agent/surface';
+import { signInRecipe, type SiteMemory } from './interrupts';
 import { readRunInputs } from '../../../tasks/task-params.schemas';
 
 /** Earlier results kept in memory for provenance (never stored): the newest 30, each clipped. */
@@ -40,6 +42,8 @@ export class KgraphObserver implements ObserverPort {
   private readonly parameters: TraceParameter[];
   /** The last page host a call showed (a step's URL, or the URL a navigate was sent to): the site of a click that reports none. */
   private lastHost: string | null = null;
+  /** The element fingerprinted just before the call (the page as the model saw it). */
+  private pending: { tool: string; fp: NonNullable<PostState['element']> | null } | null = null;
   failures = 0;
 
   constructor(private readonly i: KgraphObserverInput) {
@@ -58,19 +62,46 @@ export class KgraphObserver implements ObserverPort {
     }
   }
 
+  /** What the owner's runs taught about a site, kept on its `Site` node (merged). */
+  private async rememberSite(host: string, add: SiteMemory): Promise<void> {
+    try {
+      const prisma = this.i.prisma as unknown as { kgNode: PrismaService['kgNode'] };
+      const key = registrableDomain(host);
+      const existing = await prisma.kgNode.findFirst({ where: { userId: this.i.userId, type: 'Site', key } });
+      const props = { ...((existing?.props as object | null) ?? {}), ...add };
+      if (existing) await prisma.kgNode.update({ where: { id: existing.id }, data: { props: props as never } });
+      else await prisma.kgNode.create({ data: { id: `kgn-${randomUUID()}`, userId: this.i.userId, type: 'Site', key, label: key, props: props as never } });
+    } catch {
+      this.failures++;
+    }
+  }
+
+  async beforeToolCall(c: { tool: string; args: unknown }): Promise<void> {
+    this.pending = null;
+    if (!this.i.capture || !ELEMENT_TOOLS.has(c.tool)) return;
+    this.pending = { tool: c.tool, fp: await this.i.capture(c.tool, c.args).catch(() => null) };
+  }
+
   async toolCall(o: ToolCallObservation): Promise<void> {
     const bindings = bindArguments(o.args, { goal: this.i.goal, parameters: this.parameters, earlier: this.earlier, isSensitive: consoleIsSensitive });
     const post = postStateOf(o);
     if (post.host) this.lastHost = post.host;
     else if (o.tool === 'navigate' && o.ok) this.lastHost = hostAndPath(String((o.args as { url?: unknown })?.url ?? ''))?.host ?? this.lastHost;
     if (o.ok && o.outcome === 'ran' && this.i.capture && ELEMENT_TOOLS.has(o.tool)) {
-      const fp = await this.i.capture(o.tool, o.args).catch(() => null);
+      const fp = this.pending?.tool === o.tool && this.pending.fp ? this.pending.fp : await this.i.capture(o.tool, o.args).catch(() => null);
       if (fp) {
         post.element = fp;
         // The element's site: the page's host when the step reported it, else the last one seen (no path: no location check is written).
         if (!post.host && this.lastHost) post.host = this.lastHost;
         if (post.host) await this.shareElement(post.host, fp);
+        // The owner's own cookie choice on this site (E46.15): repeated when a banner interrupts a replay.
+        if (post.host && o.tool !== 'type_text' && isConsentChoice(fp)) await this.rememberSite(post.host, { consent: fp });
       }
+    }
+    // How the owner's run signed in (E46.15): a saved-login reference and selectors, never a secret.
+    if (o.ok && o.outcome === 'ran' && o.tool === 'sign_in_with_saved_login' && this.lastHost) {
+      const recipe = signInRecipe(o.args);
+      if (recipe) await this.rememberSite(this.lastHost, { signIn: recipe });
     }
     this.earlier.push({ seq: o.seq, text: o.resultText.slice(0, EARLIER_CHARS) });
     if (this.earlier.length > EARLIER_KEPT) this.earlier.shift();

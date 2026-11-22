@@ -33,5 +33,7 @@ export interface ToolCallObservation {
  * stores no typed text, secret, handoff value, token, page text, screenshot or model reasoning.
  */
 export interface ObserverPort {
+  /** Just before a call runs (after Stop and Pause, before the gates): the page is still as the model saw it. Optional; a throw is ignored. */
+  beforeToolCall?(call: { tool: string; family: string; args: unknown }): void | Promise<void>;
   toolCall(observation: ToolCallObservation): void | Promise<void>;
 }

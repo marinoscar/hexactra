@@ -5,7 +5,8 @@
 import type { RunOutcome } from '@marinoscar/hexactra-agent';
 import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
 import { abortableSleep } from '@marinoscar/hexactra-browser-agent/surface';
-import { breaker, checkOutcome, isAuditRun, noopTelemetry, type ProcedureVersion, type RunVerdict } from '@marinoscar/hexactra-kgraph';
+import { breaker, checkOutcome, isAuditRun, noopTelemetry, RecoveryLadder, registrableDomain, type ProcedureVersion, type RunVerdict } from '@marinoscar/hexactra-kgraph';
+import { interruptStrategy, type SiteMemory } from './interrupts';
 import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls, type ReplayMemory } from '@marinoscar/hexactra-kgraph/harness';
 
 import { declaredOutputs, learnShapes, readShapes } from '../../../kgraph/output-shapes';
@@ -68,13 +69,20 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
   try {
     const inputs: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(readRunInputs(run.inputs)?.values ?? {})) inputs[`p:${key}`] = v.value;
+    const base = harnessToolInvoker(ctx, profile, watch);
+    const siteOf = async (url: string | null): Promise<SiteMemory | null> => {
+      const host = url ? new URL(url).hostname : null;
+      if (!host) return null;
+      return ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Site', key: registrableDomain(host) } }))?.props ?? null) as SiteMemory | null;
+    };
     const result = await replayPhase({
+      recovery: new RecoveryLadder([interruptStrategy({ browser: ctx.ext.browser, invoke: base, site: siteOf })]),
       ctx,
       version,
       inputs,
       ports: {
         store: d.kgraphStore,
-        tools: surfaceInvoker(harnessToolInvoker(ctx, profile, watch), version, ctx.ext.browser, async (id) => ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Element', key: id } }))?.props ?? null) as never, {
+        tools: surfaceInvoker(base, version, ctx.ext.browser, async (id) => ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Element', key: id } }))?.props ?? null) as never, {
           familyOf: (tool) => profile.registry.list(ctx).find((t) => t.name === tool)?.family ?? 'browser',
           pacing,
           signal: ctx.ports.control.haltSignal,

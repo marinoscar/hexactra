@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { AnyContext, LoopProfile, ModelRoute, ModelStep, ObserverPort, RunOutcome, ToolCallObservation } from '@marinoscar/hexactra-agent';
 import { cancelRun, closeRun, countCall, executeTool, pauseForPerson, pauseNow } from '@marinoscar/hexactra-agent/engine';
 
-import { executeProcedure, type ExecutionReport, type StepResult } from '../execute';
+import { executeProcedure, type ExecutionReport, type RecoveryLadder, type StepResult } from '../execute';
 import type { JudgePort, KgraphPorts, StateProbePort, ToolInvocation, ToolInvokerPort } from '../ports';
 import type { ProcedureVersion } from '../schema';
 
@@ -40,6 +40,9 @@ export function watchCalls(next?: ObserverPort): { observer: ObserverPort; watch
   return {
     watch,
     observer: {
+      beforeToolCall: async (c) => {
+        await next?.beforeToolCall?.(c);
+      },
       toolCall: async (o) => {
         watch.last = o;
         const d = [...o.steps].reverse().find((s) => s.contentHash)?.contentHash;
@@ -111,6 +114,8 @@ export interface ReplayInput<C extends AnyContext> {
    * confirmation setting and saved approvals say. The graph adds caution; it never removes it.
    */
   verify?: boolean;
+  /** The recovery ladder (E46.15–E46.16), tried before a mismatch hands over. */
+  recovery?: RecoveryLadder;
   /** The outcome check of a completed walk (E46.11): a failure hands over instead of succeeding. */
   checkOutcome?(outputs: Record<string, unknown>): { ok: boolean; problems: string[] };
 }
@@ -167,6 +172,7 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
       goal: ctx.run.goal,
       ...(memory.done.length && resumeAt ? { fromStep: resumeAt, done } : {}),
       unknown,
+      ...(input.recovery ? { recovery: input.recovery } : {}),
       before: async (step) => {
         if ((await ctx.preflight()) !== null) return 'stop';
         if (input.verify && step.commitClass && !(memory.confirmed ?? []).includes(step.id)) {

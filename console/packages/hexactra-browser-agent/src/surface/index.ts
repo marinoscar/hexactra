@@ -190,3 +190,4 @@ export function screenKeyOf(url: string, digest: string | null, registrable: (ho
 
 export { abortableSleep, PACING, pacingDelay, seededRandom, type PacingMode } from './pacing';
 export { READINESS, readinessTimeout, waitForElement, waitUntil, type Readiness, type WaitOptions } from './conditions';
+export { detectInterrupt, detectBlocked, detectConsent, detectOverlay, detectSignedOut, isConsentChoice, pageSnapshot, type Interrupt, type PageSnapshot } from './interrupts';

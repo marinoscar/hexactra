@@ -43,6 +43,11 @@ export async function executeTool<C extends AnyContext>(ctx: C, tool: RunnerTool
       return record(kind, action, recArgs, ok, summary, started, reasoning, extra, intentSeq);
     };
     const facts = { outcome: 'ran' as 'ran' | 'refused' | 'asked' };
+    try {
+      await observer.beforeToolCall?.({ tool: tool.name, family: meta.family, args });
+    } catch {
+      ctx.state.observerErrors = (ctx.state.observerErrors ?? 0) + 1;
+    }
     let text: string;
     try {
       text = await runGated(ctx, tool, args, pipeline, meta, facts);
