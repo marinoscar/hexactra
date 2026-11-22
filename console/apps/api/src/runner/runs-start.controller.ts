@@ -28,6 +28,7 @@ const startRunSchema = z.object({
   /** When the chosen host cannot take the run, run on another available one (#384). */
   hostFallback: z.boolean().default(true),
   policyId: policyRefSchema.optional().describe("Run under this agent policy instead of the task's or the user's default."),
+  record: z.boolean().default(false).describe('Record a video of the run\'s browser tab (epic #755). The video is not masked and is owner-only.'),
 });
 class StartRunDto extends createZodDto(startRunSchema) {}
 
@@ -39,6 +40,7 @@ const runTaskSchema = z.object({
       "Values for the task's `{{Name}}` parameters, by key or display name (#552). Unknown names are a 400 `UNKNOWN_INPUT`, invalid values a 400 `INVALID_INPUT` with `details.issues`, a sensitive parameter a 400 `SENSITIVE_INPUT`. " +
         'A required value still missing after the defaults: the run is created `waiting_human` with one `form` question for every missing value, and starts once it is answered.',
     ),
+  record: z.boolean().optional().describe("Record a video of this run's browser tab (epic #755), or not, instead of the task's `recordVideo`. The video is not masked and is owner-only."),
 });
 class RunTaskDto extends createZodDto(runTaskSchema) {}
 
@@ -82,6 +84,7 @@ export class RunsStartController {
     const { run } = await this.starter.start(user, task, {
       inputs: parsed.data.inputs,
       reason: 'run_started',
+      ...(parsed.data.record !== undefined ? { record: parsed.data.record } : {}),
       data: {
         trigger: 'manual',
         ...clientColumns(client),
@@ -110,6 +113,7 @@ export class RunsStartController {
         profile: body.profile,
         hostId: body.hostId ?? null,
         hostFallback: body.hostFallback,
+        recordVideo: body.record,
         trigger: 'api',
         ...clientColumns(client),
         ...(decision.appLimits ? { appLimits: decision.appLimits as never } : {}),

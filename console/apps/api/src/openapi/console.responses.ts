@@ -100,6 +100,7 @@ export const taskResponseSchema = z.object({
   useSavedCards: z.boolean().describe("Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"),
   unattendedPayments: z.enum(['ask', 'allow']).describe('`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`'),
   needsBrowser: z.enum(['auto', 'always', 'never']).describe("Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"),
+  recordVideo: z.boolean().describe("Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"),
   connections: z.array(connectionSelectionViewSchema).describe('The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default.'),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),

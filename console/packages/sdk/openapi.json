@@ -52481,6 +52481,34 @@
               "maxCostUsd"
             ]
           },
+          "recordings": {
+            "type": "object",
+            "properties": {
+              "keepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Finished run recordings are deleted this many days after they were made. null keeps them indefinitely. Default 30."
+              },
+              "maxMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 480,
+                "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
+              }
+            },
+            "required": [
+              "keepDays",
+              "maxMinutes"
+            ]
+          },
           "connections": {
             "type": "object",
             "properties": {
@@ -53256,6 +53284,7 @@
           "notes",
           "browserAgentTiers",
           "browserAgentCeilings",
+          "recordings",
           "connections",
           "deliveries",
           "mailTriggers",
@@ -53832,6 +53861,34 @@
               "maxInputTokens",
               "maxOutputTokens",
               "maxCostUsd"
+            ]
+          },
+          "recordings": {
+            "type": "object",
+            "properties": {
+              "keepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Finished run recordings are deleted this many days after they were made. null keeps them indefinitely. Default 30."
+              },
+              "maxMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 480,
+                "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
+              }
+            },
+            "required": [
+              "keepDays",
+              "maxMinutes"
             ]
           },
           "connections": {
@@ -55199,6 +55256,30 @@
                   }
                 ],
                 "description": "Most a run may cost in US dollars. `null` sets no ceiling."
+              }
+            }
+          },
+          "recordings": {
+            "type": "object",
+            "properties": {
+              "keepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Finished run recordings are deleted this many days after they were made. null keeps them indefinitely. Default 30."
+              },
+              "maxMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 480,
+                "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
               }
             }
           },
@@ -82222,6 +82303,10 @@
             ],
             "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
           },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -82832,6 +82917,7 @@
           "useSavedCards",
           "unattendedPayments",
           "needsBrowser",
+          "recordVideo",
           "connections",
           "model",
           "policyId",
@@ -82936,6 +83022,10 @@
                     "never"
                   ],
                   "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+                },
+                "recordVideo": {
+                  "type": "boolean",
+                  "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
                 },
                 "connections": {
                   "type": "array",
@@ -83547,6 +83637,7 @@
                 "useSavedCards",
                 "unattendedPayments",
                 "needsBrowser",
+                "recordVideo",
                 "connections",
                 "model",
                 "policyId",
@@ -83890,6 +83981,10 @@
               "never"
             ],
             "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
           "connections": {
             "type": "array",
@@ -84501,6 +84596,7 @@
           "useSavedCards",
           "unattendedPayments",
           "needsBrowser",
+          "recordVideo",
           "connections",
           "model",
           "policyId",
@@ -84894,6 +84990,11 @@
             },
             "description": "The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts."
           },
+          "recordVideo": {
+            "default": false,
+            "type": "boolean",
+            "description": "Record a video of each run's browser tab (epic #755). Off by default. The video is NOT masked (a card number or an address on the page is visible), is played only by the owner on the run page, is never exported or delivered, and is deleted after the admin's retention period (30 days by default)."
+          },
           "schedules": {
             "maxItems": 10,
             "type": "array",
@@ -85067,6 +85168,10 @@
               "never"
             ],
             "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
           "connections": {
             "type": "array",
@@ -85378,6 +85483,7 @@
           "useSavedCards",
           "unattendedPayments",
           "needsBrowser",
+          "recordVideo",
           "connections",
           "model",
           "policyId",
@@ -85761,6 +85867,10 @@
               ]
             },
             "description": "The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts."
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Record a video of each run's browser tab (epic #755). Off by default. The video is NOT masked (a card number or an address on the page is visible), is played only by the owner on the run page, is never exported or delivered, and is deleted after the admin's retention period (30 days by default)."
           }
         }
       },
@@ -85944,6 +86054,10 @@
               "never"
             ],
             "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
           "connections": {
             "type": "array",
@@ -86564,6 +86678,7 @@
           "useSavedCards",
           "unattendedPayments",
           "needsBrowser",
+          "recordVideo",
           "connections",
           "model",
           "policyId",
@@ -98037,6 +98152,10 @@
                 }
               ]
             }
+          },
+          "record": {
+            "description": "Record a video of this run's browser tab (epic #755), or not, instead of the task's `recordVideo`. The video is not masked and is owner-only.",
+            "type": "boolean"
           }
         }
       },
@@ -98073,6 +98192,11 @@
             "description": "Run under this agent policy instead of the task's or the user's default.",
             "type": "string",
             "maxLength": 64
+          },
+          "record": {
+            "default": false,
+            "description": "Record a video of the run's browser tab (epic #755). The video is not masked and is owner-only.",
+            "type": "boolean"
           }
         },
         "required": [

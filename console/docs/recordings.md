@@ -4,7 +4,7 @@ A run can keep a **video** of its browser tab. The owner switches it on per task
 
 In short:
 
-- **Off by default.** Task form → **Record video**, or the start-run form's switch. The choice is copied into the run's policy snapshot (`policy_snapshot.recordVideo`); a task parameter, an agent policy, a page or the model cannot turn it on.
+- **Off by default.** Task form → **Record video**, or the start-run form's switch. The choice is fixed on the run when it is created (`runs.record_video`, from the task's `recordVideo` or the start request's `record`); a task parameter, an agent policy, a page or the model cannot turn it on. MCP tools neither show nor set it.
 - **Continuous, not masked.** The extension records the session tab with a CDP screencast and encodes it to VP8; the console turns it into a WebM file. **The video is not masked**: a card number or an address on the page is visible. Typed passwords show as dots, as on screen. This is the one exception to "every stored image is masked" ([runs.md](runs.md#what-is-masked)), and the recording is **not part of the trace**.
 - **Owner-only.** Played on the run page through a 15-minute signed link. Never in a JSON or PDF export, a delivery, run files, an agent tool, the model's context or the MCP server.
 - **Retention.** Admin → Browser agent → **Run recordings**: delete after N days (default **30**) or keep indefinitely. A nightly job enforces it. Deleting a run deletes its recording.

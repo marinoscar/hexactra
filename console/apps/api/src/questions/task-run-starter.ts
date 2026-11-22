@@ -36,7 +36,9 @@ export interface StartTaskRunOptions {
   /** Where the presets came from, as the run records it (default `schedule`). */
   presetSource?: InputSource;
   /** The run's columns besides the task's (trigger, origin, client, policy, conversation). */
-  data: Omit<Prisma.RunUncheckedCreateInput, 'userId' | 'taskId' | 'goal' | 'profile' | 'hostId' | 'hostFallback' | 'inputs' | 'status'>;
+  data: Omit<Prisma.RunUncheckedCreateInput, 'userId' | 'taskId' | 'goal' | 'profile' | 'hostId' | 'hostFallback' | 'inputs' | 'status' | 'recordVideo'>;
+  /** The owner's own choice for this run (`POST /tasks/:id/runs` `record`): record a video or not, instead of the task's `recordVideo` (#755). */
+  record?: boolean;
   /** Why the run job is queued. */
   reason: GoalRunReason;
   /** The owner's time zone (today and tomorrow); defaults to their profile zone. */
@@ -102,6 +104,8 @@ export class TaskRunStarter {
       profile: task.profile,
       hostId: task.hostId,
       hostFallback: task.hostFallback,
+      // Fixed here, from the task or the owner's request: nothing the run reads can change it (#755).
+      recordVideo: opts.record ?? task.recordVideo,
       ...(inputs ? { inputs: inputs as unknown as Prisma.InputJsonValue } : {}),
       ...(outputsSpec ? { outputsSpec: outputsSpec as unknown as Prisma.InputJsonValue } : {}),
     };
