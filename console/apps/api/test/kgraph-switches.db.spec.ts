@@ -80,7 +80,7 @@ describe('the Knowledge Graph switches (#777)', () => {
 
   it('is off at the deployment and the user level by default, and a task mode is refused until both are on', async () => {
     expect((await call<{ kgraph: { enabled: boolean } }>(admin, 'GET', '/system-settings')).data.kgraph.enabled).toBe(false);
-    expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: false, user: false, available: false });
+    expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: false, user: false, available: false, everyday: false });
     const task = await newTask(owner, 'Refused');
     expect((await call(owner, 'GET', `/tasks/${task}/kgraph`)).data).toEqual({ taskId: task, mode: 'off', available: false });
     const refused = await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' });
@@ -90,7 +90,7 @@ describe('the Knowledge Graph switches (#777)', () => {
     expect((await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } })).statusCode).toBe(200);
     expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' })).statusCode).toBe(409);
     expect((await call(owner, 'PATCH', '/user-settings', { kgraph: { enabled: true } })).statusCode).toBe(200);
-    expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: true, user: true, available: true });
+    expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: true, user: true, available: true, everyday: false });
     expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' })).data).toEqual({ taskId: task, mode: 'learn', available: true });
     expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'fast' })).statusCode).toBe(400);
     const audit = await prisma.auditEvent.findFirst({ where: { actorUserId: owner.userId, action: 'kgraph.task_mode_changed' } });

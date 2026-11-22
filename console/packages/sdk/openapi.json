@@ -53899,6 +53899,10 @@
               "enabled": {
                 "type": "boolean",
                 "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              },
+              "everyday": {
+                "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                "type": "boolean"
               }
             },
             "required": [
@@ -54425,6 +54429,10 @@
               "enabled": {
                 "type": "boolean",
                 "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              },
+              "everyday": {
+                "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                "type": "boolean"
               }
             },
             "required": [
@@ -54990,6 +54998,10 @@
                   "enabled": {
                     "type": "boolean",
                     "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  },
+                  "everyday": {
+                    "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                    "type": "boolean"
                   }
                 }
               },
@@ -61239,6 +61251,10 @@
                   "enabled": {
                     "type": "boolean",
                     "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  },
+                  "everyday": {
+                    "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -81928,12 +81944,17 @@
           "available": {
             "type": "boolean",
             "description": "Both are on."
+          },
+          "everyday": {
+            "type": "boolean",
+            "description": "You turned on \"Use what was learned in chats and one-off runs\" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected."
           }
         },
         "required": [
           "deployment",
           "user",
-          "available"
+          "available",
+          "everyday"
         ]
       },
       "KgraphPurgeResponseDto": {
@@ -83766,7 +83787,8 @@
             "enum": [
               "off",
               "learn",
-              "reuse"
+              "reuse",
+              "everyday"
             ],
             "description": "The effective mode the run had; `off` when the Knowledge Graph took no part."
           },
@@ -84480,10 +84502,17 @@
                 "saving"
               ]
             }
+          },
+          "everydayProcedureRuns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Chats and one-off runs in which a saved procedure ran (the everyday switch, `kgraph.everyday`). They belong to no task and never enter a task's baseline."
           }
         },
         "required": [
-          "tasks"
+          "tasks",
+          "everydayProcedureRuns"
         ]
       },
       "ApprovalRulesListResponseDto": {

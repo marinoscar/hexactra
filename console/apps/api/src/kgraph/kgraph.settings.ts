@@ -31,6 +31,10 @@ export const KGRAPH_SYSTEM_SETTINGS = {
 
 export const kgraphUserSettingsSchema = z.object({
   enabled: z.boolean().describe('Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned.'),
+  everyday: z
+    .boolean()
+    .optional()
+    .describe('Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task\'s run.'),
 });
 export type KgraphUserSettings = z.infer<typeof kgraphUserSettingsSchema>;
 export const kgraphUserSettingsPatchSchema = kgraphUserSettingsSchema.partial();
@@ -74,8 +78,9 @@ export function readKgraphSystemSettings(raw: unknown): KgraphSystemSettings {
 }
 
 /** The user namespace as stored in a user's settings document, with the defaults for what was never saved. */
-export function readKgraphUserSettings(doc: unknown): KgraphUserSettings {
+export function readKgraphUserSettings(doc: unknown): KgraphUserSettings & { everyday: boolean } {
   const raw = (doc as { kgraph?: unknown } | null | undefined)?.kgraph;
   const parsed = kgraphUserSettingsPatchSchema.safeParse(raw ?? {});
-  return { ...KGRAPH_USER_DEFAULTS, ...(parsed.success ? parsed.data : {}) };
+  const out = { ...KGRAPH_USER_DEFAULTS, ...(parsed.success ? parsed.data : {}) };
+  return { ...out, everyday: out.everyday === true };
 }
