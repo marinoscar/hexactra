@@ -11,8 +11,8 @@ describe('effectiveMode', () => {
     expect(effectiveMode({ ...on, task: 'off' })).toBe('off');
     expect(effectiveMode({ ...on, task: 'learn' })).toBe('learn');
   });
-  it('"AI only this time" never replays', () => {
-    expect(effectiveMode({ ...on, aiOnlyThisRun: true })).toBe('learn');
+  it('"AI only this time" ignores the graph', () => {
+    expect(effectiveMode({ ...on, aiOnlyThisRun: true })).toBe('off');
   });
 });
 

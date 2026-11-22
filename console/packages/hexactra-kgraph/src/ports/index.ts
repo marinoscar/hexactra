@@ -152,7 +152,7 @@ export interface KgraphSwitches {
   deployment: boolean;
   user: boolean;
   task: Mode;
-  /** "Run with AI only this time". */
+  /** "Run with AI only this time": the run ignores the graph (nothing replayed, nothing captured). */
   aiOnlyThisRun: boolean;
   /** Chat goals never use the feature: only saved tasks. */
   savedTask: boolean;
@@ -160,8 +160,7 @@ export interface KgraphSwitches {
 
 /** The effective mode of a run: `off` unless every level allows it. */
 export function effectiveMode(s: KgraphSwitches): Mode {
-  if (!s.deployment || !s.user || !s.savedTask || s.task === 'off') return 'off';
-  if (s.aiOnlyThisRun) return s.task === 'reuse' ? 'learn' : s.task;
+  if (!s.deployment || !s.user || !s.savedTask || s.aiOnlyThisRun || s.task === 'off') return 'off';
   return s.task;
 }
 
