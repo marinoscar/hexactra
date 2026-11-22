@@ -122,6 +122,16 @@ VISION §17 keeps the Agent Experience Framework independent, optional and cross
 
 The surface graph (screens, element fingerprints, re-resolution) is browser-specific, so it lives in `@marinoscar/hexactra-browser-agent` (`./surface`). That package imports only the harness and itself (its import scan), so it does **not** import `@marinoscar/hexactra-kgraph`: the fingerprint, screen key and page element are **duplicated as plain interfaces** in the toolset, and the console host maps them onto the graph's `Element` and `Screen` (`apps/api/src/runner/host/kgraph/surface.ts`). Elements are shared per owner as `kg_nodes` rows of type `Element`, keyed by a stable id derived from the site and the fingerprint, so a repaired fingerprint is used by every procedure that references it. Resolution uses page queries only (never a model); exactly one confident match is used, otherwise the step fails its check. A label passes the trace masking table before it is stored; a password field stores no name.
 
+## The API, the view model and the CLI (E46.19)
+
+The pages, the CLI and (later) MCP read the graph through REST routes behind `kgraph:read` (`apps/api/src/kgraph/kgraph-read.controller.ts`): procedures, one procedure as an ordered step list, versions, a readable diff (`diffVersions` in words), the Map's view model and how a run's steps ran. The deployment switch has its own route behind `kgraph:admin` (`GET/PUT /api/admin/kgraph/settings`), reading and writing the same `kgraph` system-settings namespace. The full list is in [parity.md](../parity.md#what-the-knowledge-graph-added-e46).
+
+- **Off.** A read answers with the stored data and `enabled: false`; restore, forget and a task's mode answer `409 KGRAPH_OFF`; "Delete everything learned" and the admin settings answer whatever the switches.
+- **Masking.** Every label and literal passes the run trace's masking (`maskSensitive`); a saved login is its kind and label; a parameter is its name, a sensitive one too. Audit events carry ids, states, kinds and changed keys only.
+- **The view model** lives in the package (`@marinoscar/hexactra-kgraph/view`: `buildGraphView`, `stepList`, `readableDiff`, `healthOf`), pure and tested there. Nodes have a type, a label, a health and counts; edges are `has`, `then`, `feeds`, `uses`; clusters are per site and per account. The host adds the owner's connected accounts, the MCP tools they switched on and the saved logins their runs signed in with; the ones no procedure uses are flagged `unused`. The console lists no saved-login provider's items, so a saved login never used by any run is not on the map.
+- **Cost of the map.** The graph route reads one row per procedure: its shown version's steps without their checks, guards and element references, and none of its screens or elements, plus counters. Above 2,000 nodes the view folds steps, parameters and outputs into their procedures, then pages over procedures (`nextCursor`).
+- **CLI.** `hexactra kgraph status | list | show | versions | restore | forget | off | on`; `off` and `on` set the user setting `kgraph.enabled`.
+
 ## Out of scope
 
 Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database.

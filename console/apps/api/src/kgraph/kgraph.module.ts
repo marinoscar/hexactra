@@ -3,6 +3,10 @@ import { Module } from '@nestjs/common';
 import { KgraphAfterRun, KgraphCompileHandler } from './kgraph-compile.job';
 import { KgraphCompileService } from './kgraph-compile.service';
 import { KgraphEnabledService } from './kgraph-enabled.service';
+import { KgraphAdminController } from './kgraph-admin.controller';
+import { KgraphAdminService } from './kgraph-admin.service';
+import { KgraphReadController } from './kgraph-read.controller';
+import { KgraphReadService } from './kgraph-read.service';
 import { KgraphController } from './kgraph.controller';
 import { KgraphService } from './kgraph.service';
 import { PrismaProcedureStore } from './prisma-procedure-store';
@@ -19,8 +23,8 @@ import { KgraphUpkeepService } from './upkeep.service';
  * `KgraphEnabledService.modeFor` and nothing else whether a run uses it.
  */
 @Module({
-  controllers: [KgraphController, KgraphReviewsController, KgraphTransferController],
-  providers: [KgraphTransferService, KgraphUpkeepService, KgraphUpkeepHandler, KgraphUpkeepTask, KgraphUpkeepDoctorCheck, KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
+  controllers: [KgraphController, KgraphReviewsController, KgraphReadController, KgraphAdminController, KgraphTransferController],
+  providers: [KgraphTransferService, KgraphUpkeepService, KgraphUpkeepHandler, KgraphUpkeepTask, KgraphUpkeepDoctorCheck, KgraphReadService, KgraphAdminService, KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
   exports: [KgraphEnabledService, PrismaProcedureStore, KgraphAfterRun],
 })
 export class KgraphModule {}
