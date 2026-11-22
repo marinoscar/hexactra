@@ -206,7 +206,8 @@ describe('tools', () => {
     const who = await login(`mcp-apps-pat-${stamp}@example.test`);
     for (const version of ['2025-06-18', '2025-03-26'] as const) {
       const res = await legacy(who.t, 'tools/list', {}, { 'mcp-protocol-version': version });
-      const before = MCP_TOOLS.filter((t) => !t.visibility).map((t) => toolListEntry(t, MCP_VERSIONS[version], { uiAvailable: () => false }));
+      // The Knowledge Graph is off here: its tools (E46.22) are not listed, exactly as before them.
+      const before = MCP_TOOLS.filter((t) => !t.visibility && !t.feature).map((t) => toolListEntry(t, MCP_VERSIONS[version], { uiAvailable: () => false }));
       const after = (res.json.result.tools as Json[]).map(({ _meta, ...rest }) => rest);
       expect(after).toEqual(JSON.parse(JSON.stringify(before)));
       expect(after.map((x) => x.name)).not.toContain('run_card_poll');
