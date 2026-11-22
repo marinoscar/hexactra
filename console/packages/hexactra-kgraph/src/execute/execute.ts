@@ -60,14 +60,16 @@ export interface ExecuteOptions {
   goal: string;
   /** Start here instead of the entry (after an agent step, or on a restart). */
   fromStep?: string;
-  /** Steps already done in an earlier walk, with their results: skipped, their results bound. */
-  done?: Record<string, StepResult>;
+  /** Steps already done in an earlier walk, with their results (null: done, result not kept — a step that reads it hands over). */
+  done?: Record<string, StepResult | null>;
   /** Commit-class steps whose outcome is unknown (a crash between intent and result): never invoked again. */
   unknown?: readonly string[];
   /** Called before a commit-class step is invoked: the host records the intent first. */
   onCommitIntent?(step: Step): Promise<void>;
   /** Called before every step: `stop` ends the walk (budgets, the job's deadline, the lease). */
   before?(step: Step): Promise<'go' | 'stop'> | 'go' | 'stop';
+  /** Called after a step is done (the host keeps its resume point). */
+  after?(step: Step): Promise<void> | void;
   /** When set, evidence is recorded per step through `ports.store` (best effort). */
   evidence?: { owner: string };
   /** Most steps one walk may take (a loop guard). Default 1000. */
@@ -144,7 +146,8 @@ class Halt {
 
 export async function executeProcedure(version: ProcedureVersion, inputs: Record<string, unknown>, ports: KgraphPorts, options: ExecuteOptions): Promise<ExecutionReport> {
   const byId = new Map(version.steps.map((s) => [s.id, s]));
-  const report: ExecutionReport = { status: 'completed', steps: [], outputs: {}, resume: null, results: { ...(options.done ?? {}) }, judgeCalls: 0, toolCalls: 0 };
+  const kept = Object.fromEntries(Object.entries(options.done ?? {}).filter(([, r]) => r !== null)) as Record<string, StepResult>;
+  const report: ExecutionReport = { status: 'completed', steps: [], outputs: {}, resume: null, results: kept, judgeCalls: 0, toolCalls: 0 };
   const unknown = new Set(options.unknown ?? []);
   const nextOf = new Map<string, string>();
   for (const e of version.edges) if (e.type === 'then' && !e.loop && !nextOf.has(e.from)) nextOf.set(e.from, e.to);
@@ -208,7 +211,7 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
   const runStep = async (s: Step): Promise<string | null> => {
     const started = ports.clock.now().getTime();
     const finish = (status: StepStatus, extra: Partial<StepReport> = {}): StepReport => ({ step: s.id, kind: s.kind, status, durationMs: ports.clock.now().getTime() - started, ...extra });
-    if (report.results[s.id] && options.done?.[s.id]) {
+    if (options.done && s.id in options.done) {
       report.steps.push(finish('skipped'));
       return s.kind === 'branch' ? null : follow(s.id);
     }
@@ -294,6 +297,7 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
       const s = byId.get(at);
       if (!s) throw new Halt('error', { step: at, kind: 'call', status: 'error', durationMs: 0, reason: 'no such step' }, { step: at });
       at = await ports.telemetry.span('kgraph.step', { step: s.id, kind: s.kind }, () => runStep(s));
+      if (report.steps.at(-1)?.status === 'done') await options.after?.(s);
     }
   } catch (err) {
     if (!(err instanceof Halt)) throw err;
