@@ -14,6 +14,7 @@ import { renderPdf } from '../tasks/run-report.pdf';
 import '../tasks/runs.errors';
 import { benchmarkExportFilename, benchmarkReportCsv, buildBenchmarkReport, type TrialRunText } from './benchmark-report';
 import { buildBenchmarkReportDefinition } from './benchmark-report.pdf';
+import { DEFAULT_SCORE_PRESET, type ScorePreset } from './scorecard.schemas';
 import { BENCHMARK_EXPORT_RATE_LIMIT, type BenchmarkExportFormat, type BenchmarkReport, type BenchmarkReportPaper } from './benchmark-report.schemas';
 import { BenchmarksService } from './benchmarks.service';
 import { ScorecardService } from './scorecard.service';
@@ -24,6 +25,8 @@ export const BENCHMARK_EXPORTED = 'benchmarks.exported' as const;
 export interface BenchmarkExportOptions {
   format: BenchmarkExportFormat;
   paper?: BenchmarkReportPaper;
+  /** The PDF leaderboard's weighting (#872); default `accuracy`. */
+  preset?: ScorePreset;
   baseline?: string;
   orgId?: string | null;
   /** The viewer has `runs:read`: each trial carries its run's recording status (#846). Never the video. */
@@ -94,10 +97,11 @@ export class BenchmarkReportService {
     const report = await this.build(userId, id, { baseline: opts.baseline, now, recordings: opts.recordings });
     const filename = benchmarkExportFilename(id, now, opts.format);
     const paper = opts.paper ?? 'a4';
+    const preset = opts.preset ?? DEFAULT_SCORE_PRESET;
     let body: string | Readable;
     if (opts.format === 'pdf') {
       const out = new PassThrough();
-      const pdf = renderPdf(buildBenchmarkReportDefinition(report, { paper, consoleUrl: this.consoleUrl() }));
+      const pdf = renderPdf(buildBenchmarkReportDefinition(report, { paper, preset, consoleUrl: this.consoleUrl() }));
       pdf.once('error', (err: Error) => {
         this.log.warn(`benchmarks.export: the PDF of benchmark ${id} could not be rendered: ${err.name}`);
         out.destroy(err);
@@ -107,10 +111,10 @@ export class BenchmarkReportService {
     } else {
       body = opts.format === 'csv' ? benchmarkReportCsv(report) : JSON.stringify(report, null, 2);
     }
-    this.log.log(`benchmarks.export user=${userId} benchmark=${id} format=${opts.format}${opts.format === 'pdf' ? ` paper=${paper}` : ''} trials=${report.trials.length} ms=${Date.now() - started}`);
+    this.log.log(`benchmarks.export user=${userId} benchmark=${id} format=${opts.format}${opts.format === 'pdf' ? ` paper=${paper} preset=${preset}` : ''} trials=${report.trials.length} ms=${Date.now() - started}`);
     await this.audit(userId, id, opts.orgId ?? null, {
       format: opts.format,
-      ...(opts.format === 'pdf' ? { paper } : {}),
+      ...(opts.format === 'pdf' ? { paper, preset } : {}),
       ...(opts.baseline ? { baselineId: opts.baseline } : {}),
       partial: report.partial,
       trials: report.trials.length,

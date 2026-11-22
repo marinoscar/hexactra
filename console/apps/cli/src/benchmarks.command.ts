@@ -258,18 +258,20 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--format <format>', EXPORT_FORMATS.join(', '), 'json')
     .option('--paper <size>', "the PDF's paper: a4 or letter", 'a4')
     .option('--baseline <id>', 'include the comparison with this earlier benchmark')
+    .option('--preset <preset>', `the PDF leaderboard's Benchmark Score weighting: ${SCORE_PRESETS.join(', ')} (default: accuracy)`)
     .option('-o, --output <file>', 'write to this file ("-" for stdout; default: the console\'s file name in the current directory)')
     .action(
-      coded(async (ref: string, o: { format: string; paper: string; baseline?: string; output?: string }) => {
+      coded(async (ref: string, o: { format: string; paper: string; preset?: string; baseline?: string; output?: string }) => {
         const format = o.format.toLowerCase();
         if (!EXPORT_FORMATS.includes(format as ExportFormat)) throw new Error(`--format is one of ${EXPORT_FORMATS.join(', ')}, not "${o.format}".`);
         const paper = o.paper.toLowerCase();
         if (paper !== 'a4' && paper !== 'letter') throw new Error(`--paper is a4 or letter, not "${o.paper}".`);
+        if (o.preset !== undefined && !(SCORE_PRESETS as readonly string[]).includes(o.preset)) throw new Error(`--preset must be one of ${SCORE_PRESETS.join(', ')}`);
         const api = consoleApi();
         const id = await resolveBenchmarkId(api, ref);
         const baseline = o.baseline ? await resolveBenchmarkId(api, o.baseline) : undefined;
         const target = exportTargetFactory ? exportTargetFactory() : consoleCredentials();
-        const file = await exportBenchmark(target, id, { format: format as ExportFormat, paper, ...(baseline ? { baseline } : {}), ...(o.output ? { output: o.output } : {}) });
+        const file = await exportBenchmark(target, id, { format: format as ExportFormat, paper, ...(o.preset ? { preset: o.preset } : {}), ...(baseline ? { baseline } : {}), ...(o.output ? { output: o.output } : {}) });
         if (file.path !== '-') out(`wrote ${file.path} (${sizeText(file.bytes)})`);
       }),
     );

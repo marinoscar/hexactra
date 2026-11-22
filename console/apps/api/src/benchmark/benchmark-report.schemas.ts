@@ -6,7 +6,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { benchmarkSchema, benchmarkTrialSchema } from './benchmarks.schemas';
-import { benchmarkComparisonSchema, scorecardSchema } from './scorecard.schemas';
+import { DEFAULT_SCORE_PRESET, SCORE_PRESETS, benchmarkComparisonSchema, scorecardSchema } from './scorecard.schemas';
 
 export const BENCHMARK_REPORT_TYPE = 'hexactra.benchmark-report' as const;
 export const BENCHMARK_REPORT_FORMAT_VERSION = 1 as const;
@@ -23,6 +23,7 @@ export const benchmarkExportQuerySchema = z.object({
   format: z.enum(BENCHMARK_EXPORT_FORMATS).default('json').describe('`json` (the default): the `hexactra.benchmark-report` file. `csv`: one row per trial. `pdf`: the report.'),
   paper: z.enum(BENCHMARK_REPORT_PAPERS).default('a4').describe('The PDF\'s paper: `a4` (the default) or `letter`. Ignored for `json` and `csv`.'),
   baseline: z.uuid().optional().describe('An earlier benchmark on the same suite key and version: the report adds the comparison with it (409 `BENCHMARK_SUITE_MISMATCH` otherwise).'),
+  preset: z.enum(SCORE_PRESETS).default(DEFAULT_SCORE_PRESET).describe('The PDF\'s Benchmark Score weighting for its leaderboard (#872): `accuracy` (the default), `balanced`, `budget` or `speed`. The scores under every preset are in the scorecard; ignored for `json` and `csv`.'),
 });
 export class BenchmarkExportQueryDto extends createZodDto(benchmarkExportQuerySchema) {}
 export type BenchmarkExportQuery = z.infer<typeof benchmarkExportQuerySchema>;

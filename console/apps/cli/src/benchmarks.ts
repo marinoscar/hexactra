@@ -493,10 +493,11 @@ export function exportFilename(id: string, disposition: string | null, format: E
 export async function exportBenchmark(
   target: ExportTarget,
   id: string,
-  opts: { format: ExportFormat; paper?: 'a4' | 'letter'; baseline?: string; output?: string; dir?: string; stdout?: (b: Buffer) => void },
+  opts: { format: ExportFormat; paper?: 'a4' | 'letter'; preset?: string; baseline?: string; output?: string; dir?: string; stdout?: (b: Buffer) => void },
 ): Promise<{ path: string; bytes: number }> {
   const query: Record<string, string> = { format: opts.format };
   if (opts.format === 'pdf') query.paper = opts.paper ?? 'a4';
+  if (opts.format === 'pdf' && opts.preset) query.preset = opts.preset;
   if (opts.baseline) query.baseline = opts.baseline;
   const url = buildUrl(target.apiBaseUrl, `/benchmarks/${encodeURIComponent(id)}/export`, query);
   const fetchImpl = target.fetch ?? globalThis.fetch;
