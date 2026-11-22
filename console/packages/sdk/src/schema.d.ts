@@ -10994,6 +10994,11 @@ export interface components {
                 suspendAfterFailures: number;
                 /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
                 retentionDays: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing: "human" | "fast";
             };
             connections: {
                 mcp?: {
@@ -11301,6 +11306,11 @@ export interface components {
                 suspendAfterFailures: number;
                 /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
                 retentionDays: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing: "human" | "fast";
             };
             connections?: {
                 mcp?: {
@@ -11612,6 +11622,11 @@ export interface components {
                 suspendAfterFailures?: number;
                 /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
                 retentionDays?: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing?: "human" | "fast";
             };
             connections?: {
                 mcp?: {

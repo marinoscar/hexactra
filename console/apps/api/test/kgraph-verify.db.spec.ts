@@ -78,7 +78,7 @@ describe('verified admission and learn-only (#784)', () => {
   beforeAll(async () => {
     admin = await login(`kgver-admin-${stamp}@example.test`, 'admin');
     owner = await login(`kgver-owner-${stamp}@example.test`);
-    await patch(admin.token, '/system-settings', { kgraph: { enabled: true } });
+    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } });
     await patch(owner.token, '/user-settings', { kgraph: { enabled: true } });
   });
   afterAll(async () => {

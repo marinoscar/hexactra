@@ -78,7 +78,7 @@ describe('the surface graph (#787)', () => {
   beforeAll(async () => {
     admin = await login(`kgsur-admin-${stamp}@example.test`, 'admin');
     owner = await login(`kgsur-owner-${stamp}@example.test`);
-    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, auditEvery: 0 } });
+    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, auditEvery: 0, pacing: 'fast' } });
     await patch(owner.token, '/user-settings', { kgraph: { enabled: true } });
   });
   afterAll(async () => {

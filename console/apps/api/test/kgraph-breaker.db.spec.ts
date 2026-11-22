@@ -78,7 +78,7 @@ describe('circuit breaker and rollback (#786)', () => {
   beforeAll(async () => {
     admin = await login(`kgbrk-admin-${stamp}@example.test`, 'admin');
     owner = await login(`kgbrk-owner-${stamp}@example.test`);
-    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, auditEvery: 0, suspendAfterFailures: 3 } });
+    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, auditEvery: 0, suspendAfterFailures: 3, pacing: 'fast' } });
     await patch(owner.token, '/user-settings', { kgraph: { enabled: true } });
   });
   afterAll(async () => {

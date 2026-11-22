@@ -70,7 +70,7 @@ describe('the Knowledge Graph compiler job (#781)', () => {
   beforeAll(async () => {
     admin = await login(`kgcomp-admin-${stamp}@example.test`, 'admin');
     owner = await login(`kgcomp-owner-${stamp}@example.test`);
-    await patch(admin.token, '/system-settings', { kgraph: { enabled: true } });
+    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } });
     await patch(owner.token, '/user-settings', { kgraph: { enabled: true } });
   });
   afterAll(async () => {

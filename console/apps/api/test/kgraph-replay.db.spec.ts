@@ -78,7 +78,7 @@ describe('the Knowledge Graph replay (#783)', () => {
   beforeAll(async () => {
     admin = await login(`kgrep-admin-${stamp}@example.test`, 'admin');
     owner = await login(`kgrep-owner-${stamp}@example.test`);
-    await patch(admin.token, '/system-settings', { kgraph: { enabled: true } });
+    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } });
     await patch(owner.token, '/user-settings', { kgraph: { enabled: true } });
   });
   afterAll(async () => {

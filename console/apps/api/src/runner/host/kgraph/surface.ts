@@ -2,7 +2,7 @@
 // Page queries only (never a model), through the run's own browser; labels pass the trace masking table before they are stored.
 import type { BrowserPort } from '@marinoscar/hexactra-browser-agent/browser-port';
 import type { BrowserState } from '@marinoscar/hexactra-browser-agent/context';
-import { captureFingerprint, resolveFingerprint, type ElementFingerprint } from '@marinoscar/hexactra-browser-agent/surface';
+import { captureFingerprint, pacingDelay, readinessTimeout, seededRandom, waitForElement, waitUntil, abortableSleep, type ElementFingerprint, type PacingMode } from '@marinoscar/hexactra-browser-agent/surface';
 import type { ProcedureVersion, ToolInvocation, ToolInvokerPort } from '@marinoscar/hexactra-kgraph';
 
 import { maskSensitive } from '../../../tasks/mask';
@@ -32,22 +32,64 @@ export function fingerprintOf(el: ProcedureVersion['elements'][number], shared?:
   };
 }
 
+export interface SurfaceInvokerOptions {
+  /** The tool's family (`browser`, `accounts`, `mcp:…`): only browser steps are paced and wait for the page. */
+  familyOf(tool: string): string;
+  pacing: PacingMode;
+  /** Stop and Pause end a wait at once. */
+  signal?: AbortSignal;
+  /** The page's URL now (a page query), for postconditions. */
+  location(): Promise<string | null>;
+  /** Injected for tests. */
+  random?: () => number;
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<boolean>;
+}
+
+const hostPathOf = (url: string | null) => {
+  try {
+    const u = new URL(url ?? '');
+    return { host: u.hostname.toLowerCase(), path: u.pathname };
+  } catch {
+    return null;
+  }
+};
+const pathFits = (pattern: string, path: string) => pattern === '**' || new RegExp(`^${pattern.split('/').map((s) => (s === '**' ? '.*' : s === '*' ? '[^/]+' : s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).join('/')}/?$`).test(path);
+
 /**
- * A browser step that names an element resolves it first: exactly one confident match replaces the step's selector; otherwise the step fails
- * (no call is made) and the executor stops with a resume point. Then the same tool call goes through the wrapped invoker (`executeTool`).
+ * A replayed browser step (E46.13, E46.14): a paced gap after the previous browser action (none for account and MCP steps), then a wait until
+ * its element resolves to exactly one visible, enabled match (otherwise the step fails: no call is made), then the same tool call through the
+ * wrapped invoker (`executeTool`), then a wait until its location check holds. Waits end at once on Stop or Pause.
  */
-export function surfaceInvoker(inner: ToolInvokerPort, version: ProcedureVersion, browser: BrowserPort, shared: (elementId: string) => Promise<Partial<ElementFingerprint> | null>): ToolInvokerPort {
+export function surfaceInvoker(inner: ToolInvokerPort, version: ProcedureVersion, browser: BrowserPort, shared: (elementId: string) => Promise<Partial<ElementFingerprint> | null>, o: SurfaceInvokerOptions): ToolInvokerPort {
+  const random = o.random ?? seededRandom(Date.now() & 0xffff);
+  const sleep = o.sleep ?? abortableSleep;
+  let browserActions = 0;
+  let lastWasNavigation = false;
+  const miss = (text: string, kind: string): ToolInvocation => ({ ok: false, text, digest: `element:${kind}`, refused: false, stopped: false, paused: false });
   return {
     invoke: async (req) => {
       const step = version.steps.find((s) => s.id === req.step);
-      const el = step?.element ? version.elements.find((e) => e.id === step.element) : undefined;
-      if (!el) return inner.invoke(req);
-      const found = await resolveFingerprint(browser, fingerprintOf(el, await shared(el.id).catch(() => null)));
-      if (found.kind !== 'found') {
-        const miss: ToolInvocation = { ok: false, text: `the element "${el.label ?? el.role ?? 'element'}" was ${found.kind === 'ambiguous' ? 'ambiguous' : 'not found'}`, digest: `element:${found.kind}`, refused: false, stopped: false, paused: false };
-        return miss;
+      if (o.familyOf(req.tool) !== 'browser' || !step) return inner.invoke(req);
+      if (browserActions > 0 && !(await sleep(pacingDelay(random, o.pacing, lastWasNavigation), o.signal))) return { ...miss('stopped while waiting', 'aborted'), stopped: true };
+      let args = req.args;
+      const el = step.element ? version.elements.find((e) => e.id === step.element) : undefined;
+      if (el) {
+        const ready = await waitForElement(browser, fingerprintOf(el, await shared(el.id).catch(() => null)), { timeoutMs: readinessTimeout([]), signal: o.signal, sleep });
+        if (ready.kind === 'aborted') return { ...miss('stopped while waiting', 'aborted'), stopped: true };
+        if (ready.kind !== 'found') return miss(`the element "${el.label ?? el.role ?? 'element'}" was ${ready.kind === 'ambiguous' ? 'ambiguous' : ready.kind === 'timeout' ? 'not ready in time' : 'not found'}`, ready.kind);
+        args = { ...args, selector: ready.selector };
       }
-      return inner.invoke({ ...req, args: { ...req.args, selector: found.selector } });
+      const result = await inner.invoke({ ...req, args });
+      browserActions++;
+      lastWasNavigation = req.tool === 'navigate';
+      const loc = step.checks.find((c) => c.kind === 'location');
+      if (result.ok && loc && loc.kind === 'location') {
+        await waitUntil(async () => {
+          const at = hostPathOf(await o.location());
+          return at !== null && (at.host === loc.host || at.host.endsWith(`.${loc.host}`)) && pathFits(loc.pathPattern, at.path);
+        }, { timeoutMs: readinessTimeout([]), signal: o.signal, sleep });
+      }
+      return result;
     },
   };
 }

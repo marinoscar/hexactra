@@ -4,6 +4,7 @@
 // match hands the run to the loop with one note in the model's log. Any error is caught, counted and handed over: it never fails the run.
 import type { RunOutcome } from '@marinoscar/hexactra-agent';
 import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
+import { abortableSleep } from '@marinoscar/hexactra-browser-agent/surface';
 import { breaker, checkOutcome, isAuditRun, noopTelemetry, type ProcedureVersion, type RunVerdict } from '@marinoscar/hexactra-kgraph';
 import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls, type ReplayMemory } from '@marinoscar/hexactra-kgraph/harness';
 
@@ -62,6 +63,7 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
   const { observer, watch } = watchCalls(original);
   (ctx.ports as { observer?: typeof observer }).observer = observer;
   const declared = declaredOutputs(run.outputsSpec);
+  const pacing = (await d.kgraph.systemSettingsOf().catch(() => null))?.pacing ?? 'human';
   const shapes = declared.length ? await readShapes(d.prisma, userId, version.id).catch(() => ({})) : {};
   try {
     const inputs: Record<string, unknown> = {};
@@ -72,10 +74,15 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
       inputs,
       ports: {
         store: d.kgraphStore,
-        tools: surfaceInvoker(harnessToolInvoker(ctx, profile, watch), version, ctx.ext.browser, async (id) => ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Element', key: id } }))?.props ?? null) as never),
+        tools: surfaceInvoker(harnessToolInvoker(ctx, profile, watch), version, ctx.ext.browser, async (id) => ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Element', key: id } }))?.props ?? null) as never, {
+          familyOf: (tool) => profile.registry.list(ctx).find((t) => t.name === tool)?.family ?? 'browser',
+          pacing,
+          signal: ctx.ports.control.haltSignal,
+          location: () => currentUrl(ctx as never),
+        }),
         probe: harnessProbe(() => currentUrl(ctx as never), watch),
         judge: harnessJudge(ctx, ctx.ports.policy.routing.route('fast')),
-        clock: { now: () => new Date(ctx.ports.clock.now()), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
+        clock: { now: () => new Date(ctx.ports.clock.now()), sleep: async (ms) => void (await abortableSleep(ms, ctx.ports.control.haltSignal)) },
         ids: { next: (p) => `${p}${ctx.ports.ids.uuid()}` },
         telemetry: noopTelemetry,
       },

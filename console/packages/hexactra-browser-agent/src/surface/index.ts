@@ -38,6 +38,9 @@ export interface PageElement {
   anchor: string | null;
   /** The element's other selector candidates (id, test attribute, structural path). */
   selectors: string[];
+  /** Shown and enabled (E46.14): absent means unknown and counts as ready. */
+  visible?: boolean;
+  enabled?: boolean;
 }
 
 export type Resolution =
@@ -98,7 +101,8 @@ export function surfaceElementsScript(): string {
     const t = el.getAttribute('data-testid') || el.getAttribute('data-test');
     if (t) sels.push('[data-testid="' + t.replace(/"/g, '') + '"]');
     sels.push(cssPath(el));
-    out.push({ selector: sels[0], selectors: sels.slice(0, 3), role: el.getAttribute('role') || null, name: el.type === 'password' ? null : label(el) || null, tag: el.tagName.toLowerCase(), inputType: el.getAttribute('type'), anchor: anchorOf(el) });
+    const r = el.getBoundingClientRect();
+    out.push({ visible: r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden', enabled: !el.disabled && el.getAttribute('aria-disabled') !== 'true', selector: sels[0], selectors: sels.slice(0, 3), role: el.getAttribute('role') || null, name: el.type === 'password' ? null : label(el) || null, tag: el.tagName.toLowerCase(), inputType: el.getAttribute('type'), anchor: anchorOf(el) });
   }
   return out;
 })()`;
@@ -125,7 +129,7 @@ function asElement(v: unknown): PageElement | null {
   const selector = s(o.selector, 500);
   if (!selector) return null;
   const selectors = Array.isArray(o.selectors) ? o.selectors.map((x) => s(x, 500)).filter((x): x is string => x !== null).slice(0, 3) : [selector];
-  return { selector, selectors, role: s(o.role, 40), name: s(o.name, 200), tag: s(o.tag, 40), inputType: s(o.inputType, 40), anchor: s(o.anchor, 120) };
+  return { selector, selectors, role: s(o.role, 40), name: s(o.name, 200), tag: s(o.tag, 40), inputType: s(o.inputType, 40), anchor: s(o.anchor, 120), ...(typeof o.visible === 'boolean' ? { visible: o.visible } : {}), ...(typeof o.enabled === 'boolean' ? { enabled: o.enabled } : {}) };
 }
 
 /** Every control the page lists, or null when the page cannot be asked. */
@@ -183,3 +187,6 @@ export function screenKeyOf(url: string, digest: string | null, registrable: (ho
     return null;
   }
 }
+
+export { abortableSleep, PACING, pacingDelay, seededRandom, type PacingMode } from './pacing';
+export { READINESS, readinessTimeout, waitForElement, waitUntil, type Readiness, type WaitOptions } from './conditions';

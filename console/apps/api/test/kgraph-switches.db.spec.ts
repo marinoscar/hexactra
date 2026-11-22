@@ -86,8 +86,8 @@ describe('the Knowledge Graph switches (#777)', () => {
     const refused = await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' });
     expect([refused.statusCode, refused.code]).toEqual([409, 'KGRAPH_OFF']);
     // An ordinary user cannot turn the deployment on.
-    expect((await call(owner, 'PATCH', '/system-settings', { kgraph: { enabled: true } })).statusCode).toBe(403);
-    expect((await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: true } })).statusCode).toBe(200);
+    expect((await call(owner, 'PATCH', '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } })).statusCode).toBe(403);
+    expect((await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } })).statusCode).toBe(200);
     expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' })).statusCode).toBe(409);
     expect((await call(owner, 'PATCH', '/user-settings', { kgraph: { enabled: true } })).statusCode).toBe(200);
     expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: true, user: true, available: true });
@@ -117,7 +117,7 @@ describe('the Knowledge Graph switches (#777)', () => {
 
     await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: false } });
     expect([await mode(), await kept()]).toEqual(['off', true]);
-    await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: true } });
+    await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } });
     expect([await mode(), await kept()]).toEqual(['reuse', true]);
 
     await call(owner, 'PATCH', '/user-settings', { kgraph: { enabled: false } });
