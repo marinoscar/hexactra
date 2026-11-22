@@ -885,6 +885,51 @@
     "outputSchema": null
   },
   {
+    "name": "procedures_list",
+    "title": "List learned procedures",
+    "scope": "procedures:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List learned procedures",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "52f02ffd5d76b32d",
+    "outputSchema": "ac6f8dd27d9b1b51"
+  },
+  {
+    "name": "procedure_get",
+    "title": "Read a learned procedure",
+    "scope": "procedures:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Read a learned procedure",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "78cc3bed67e9087e",
+    "outputSchema": "fce11bbf5ac15b42"
+  },
+  {
+    "name": "procedure_run",
+    "title": "Run a learned procedure",
+    "scope": "procedures:run",
+    "effect": "write",
+    "annotations": {
+      "title": "Run a learned procedure",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "80aad6103ca0195a",
+    "outputSchema": "56ece3dae3ac6e97"
+  },
+  {
     "name": "run_card_poll",
     "title": "Refresh a run card",
     "scope": "runs:read",

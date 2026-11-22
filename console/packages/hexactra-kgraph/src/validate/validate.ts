@@ -16,6 +16,8 @@ export const VIOLATION_RULES = [
   'unknown_tool',
   'undeclared_site',
   'judge_instruction',
+  'unobservable_guard',
+  'unbounded_loop',
 ] as const;
 export type ViolationRule = (typeof VIOLATION_RULES)[number];
 
@@ -147,10 +149,13 @@ export function rules(v: ProcedureVersion, options: ValidateOptions): Violation[
         }
         break;
       case 'branch':
+        // A guard reads only observable state (a screen, an element, a result's shape), never a view digest.
+        if (s.guard.kind === 'view_digest') out.push({ rule: 'unobservable_guard', step: s.id, message: 'a branch guard reads a screen, an element or a result, never a view digest' });
         refStep(s, s.then, 'the branch', false);
         refStep(s, s.else, 'the branch', false);
         break;
       case 'foreach':
+        if (!(s.maxItems >= 1 && s.maxItems <= 1000)) out.push({ rule: 'unbounded_loop', step: s.id, message: 'a loop has a bound' });
         checkBinding(s, 'over', s.over);
         for (const b of s.body) refStep(s, b, 'the loop body', false);
         break;

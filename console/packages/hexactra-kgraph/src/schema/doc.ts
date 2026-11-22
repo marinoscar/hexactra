@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { accountSchema, EDGE_TYPES, edgeSchema, elementSchema, graphNodeSchema, NODE_TYPES, outputSchema, parameterSchema, screenSchema, secretRefSchema, siteSchema, toolSchema } from './core';
 import { evidenceSchema, modeSchema, procedureSchema, procedureVersionSchema, VERSION_TRANSITIONS } from './procedure';
 import { bindingSchema, checkSchema, STEP_KINDS, stepSchema } from './step';
+import { transferFileSchema } from '../transfer';
 
 export const SCHEMA_DOC_ENTRIES: readonly { name: string; about: string; schema: z.ZodType }[] = [
   { name: 'Procedure', about: "One task's learned way of doing its job, across versions.", schema: procedureSchema },
@@ -22,6 +23,7 @@ export const SCHEMA_DOC_ENTRIES: readonly { name: string; about: string; schema:
   { name: 'Element', about: 'An element on a screen.', schema: elementSchema },
   { name: 'Evidence', about: 'Counts of what happened to a version or a step.', schema: evidenceSchema },
   { name: 'Mode', about: 'The per-task mode.', schema: modeSchema },
+  { name: 'TransferFile', about: 'The export and import file (`hexactra.kgraph`, formatVersion 1). Never trusted on arrival.', schema: transferFileSchema },
 ];
 
 /** The whole of docs/schema.md. Deterministic: the same schemas give the same bytes. */

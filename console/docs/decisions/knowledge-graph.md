@@ -124,6 +124,11 @@ The surface graph (screens, element fingerprints, re-resolution) is browser-spec
 
 ## The API, the view model and the CLI (E46.19)
 
+## Procedures as callable tools (E46.22)
+
+- **For other agents, over MCP.** `procedures_list`, `procedure_get` (scope `procedures:read`) and `procedure_run` (scope `procedures:run`), built from the package's host-neutral descriptors (`@marinoscar/hexactra-kgraph/mcp`, no MCP SDK). They are listed and callable only while the deployment and the caller's switches are on (per-request availability in the one registry, `McpTool.feature`); otherwise `tools/list` is the list of before and a call answers "turned off". `procedure_run` starts an ordinary run of the procedure's task and returns its id at once. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, or changes a switch.
+- **For the agent inside a run.** In a run whose mode is `reuse`, the tool family `procedures` adds `procedures_list` and `run_procedure`, registered last (a run with the feature off is offered exactly the tools of before). `run_procedure` walks another **active** procedure of the same owner (never the task's own) with the package's `runSubProcedure`: every step through the run's tool wrapper (Stop, Pause, the gates, intent recording), parameters bound from the call (a sensitive one only from the run's own inputs), and depth 1 (a sub-procedure that reaches `run_procedure` is refused). Its own calls are not captured; the capture records the one `run_procedure` call.
+
 The pages, the CLI and (later) MCP read the graph through REST routes behind `kgraph:read` (`apps/api/src/kgraph/kgraph-read.controller.ts`): procedures, one procedure as an ordered step list, versions, a readable diff (`diffVersions` in words), the Map's view model and how a run's steps ran. The deployment switch has its own route behind `kgraph:admin` (`GET/PUT /api/admin/kgraph/settings`), reading and writing the same `kgraph` system-settings namespace. The full list is in [parity.md](../parity.md#what-the-knowledge-graph-added-e46).
 
 - **Off.** A read answers with the stored data and `enabled: false`; restore, forget and a task's mode answer `409 KGRAPH_OFF`; "Delete everything learned" and the admin settings answer whatever the switches.

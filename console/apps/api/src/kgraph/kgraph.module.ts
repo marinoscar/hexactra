@@ -12,15 +12,19 @@ import { KgraphService } from './kgraph.service';
 import { PrismaProcedureStore } from './prisma-procedure-store';
 import { KgraphReviewsController } from './reviews.controller';
 import { KgraphReviewsService } from './reviews.service';
+import { KgraphTransferController } from './transfer.controller';
+import { KgraphTransferService } from './transfer.service';
 import './kgraph.errors';
+import { KgraphUpkeepDoctorCheck, KgraphUpkeepHandler, KgraphUpkeepTask } from './upkeep.job';
+import { KgraphUpkeepService } from './upkeep.service';
 
 /**
  * The Knowledge Graph host (epic E46, docs/decisions/knowledge-graph.md): the switches, the store binding and the routes. The runner asks
  * `KgraphEnabledService.modeFor` and nothing else whether a run uses it.
  */
 @Module({
-  controllers: [KgraphController, KgraphReviewsController, KgraphReadController, KgraphAdminController],
-  providers: [KgraphReadService, KgraphAdminService, KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
+  controllers: [KgraphController, KgraphReviewsController, KgraphReadController, KgraphAdminController, KgraphTransferController],
+  providers: [KgraphTransferService, KgraphUpkeepService, KgraphUpkeepHandler, KgraphUpkeepTask, KgraphUpkeepDoctorCheck, KgraphReadService, KgraphAdminService, KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
   exports: [KgraphEnabledService, PrismaProcedureStore, KgraphAfterRun],
 })
 export class KgraphModule {}

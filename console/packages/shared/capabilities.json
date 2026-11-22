@@ -1630,7 +1630,7 @@
       ],
       "cli": "kgraph status",
       "mcp": {
-        "none": "Deliberate for now: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); procedures as MCP tools arrive in E46.22"
+        "none": "Deliberate: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); the procedure tools (procedures_list, procedure_get, procedure_run) are offered only while both are on"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
@@ -1697,10 +1697,10 @@
         "GET /api/kgraph/summary"
       ],
       "cli": {
-        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
+        "none": "Not offered yet: `hexactra kgraph list` shows each task's clean-replay rate; the ledger itself is read through the REST API or the web app"
       },
       "mcp": {
-        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+        "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
@@ -1725,9 +1725,10 @@
         "kgraph show",
         "kgraph versions"
       ],
-      "mcp": {
-        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
-      },
+      "mcp": [
+        "procedures_list",
+        "procedure_get"
+      ],
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
       },
@@ -1735,6 +1736,23 @@
         "/kgraph",
         "/kgraph/procedures/:id",
         "/runs/:id"
+      ]
+    },
+    {
+      "id": "kgraph.procedure_run",
+      "description": "Run a learned procedure: start a run of an active procedure's task with its parameters, through the run start path every run uses (its policy, limits, gates and Inbox questions)",
+      "rest": [
+        "GET /api/kgraph/procedures/{id}",
+        "GET /api/tasks/{id}/kgraph",
+        "POST /api/tasks/{id}/runs"
+      ],
+      "cli": "tasks run",
+      "mcp": "procedure_run",
+      "tui": {
+        "none": "The TUI is for watching and answering; a run started this way is watched there like any run"
+      },
+      "web": [
+        "/tasks/:id"
       ]
     },
     {
@@ -1747,7 +1765,7 @@
         "none": "Deliberate: the map is a picture, drawn in the web app; `kgraph list` and `kgraph show` read the same procedures as text"
       },
       "mcp": {
-        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+        "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the map is drawn in the web app"
@@ -1775,6 +1793,45 @@
       "web": [
         "/admin/settings/kgraph"
       ]
+    },
+    {
+      "id": "kgraph.upkeep",
+      "description": "Run the Knowledge Graph's library upkeep now (administrators)",
+      "rest": [
+        "POST /api/kgraph/admin/upkeep"
+      ],
+      "cli": {
+        "none": "An administrator's action in the web app"
+      },
+      "mcp": {
+        "none": "Deliberate: an administrator's maintenance action, not for hosted AI apps"
+      },
+      "tui": {
+        "none": "An administrator's action in the web app"
+      },
+      "web": {
+        "none": "Not in the web app yet: the daily job runs it; an administrator runs it now through the REST route"
+      }
+    },
+    {
+      "id": "kgraph.transfer",
+      "description": "Export your Knowledge Graph procedures as a file, and import a file (it waits for your review and a verification run)",
+      "rest": [
+        "GET /api/kgraph/export",
+        "POST /api/kgraph/import"
+      ],
+      "cli": {
+        "none": "Arrives with the Knowledge Graph CLI commands (E46.19)"
+      },
+      "mcp": {
+        "none": "Deliberate: procedures are not exported to or imported from hosted AI apps (docs/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "Done in the web app or the REST API"
+      },
+      "web": {
+        "none": "Not in the web app yet: export and import go through the REST API"
+      }
     }
   ]
 }

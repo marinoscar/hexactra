@@ -56,10 +56,10 @@ describe('what the Knowledge Graph package imports', () => {
     expect(files.flatMap((f) => violations(f, readFileSync(f, 'utf8'), root))).toEqual([]);
   });
 
-  it('fails on a framework, a database client, a provider SDK, a platform package, a console path, or the harness outside src/harness', () => {
+  it('fails on a framework, a database client, a provider SDK, an MCP SDK, a platform package, a console path, or the harness outside src/harness', () => {
     const root = join(PACKAGE, 'dist');
     const f = join(root, 'validate', 'validate.js');
-    for (const spec of ['@nestjs/common', '@prisma/client', 'openai', '@marinoscar/platform-api', 'pg', '../../../apps/api/src/tasks/redact', HARNESS, `${HARNESS}/ports`, '../harness']) {
+    for (const spec of ['@nestjs/common', '@prisma/client', 'openai', '@modelcontextprotocol/sdk', '@modelcontextprotocol/sdk/server/mcp.js', '@marinoscar/platform-api', 'pg', '../../../apps/api/src/tasks/redact', HARNESS, `${HARNESS}/ports`, '../harness']) {
       expect(violations(f, `const x = require('${spec}');`, root)).toHaveLength(1);
       expect(violations(f, `import { x } from '${spec}';`, root)).toHaveLength(1);
     }

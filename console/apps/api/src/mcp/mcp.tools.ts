@@ -4,6 +4,7 @@
 // snapshot (test/mcp-manifest.spec.ts) are all derived from it. Every tool
 // calls the console's own REST routes in-process, as the caller.
 import { chatAnswerMode } from '@app/shared/question-rules';
+import { procedureGetDescriptor, procedureRunDescriptor, proceduresListDescriptor, type ProcedureToolDescriptor } from '@marinoscar/hexactra-kgraph/mcp';
 import { z } from 'zod';
 import type { UsageReport } from '../usage/usage.schemas';
 
@@ -23,7 +24,7 @@ import { answerableHere, howToAnswer, progressHasPageText, progressQuestionSchem
 import { browserActionScope } from '../browser/browser-action-scopes';
 import { fitRunTrace, runExportOutputSchema, traceHasPageText } from './run-export';
 import type { RunTrace } from '../tasks/run-trace.schemas';
-import { MCP_SCOPE_IDS, grantedScopes, type McpEffect, type McpScope } from './mcp.scopes';
+import { MCP_CARD_SCOPE_IDS, grantedScopes, type McpCardScope, type McpEffect, type McpScope } from './mcp.scopes';
 import { QUESTION_CARD_URI, RUN_CARD_URI, TASKS_CARD_URI, type McpToolVisibility } from './mcp.apps';
 
 export type { McpContent, McpContext, McpToolResult } from './mcp.results';
@@ -55,7 +56,22 @@ export interface McpTool {
   ui?: { resourceUri: string };
   /** MCP Apps: who may call it (`_meta.ui.visibility`); absent is the default, the model and the app. */
   visibility?: McpToolVisibility[];
+  /**
+   * Per-request availability (E46.22): the switch the tool depends on. A tool with one is listed and callable only while that switch is on
+   * for the deployment AND the caller's own account (`McpDispatcher.unavailableFeatures`); otherwise it is absent from `tools/list` and a
+   * direct call answers `featureOffText`. Absent: always available (every tool before E46.22).
+   */
+  feature?: McpToolFeature;
   call(args: Record<string, unknown>, ctx: McpContext): Promise<McpToolResult>;
+}
+
+/** The switches a tool may depend on (`McpTool.feature`): `kgraph`, the Knowledge Graph's deployment and user switches. */
+export const MCP_TOOL_FEATURES = ['kgraph'] as const;
+export type McpToolFeature = (typeof MCP_TOOL_FEATURES)[number];
+
+/** The tool error of a call to a tool whose switch is off (E46.22). */
+export function featureOffText(tool: Pick<McpTool, 'name'>): string {
+  return `${tool.name} is turned off: the Knowledge Graph is off for this Hexactra deployment or for your account. The owner can turn it on in Hexactra's settings.`;
 }
 
 /** The MCP `annotations` of a tool, every hint explicit (ChatGPT and Claude review rules). */
@@ -268,7 +284,7 @@ function typedQuestion(q: QuestionView, ctx: McpContext): z.infer<typeof typedQu
 }
 
 /** What a question card needs besides the question: where the console is and what this connection may do. */
-function cardContext(ctx: McpContext): { app_url: string; granted_scopes: McpScope[] } {
+function cardContext(ctx: McpContext): { app_url: string; granted_scopes: McpCardScope[] } {
   return { app_url: appUrlOf(ctx), granted_scopes: grantedScopes(ctx.credential) };
 }
 
@@ -285,7 +301,7 @@ const questionToolSchema = z.object({
   hint: z.string().optional(),
   question: typedQuestionSchema.optional().describe('The typed question (prompt, options, constraints), for the question card (#467)'),
   app_url: z.string().optional().describe('The Hexactra console (links to the inbox and to runs)'),
-  granted_scopes: z.array(z.enum(MCP_SCOPE_IDS)).optional().describe('The scopes this connection holds (the card hides what it cannot do; the server checks anyway)'),
+  granted_scopes: z.array(z.enum(MCP_CARD_SCOPE_IDS)).optional().describe('The scopes this connection holds (the card hides what it cannot do; the server checks anyway)'),
 });
 
 /** What a tool returns about a question: never more than the REST API (a secret is never returned). */
@@ -686,6 +702,40 @@ export function instructionsFor(can: InstructionScopes, opts: { hosted?: boolean
 
 export const MCP_INSTRUCTIONS = instructionsFor(() => true);
 
+/** A learned procedure as `GET /kgraph/procedures/:id` answers (E46.19). */
+interface RestProcedure {
+  id: string;
+  taskId: string;
+  taskName: string;
+  name: string;
+  state: string | null;
+  health: string;
+  activeVersion: {
+    steps: Array<{ id: string; kind: string; label: string; tool: string | null; target: string | null; usesAi: boolean; commitClass: boolean; health: string }>;
+    parameters: Array<{ name: string; type: string; sensitive: boolean; required: boolean }>;
+    outputs: Array<{ name: string; sensitive: boolean }>;
+  } | null;
+}
+
+/** A procedure as the tools show it (the package's `procedureSummarySchema`): labels are already masked by the route. */
+function mcpProcedure(p: RestProcedure): Record<string, unknown> {
+  return {
+    id: p.id,
+    task_id: p.taskId,
+    task_name: p.taskName,
+    name: p.name,
+    state: p.state,
+    health: p.health,
+    parameters: (p.activeVersion?.parameters ?? []).map((x) => ({ name: x.name, type: x.type, required: x.required, sensitive: x.sensitive })),
+    outputs: (p.activeVersion?.outputs ?? []).filter((o) => !o.sensitive).map((o) => ({ name: o.name })),
+  };
+}
+
+/** A registry entry's shared fields from one of the package's host-neutral descriptors (`@marinoscar/hexactra-kgraph/mcp`). */
+function procedureTool(d: ProcedureToolDescriptor): Pick<McpTool, 'name' | 'title' | 'description' | 'input' | 'output' | 'effect' | 'openWorld' | 'idempotent' | 'feature'> {
+  return { name: d.name, title: d.title, description: d.description, input: d.input, output: d.output, effect: d.effect, openWorld: d.openWorld, ...(d.idempotent ? { idempotent: true } : {}), feature: 'kgraph' };
+}
+
 export const MCP_TOOLS: McpTool[] = [
   // --- delegate to the console's goal runner -------------------------------
   {
@@ -896,7 +946,7 @@ export const MCP_TOOLS: McpTool[] = [
       next_cursor: z.string().nullable().describe('Pass as cursor for the next page; null on the last page'),
       total: z.number().int().describe('How many tasks the user has'),
       app_url: z.string().optional().describe('The Hexactra console (each task is at app_url/tasks/<id>)'),
-      granted_scopes: z.array(z.enum(MCP_SCOPE_IDS)).optional().describe('The scopes this connection holds (the tasks card hides Run and Pause when it cannot use them)'),
+      granted_scopes: z.array(z.enum(MCP_CARD_SCOPE_IDS)).optional().describe('The scopes this connection holds (the tasks card hides Run and Pause when it cannot use them)'),
     }),
     scope: 'runs:read',
     effect: 'read',
@@ -1102,7 +1152,7 @@ export const MCP_TOOLS: McpTool[] = [
     output: z.object({
       items: z.array(inboxItemResponseSchema),
       app_url: z.string().optional().describe('The Hexactra console (links to the inbox)'),
-      granted_scopes: z.array(z.enum(MCP_SCOPE_IDS)).optional().describe('The scopes this connection holds (the question card hides what it cannot do)'),
+      granted_scopes: z.array(z.enum(MCP_CARD_SCOPE_IDS)).optional().describe('The scopes this connection holds (the question card hides what it cannot do)'),
     }),
     scope: 'inbox:read',
     effect: 'read',
@@ -1769,6 +1819,47 @@ export const MCP_TOOLS: McpTool[] = [
     openWorld: true,
     idempotent: true,
     call: async (a, ctx) => text(await ctx.api('DELETE', `/browser/sessions/${String(a.session_id)}`, { success: a.success, ...(a.result ? { result: a.result } : {}) })),
+  },
+  // --- learned procedures (E46.22): the Knowledge Graph's procedures, listed and callable only while it is on for the deployment and the caller ---
+  {
+    ...procedureTool(proceduresListDescriptor),
+    scope: 'procedures:read',
+    async call(a, ctx) {
+      const qs = new URLSearchParams({ ...(a.state ? { state: String(a.state) } : {}), ...(a.query ? { q: String(a.query) } : {}) }).toString();
+      const list = await ctx.api<{ procedures: Array<{ id: string }> }>('GET', `/kgraph/procedures${qs ? `?${qs}` : ''}`);
+      const page = list.procedures.slice(0, Number(a.limit));
+      const procedures = await Promise.all(page.map(async (p) => mcpProcedure(await ctx.api<RestProcedure>('GET', `/kgraph/procedures/${encodeURIComponent(p.id)}`))));
+      const v = { procedures, has_more: list.procedures.length > page.length };
+      return toolOutput({ text: v, structured: v, summary: `${procedures.length} learned procedure(s).` });
+    },
+  },
+  {
+    ...procedureTool(procedureGetDescriptor),
+    scope: 'procedures:read',
+    async call(a, ctx) {
+      const p = await ctx.api<RestProcedure>('GET', `/kgraph/procedures/${encodeURIComponent(String(a.procedure_id))}`);
+      const steps = (p.activeVersion?.steps ?? []).map((s) => ({ id: s.id, kind: s.kind, label: s.label, tool: s.tool, target: s.target, uses_ai: s.usesAi, commits: s.commitClass, health: s.health }));
+      const v = { ...mcpProcedure(p), steps };
+      // Step labels and targets can come from web pages: untrusted.
+      return toolOutput({ text: v, structured: v, summary: `Procedure ${p.id}: ${steps.length} step(s).`, untrusted: true });
+    },
+  },
+  {
+    ...procedureTool(procedureRunDescriptor),
+    scope: 'procedures:run',
+    async call(a, ctx) {
+      const p = await ctx.api<RestProcedure>('GET', `/kgraph/procedures/${encodeURIComponent(String(a.procedure_id))}`);
+      if (p.state !== 'active' || !p.activeVersion) return errorOutcome('This procedure is not active yet: it can be run once it has been verified.', 'PROCEDURE_NOT_ACTIVE');
+      const inputs = (a.inputs ?? {}) as Record<string, string | number>;
+      const sensitive = new Set(p.activeVersion.parameters.filter((x) => x.sensitive).map((x) => x.name.toLowerCase()));
+      if (Object.keys(inputs).some((k) => sensitive.has(k.toLowerCase()))) return errorOutcome('A sensitive parameter is never passed here: the owner enters it in Hexactra when the run starts.', 'SENSITIVE_INPUT');
+      const mode = await ctx.api<{ mode: string }>('GET', `/tasks/${p.taskId}/kgraph`);
+      if (mode.mode !== 'reuse') return errorOutcome("This procedure's task does not reuse its procedure (its Knowledge Graph mode is not reuse): the owner can change that in Hexactra.", 'PROCEDURE_NOT_REUSED');
+      // The run start path every run uses: the same policy, limits, gates, questions and Inbox.
+      const run = await ctx.api<Record<string, unknown>>('POST', `/tasks/${p.taskId}/runs`, Object.keys(inputs).length ? { inputs } : {});
+      const v = { run_id: String(run.id), status: String(run.status), procedure_id: p.id, task_id: p.taskId, follow: `run_wait with run_id ${String(run.id)}` };
+      return toolOutput({ text: v, structured: v, summary: `Run ${v.run_id} started (${v.status}). Follow it with run_wait.` });
+    },
   },
   // --- MCP Apps helpers (#466): called by a widget through the host, hidden from the model ---
   {

@@ -14,7 +14,9 @@ describe('answering a review', () => {
   });
   it('no MCP tool names a Knowledge Graph review', () => {
     const tools = readFileSync(join(__dirname, '..', 'src', 'mcp', 'mcp.tools.ts'), 'utf8');
-    expect(tools).not.toMatch(/kgraph|kg_review|reviews\/.*answer/i);
+    // The learned-procedure tools (E46.22) read /kgraph/procedures; nothing reaches a review, its answer, or another Knowledge Graph route.
+    expect(tools).not.toMatch(/kg_?review|kgraph\/reviews/i);
+    expect([...tools.matchAll(/\/kgraph\/([a-z]+)/g)].map((m) => m[1]).filter((r) => r !== 'procedures')).toEqual([]);
   });
 });
 

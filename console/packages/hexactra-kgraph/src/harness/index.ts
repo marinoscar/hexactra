@@ -19,6 +19,11 @@ export interface ReplayMemory {
   intent: string | null;
   /** The run was handed to the agent: no later job replays again. */
   handedOver: boolean;
+  /** Per-segment reuse (E46.18): the first step of the segment after the one that handed over, and how many hand-backs this run made. */
+  resumeAt?: string | null;
+  handBacks?: number;
+  /** The run's step count when it was handed over: the walk resumes only after the agent has acted since. */
+  handedOverAt?: number;
   /** Verification (E46.10): the commit-class step the owner is being asked about, and the ones they allowed. */
   awaitingConfirm?: string | null;
   confirmed?: string[];
@@ -114,6 +119,8 @@ export interface ReplayInput<C extends AnyContext> {
    * confirmation setting and saved approvals say. The graph adds caution; it never removes it.
    */
   verify?: boolean;
+  /** Start here (a later segment, E46.18) instead of the first step not done. */
+  fromStep?: string;
   /** The recovery ladder (E46.15–E46.16), tried before a mismatch hands over. */
   recovery?: RecoveryLadder;
   /** The outcome check of a completed walk (E46.11): a failure hands over instead of succeeding. */
@@ -158,6 +165,11 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
   let declined = false;
   const handover = async (report: ExecutionReport): Promise<ReplayResult> => {
     memory.handedOver = true;
+    memory.handedOverAt = ctx.state.stepCount;
+    // The next segment after the one that broke (E46.18): the agent finishes this segment's sub-goal, then the walk may resume there.
+    const at = report.resume ? version.steps.findIndex((s) => s.id === report.resume!.step) : -1;
+    const seg = at >= 0 ? version.steps[at]!.segment : undefined;
+    memory.resumeAt = at >= 0 ? (version.steps.slice(at + 1).find((s) => s.segment !== seg && s.kind !== 'agent')?.id ?? null) : null;
     const note = handoverNote(report);
     ctx.memory.log.push(note);
     await input.save();
@@ -170,7 +182,7 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
     const resumeAt = version.steps.find((s) => !memory.done.includes(s.id))?.id;
     report = await executeProcedure(version, input.inputs, input.ports, {
       goal: ctx.run.goal,
-      ...(memory.done.length && resumeAt ? { fromStep: resumeAt, done } : {}),
+      ...(input.fromStep ? { fromStep: input.fromStep, done } : memory.done.length && resumeAt ? { fromStep: resumeAt, done } : {}),
       unknown,
       ...(input.recovery ? { recovery: input.recovery } : {}),
       before: async (step) => {
@@ -211,6 +223,8 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
       after: async (step) => {
         if (!memory.done.includes(step.id)) memory.done.push(step.id);
         if (memory.intent === step.id) memory.intent = null;
+        // A confirmation covers one sending: a loop's next iteration asks again (E46.18).
+        if (memory.confirmed?.includes(step.id)) memory.confirmed = memory.confirmed.filter((id) => id !== step.id);
       },
     });
   } catch {
@@ -327,3 +341,5 @@ export function harnessProbe(location: () => Promise<string | null>, watch: Call
     elementPresent: async () => null,
   };
 }
+
+export { bindParameters, insideSubProcedure, runSubProcedure, type BoundInputs, type SubProcedureInput, type SubProcedureResult } from './sub-procedure';

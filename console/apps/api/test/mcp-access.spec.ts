@@ -117,9 +117,10 @@ describe('tools/list for an OAuth app (#460)', () => {
     expect(on.find((t) => t.name === 'run_goal')!.description).not.toContain(STEP_UP_NOTE);
     const off = await list(false, oauth(DEFAULT_SCOPES), CONTRIBUTOR);
     expect(off.map((t) => t.name)).not.toContain('browser_open');
-    // A personal access token: every model-visible tool, unmarked, whatever the setting says.
+    // A personal access token: every model-visible tool, unmarked, whatever the setting says; without the Knowledge Graph's switches (no
+    // service here: off), not the learned-procedure tools (E46.22).
     const pat = await list(false, { kind: 'pat', tokenId: 'p' });
-    expect(pat.map((t) => t.name)).toEqual(MCP_TOOLS.filter((t) => !t.visibility).map((t) => t.name));
+    expect(pat.map((t) => t.name)).toEqual(MCP_TOOLS.filter((t) => !t.visibility && !t.feature).map((t) => t.name));
     expect(pat.some((t) => t.description.includes(STEP_UP_NOTE))).toBe(false);
     expect(pat.every((t) => Array.isArray(t.securitySchemes))).toBe(true);
   });
@@ -159,6 +160,70 @@ describe('call-time enforcement (#460)', () => {
     const pat = await d.dispatch(call('runs_list'), rctx({ kind: 'pat', tokenId: 'p' }), caller as never);
     expect(pat!.status).toBe(200);
     expect(tokenRevoked(7).status).toBe(401);
+  });
+});
+
+describe('per-request availability: the learned-procedure tools (E46.22)', () => {
+  const KG = ['procedures_list', 'procedure_get', 'procedure_run'];
+  const KG_USER = [...CONTRIBUTOR, 'kgraph:read'];
+  /** A dispatcher whose Knowledge Graph switches answer `available`, and the REST calls its tools made. */
+  const dispatcher = (available: boolean | 'throws') => {
+    const inject = jest.fn(async () => ({ statusCode: 200, headers: {}, body: JSON.stringify({ data: { enabled: true, procedures: [] } }), rawPayload: Buffer.alloc(0) }));
+    const kgraph = { status: async () => (available === 'throws' ? Promise.reject(new Error('db down')) : { deployment: available, user: available, available }) };
+    const d = new McpDispatcher({ httpAdapter: { getInstance: () => ({ inject }) } } as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, kgraph as never);
+    return { d, inject };
+  };
+  const list = async (d: McpDispatcher, credential: unknown, userPermissions?: string[]) =>
+    ((await d.dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, rctx(credential), 'Bearer x', undefined, { userId: 'u1', userPermissions }))!.body.result as { tools: Array<{ name: string }> }).tools.map((t) => t.name);
+  const before = MCP_TOOLS.filter((t) => !t.feature);
+
+  it('switch off (or unreadable): tools/list is exactly the list of before for every caller, and a direct call answers "turned off"', async () => {
+    for (const state of [false, 'throws'] as const) {
+      const { d, inject } = dispatcher(state);
+      expect(await list(d, { kind: 'pat', tokenId: 'p' })).toEqual(before.filter((t) => !t.visibility).map((t) => t.name));
+      expect(await list(d, { kind: 'jwt' })).toEqual(before.filter((t) => !t.visibility).map((t) => t.name));
+      const app = await list(d, oauth(MCP_SCOPE_IDS), KG_USER);
+      expect(app.filter((n) => KG.includes(n))).toEqual([]);
+      expect(app).toEqual(listedTools(rctx(oauth(MCP_SCOPE_IDS)), { permissions: KG_USER }, false).map((x) => x.tool.name).filter((n) => !KG.includes(n)));
+      for (const name of KG) {
+        const out = await d.dispatch(call(name, { procedure_id: 'kgp-1' }), rctx({ kind: 'pat', tokenId: 'p' }), 'Bearer x', undefined, { userId: 'u1' });
+        const r = out!.body.result as { isError: boolean; content: Array<{ text: string }>; structuredContent?: { code: string } };
+        expect([name, r.isError, r.content[0]!.text]).toEqual([name, true, expect.stringContaining('is turned off')]);
+      }
+      expect(inject).not.toHaveBeenCalled();
+    }
+  });
+
+  it('switch on: listed and callable, at the end of the model tools of before; an OAuth app sees them only with their scopes', async () => {
+    const { d, inject } = dispatcher(true);
+    const pat = await list(d, { kind: 'pat', tokenId: 'p' });
+    expect(pat).toEqual(MCP_TOOLS.filter((t) => !t.visibility).map((t) => t.name));
+    expect(pat.slice(-3)).toEqual(KG);
+    // Granted procedures:run (and :read): listed. Without them: not listed (no step-up advertised) or marked as a step-up.
+    expect((await list(d, oauth([...DEFAULT_SCOPES, 'procedures:read', 'procedures:run']), KG_USER)).filter((n) => KG.includes(n))).toEqual(KG);
+    // With procedures:run only, the read tools are advertised as step-ups (the default setting), marked so.
+    const stepped = ((await d.dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, rctx(oauth(['runs:read', 'procedures:run'])), 'Bearer x', undefined, { userId: 'u1', userPermissions: KG_USER }))!.body.result as { tools: Array<{ name: string; description: string }> }).tools;
+    expect(stepped.filter((t) => KG.includes(t.name)).map((t) => [t.name, t.description.includes(STEP_UP_NOTE)])).toEqual([['procedures_list', true], ['procedure_get', true], ['procedure_run', false]]);
+    const out = await d.dispatch(call('procedures_list', {}), rctx({ kind: 'pat', tokenId: 'p' }), 'Bearer x', undefined, { userId: 'u1' });
+    expect((out!.body.result as { isError?: boolean }).isError).toBeFalsy();
+    expect(inject).toHaveBeenCalledTimes(1);
+  });
+
+  it('scopes gate an OAuth app: procedures:read reads, procedures:run runs; neither alone does the other; a user without the permissions is forbidden', () => {
+    const user = { permissions: KG_USER };
+    expect(toolAccess(tool('procedures_list'), oauth(['procedures:read']), user)).toBe('allowed');
+    expect(toolAccess(tool('procedure_run'), oauth(['procedures:read']), user)).toBe('needs_scope');
+    expect(toolAccess(tool('procedure_run'), oauth(['procedures:run']), user)).toBe('allowed');
+    expect(toolAccess(tool('procedure_get'), oauth(['procedures:run']), user)).toBe('needs_scope');
+    expect(toolAccess(tool('procedure_run'), oauth(MCP_SCOPE_IDS), { permissions: [...VIEWER, 'kgraph:read'] })).toBe('forbidden');
+    expect(toolAccess(tool('procedures_list'), oauth(MCP_SCOPE_IDS), { permissions: CONTRIBUTOR })).toBe('forbidden');
+  });
+
+  it('a turned-off tool is never a step-up: stepUpScopes skips it', () => {
+    const r = rctx(oauth(DEFAULT_SCOPES));
+    const user = { permissions: KG_USER };
+    expect(stepUpScopes([call('procedure_run')], r, user)).toEqual(['procedures:run']);
+    expect(stepUpScopes([call('procedure_run')], r, user, new Set(['kgraph']))).toBeNull();
   });
 });
 

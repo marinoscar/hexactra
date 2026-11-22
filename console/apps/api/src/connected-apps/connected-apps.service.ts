@@ -32,6 +32,8 @@ export const SCOPE_LABELS: Readonly<Record<string, string>> = {
   'tasks:write': 'Tasks',
   'inbox:read': 'Inbox',
   'inbox:write': 'Inbox',
+  'procedures:read': 'Procedures',
+  'procedures:run': 'Run procedures',
   'browser:drive': 'Drive browser',
   'browser:evaluate': 'JavaScript',
   'desktop:control': 'Desktop',

@@ -6,7 +6,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
 import { FabricClient } from '../src/fabric/fabric.client';
-import { READ_ONLY_TOOLS } from '../src/mcp/mcp.tools';
+import { MCP_TOOLS, READ_ONLY_TOOLS } from '../src/mcp/mcp.tools';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 let app: NestFastifyApplication;
@@ -58,7 +58,8 @@ describe('the console MCP server', () => {
     // Every hint is explicit (#462).
     expect(list.json.result.tools.find((x: { name: string }) => x.name === 'run_status').annotations).toEqual({ title: expect.any(String), readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
     // Every read-only hint names a real tool (an app-only tool, #466, is not listed to a personal access token).
-    for (const n of READ_ONLY_TOOLS) if (n !== 'run_card_poll') expect(names).toContain(n);
+    // The learned-procedure tools (E46.22) are listed only while the Knowledge Graph is on (it is off here).
+    for (const n of READ_ONLY_TOOLS) if (n !== 'run_card_poll' && !MCP_TOOLS.find((t) => t.name === n)?.feature) expect(names).toContain(n);
     expect(names).not.toContain('run_card_poll');
 
     const made = await rpc(t, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'task_create', arguments: { name: 'Fare', goal: 'Find a fare', allowed_domains: ['flights.example.test'] } } });
