@@ -88,6 +88,11 @@ import { RunRetentionCeilingPage } from './pages/RunRetentionCeilingPage';
 import { RecordingRetentionPage } from './pages/RecordingRetentionPage';
 import { RequestHistorySettingsPage } from './pages/RequestHistorySettingsPage';
 import { AgentPricingPage } from './pages/AgentPricingPage';
+import { KgraphAdminPage } from './pages/KgraphAdminPage';
+import { KgraphPage } from './pages/KgraphPage';
+import { KgraphProcedurePage } from './pages/KgraphProcedurePage';
+import { KgraphSettingsPage } from './pages/KgraphSettingsPage';
+import { KgraphStatusProvider, useKgraphFeature } from './kgraph/KgraphStatusProvider';
 import { AppPlatformHost } from './platformHost';
 import {
   beforeLogout,
@@ -113,6 +118,8 @@ registerSettingsFeature('orgs', useOrgsFeature);
 // The `oauthServer` feature (#459): the Connected apps card shows only while the
 // OAuth server is on (it ships off; an administrator switches it on in OAuth clients).
 registerSettingsFeature('oauthServer', useOAuthServerFeature);
+// The `kgraph` feature (E46.20): the Knowledge Graph's navigation entry shows only while the deployment's and the viewer's own switch are on.
+registerSettingsFeature('kgraph', useKgraphFeature);
 
 // "My saved logins" (E37.5): Vault's own pages, a separate chunk loaded when the route opens.
 const SavedLoginsRoutes = lazy(() => import('./secrets/SavedLoginsRoutes'));
@@ -148,7 +155,7 @@ function HomeRoute() {
  * need the host (the Inbox count behind the navigation badge, the onboarding
  * fetch). Add yours to `src/slices/<id>.tsx`.
  */
-const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, OAuthServerStatus, AppPlatformHost, InboxCountProvider, ...sliceHostedProviders];
+const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, OAuthServerStatus, AppPlatformHost, InboxCountProvider, KgraphStatusProvider, ...sliceHostedProviders];
 
 /** One probe per signed-in user of whether the OAuth server is on (the `oauthServer` feature). */
 function OAuthServerStatus({ children }: { children: ReactNode }) {
@@ -326,6 +333,11 @@ export function AppRoutes() {
           <Route path="admin/settings/run-history" element={<Gate permission="system_settings:read"><RunRetentionCeilingPage /></Gate>} />
           <Route path="admin/settings/run-recordings" element={<Gate permission="system_settings:read"><RecordingRetentionPage /></Gate>} />
           <Route path="admin/settings/request-history" element={<Gate permission="system_settings:read"><RequestHistorySettingsPage /></Gate>} />
+          {/* The Knowledge Graph (E46.20): `kgraph:read` is what /api/kgraph/* enforces (writes are gated in the pages); `kgraph:admin` what /api/admin/kgraph/settings enforces. */}
+          <Route path="kgraph" element={<Gate permission="kgraph:read"><KgraphPage /></Gate>} />
+          <Route path="kgraph/procedures/:id" element={<Gate permission="kgraph:read"><KgraphProcedurePage /></Gate>} />
+          <Route path="settings/kgraph" element={<Gate permission="kgraph:read"><KgraphSettingsPage /></Gate>} />
+          <Route path="admin/settings/kgraph" element={<Gate permission="kgraph:admin"><KgraphAdminPage /></Gate>} />
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />
           {/* The enabled optional slices' pages (packages/shared/slices.json; src/slices/). */}

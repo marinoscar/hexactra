@@ -18,6 +18,7 @@ import { useTaskActions } from '../components/useTaskActions';
 import { TaskDeliveriesSummary } from '../deliveries/TaskDeliveriesSummary';
 import { TaskChips } from '../taskConnections/TaskChips';
 import { TaskOutputsTable } from '../taskOutputs/TaskOutputsTable';
+import { TaskKgraphControl } from '../kgraph/TaskKgraphControl';
 import { OUTPUT_TYPE_LABEL } from '../taskOutputs/model';
 import { useRunInputs } from '../taskParams/RunInputsDialog';
 import { savedValueText } from '../taskParams/model';
@@ -456,6 +457,9 @@ export function TaskDetailPage() {
           )}
 
           <MailTriggersSection taskId={task.id} parameters={task.parameters ?? []} canWrite={canRun} canRead={canReadRuns} canReadConnections={viewer.hasPermission('connections:read')} />
+
+          {/* The Knowledge Graph (E46.20): nothing without `kgraph:read`. */}
+          <TaskKgraphControl taskId={task.id} />
 
           <Section title="Configuration" collapsible startCollapsed={foldGoal} action={editLink}>
             <Paper variant="outlined" sx={{ px: 2, py: 1 }}>

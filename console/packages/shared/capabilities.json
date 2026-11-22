@@ -1635,9 +1635,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/settings/kgraph",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "kgraph.manage",
@@ -1660,9 +1661,11 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/settings/kgraph",
+        "/tasks/:id",
+        "/kgraph/procedures/:id"
+      ]
     },
     {
       "id": "kgraph.reviews",
@@ -1681,9 +1684,10 @@
       "tui": {
         "none": "Deliberate: answered in the signed-in web app only"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/kgraph",
+        "/inbox"
+      ]
     },
     {
       "id": "kgraph.ledger",
@@ -1693,7 +1697,7 @@
         "GET /api/kgraph/summary"
       ],
       "cli": {
-        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
+        "none": "Not offered yet: `hexactra kgraph list` shows each task's clean-replay rate; the ledger itself is read through the REST API or the web app"
       },
       "mcp": {
         "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
@@ -1701,9 +1705,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/kgraph"
+      ]
     },
     {
       "id": "kgraph.procedures",
@@ -1728,9 +1732,11 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/kgraph",
+        "/kgraph/procedures/:id",
+        "/runs/:id"
+      ]
     },
     {
       "id": "kgraph.procedure_run",
@@ -1745,9 +1751,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; a run started this way is watched there like any run"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794); until then running the procedure's task replays it"
-      }
+      "web": [
+        "/tasks/:id"
+      ]
     },
     {
       "id": "kgraph.graph",
@@ -1784,9 +1790,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; deployment settings are set in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph settings card (E46.20, #794)"
-      }
+      "web": [
+        "/admin/settings/kgraph"
+      ]
     },
     {
       "id": "kgraph.upkeep",
@@ -1804,7 +1810,7 @@
         "none": "An administrator's action in the web app"
       },
       "web": {
-        "none": "Arrives with the Knowledge Graph admin card (E46.20, #794)"
+        "none": "Not in the web app yet: the daily job runs it; an administrator runs it now through the REST route"
       }
     },
     {
@@ -1824,7 +1830,7 @@
         "none": "Done in the web app or the REST API"
       },
       "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+        "none": "Not in the web app yet: export and import go through the REST API"
       }
     }
   ]

@@ -247,6 +247,16 @@ export const ROUTES = [
   ['task-connections-detail', '/tasks/{carTask}'],
   ['run-connections', '/runs/{carRun}'],
   ['settings-connections-details', '/settings/connections', { action: openConnectionDetails }],
+  // The Knowledge Graph (E46.20, #794): the page's tabs, a procedure, a version's diff, the settings cards' pages. The task page
+  // (`task-detail`), a finished run (`run-finished`) and the Inbox (`inbox`) show its control, panel and review card in the mock.
+  ['kgraph', '/kgraph'],
+  ['kgraph-reviews', '/kgraph?tab=reviews'],
+  ['kgraph-map', '/kgraph?tab=map'],
+  ['kgraph-history', '/kgraph?tab=history', { action: pressButton('What changed') }],
+  ['kgraph-procedure', '/kgraph/procedures/kgp-ui-1'],
+  ['settings-kgraph', '/settings/kgraph'],
+  ['settings-kgraph-delete', '/settings/kgraph', { viewport: true, action: pressButton('Delete everything learned') }],
+  ['admin-kgraph', '/admin/settings/kgraph'],
   ['inbox-account-approvals', '/inbox', {
     action: async (page) => {
       await page.getByRole('button', { name: 'Show all' }).first().click({ timeout: 5_000 });
