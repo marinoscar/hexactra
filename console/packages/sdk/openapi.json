@@ -30155,6 +30155,852 @@
         }
       }
     },
+    "/api/kgraph/procedures": {
+      "get": {
+        "description": "Each with its shown version's state and health, its step count and its task's ledger summary. Filters: `taskId`, `state`, `q`. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_procedures",
+        "parameters": [
+          {
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "description": "Only procedures whose shown version is in this state.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "candidate",
+                "verified",
+                "active",
+                "suspended",
+                "retired",
+                "rejected"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words in the procedure or task name.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProceduresResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Your learned procedures",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/procedures/{id}": {
+      "get": {
+        "description": "The active version (else the newest) as an ordered step list: kind, tool, target, whether it uses AI, health, and each argument by where it comes from; its parameters and outputs. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_procedure",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProcedureDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One procedure",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/procedures/{id}/versions": {
+      "get": {
+        "description": "Newest first, with state, change class, health and evidence counts. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_versions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VersionsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A procedure's versions",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/procedures/{id}/versions/{version}": {
+      "get": {
+        "description": "By its number, as an ordered step list. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_version",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VersionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One version of a procedure",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/procedures/{id}/versions/{version}/diff": {
+      "get": {
+        "description": "Step by step in plain words, against `against` (a version number), else its parent, else the version before it. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_diff",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "against",
+            "required": false,
+            "in": "query",
+            "description": "The version number to compare with. Default: the version's parent, else the one before it.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DiffResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What changed in a version",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/graph": {
+      "get": {
+        "description": "Nodes (procedures, steps, tools, sites, accounts, saved logins, parameters, outputs) with type, label, health and counts; edges; clusters per site and per account. Your connected accounts, added MCP tools and saved logins no procedure uses yet are included, flagged `unused` (not with `taskId` or `site`). Above 2,000 nodes, steps fold into their procedures, then the procedures are paged (`cursor`). While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_graph",
+        "parameters": [
+          {
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "site",
+            "required": false,
+            "in": "query",
+            "description": "Only procedures on this registrable domain.",
+            "schema": {
+              "minLength": 3,
+              "maxLength": 253,
+              "type": "string"
+            }
+          },
+          {
+            "name": "types",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated node types: Procedure, Step, Site, Account, Tool, SecretRef, Parameter, Output.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` of the previous page.",
+            "schema": {
+              "minimum": 0,
+              "maximum": 100000,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GraphResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The Knowledge Graph map",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/runs/{runId}": {
+      "get": {
+        "description": "Its mode and outcome, and which steps of the procedure were replayed, recovered, judged (one small model call) or done by the agent. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphRead_run",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/KgRunResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "How a run used the Knowledge Graph",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/kgraph/settings": {
+      "get": {
+        "description": "Whether the Knowledge Graph is allowed on this deployment, and its audit, suspension, retention and pacing rules (the system setting `kgraph`).\n\n**Requires:** authentication, plus permission `kgraph:admin`.",
+        "operationId": "kgraphAdmin_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminSettingsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The Knowledge Graph deployment settings",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:admin"
+          ]
+        }
+      },
+      "put": {
+        "description": "The fields sent change; the others keep their value. Turning it off keeps everything learned. Answers whatever the switches are.\n\n**Requires:** authentication, plus permission `kgraph:admin`.",
+        "operationId": "kgraphAdmin_put",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutAdminSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminSettingsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change the Knowledge Graph deployment settings",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:admin"
+          ]
+        }
+      }
+    },
     "/api/kgraph/ledger": {
       "get": {
         "description": "One row per run of the task with the Knowledge Graph on (newest first): steps by how they ran, model calls, tokens, cost and active time, and the task's AI-only baseline. A cost with `costKnown: false` is a lower bound.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
@@ -48881,6 +49727,8 @@
               "KGRAPH_REVIEW_NOT_FOUND",
               "KGRAPH_REVIEW_ANSWERED",
               "KGRAPH_REVIEW_CONSOLE_ONLY",
+              "KGRAPH_VERSION_NOT_FOUND",
+              "KGRAPH_RUN_NOT_FOUND",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -80165,6 +81013,1621 @@
         "required": [
           "approve"
         ],
+        "additionalProperties": false
+      },
+      "ProceduresResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "procedures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "taskId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskName": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "versionId": {
+                  "description": "The version shown: the active one, else the newest.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "versionNumber": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "state": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "candidate",
+                        "verified",
+                        "active",
+                        "suspended",
+                        "retired",
+                        "rejected"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "health": {
+                  "type": "string",
+                  "enum": [
+                    "healthy",
+                    "degraded",
+                    "failing",
+                    "unknown"
+                  ],
+                  "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+                },
+                "steps": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "updatedAt": {
+                  "type": "string"
+                },
+                "ledger": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Ledger rows of the task."
+                    },
+                    "procedureRuns": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Runs that executed a procedure version."
+                    },
+                    "cleanReplayRate": {
+                      "description": "`replayed_clean` runs over procedure runs; null with none.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "runs",
+                    "procedureRuns",
+                    "cleanReplayRate"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "taskId",
+                "taskName",
+                "name",
+                "versionId",
+                "versionNumber",
+                "state",
+                "health",
+                "steps",
+                "updatedAt",
+                "ledger"
+              ]
+            },
+            "description": "Newest first, at most 200."
+          }
+        },
+        "required": [
+          "enabled",
+          "procedures"
+        ]
+      },
+      "ProcedureDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "versionId": {
+            "description": "The version shown: the active one, else the newest.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "versionNumber": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "candidate",
+                  "verified",
+                  "active",
+                  "suspended",
+                  "retired",
+                  "rejected"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "failing",
+              "unknown"
+            ],
+            "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+          },
+          "steps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Ledger rows of the task."
+              },
+              "procedureRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs that executed a procedure version."
+              },
+              "cleanReplayRate": {
+                "description": "`replayed_clean` runs over procedure runs; null with none.",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "runs",
+              "procedureRuns",
+              "cleanReplayRate"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "activeVersion": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "candidate",
+                      "verified",
+                      "active",
+                      "suspended",
+                      "retired",
+                      "rejected"
+                    ]
+                  },
+                  "changeClass": {
+                    "type": "string",
+                    "enum": [
+                      "initial",
+                      "structural",
+                      "sensitive"
+                    ]
+                  },
+                  "parentId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sourceRunId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  },
+                  "health": {
+                    "type": "string",
+                    "enum": [
+                      "healthy",
+                      "degraded",
+                      "failing",
+                      "unknown"
+                    ],
+                    "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+                  },
+                  "counts": {
+                    "type": "object",
+                    "properties": {
+                      "successes": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failures": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "repairs": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "successes",
+                      "failures",
+                      "repairs"
+                    ]
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "tool": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "target": {
+                          "description": "The element's or screen's label, else the site.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "usesAi": {
+                          "type": "boolean",
+                          "description": "A judge step (one small model call) or an agent step (the agent loop)."
+                        },
+                        "commitClass": {
+                          "type": "boolean",
+                          "description": "Sends, pays or otherwise commits: intent-recorded and never repeated when its outcome is unknown."
+                        },
+                        "health": {
+                          "type": "string",
+                          "enum": [
+                            "healthy",
+                            "degraded",
+                            "failing",
+                            "unknown"
+                          ],
+                          "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+                        },
+                        "counts": {
+                          "type": "object",
+                          "properties": {
+                            "successes": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "failures": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "repairs": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "successes",
+                            "failures",
+                            "repairs"
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "literal",
+                                  "parameter",
+                                  "output",
+                                  "judge",
+                                  "secret"
+                                ]
+                              },
+                              "detail": {
+                                "description": "A masked literal, a parameter name, the earlier step, or a saved login by kind and label: never a typed value or a secret.",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "source",
+                              "detail"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "tool",
+                        "target",
+                        "usesAi",
+                        "commitClass",
+                        "health",
+                        "counts",
+                        "args"
+                      ]
+                    }
+                  },
+                  "parameters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "sensitive": {
+                          "type": "boolean",
+                          "description": "Its value is never stored or shown."
+                        },
+                        "required": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type",
+                        "sensitive",
+                        "required"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "sensitive": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "sensitive"
+                      ]
+                    }
+                  },
+                  "sites": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "accounts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "connectionId": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "connectionId",
+                        "provider"
+                      ]
+                    }
+                  },
+                  "savedLogins": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "login",
+                            "identity",
+                            "card"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "label"
+                      ]
+                    },
+                    "description": "By label only."
+                  }
+                },
+                "required": [
+                  "id",
+                  "number",
+                  "state",
+                  "changeClass",
+                  "parentId",
+                  "sourceRunId",
+                  "createdAt",
+                  "health",
+                  "counts",
+                  "steps",
+                  "parameters",
+                  "outputs",
+                  "sites",
+                  "accounts",
+                  "savedLogins"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version shown as an ordered step list; null when the procedure has none."
+          },
+          "versions": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "taskName",
+          "name",
+          "versionId",
+          "versionNumber",
+          "state",
+          "health",
+          "steps",
+          "updatedAt",
+          "ledger",
+          "enabled",
+          "activeVersion",
+          "versions"
+        ]
+      },
+      "VersionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "procedureId": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "candidate",
+                    "verified",
+                    "active",
+                    "suspended",
+                    "retired",
+                    "rejected"
+                  ]
+                },
+                "changeClass": {
+                  "type": "string",
+                  "enum": [
+                    "initial",
+                    "structural",
+                    "sensitive"
+                  ]
+                },
+                "parentId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sourceRunId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "health": {
+                  "type": "string",
+                  "enum": [
+                    "healthy",
+                    "degraded",
+                    "failing",
+                    "unknown"
+                  ],
+                  "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+                },
+                "counts": {
+                  "type": "object",
+                  "properties": {
+                    "successes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repairs": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "successes",
+                    "failures",
+                    "repairs"
+                  ]
+                },
+                "steps": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "state",
+                "changeClass",
+                "parentId",
+                "sourceRunId",
+                "createdAt",
+                "health",
+                "counts",
+                "steps"
+              ]
+            },
+            "description": "Newest first."
+          }
+        },
+        "required": [
+          "enabled",
+          "procedureId",
+          "versions"
+        ]
+      },
+      "VersionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "candidate",
+              "verified",
+              "active",
+              "suspended",
+              "retired",
+              "rejected"
+            ]
+          },
+          "changeClass": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "structural",
+              "sensitive"
+            ]
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "failing",
+              "unknown"
+            ],
+            "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "successes": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "repairs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "successes",
+              "failures",
+              "repairs"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "tool": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "target": {
+                  "description": "The element's or screen's label, else the site.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "usesAi": {
+                  "type": "boolean",
+                  "description": "A judge step (one small model call) or an agent step (the agent loop)."
+                },
+                "commitClass": {
+                  "type": "boolean",
+                  "description": "Sends, pays or otherwise commits: intent-recorded and never repeated when its outcome is unknown."
+                },
+                "health": {
+                  "type": "string",
+                  "enum": [
+                    "healthy",
+                    "degraded",
+                    "failing",
+                    "unknown"
+                  ],
+                  "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+                },
+                "counts": {
+                  "type": "object",
+                  "properties": {
+                    "successes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repairs": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "successes",
+                    "failures",
+                    "repairs"
+                  ]
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "literal",
+                          "parameter",
+                          "output",
+                          "judge",
+                          "secret"
+                        ]
+                      },
+                      "detail": {
+                        "description": "A masked literal, a parameter name, the earlier step, or a saved login by kind and label: never a typed value or a secret.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "source",
+                      "detail"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "label",
+                "tool",
+                "target",
+                "usesAi",
+                "commitClass",
+                "health",
+                "counts",
+                "args"
+              ]
+            }
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "sensitive": {
+                  "type": "boolean",
+                  "description": "Its value is never stored or shown."
+                },
+                "required": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "sensitive",
+                "required"
+              ]
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "sensitive": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "sensitive"
+              ]
+            }
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "connectionId",
+                "provider"
+              ]
+            }
+          },
+          "savedLogins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "login",
+                    "identity",
+                    "card"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "label"
+              ]
+            },
+            "description": "By label only."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "procedureId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "state",
+          "changeClass",
+          "parentId",
+          "sourceRunId",
+          "createdAt",
+          "health",
+          "counts",
+          "steps",
+          "parameters",
+          "outputs",
+          "sites",
+          "accounts",
+          "savedLogins",
+          "enabled",
+          "procedureId"
+        ]
+      },
+      "DiffResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "procedureId": {
+            "type": "string"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The older version number; null when there is none to compare with."
+          },
+          "to": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "change": {
+                  "type": "string",
+                  "enum": [
+                    "unchanged",
+                    "relocated",
+                    "inserted",
+                    "removed",
+                    "rebound",
+                    "retargeted"
+                  ]
+                },
+                "before": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "tool": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "tool"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "after": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "tool": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "tool"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "change",
+                "before",
+                "after",
+                "args",
+                "text"
+              ]
+            }
+          }
+        },
+        "required": [
+          "enabled",
+          "procedureId",
+          "from",
+          "to",
+          "changes"
+        ]
+      },
+      "GraphResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "Procedure",
+                    "Step",
+                    "Site",
+                    "Account",
+                    "Tool",
+                    "SecretRef",
+                    "Parameter",
+                    "Output"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "health": {
+                  "type": "string",
+                  "enum": [
+                    "healthy",
+                    "degraded",
+                    "failing",
+                    "unknown"
+                  ],
+                  "description": "From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet)."
+                },
+                "counts": {
+                  "type": "object",
+                  "properties": {
+                    "successes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "repairs": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "uses": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "successes",
+                    "failures",
+                    "repairs",
+                    "uses"
+                  ]
+                },
+                "unused": {
+                  "type": "boolean",
+                  "description": "A connected account, added tool or saved login of yours that no procedure uses yet."
+                },
+                "cluster": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "procedure": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "type",
+                "label",
+                "health",
+                "counts",
+                "unused",
+                "cluster",
+                "procedure"
+              ]
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "has",
+                    "then",
+                    "feeds",
+                    "uses"
+                  ]
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "from",
+                "to"
+              ]
+            }
+          },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "site",
+                    "account"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "nodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "label",
+                "nodes"
+              ]
+            }
+          },
+          "collapsed": {
+            "type": "boolean",
+            "description": "Above the node limit, steps, parameters and outputs fold into their procedures."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Only part of the procedures is in this page."
+          },
+          "totalNodes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "nodeLimit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "enabled",
+          "nodes",
+          "edges",
+          "clusters",
+          "collapsed",
+          "truncated",
+          "totalNodes",
+          "nodeLimit",
+          "nextCursor"
+        ]
+      },
+      "KgRunResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed."
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "learn",
+              "reuse"
+            ],
+            "description": "The effective mode the run had; `off` when the Knowledge Graph took no part."
+          },
+          "aiOnly": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "description": "`replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "procedureId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "versionNumber": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "tool": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "how": {
+                  "type": "string",
+                  "enum": [
+                    "replayed",
+                    "recovered",
+                    "judged",
+                    "agent",
+                    "not_reached"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "label",
+                "tool",
+                "how"
+              ]
+            },
+            "description": "The version's steps and how each ran in this run."
+          },
+          "ledger": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "replayed": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "recovered": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "judge": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "agent": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "replayed",
+                  "recovered",
+                  "judge",
+                  "agent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Step counts from the savings ledger, once written."
+          }
+        },
+        "required": [
+          "enabled",
+          "runId",
+          "taskId",
+          "mode",
+          "aiOnly",
+          "outcome",
+          "procedureId",
+          "versionId",
+          "versionNumber",
+          "steps",
+          "ledger"
+        ]
+      },
+      "AdminSettingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+          },
+          "auditEvery": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
+          },
+          "suspendAfterFailures": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+          },
+          "retentionDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+          },
+          "pacing": {
+            "type": "string",
+            "enum": [
+              "human",
+              "fast"
+            ],
+            "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
+          }
+        },
+        "required": [
+          "enabled",
+          "auditEvery",
+          "suspendAfterFailures",
+          "retentionDays",
+          "pacing"
+        ]
+      },
+      "PutAdminSettingsDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+          },
+          "auditEvery": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
+          },
+          "suspendAfterFailures": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+          },
+          "retentionDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+          },
+          "pacing": {
+            "type": "string",
+            "enum": [
+              "human",
+              "fast"
+            ],
+            "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
+          }
+        },
         "additionalProperties": false
       },
       "LedgerResponseDto": {

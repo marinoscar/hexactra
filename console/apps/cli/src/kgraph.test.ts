@@ -1,0 +1,142 @@
+import { Command } from 'commander';
+import { createCli } from '@marinoscar/platform-cli';
+import { ApiClient } from '@marinoscar/platform-cli/api-client';
+import { resetCliForTests } from '@marinoscar/platform-cli/testing';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { APP_CLI_OPTIONS } from './app.js';
+import { setConsoleApiFactory } from './console-api.js';
+import { kgraphCommand, procedureLine, statusText, stepLine, type ProcedureDetailView, type ProcedureItemView } from './kgraph.command.js';
+
+resetCliForTests();
+createCli(APP_CLI_OPTIONS);
+
+const TASK = '44444444-4444-4444-8444-444444444444';
+const ITEM: ProcedureItemView = { id: 'kgp-1', taskId: TASK, taskName: 'Pay the bill', name: 'Pay the bill', versionId: 'kgv-2', versionNumber: 2, state: 'active', health: 'healthy', steps: 3, updatedAt: '2026-06-01T00:00:00.000Z', ledger: { runs: 4, procedureRuns: 4, cleanReplayRate: 0.75 } };
+const DETAIL: ProcedureDetailView = {
+  ...ITEM,
+  enabled: true,
+  versions: 2,
+  activeVersion: {
+    id: 'kgv-2',
+    number: 2,
+    state: 'active',
+    changeClass: 'structural',
+    createdAt: '2026-06-01T00:00:00.000Z',
+    health: 'healthy',
+    counts: { successes: 3, failures: 1, repairs: 0 },
+    sites: ['shop.example.test'],
+    savedLogins: [{ kind: 'login', label: 'Shop login' }],
+    parameters: [{ name: 'PIN', sensitive: true }],
+    outputs: [{ name: 'paid' }],
+    steps: [
+      { id: 's1', kind: 'call', label: 'Open the shop', tool: 'navigate', target: 'shop.example.test', usesAi: false, commitClass: false, health: 'healthy', args: [{ name: 'url', source: 'literal', detail: 'https://shop.example.test/' }] },
+      { id: 's2', kind: 'call', label: 'Sign in', tool: 'type_secret', target: null, usesAi: false, commitClass: false, health: 'unknown', args: [{ name: 'secret', source: 'secret', detail: 'login "Shop login"' }] },
+      { id: 's3', kind: 'judge', label: 'Is it paid?', tool: null, target: null, usesAi: true, commitClass: false, health: 'unknown', args: [] },
+    ],
+  },
+};
+const VERSIONS = [
+  { id: 'kgv-2', number: 2, state: 'active', changeClass: 'structural', createdAt: '2026-06-01T00:00:00.000Z', health: 'healthy', counts: { successes: 3, failures: 1, repairs: 0 }, steps: 3 },
+  { id: 'kgv-1', number: 1, state: 'retired', changeClass: 'initial', createdAt: '2026-05-01T00:00:00.000Z', health: 'unknown', counts: { successes: 0, failures: 0, repairs: 0 }, steps: 2 },
+];
+
+function fakeApi(routes: Record<string, unknown>) {
+  const calls: { method: string; path: string; query: string; body: unknown }[] = [];
+  const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? 'GET';
+    const path = decodeURIComponent(url.pathname.replace(/^\/api/, ''));
+    calls.push({ method, path, query: url.search, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    const key = `${method} ${path}`;
+    if (!(key in routes)) return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
+    return new Response(JSON.stringify({ data: routes[key] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  });
+  setConsoleApiFactory(() => new ApiClient({ baseUrl: 'http://console.example.test/api', token: 'pat_test', fetch }));
+  return calls;
+}
+
+async function run(...args: string[]): Promise<string> {
+  const program = new Command().exitOverride();
+  kgraphCommand(program);
+  let text = '';
+  const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    text += String(chunk);
+    return true;
+  });
+  try {
+    await program.parseAsync(['node', 'hexactra', ...args]);
+  } finally {
+    spy.mockRestore();
+  }
+  return text;
+}
+
+afterEach(() => setConsoleApiFactory(null));
+
+describe('kgraph helpers', () => {
+  it('says why it is off', () => {
+    expect(statusText({ deployment: false, user: true, available: false })).toContain('turned off by your administrator');
+    expect(statusText({ deployment: true, user: false, available: false })).toContain('hexactra kgraph on');
+    expect(statusText({ deployment: true, user: true, available: true })).toContain('available');
+  });
+
+  it('prints a procedure and a step on one line each', () => {
+    const line = procedureLine(ITEM);
+    for (const part of ['kgp-1', 'v2 active', 'healthy', '3 steps', 'Pay the bill  (task: Pay the bill)', '75% clean replays']) expect(line).toContain(part);
+    expect(stepLine(DETAIL.activeVersion!.steps[2]!, 2)).toContain('[uses AI]');
+    expect(stepLine(DETAIL.activeVersion!.steps[1]!, 1)).toContain('secret=secret:login "Shop login"');
+  });
+});
+
+describe('hexactra kgraph', () => {
+  it('status, as text and JSON', async () => {
+    fakeApi({ 'GET /kgraph/status': { deployment: true, user: false, available: false } });
+    expect(await run('kgraph', 'status')).toContain('you         off');
+    expect(JSON.parse(await run('kgraph', 'status', '--json'))).toEqual({ deployment: true, user: false, available: false });
+  });
+
+  it('lists with filters, and says when the feature is off', async () => {
+    const calls = fakeApi({ 'GET /kgraph/procedures': { enabled: false, procedures: [ITEM] } });
+    const text = await run('kgraph', 'list', '--task', TASK, '--state', 'active', '--search', 'bill');
+    expect(text).toContain('off for you');
+    expect(text).toContain('kgp-1');
+    expect(calls[0]!.query).toContain(`taskId=${TASK}`);
+    expect(calls[0]!.query).toContain('state=active');
+    expect(calls[0]!.query).toContain('q=bill');
+    expect(JSON.parse(await run('kgraph', 'list', '--json')).procedures[0].id).toBe('kgp-1');
+  });
+
+  it('shows a procedure found by name as its ordered steps', async () => {
+    fakeApi({ 'GET /kgraph/procedures': { enabled: true, procedures: [ITEM] }, 'GET /kgraph/procedures/kgp-1': DETAIL });
+    const text = await run('kgraph', 'show', 'pay the bill');
+    expect(text).toContain('version 2 of 2: active, healthy (3 clean, 1 failed, 0 repaired)');
+    expect(text).toContain('parameters: PIN (sensitive)');
+    expect(text).toMatch(/1\. call +navigate +Open the shop -> shop.example.test/);
+    expect(text).toMatch(/3\. judge .*Is it paid\? {2}\[uses AI\]/);
+    expect(JSON.parse(await run('kgraph', 'show', 'kgp', '--json')).activeVersion.number).toBe(2);
+  });
+
+  it('lists versions, restores by number and forgets', async () => {
+    const calls = fakeApi({
+      'GET /kgraph/procedures': { enabled: true, procedures: [ITEM] },
+      'GET /kgraph/procedures/kgp-1/versions': { enabled: true, procedureId: 'kgp-1', versions: VERSIONS },
+      'POST /kgraph/procedures/kgp-1/restore': { procedureId: 'kgp-1', restoredFrom: 'kgv-1', versionId: 'kgv-3' },
+      'POST /kgraph/procedures/kgp-1/forget': { procedureId: 'kgp-1', retired: 2 },
+    });
+    const versions = await run('kgraph', 'versions', 'kgp-1');
+    expect(versions.split('\n')[0]).toMatch(/^v2 +active +structural/);
+    expect(await run('kgraph', 'restore', 'kgp-1', '1')).toContain('restored Pay the bill: kgv-3 (from kgv-1)');
+    expect(calls.find((c) => c.method === 'POST' && c.path.endsWith('/restore'))!.body).toEqual({ versionId: 'kgv-1' });
+    await expect(run('kgraph', 'restore', 'kgp-1', '7')).rejects.toThrow(/no version 7/);
+    expect(await run('kgraph', 'forget', 'kgp-1')).toContain('2 versions retired');
+    await expect(run('kgraph', 'show', 'nothing')).rejects.toThrow(/No procedure matches/);
+  });
+
+  it('off and on change your own switch through the user settings', async () => {
+    const calls = fakeApi({ 'PATCH /user-settings': {}, 'GET /kgraph/status': { deployment: true, user: true, available: true } });
+    expect(await run('kgraph', 'on')).toContain('available');
+    await run('kgraph', 'off');
+    expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.body)).toEqual([{ kgraph: { enabled: true } }, { kgraph: { enabled: false } }]);
+  });
+});

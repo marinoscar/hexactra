@@ -45,6 +45,7 @@ console.log((await store.getVersion('me', version.id))?.state); // 'verified'
 | `./schema` | The typed graph: nodes, edges, steps, bindings, checks, versions and states, evidence (zod schemas and their types). |
 | `./validate` | `validateVersion`: the rules a version must satisfy before it can run; `defaultIsSensitive`. |
 | `./ports` | `ProcedureStorePort`, `ToolInvokerPort`, `StateProbePort`, `JudgePort`, `ClockPort`, `IdPort`, `TelemetryPort` (`noopTelemetry`), `effectiveMode`. |
+| `./view` | The plain view model the Map, the API and exports read: `buildGraphView` (nodes with type, label, health and counts; edges; clusters per site and per account; capabilities no procedure uses flagged `unused`; folded and paged above a node limit), `stepList`, `readableDiff`, `healthOf`. Labels pass the host's mask. |
 | `./testing` | In-memory fakes of every port, a scripted tool invoker, builders, `runStoreConformance` (the host conformance kit). |
 | `./mcp` | Host-neutral MCP tool descriptors and handlers (planned). |
 | `./harness` | The bridge to `@marinoscar/hexactra-agent` (planned; the only place that imports it). |
