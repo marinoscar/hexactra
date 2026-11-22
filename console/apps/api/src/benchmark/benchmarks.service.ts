@@ -5,23 +5,24 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { readDeployInfo, resolveApiVersion, resolveDeployInfoPath } from '@marinoscar/platform-api/host';
 import { JobsService } from '@marinoscar/platform-api/jobs';
-import type { Benchmark, BenchmarkTrial, Prisma } from '@prisma/client';
+import type { Benchmark, Prisma } from '@prisma/client';
 
 import { FabricClient } from '../fabric/fabric.client';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 import { inRunOrder, publicConfig, readBenchmarkConfig, type StoredBenchmarkConfig } from './benchmark-config';
-import { BENCHMARK_STATUSES, LIVE_BENCHMARK_STATUSES, TRIAL_FAILURE_REASONS, TRIAL_STATUSES, TRIAL_VERDICTS, type BenchmarkStatus } from './benchmark.constants';
+import { BENCHMARK_STATUSES, LIVE_BENCHMARK_STATUSES, TRIAL_STATUSES, type BenchmarkStatus } from './benchmark.constants';
 import { enqueueBenchmarkAdvance } from './benchmark.jobs.enqueue';
 import { BenchmarkMetrics } from './benchmark.metrics';
 import { BenchmarkRunner, STOP_GRACE_MS } from './benchmark-runner.service';
 import { BenchmarkSiteAddress } from './benchmark-site-address';
+import { ScorecardService } from './scorecard.service';
 import { BENCHMARK_LIMITS } from './benchmark.settings';
 import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTotals, type BenchmarkTrialView, type BenchmarkView, type CreateBenchmarkInput } from './benchmarks.schemas';
 import { SUITE, challengeById, missingCapabilities, seedFrom } from './suite/registry';
-import { CATEGORIES, CATEGORY_LABELS, type Check } from './suite/types';
-import { readTrialModels } from './trial-models';
+import { CATEGORIES, CATEGORY_LABELS } from './suite/types';
+import { TRIAL_VIEW_OMIT, iso, oneOf, trialView } from './trial-view';
 
 /** Who is asking. */
 export interface BenchmarkActor {
@@ -32,8 +33,6 @@ export interface BenchmarkActor {
 /** The audit actions of benchmarks; ids and counts only. */
 export const BENCHMARK_AUDIT = { started: 'benchmarks.started', cancelled: 'benchmarks.cancelled', deleted: 'benchmarks.deleted' } as const;
 
-const oneOf = <T extends string>(list: readonly T[], value: unknown): T | null => (list.includes(value as T) ? (value as T) : null);
-const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 const EMPTY_TOTALS: BenchmarkTotals = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, modelCalls: 0, costUsd: 0, costKnown: true };
 const EMPTY_PROGRESS: BenchmarkProgress = { total: 0, pending: 0, running: 0, graded: 0, skipped: 0, pass: 0, fail: 0, error: 0, unsupported: 0 };
 
@@ -53,6 +52,7 @@ export class BenchmarksService {
     private readonly site: BenchmarkSiteAddress,
     private readonly runner: BenchmarkRunner,
     private readonly metrics: BenchmarkMetrics,
+    private readonly scorecard: ScorecardService,
   ) {}
 
   private db(userId: string) {
@@ -205,7 +205,7 @@ export class BenchmarksService {
     const b = await this.find(userId, id);
     const rows = await this.prisma.benchmarkTrial.findMany({
       where: { benchmarkId: id, ...(filter.status ? { status: filter.status } : {}), ...(filter.verdict ? { verdict: filter.verdict } : {}), ...(filter.policyRef ? { policyRef: filter.policyRef } : {}), ...(filter.challengeId ? { challengeId: filter.challengeId } : {}) },
-      omit: { siteState: true, policySnapshot: true, tokenHash: true, seed: true },
+      omit: TRIAL_VIEW_OMIT,
     });
     return { items: inRunOrder(readBenchmarkConfig(b.config), rows).map(trialView) };
   }
@@ -232,6 +232,8 @@ export class BenchmarksService {
       // A pass now for a trial that had no run yet, and one later that ends a run nothing stopped.
       await enqueueBenchmarkAdvance(this.jobs, id, config.orgId, 'benchmark_cancelled');
       if (running.length) await enqueueBenchmarkAdvance(this.jobs, id, config.orgId, 'benchmark_cancelled', STOP_GRACE_MS + 1_000);
+      // Final now when nothing was running; otherwise the pass that grades the stopped trial writes it.
+      await this.scorecard.cacheIfEnded(id);
       this.log.log(`benchmark ${id}: cancelled`);
     }
     return this.get(actor.id, id);
@@ -315,48 +317,4 @@ export class BenchmarksService {
   }
 }
 
-type TrialRow = Omit<BenchmarkTrial, 'siteState' | 'policySnapshot' | 'tokenHash' | 'seed'>;
-
-const readChecks = (value: unknown): Check[] | null =>
-  Array.isArray(value)
-    ? value.flatMap((c): Check[] => {
-        const v = c as Partial<Check> | null;
-        return v && typeof v.name === 'string' ? [{ name: v.name, pass: v.pass === true, ...(typeof v.detail === 'string' ? { detail: v.detail } : {}) }] : [];
-      })
-    : null;
-
-/** A trial as the API returns it: never its seed, its token, its site state or the expected answer. */
-export function trialView(t: TrialRow): BenchmarkTrialView {
-  const challenge = challengeById(t.challengeId);
-  return {
-    id: t.id,
-    challengeId: t.challengeId,
-    challengeTitle: challenge?.title ?? t.challengeId,
-    category: challenge?.category ?? null,
-    policyRef: t.policyRef,
-    policyLabel: t.policyLabel,
-    trialIndex: t.trialIndex,
-    status: oneOf(TRIAL_STATUSES, t.status) ?? 'skipped',
-    verdict: oneOf(TRIAL_VERDICTS, t.verdict),
-    failureReason: oneOf(TRIAL_FAILURE_REASONS, t.failureReason),
-    checks: readChecks(t.checks),
-    claimedSuccess: t.claimedSuccess,
-    runId: t.runId,
-    durationMs: t.durationMs,
-    activeMs: t.activeMs,
-    steps: t.steps,
-    modelCalls: t.modelCalls,
-    inputTokens: t.inputTokens,
-    outputTokens: t.outputTokens,
-    cachedInputTokens: t.cachedInputTokens,
-    model: readTrialModels(t.models)?.model ?? null,
-    models: readTrialModels(t.models),
-    costUsd: t.costUsd === null ? null : Number(t.costUsd),
-    costKnown: t.costKnown,
-    stopReason: t.stopReason,
-    questions: t.questions,
-    escalations: t.escalations,
-    startedAt: iso(t.startedAt),
-    finishedAt: iso(t.finishedAt),
-  };
-}
+export { trialView };

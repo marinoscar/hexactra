@@ -8,3 +8,4 @@ registerErrorCode({ code: 'BENCHMARK_HOST_UNAVAILABLE', status: 400, description
 registerErrorCode({ code: 'BENCHMARK_HOST_NOT_FOUND', status: 400, description: 'The node chosen for the benchmark is not in the fleet.' });
 registerErrorCode({ code: 'CHALLENGE_UNKNOWN', status: 400, description: 'The suite has no challenge with that id; the message names it.' });
 registerErrorCode({ code: 'POLICY_DUPLICATE', status: 400, description: 'A benchmark lists each agent policy once, each with its own label.' });
+registerErrorCode({ code: 'BENCHMARK_SUITE_MISMATCH', status: 409, description: 'Two benchmarks compare only on one suite key and version; the details name both.' });
