@@ -48199,6 +48199,8 @@
               "SECRETS_VAULT_NEEDS_RECONNECT",
               "SECRETS_VAULT_UNAVAILABLE",
               "SECRETS_VAULT_CONNECT_FAILED",
+              "KGRAPH_TASK_NOT_FOUND",
+              "KGRAPH_OFF",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -48213,8 +48215,6 @@
               "MAIL_TRIGGER_POLL_TOO_FAST",
               "MAIL_TRIGGER_INPUTS_INVALID",
               "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
-              "KGRAPH_TASK_NOT_FOUND",
-              "KGRAPH_OFF",
               "BENCHMARK_NOT_FOUND",
               "BENCHMARK_RUNNING",
               "BENCHMARK_SITE_UNREACHABLE",
@@ -53170,9 +53170,9 @@
               },
               "auditEvery": {
                 "type": "integer",
-                "minimum": 2,
+                "minimum": 0,
                 "maximum": 1000,
-                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
               },
               "suspendAfterFailures": {
                 "type": "integer",
@@ -54593,9 +54593,9 @@
               },
               "auditEvery": {
                 "type": "integer",
-                "minimum": 2,
+                "minimum": 0,
                 "maximum": 1000,
-                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
               },
               "suspendAfterFailures": {
                 "type": "integer",
@@ -56025,9 +56025,9 @@
               },
               "auditEvery": {
                 "type": "integer",
-                "minimum": 2,
+                "minimum": 0,
                 "maximum": 1000,
-                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
               },
               "suspendAfterFailures": {
                 "type": "integer",
@@ -79265,6 +79265,9 @@
               },
               "evidence": {
                 "type": "number"
+              },
+              "traces": {
+                "type": "number"
               }
             },
             "required": [
@@ -79275,7 +79278,8 @@
               "tasks",
               "runs",
               "reviews",
-              "evidence"
+              "evidence",
+              "traces"
             ]
           }
         },

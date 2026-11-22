@@ -9542,6 +9542,8 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example KGRAPH_TASK_NOT_FOUND
+             * @example KGRAPH_OFF
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -9556,8 +9558,6 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
-             * @example KGRAPH_TASK_NOT_FOUND
-             * @example KGRAPH_OFF
              * @example BENCHMARK_NOT_FOUND
              * @example BENCHMARK_RUNNING
              * @example BENCHMARK_SITE_UNREACHABLE
@@ -10942,7 +10942,7 @@ export interface components {
             kgraph: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures: number;
@@ -11249,7 +11249,7 @@ export interface components {
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures: number;
@@ -11560,7 +11560,7 @@ export interface components {
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
                 enabled?: boolean;
-                /** @description Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10. */
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
                 auditEvery?: number;
                 /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
                 suspendAfterFailures?: number;
@@ -16544,6 +16544,7 @@ export interface components {
                 runs: number;
                 reviews: number;
                 evidence: number;
+                traces: number;
             };
         };
         TaskKgraphResponseDto: {
