@@ -11,6 +11,7 @@ Hexactra is a Cargo + pnpm monorepo with a large amount of scaffolding. **Most v
 - `apps/chrome-extension` (MV3 extension, standalone side-panel AI works), `apps/dashboard`, `packages/sdk`, `packages/contracts`.
 - `console/` — the Hexactra Console (epic #217): an EnterpriseAppBase starter app (NestJS + React + Prisma, Node 24, npm, separate from the pnpm workspace). Inside `console/`, its own `AGENTS.md` applies: never edit `@marinoscar/platform-*`; platform gaps go upstream as EnterpriseAppBase seam requests. CI: `.github/workflows/console.yml`.
 - `console/packages/hexactra-agent`, `console/packages/hexactra-browser-agent` — the agent harness and the Hexactra browser toolset (E38.9, #614), workspace packages the console API hosts (`@marinoscar/hexactra-agent`, `@marinoscar/hexactra-browser-agent`; decision record `console/docs/decisions/agent-packages.md`). **A new tool, gate or loop behaviour goes in a package, with its test in the package; the app only binds ports** (`console/apps/api/src/runner/host/`). The harness package never imports a framework, a database client, the fabric or a provider SDK (a test scans its built output). `cd console && npm run build:packages` builds them (the apps import the built output); `npm run test:packages` tests them.
+- `console/packages/hexactra-kgraph` — the Knowledge Graph package (`@marinoscar/hexactra-kgraph`, epic E46, #770; decision record `console/docs/decisions/knowledge-graph.md`): learned procedures, their validator, compiler and executor behind ports. Generic: only `src/harness/` imports the agent harness. Off by default at every level.
 - `console/apps/web/src/ui/` — the console's page kit (`PageContainer`, `PageHeader`, `ResponsiveList`, `StatusChip`, `useConfirm`, `aboveBottomBar`, the time and cost formatters; console README, "UI kit"). New console pages compose the kit and are verified at 360/390/768/1024/1440 px (`npm run ui:screens`, console README, "Responsive rules").
 - `api/openapi.yaml`, `api/*.json` — contracts (CI checks they parse).
 - `scripts/link-github-subissues.mjs` — idempotent script linking epics to sub-issues (`epicChildren` map); refuses any repo but `marinoscar/hexactra`.
@@ -84,6 +85,8 @@ Rules:
 - Do not delegate to sub-agents for now; the session working the issue does the work itself in its branch.
 - Remove the branch once the PR is merged. `git branch -a` shows what exists.
 
+**E46 integration branch (owner-approved exception, epic #770 only).** Knowledge Graph work (E46, #775–#799) branches `issue/<n>-<slug>` from `epic/e46-kgraph` and opens its PR against `epic/e46-kgraph`, not `main`; after the merge the issue is closed by hand (a closing keyword does not fire on a non-default branch). `origin/main` is merged into the epic branch through a PR before each issue. One final PR (E46.25) merges `epic/e46-kgraph` to `main`, the console version is bumped once there, and this exception ends when that PR merges.
+
 ## Commits
 
 Conventional Commits: `<type>(<scope>): <imperative summary>` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`). Small, single-intent commits; behavior changes ship with their tests. Reference the issue (`#<n>`) in the PR, and in commits where useful.
@@ -147,6 +150,15 @@ Design invariants to preserve when writing docs or code:
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).
+- The Knowledge Graph (epic E46) switched off at any level is byte-identical to `main`: `console/apps/api/test/runner-characterisation.db.spec.ts` passes unchanged.
+- The Knowledge Graph adds only new `kg_` tables and new routes; no existing table, API response or MCP tool changes shape for it.
+- A Knowledge Graph failure (capture, compile, replay, check, repair) is logged and counted and never fails a run: the run continues with the agent loop.
+- Every tool a replayed procedure runs goes through `executeTool`, with Stop, Pause, the gates, the span and intent recording exactly as for a model-chosen call.
+- The Knowledge Graph never grants anything: it cannot widen allowed sites, add a connection or recipient, release a secret or create a saved approval.
+- A procedure is built only from server-recorded facts (tool names, arguments, results), never from model free text or page prose; a `judge` step stores no run-written instruction.
+- A value matching the sensitive patterns is never stored in the Knowledge Graph; a step that needs one binds a task parameter or a saved-login/identity/card reference, or stays with the agent.
+- A replayed commit-class step is intent-recorded and never repeated when its outcome is unknown.
+- A Knowledge Graph change that adds or changes a send, a payment, a recipient, a site, an account or a credential is approved only by the owner, signed in, in the console; never by a webhook, the CLI, MCP or a hosted AI app.
 
 Planned monorepo layout (target, directories do not exist yet): Cargo workspace `crates/hexactra-{control,agent,worker,native-host,cli,mcp,core,telemetry}`, pnpm workspace `packages/{sdk,contracts}`, `apps/{chrome-extension,dashboard}`, `api/openapi.yaml` + `api/schemas/`, `deploy/`, `docs/`, `tests/`. Planned stack: Rust/Tokio/Axum/Clap/Serde/SQLite, React+TypeScript dashboard, OpenAPI-generated SDKs.
 
