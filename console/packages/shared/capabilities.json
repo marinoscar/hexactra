@@ -1684,7 +1684,9 @@
       "rest": [
         "GET /api/kgraph/reviews",
         "GET /api/kgraph/reviews/{id}",
-        "POST /api/kgraph/reviews/{id}/answer"
+        "POST /api/kgraph/reviews/{id}/answer",
+        "GET /api/kgraph/reviews/site-facts",
+        "POST /api/kgraph/reviews/site-facts/{id}/answer"
       ],
       "cli": {
         "none": "Deliberate: a review is answered only by the owner signed in to the console (docs/decisions/knowledge-graph.md)"
@@ -1699,6 +1701,29 @@
         "/kgraph",
         "/inbox"
       ]
+    },
+    {
+      "id": "kgraph.site_facts",
+      "description": "See, add, edit, archive, restore and delete short facts about a site that a later run reads as data (Knowledge Graph phase 5); a fact you type is active at once, a proposal waits in your reviews",
+      "rest": [
+        "GET /api/kgraph/sites",
+        "GET /api/kgraph/sites/{site}/facts",
+        "POST /api/kgraph/sites/{site}/facts",
+        "PATCH /api/kgraph/site-facts/{id}",
+        "DELETE /api/kgraph/site-facts/{id}"
+      ],
+      "cli": {
+        "none": "Not offered yet: the site facts commands are #855; the REST API has them"
+      },
+      "mcp": {
+        "none": "Deliberate: site facts are not exposed over Hexactra's MCP server in phase 5 (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "Deliberate: the TUI is for watching and answering"
+      },
+      "web": {
+        "none": "Not offered yet: the Sites tab of the Knowledge Graph page is #855; the REST API has it"
+      }
     },
     {
       "id": "kgraph.ledger",

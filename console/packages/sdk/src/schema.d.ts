@@ -5829,7 +5829,7 @@ export interface paths {
         post?: never;
         /**
          * Delete everything learned
-         * @description Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes and run records. Nobody else's. Turning a switch off deletes nothing; this does.
+         * @description Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes, run records and site facts. Nobody else's. Turning a switch off deletes nothing; this does.
          *
          *     **Requires:** authentication, plus permission `kgraph:write`.
          */
@@ -5933,6 +5933,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/reviews/site-facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Site facts waiting for your review
+         * @description Proposals derived from your runs or written by the agent. None is used by a run until you approve it.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphSiteFactReviews_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/reviews/site-facts/{id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve, edit then approve, or decline a site fact (signed-in console only)
+         * @description `403 KGRAPH_REVIEW_CONSOLE_ONLY` for a personal access token, an OAuth app or any credential but a browser session. Approved: the fact is active (with your edit, if any). Declined: it is archived and the same fact is not proposed again for 30 days.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraphSiteFactReviews_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kgraph/reviews": {
         parameters: {
             query?: never;
@@ -5995,6 +6039,84 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your sites with facts
+         * @description Each site (registrable domain) you have facts about, with how many are active, proposed and archived.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphSiteFacts_sites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/sites/{site}/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A site's facts
+         * @description Oldest first; optionally only one status.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphSiteFacts_list"];
+        put?: never;
+        /**
+         * Add a fact about a site (active at once)
+         * @description Your own words, active at once. `422 KGRAPH_SITE_FACT_REFUSED` for a password, code, token or full number, an instruction, or a link to another site. `409 KGRAPH_OFF` while the Knowledge Graph is off.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraphSiteFacts_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/site-facts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a site fact
+         * @description Permanently. A deleted proposal may be proposed again.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        delete: operations["kgraphSiteFacts_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit, archive or restore a site fact
+         * @description `422 KGRAPH_SITE_FACT_REFUSED` for a refused text; `409 KGRAPH_SITE_FACT_EXISTS` when the edit equals another of your facts; `409 KGRAPH_SITE_FACT_STATUS` for a move that is not allowed (a proposal is approved in Reviews).
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        patch: operations["kgraphSiteFacts_update"];
         trace?: never;
     };
     "/api/kgraph/procedures": {
@@ -9977,6 +10099,10 @@ export interface components {
              * @example KGRAPH_VERSION_NOT_FOUND
              * @example KGRAPH_RUN_NOT_FOUND
              * @example KGRAPH_IMPORT_INVALID
+             * @example KGRAPH_SITE_FACT_NOT_FOUND
+             * @example KGRAPH_SITE_FACT_REFUSED
+             * @example KGRAPH_SITE_FACT_EXISTS
+             * @example KGRAPH_SITE_FACT_STATUS
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -17034,6 +17160,7 @@ export interface components {
                 evidence: number;
                 traces: number;
                 ledger: number;
+                siteFacts: number;
             };
         };
         TaskKgraphResponseDto: {
@@ -17066,6 +17193,38 @@ export interface components {
             /** @description Versions retired: the task learns again. */
             retired: number;
         };
+        SiteFactResponseDto: {
+            id: string;
+            site: string;
+            /** @enum {string} */
+            kind: "navigation" | "sign_in" | "quirk" | "timing" | "other";
+            /** @description At most 300 characters, shown as text. Data about the site, never an instruction or a permission. */
+            text: string;
+            /** @enum {string} */
+            source: "owner" | "derived" | "agent_proposed";
+            /** @enum {string} */
+            status: "proposed" | "active" | "archived";
+            /** @description What a proposal came from: the run and how many of its calls and screens. Ids and counts only. */
+            evidence: {
+                runId: string | null;
+                steps: number;
+                screens: number;
+            };
+            declinedAt: string | null;
+            lastUsedAt: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        AnswerSiteFactDto: {
+            approve: boolean;
+            /**
+             * @description Approve with your own edit of the kind.
+             * @enum {string}
+             */
+            kind?: "navigation" | "sign_in" | "quirk" | "timing" | "other";
+            /** @description Approve with your own edit of the text. */
+            text?: string;
+        };
         ReviewResponseDto: {
             /** Format: uuid */
             id: string;
@@ -17083,6 +17242,27 @@ export interface components {
         };
         AnswerReviewDto: {
             approve: boolean;
+        };
+        SiteSummaryResponseDto: {
+            site: string;
+            active: number;
+            proposed: number;
+            archived: number;
+        };
+        CreateSiteFactDto: {
+            /** @enum {string} */
+            kind: "navigation" | "sign_in" | "quirk" | "timing" | "other";
+            text: string;
+        };
+        UpdateSiteFactDto: {
+            /** @enum {string} */
+            kind?: "navigation" | "sign_in" | "quirk" | "timing" | "other";
+            text?: string;
+            /**
+             * @description `archived` sets a fact aside; `active` restores an archived one. A proposal is approved in Reviews.
+             * @enum {string}
+             */
+            status?: "active" | "archived";
         };
         ProceduresResponseDto: {
             /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
@@ -17467,6 +17647,11 @@ export interface components {
                 index: number;
                 reason: string;
             }[];
+            /** @description Site facts in the file: each one stored as a proposal for your review, or skipped (refused, already known or declined lately). */
+            siteFacts: {
+                proposed: number;
+                skipped: number;
+            };
         };
         ImportBodyDto: {
             /** @description A `hexactra.kgraph` file (formatVersion 1). */
@@ -44425,6 +44610,108 @@ export interface operations {
             };
         };
     };
+    kgraphSiteFactReviews_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SiteFactResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFactReviews_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerSiteFactDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SiteFactResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     kgraphReviews_list: {
         parameters: {
             query?: {
@@ -44547,6 +44834,254 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ReviewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFacts_sites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SiteSummaryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFacts_list: {
+        parameters: {
+            query?: {
+                status?: "proposed" | "active" | "archived";
+            };
+            header?: never;
+            path: {
+                site: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SiteFactResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFacts_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSiteFactDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SiteFactResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFacts_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFacts_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSiteFactDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SiteFactResponseDto"];
                     };
                 };
             };
@@ -45056,7 +45591,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence. */
+            /** @description A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence. Your active site facts travel in `siteFacts` (site, kind, text, source). */
             200: {
                 headers: {
                     [name: string]: unknown;
