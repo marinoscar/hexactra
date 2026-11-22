@@ -99,13 +99,14 @@ As `package.json` `exports` declares them:
 
 | Import | What |
 |---|---|
-| `@marinoscar/hexactra-kgraph` | Everything in `./schema`, `./validate`, `./ports`, `./compile`, `./execute`, `./repair`, `./view` and `./transfer`. Not `./testing`, `./mcp` or `./harness`. |
+| `@marinoscar/hexactra-kgraph` | Everything in `./schema`, `./validate`, `./ports`, `./compile`, `./execute`, `./repair`, `./view`, `./transfer` and `./match`. Not `./testing`, `./mcp` or `./harness`. |
 | `./schema` | The typed graph: nodes, edges, step kinds, bindings, checks, parameters, outputs, the surface graph (screens and elements), versions, the state machine (`canTransition`, `VERSION_TRANSITIONS`), evidence, site facts (`SiteFact`, `siteFactKey`, `SITE_FACT_TRANSITIONS`). Zod schemas and their types. |
 | `./validate` | `validateVersion` (typed violations; empty means valid), `VIOLATION_RULES`, `defaultIsSensitive`, and `validateSiteFact` with its `SecretCheckPort` (`defaultSecretCheck`). |
 | `./compile` | The trace types and `bindArguments` (argument provenance), `compileTrace` (trace to a `candidate` version), `cleanTrace`, `findLoop`, `mergeBranches`, `deriveSiteFacts` (site-fact proposals from a trace, the surface graph and the interrupt handlers that fired). |
 | `./execute` | `executeProcedure` (walks a version through the ports and returns an `ExecutionReport` with a resume point), the outcome check (`checkOutcome`, `learnShape`, `isAuditRun`), and the recovery ladder (`RecoveryLadder`, `RUNGS`, `RECOVERY_LIMITS`). |
 | `./repair` | `diffVersions`, `classifyRepair` (`structural` or `sensitive`, with reasons), `breaker` (the circuit breaker, `BREAKER`). |
 | `./transfer` | `exportFile`, `exportProcedure` and `readTransferFile`: the `hexactra.kgraph` file, with no ids, tokens, secret values, evidence or traces. |
+| `./match` | `matchProcedures` (the procedures that may do part of a goal: exact registrable-domain sites, accounts and normalised words; no I/O, no model), `sitesInText`, `siteOf`, `wordsOf`, `cleanReplayRate`, `MATCHABLE_STATES`. |
 | `./ports` | `ProcedureStorePort`, `ToolInvokerPort`, `StateProbePort`, `JudgePort`, `ClockPort`, `IdPort`, `TelemetryPort` (`noopTelemetry`), the optional `SiteFactStorePort`, `KgraphPorts`, `effectiveMode`. |
 | `./view` | The plain view model the console's Map, API and CLI read: `buildGraphView` (nodes, edges, clusters, `unused` capabilities, folding and paging above a node limit), `stepList`, `readableDiff`, `healthOf`, `defaultMask`. |
 | `./testing` | In-memory fakes of every port (`fakePorts`, `InMemoryProcedureStore`, `ScriptedToolInvoker`, `FakeStateProbe`, `FakeJudge`, `FakeClock`, `SequentialIds`, `RecordingTelemetry`, `InMemorySiteFactStore`), `replies`, builders (`aProcedure`, `aVersion`, `call`, `lit`, `param`, `out`, `secret`, `TOOLS`), and the host conformance kits `runStoreConformance` and `runSiteFactStoreConformance`. |
@@ -116,7 +117,7 @@ As `package.json` `exports` declares them:
 
 | File | What |
 |---|---|
-| [docs/concepts.md](docs/concepts.md) | The graph, step kinds, bindings, checks, versions and states, change classes, modes, the compiler, recovery and the breaker. |
+| [docs/concepts.md](docs/concepts.md) | The graph, step kinds, bindings, checks, versions and states, change classes, modes, matching, the compiler, recovery and the breaker. |
 | [docs/host-guide.md](docs/host-guide.md) | Every port and its guarantees, embedding step by step, the crash-safety contract, the conformance kit. |
 | [docs/schema.md](docs/schema.md) | The schema as JSON Schema. Generated: `npm run docs:schema -w @marinoscar/hexactra-kgraph`; `test/schema-doc.spec.ts` fails when it is stale. |
 | [docs/security.md](docs/security.md) | The threat model: poisoning through pages, emails and tool results; what the package enforces; what a host must enforce. |

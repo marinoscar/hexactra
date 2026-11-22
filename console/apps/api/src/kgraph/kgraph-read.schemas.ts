@@ -131,7 +131,7 @@ export const kgRunSchema = z.object({
   enabled,
   runId: z.string().uuid(),
   taskId: z.string().uuid().nullable(),
-  mode: z.enum(['off', 'learn', 'reuse']).describe('The effective mode the run had; `off` when the Knowledge Graph took no part.'),
+  mode: z.enum(['off', 'learn', 'reuse', 'everyday']).describe('The effective mode the run had; `off` when the Knowledge Graph took no part.'),
   aiOnly: z.boolean(),
   outcome: z.string().nullable().describe('`replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running.'),
   procedureId: z.string().nullable(),

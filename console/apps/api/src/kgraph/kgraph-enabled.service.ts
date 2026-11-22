@@ -1,8 +1,10 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { AppMetricsService } from '@marinoscar/platform-api/host';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { effectiveMode, modeSchema, type Mode } from '@marinoscar/hexactra-kgraph';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { KGRAPH_ERROR_STAGES, type KgraphErrorStage } from './kgraph-metrics';
 import { readKgraphSystemSettings, readKgraphUserSettings, type KgraphSystemSettings } from './kgraph.settings';
 
 /** What the gate needs to know about the run asking. */
@@ -19,6 +21,8 @@ export interface KgraphStatus {
   user: boolean;
   /** Both switches on: a task may choose `learn` or `reuse`. */
   available: boolean;
+  /** The user's own everyday switch (E46.28): effective for chats and one-off runs only while `available`. */
+  everyday: boolean;
 }
 
 /**
@@ -33,6 +37,7 @@ export class KgraphEnabledService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly systemSettings?: SystemSettingsService,
+    @Optional() private readonly metrics?: AppMetricsService,
   ) {}
 
   async systemSettingsOf(): Promise<KgraphSystemSettings> {
@@ -42,8 +47,8 @@ export class KgraphEnabledService {
   async status(userId: string): Promise<KgraphStatus> {
     const deployment = (await this.systemSettingsOf()).enabled;
     const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
-    const user = readKgraphUserSettings(row?.value).enabled;
-    return { deployment, user, available: deployment && user };
+    const own = readKgraphUserSettings(row?.value);
+    return { deployment, user: own.enabled, available: deployment && own.enabled, everyday: own.everyday };
   }
 
   /** The task's stored mode (`off` without a row). */
@@ -62,6 +67,31 @@ export class KgraphEnabledService {
     } catch (err) {
       this.log.warn(`kgraph mode read failed, using off: ${err instanceof Error ? err.name : 'error'}`);
       return 'off';
+    }
+  }
+
+  /**
+   * The everyday switch (E46.28): true only when the deployment, user and everyday switches are on and the run is NOT a saved task's run (a
+   * chat, a conversation's run or a one-off run). Such a run is offered matched procedures; it never captures, compiles or replays a whole
+   * procedure by itself. Never throws: an error reading any switch is false, so the run is exactly as without the feature.
+   */
+  async everydayFor(userId: string, run: KgraphRunFacts): Promise<boolean> {
+    try {
+      if (run.isTaskRun) return false;
+      const s = await this.status(userId);
+      return s.available && s.everyday;
+    } catch (err) {
+      this.log.warn(`kgraph everyday read failed, using off: ${err instanceof Error ? err.name : 'error'}`);
+      return false;
+    }
+  }
+
+  /** Counts one Knowledge Graph failure that did not fail the run (`app.kgraph.errors{stage}`). Never throws. */
+  countError(stage: KgraphErrorStage): void {
+    try {
+      if ((KGRAPH_ERROR_STAGES as readonly string[]).includes(stage)) this.metrics?.add('kgraphErrors', 1, { stage });
+    } catch {
+      // A metric never fails a run.
     }
   }
 }

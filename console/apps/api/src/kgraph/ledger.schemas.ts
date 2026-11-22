@@ -62,6 +62,10 @@ export const kgraphSummarySchema = z.object({
         .describe('Baseline minus the procedure runs (positive: saved). Null without a baseline or without a procedure run: a saving is never assumed.'),
     }),
   ),
+  everydayProcedureRuns: z
+    .number()
+    .int()
+    .describe('Chats and one-off runs in which a saved procedure ran (the everyday switch, `kgraph.everyday`). They belong to no task and never enter a task\'s baseline.'),
 });
 
 export class LedgerQueryDto extends createZodDto(ledgerQuerySchema) {}

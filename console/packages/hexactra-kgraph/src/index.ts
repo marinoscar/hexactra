@@ -8,3 +8,4 @@ export * from './execute';
 export * from './repair';
 export * from './view';
 export * from './transfer';
+export * from './match';
