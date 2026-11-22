@@ -9542,6 +9542,8 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example KGRAPH_TASK_NOT_FOUND
+             * @example KGRAPH_OFF
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -9556,8 +9558,6 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
-             * @example KGRAPH_TASK_NOT_FOUND
-             * @example KGRAPH_OFF
              * @example BENCHMARK_NOT_FOUND
              * @example BENCHMARK_RUNNING
              * @example BENCHMARK_SITE_UNREACHABLE
@@ -16544,6 +16544,7 @@ export interface components {
                 runs: number;
                 reviews: number;
                 evidence: number;
+                traces: number;
             };
         };
         TaskKgraphResponseDto: {
