@@ -1628,9 +1628,7 @@
         "GET /api/kgraph/status",
         "GET /api/tasks/{id}/kgraph"
       ],
-      "cli": {
-        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
-      },
+      "cli": "kgraph status",
       "mcp": {
         "none": "Deliberate for now: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); procedures as MCP tools arrive in E46.22"
       },
@@ -1643,16 +1641,19 @@
     },
     {
       "id": "kgraph.manage",
-      "description": "Choose a task's Knowledge Graph mode (off, learn, reuse), restore an earlier version of a procedure or forget it, and delete everything learned",
+      "description": "Choose a task's Knowledge Graph mode (off, learn, reuse), restore an earlier version of a procedure or forget it, delete everything learned, and turn your own switch on or off (your user setting kgraph.enabled)",
       "rest": [
         "PUT /api/tasks/{id}/kgraph",
         "DELETE /api/kgraph",
         "POST /api/kgraph/procedures/{id}/restore",
         "POST /api/kgraph/procedures/{id}/forget"
       ],
-      "cli": {
-        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
-      },
+      "cli": [
+        "kgraph restore",
+        "kgraph forget",
+        "kgraph off",
+        "kgraph on"
+      ],
       "mcp": {
         "none": "Deliberate: only the owner, signed in to the console, turns learning on or deletes it; no hosted AI app changes it (docs/decisions/knowledge-graph.md)"
       },
@@ -1702,6 +1703,71 @@
       },
       "web": {
         "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
+    },
+    {
+      "id": "kgraph.procedures",
+      "description": "Read your learned procedures: the list with state, health and the ledger summary, one procedure as an ordered step list (kind, tool, target, uses AI, health, arguments by source), its versions and a readable diff between two, and how a run's steps ran (replayed, recovered, judged or done by the agent)",
+      "rest": [
+        "GET /api/kgraph/procedures",
+        "GET /api/kgraph/procedures/{id}",
+        "GET /api/kgraph/procedures/{id}/versions",
+        "GET /api/kgraph/procedures/{id}/versions/{version}",
+        "GET /api/kgraph/procedures/{id}/versions/{version}/diff",
+        "GET /api/kgraph/runs/{runId}"
+      ],
+      "cli": [
+        "kgraph list",
+        "kgraph show",
+        "kgraph versions"
+      ],
+      "mcp": {
+        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
+    },
+    {
+      "id": "kgraph.graph",
+      "description": "The Knowledge Graph map: procedures, steps and the tools, sites, accounts and saved logins they use, with the connected accounts, added tools and saved logins no procedure uses yet, clustered per site and per account",
+      "rest": [
+        "GET /api/kgraph/graph"
+      ],
+      "cli": {
+        "none": "Deliberate: the map is a picture, drawn in the web app; `kgraph list` and `kgraph show` read the same procedures as text"
+      },
+      "mcp": {
+        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the map is drawn in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph map (E46.21)"
+      }
+    },
+    {
+      "id": "kgraph.admin",
+      "description": "Allow or stop the Knowledge Graph for the whole deployment and set its audit, suspension, retention and pacing rules (administrators)",
+      "rest": [
+        "GET /api/admin/kgraph/settings",
+        "PUT /api/admin/kgraph/settings"
+      ],
+      "cli": {
+        "none": "Deliberate: a deployment setting is changed by an administrator in the web app's settings; `kgraph status` shows whether it is on"
+      },
+      "mcp": {
+        "none": "Deliberate: no hosted AI app or MCP client changes a deployment setting"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; deployment settings are set in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph settings card (E46.20, #794)"
       }
     }
   ]

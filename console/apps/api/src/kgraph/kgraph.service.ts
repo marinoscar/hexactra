@@ -31,6 +31,7 @@ export class KgraphService {
    */
   async restore(userId: string, procedureId: string, versionId: string) {
     await this.ownProcedure(userId, procedureId);
+    await this.requireOn(userId);
     const versions = await this.store.listVersions(userId, procedureId);
     const chosen = versions.find((v) => v.id === versionId);
     if (!chosen || (chosen.state !== 'retired' && chosen.state !== 'suspended')) throw new ConflictException({ code: 'KGRAPH_VERSION_NOT_RESTORABLE', message: 'Only a retired or suspended version can be restored' });
@@ -44,6 +45,7 @@ export class KgraphService {
   /** Reset (E46.12): every version of the procedure retires; the task learns again. */
   async forget(userId: string, procedureId: string) {
     await this.ownProcedure(userId, procedureId);
+    await this.requireOn(userId);
     let retired = 0;
     for (const v of await this.store.listVersions(userId, procedureId)) if (v.state !== 'retired' && v.state !== 'rejected' && (await this.store.setVersionState(userId, v.id, v.state, 'retired'))) retired++;
     await this.audit(userId, 'kgraph.procedure.forgotten', 'kgraph_procedure', procedureId, { procedureId, retired });
@@ -61,12 +63,17 @@ export class KgraphService {
     return { taskId, mode, available: status.available };
   }
 
-  async setTaskMode(userId: string, taskId: string, mode: Mode) {
-    await this.ownTask(userId, taskId);
+  /** A write other than "Delete everything learned" and the admin settings is refused with `409 KGRAPH_OFF` while a switch is off (E46.19). */
+  private async requireOn(userId: string): Promise<void> {
     const status = await this.enabled.status(userId);
     if (!status.available) {
       throw new ConflictException({ code: 'KGRAPH_OFF', message: status.deployment ? 'Turn on the Knowledge Graph in your settings first' : 'The Knowledge Graph is turned off by your administrator' });
     }
+  }
+
+  async setTaskMode(userId: string, taskId: string, mode: Mode) {
+    await this.ownTask(userId, taskId);
+    await this.requireOn(userId);
     const before = await this.enabled.taskMode(userId, taskId);
     await this.prisma.forUser({ userId }).kgTaskSettings.upsert({ where: { taskId }, create: { taskId, userId, mode }, update: { mode } });
     if (before !== mode) await this.audit(userId, 'kgraph.task_mode_changed', 'task', taskId, { taskId, from: before, to: mode });
