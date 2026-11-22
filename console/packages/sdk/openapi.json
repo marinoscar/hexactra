@@ -29823,6 +29823,64 @@
         }
       }
     },
+    "/api/kgraph/admin/upkeep": {
+      "post": {
+        "description": "Enqueues the daily upkeep job (traces, old versions, stale procedures, orphans, duplicates, health). Administrators.\n\n**Requires:** authentication, plus permission `kgraph:admin`.",
+        "operationId": "kgraph_upkeepNow",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Run Knowledge Graph upkeep now",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:admin"
+          ]
+        }
+      }
+    },
     "/api/kgraph/reviews": {
       "get": {
         "description": "Repairs that would add or change a send, a payment, a recipient, a site, an account or a saved login. They never pause a run.\n\n**Requires:** authentication, plus permission `kgraph:read`.",

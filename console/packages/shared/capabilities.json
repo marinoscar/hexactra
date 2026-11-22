@@ -1769,6 +1769,25 @@
       "web": {
         "none": "Arrives with the Knowledge Graph settings card (E46.20, #794)"
       }
+    },
+    {
+      "id": "kgraph.upkeep",
+      "description": "Run the Knowledge Graph's library upkeep now (administrators)",
+      "rest": [
+        "POST /api/kgraph/admin/upkeep"
+      ],
+      "cli": {
+        "none": "An administrator's action in the web app"
+      },
+      "mcp": {
+        "none": "Deliberate: an administrator's maintenance action, not for hosted AI apps"
+      },
+      "tui": {
+        "none": "An administrator's action in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph admin card (E46.20, #794)"
+      }
     }
   ]
 }

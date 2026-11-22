@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import { JobsService } from '@marinoscar/platform-api/jobs';
+import { KGRAPH_UPKEEP_JOB } from './upkeep.job';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -13,7 +15,10 @@ import { KgraphService } from './kgraph.service';
 @ApiTags('Knowledge Graph')
 @Controller()
 export class KgraphController {
-  constructor(private readonly kgraph: KgraphService) {}
+  constructor(
+    private readonly kgraph: KgraphService,
+    @Optional() private readonly jobs?: JobsService,
+  ) {}
 
   @Get('kgraph/status')
   @ApiDataResponse(KgraphStatusResponseDto)
@@ -63,5 +68,15 @@ export class KgraphController {
   @ApiOperation({ summary: 'Forget a procedure', description: 'Every version retires (kept for history); the task learns again from its next successful run.' })
   forget(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.kgraph.forget(userId, id);
+  }
+
+  @Post('kgraph/admin/upkeep')
+  @HttpCode(202)
+  @Auth({ permissions: ['kgraph:admin'] })
+  @ApiOperation({ summary: 'Run Knowledge Graph upkeep now', description: 'Enqueues the daily upkeep job (traces, old versions, stale procedures, orphans, duplicates, health). Administrators.' })
+  async upkeepNow() {
+    if (!this.jobs) return { queued: false };
+    await this.jobs.enqueue({ type: KGRAPH_UPKEEP_JOB, reason: 'kgraph_upkeep', subjectType: 'kgraph', subjectId: 'upkeep', orgId: null, payload: {} });
+    return { queued: true };
   }
 }
