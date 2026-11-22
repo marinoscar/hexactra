@@ -124,6 +124,28 @@ assert.equal(effectiveMode({ ...on, aiOnlyThisRun: true }), 'off'); // one run
 assert.equal(effectiveMode({ ...on, savedTask: false }), 'off'); // a chat goal never uses it
 ```
 
+## Matching
+
+`matchProcedures({ goal, sites, accounts }, library, opts)` (`./match`) returns the procedures of the owner's library that may do part of a goal, as `{ procedureId, score, reasons }`, best first, at most `opts.limit` (default 5). It is deterministic and cheap: no I/O, no model and no embeddings. Each `reasons` entry is `site`, `words` or `account`.
+
+- **Sites.** The candidate sites are the registrable domains named in the goal (`sitesInText`; an e-mail address's domain is not a site) plus `sites`: the run's allowed sites and the sites of the accounts the goal names. A procedure matches on `site` only when its version declares one of them **exactly**. A subdomain of the same registrable domain is the same site, and a lookalike never matches (`paypa1.com`, `paypal.com.evil.io`, `paypal.co`).
+- **Accounts.** A procedure matches on `account` when its version uses one of the `accounts` connection ids.
+- **Words.** `wordsOf` normalises both sides: lower case, accents stripped, camelCase and snake_case split, a small stop-word list, and simple plural folding (`invoices` → `invoice`, `entries` → `entry`). A procedure's words are its name, its description (when the library entry has one) and its parameter names. With a site or account match, one shared word counts. Without one, a match needs `opts.minWords` shared words (default 2).
+- **Ranking.** A site or account match comes first, then more shared words, then a higher clean-replay rate (`cleanReplayRate`: successes without repair over all runs), then the procedure id. The order does not depend on the library's order.
+- **States.** Only an `active` version is offered (`MATCHABLE_STATES`). A `candidate`, `verified`, `suspended` or `retired` version is never returned.
+
+A match is only an offer. It grants nothing, and a matched procedure runs only when the agent chooses it, through the same gates as any tool. A matched procedure whose parameters the goal does not supply still lists them in `procedure_run`, so the agent asks for them or supplies them. A host reads the library with `ProcedureStorePort.listActiveProceduresForSites` (see [host-guide.md](host-guide.md)), or from its own list for a words-only match.
+
+```ts runnable
+import assert from 'node:assert/strict';
+import { matchProcedures } from '@marinoscar/hexactra-kgraph/match';
+import { aProcedure, aVersion, call } from '@marinoscar/hexactra-kgraph/testing';
+
+const statement = { procedure: aProcedure({ id: 'p-bank', name: 'Download statements', activeVersion: 'v1' }), version: aVersion([call('c1', 'navigate')], { id: 'v1', procedure: 'p-bank', state: 'active', sites: [{ id: 's1', domain: 'bank.com' }] }) };
+assert.deepEqual(matchProcedures({ goal: 'Download my statement from https://www.bank.com' }, [statement]).map((m) => m.reasons), [['site', 'words']]);
+assert.deepEqual(matchProcedures({ goal: 'Download my statement from bank.com.evil.io' }, [statement], { minWords: 3 }), []); // a lookalike
+```
+
 ## Compiling
 
 `compileTrace` turns the trace of one clean, successful run into a `candidate` version. It is deterministic and model-free.

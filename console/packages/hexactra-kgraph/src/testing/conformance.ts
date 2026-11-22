@@ -94,6 +94,33 @@ export function runStoreConformance(host: StoreHost): void {
       expect((await ctx.store.getVersion(a, 'kgc-v6'))?.stepEvidence['c1']?.successes).toBe(1);
     });
 
+    it('lists active procedures by exact site: no subdomain, suffix or lookalike, no other state, no other owner', async () => {
+      const [a, b] = ctx.owners;
+      const site = (domain: string) => ({ sites: [{ id: `site:${domain}`, domain }] });
+      const put = async (owner: string, p: string, v: string, domain: string, activate: boolean) => {
+        await ctx.store.putProcedure(aProcedure({ id: p, owner, task: await ctx.task(owner, `${p}-t`) }));
+        await ctx.store.putVersion(owner, aVersion([call('c1', 'navigate')], { id: v, procedure: p, ...site(domain) }));
+        if (activate) expect(await ctx.store.activate(owner, v, 'candidate')).toBe(true);
+      };
+      await put(a, 'kgc-s2', 'kgc-sv2', 'bank.com', true);
+      await put(a, 'kgc-s1', 'kgc-sv1', 'shop.co.uk', true);
+      await put(a, 'kgc-s3', 'kgc-sv3', 'bank.com', false); // candidate only
+      await put(a, 'kgc-s4', 'kgc-sv4', 'bank.com.evil.io', true); // a lookalike
+      await put(a, 'kgc-s5', 'kgc-sv5', 'bank.com', true);
+      expect(await ctx.store.setVersionState(a, 'kgc-sv5', 'active', 'suspended')).toBe(true);
+      await put(b, 'kgc-s6', 'kgc-sv6', 'bank.com', true); // another owner's
+      const found = await ctx.store.listActiveProceduresForSites(a, ['bank.com', 'shop.co.uk', 'example.org']);
+      expect(found.map((x) => [x.procedure.id, x.version.id, x.version.state])).toEqual([
+        ['kgc-s1', 'kgc-sv1', 'active'],
+        ['kgc-s2', 'kgc-sv2', 'active'],
+      ]);
+      expect((await ctx.store.listActiveProceduresForSites(a, ['com'])).length).toBe(0);
+      expect((await ctx.store.listActiveProceduresForSites(a, ['evil.io'])).length).toBe(0);
+      expect((await ctx.store.listActiveProceduresForSites(a, ['co.uk'])).length).toBe(0);
+      expect((await ctx.store.listActiveProceduresForSites(a, [])).length).toBe(0);
+      expect((await ctx.store.listActiveProceduresForSites(b, ['shop.co.uk'])).length).toBe(0);
+    });
+
     it('deletes everything learned for one owner only', async () => {
       const [a, b] = ctx.owners;
       await ctx.store.putProcedure(aProcedure({ id: 'kgc-p5', owner: a, task: await ctx.task(a, 'kgc-t5') }));

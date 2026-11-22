@@ -15,6 +15,8 @@ export type EvidenceOutcome = 'success' | 'failure' | 'repair';
  *   returns false otherwise; it never applies a move `canTransition` refuses.
  * - **One active version.** `activate` leaves exactly one `active` version per procedure, in one transaction.
  * - **Deleting is complete.** `deleteAll` removes every procedure, version and evidence row of the owner.
+ * - **Site lookups are exact.** `listActiveProceduresForSites` matches a site only on its exact registrable domain (never a subdomain, a
+ *   suffix or a lookalike) and returns only procedures whose `activeVersion` is in the `active` state.
  */
 export interface ProcedureStorePort {
   getProcedure(owner: string, id: string): Promise<Procedure | null>;
@@ -37,6 +39,12 @@ export interface ProcedureStorePort {
   activate(owner: string, version: string, from: 'candidate' | 'verified' | 'suspended'): Promise<boolean>;
   /** Add one outcome to the version's evidence, and to the step's when `step` is given. Returns the version's evidence after it. */
   recordEvidence(owner: string, version: string, step: string | null, outcome: EvidenceOutcome, at: string): Promise<Evidence>;
+  /**
+   * The owner's procedures whose active version declares one of `sites` (registrable domains, compared exactly), each with that version,
+   * ordered by procedure id. An empty `sites` returns nothing. A procedure with no active version, or whose `activeVersion` is not in the
+   * `active` state, is never returned. The input `matchProcedures` (`./match`) ranks.
+   */
+  listActiveProceduresForSites(owner: string, sites: readonly string[]): Promise<{ procedure: Procedure; version: ProcedureVersion }[]>;
   /** Delete everything learned for the owner. Returns the number of procedures removed. */
   deleteAll(owner: string): Promise<number>;
 }
