@@ -49839,6 +49839,16 @@
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
+              "KGRAPH_TASK_NOT_FOUND",
+              "KGRAPH_OFF",
+              "KGRAPH_PROCEDURE_NOT_FOUND",
+              "KGRAPH_VERSION_NOT_RESTORABLE",
+              "KGRAPH_REVIEW_NOT_FOUND",
+              "KGRAPH_REVIEW_ANSWERED",
+              "KGRAPH_REVIEW_CONSOLE_ONLY",
+              "KGRAPH_VERSION_NOT_FOUND",
+              "KGRAPH_RUN_NOT_FOUND",
+              "KGRAPH_IMPORT_INVALID",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -49878,16 +49888,6 @@
               "SECRETS_VAULT_NEEDS_RECONNECT",
               "SECRETS_VAULT_UNAVAILABLE",
               "SECRETS_VAULT_CONNECT_FAILED",
-              "KGRAPH_TASK_NOT_FOUND",
-              "KGRAPH_OFF",
-              "KGRAPH_PROCEDURE_NOT_FOUND",
-              "KGRAPH_VERSION_NOT_RESTORABLE",
-              "KGRAPH_REVIEW_NOT_FOUND",
-              "KGRAPH_REVIEW_ANSWERED",
-              "KGRAPH_REVIEW_CONSOLE_ONLY",
-              "KGRAPH_VERSION_NOT_FOUND",
-              "KGRAPH_RUN_NOT_FOUND",
-              "KGRAPH_IMPORT_INVALID",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -52906,6 +52906,18 @@
               "keepFailedDays"
             ]
           },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "agentPricing": {
             "type": "object",
             "properties": {
@@ -52961,18 +52973,6 @@
             },
             "required": [
               "paused"
-            ]
-          },
-          "kgraph": {
-            "type": "object",
-            "properties": {
-              "enabled": {
-                "type": "boolean",
-                "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
-              }
-            },
-            "required": [
-              "enabled"
             ]
           },
           "connections": {
@@ -53432,6 +53432,18 @@
               "keepFailedDays"
             ]
           },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "agentPricing": {
             "type": "object",
             "properties": {
@@ -53487,18 +53499,6 @@
             },
             "required": [
               "paused"
-            ]
-          },
-          "kgraph": {
-            "type": "object",
-            "properties": {
-              "enabled": {
-                "type": "boolean",
-                "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
-              }
-            },
-            "required": [
-              "enabled"
             ]
           },
           "connections": {
@@ -53995,6 +53995,22 @@
               }
             ]
           },
+          "kgraph": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "agentPricing": {
             "anyOf": [
               {
@@ -54057,22 +54073,6 @@
                 "properties": {
                   "paused": {
                     "type": "boolean"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "kgraph": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
                   }
                 }
               },
@@ -54457,6 +54457,55 @@
             },
             "required": [
               "maxKeepDays"
+            ]
+          },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+              },
+              "auditEvery": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
+              },
+              "suspendAfterFailures": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+              },
+              "retentionDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              },
+              "pacing": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "fast"
+                ],
+                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
+              }
+            },
+            "required": [
+              "enabled",
+              "auditEvery",
+              "suspendAfterFailures",
+              "retentionDays",
+              "pacing"
             ]
           },
           "agentPricing": {
@@ -54846,55 +54895,6 @@
             "required": [
               "keepDays",
               "maxMinutes"
-            ]
-          },
-          "kgraph": {
-            "type": "object",
-            "properties": {
-              "enabled": {
-                "type": "boolean",
-                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
-              },
-              "auditEvery": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000,
-                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
-              },
-              "suspendAfterFailures": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 100,
-                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
-              },
-              "retentionDays": {
-                "anyOf": [
-                  {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 3650
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
-              },
-              "pacing": {
-                "type": "string",
-                "enum": [
-                  "human",
-                  "fast"
-                ],
-                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
-              }
-            },
-            "required": [
-              "enabled",
-              "auditEvery",
-              "suspendAfterFailures",
-              "retentionDays",
-              "pacing"
             ]
           },
           "connections": {
@@ -55668,12 +55668,12 @@
           "secrets",
           "mcp",
           "runs",
+          "kgraph",
           "agentPricing",
           "notes",
           "browserAgentTiers",
           "browserAgentCeilings",
           "recordings",
-          "kgraph",
           "connections",
           "deliveries",
           "mailTriggers",
@@ -55889,6 +55889,55 @@
             },
             "required": [
               "maxKeepDays"
+            ]
+          },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+              },
+              "auditEvery": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
+              },
+              "suspendAfterFailures": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+              },
+              "retentionDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              },
+              "pacing": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "fast"
+                ],
+                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
+              }
+            },
+            "required": [
+              "enabled",
+              "auditEvery",
+              "suspendAfterFailures",
+              "retentionDays",
+              "pacing"
             ]
           },
           "agentPricing": {
@@ -56278,55 +56327,6 @@
             "required": [
               "keepDays",
               "maxMinutes"
-            ]
-          },
-          "kgraph": {
-            "type": "object",
-            "properties": {
-              "enabled": {
-                "type": "boolean",
-                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
-              },
-              "auditEvery": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000,
-                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
-              },
-              "suspendAfterFailures": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 100,
-                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
-              },
-              "retentionDays": {
-                "anyOf": [
-                  {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 3650
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
-              },
-              "pacing": {
-                "type": "string",
-                "enum": [
-                  "human",
-                  "fast"
-                ],
-                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
-              }
-            },
-            "required": [
-              "enabled",
-              "auditEvery",
-              "suspendAfterFailures",
-              "retentionDays",
-              "pacing"
             ]
           },
           "connections": {
@@ -57375,6 +57375,48 @@
               }
             }
           },
+          "kgraph": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
+              },
+              "auditEvery": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
+              },
+              "suspendAfterFailures": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
+              },
+              "retentionDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              },
+              "pacing": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "fast"
+                ],
+                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
+              }
+            }
+          },
           "agentPricing": {
             "type": "object",
             "properties": {
@@ -57718,48 +57760,6 @@
                 "minimum": 1,
                 "maximum": 480,
                 "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
-              }
-            }
-          },
-          "kgraph": {
-            "type": "object",
-            "properties": {
-              "enabled": {
-                "type": "boolean",
-                "description": "Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned."
-              },
-              "auditEvery": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 1000,
-                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
-              },
-              "suspendAfterFailures": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 100,
-                "description": "Consecutive failed replays that suspend a procedure (E46.12). Default 3."
-              },
-              "retentionDays": {
-                "anyOf": [
-                  {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 3650
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
-              },
-              "pacing": {
-                "type": "string",
-                "enum": [
-                  "human",
-                  "fast"
-                ],
-                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
               }
             }
           },
@@ -60246,6 +60246,18 @@
                   "keepFailedDays"
                 ]
               },
+              "kgraph": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
               "agentPricing": {
                 "type": "object",
                 "properties": {
@@ -60301,18 +60313,6 @@
                 },
                 "required": [
                   "paused"
-                ]
-              },
-              "kgraph": {
-                "type": "object",
-                "properties": {
-                  "enabled": {
-                    "type": "boolean",
-                    "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
-                  }
-                },
-                "required": [
-                  "enabled"
                 ]
               },
               "connections": {

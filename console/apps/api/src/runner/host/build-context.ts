@@ -54,6 +54,8 @@ import { savedLoginTools } from './tools/saved-logins';
 import { proposeMemory, proposeSavingLogin } from './tools/propose';
 import { kgraphObserverFor } from './kgraph/kgraph-observer';
 import { surfaceCapture } from './kgraph/surface';
+import { subProcedures } from './kgraph/sub-procedure';
+import { procedureTools, proceduresFamily } from './tools/procedures';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -203,6 +205,10 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     },
   } satisfies BrowserHooks);
 
+  // The owner's learned procedures as tools (E46.22): only when the run's Knowledge Graph mode is reuse; otherwise not even constructed.
+  const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
+  const reuse = Boolean(d.kgraph && d.kgraphStore) && (await d.kgraph!.modeFor({ userId, taskId: run.taskId ?? null, run: { isTaskRun } })) === 'reuse';
+  const procedures = reuse ? { tools: procedureTools(subProcedures(d, userId, run.taskId ?? null, run.inputs, () => profile)), family: proceduresFamily } : null;
   // The tools, in the order the model has always been offered them (one function, shared with the scenario kit).
   const registry = registerRunTools<HostContext>({
     needsBrowser: s.connections.needsBrowser,
@@ -213,6 +219,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     savedCards: flags.savedCards ? buildSavedCardTools(cardCtx) : null,
     connections: s.connections.list.length > 0 && Boolean(d.connections),
     ...(s.connections.list.length > 0 ? await mcpToolset(d, userId, s.connections.list).then((m) => ({ mcp: m.tools, mcpFamilies: m.families })) : { mcp: [] }),
+    procedures,
   });
 
   // A run an email started (E39.8): a reference to the message, never its content.

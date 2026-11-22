@@ -173,6 +173,7 @@ The agent picks a tool by capability, not by habit. Each kind of tool is a **fam
 |---|---|---|---|
 | `accounts` | 10 | `accountsFamily`, `apps/api/src/runner/host/tools/connections/index.ts` | "The owner's accounts": Google and Microsoft mail, calendar and files; the toolbox names each account and what it may do; its section says to attach pictures and reports by reference (E41.4) |
 | `mcp:<connectionId>` | 20 | `mcpFamilies`, `tools/connections/mcp.ts` | the owner's label, and the server's own `instructions` (cleaned, at most 300 characters, under `MCP_TRUST_LINE`) or its first tool titles |
+| `procedures` | 40 | `proceduresFamily`, `apps/api/src/runner/host/tools/procedures.ts` | "The owner's saved procedures": `procedures_list` and `run_procedure` (E46.22), offered only in a run whose Knowledge Graph mode is `reuse` and registered after every other tool; `run_procedure` walks another active procedure of the owner through the run's tool wrapper (`runSubProcedure`, depth 1) |
 | `browser` | 50 | `browserFamily`, `packages/hexactra-browser-agent/src/families.ts` | "The browser", with the "How to see" and "How to act" sections |
 | `desktop` | 60 | `desktopFamily` (same file) | "The desktop", with the "Outside the page" bullet |
 | `human`, `control`, `secrets`, `memory` | | no descriptor | covered by the general sections |

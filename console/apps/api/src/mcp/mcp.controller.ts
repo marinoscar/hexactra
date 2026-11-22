@@ -220,10 +220,12 @@ export class McpController {
     const userPermissions = credential?.kind === 'oauth' ? userPermissionsOf(user) : undefined;
     const extra = { userId: user?.id, orgId: user?.activeOrgId ?? user?.orgId ?? null, requestId: typeof req.id === 'string' ? req.id : null, signal: gone.signal, ...(userPermissions ? { userPermissions } : {}) };
     const principal = userPermissions ? { permissions: userPermissions } : undefined;
+    // The switches off for an OAuth caller (E46.22): a turned-off tool answers "turned off", never a step-up.
+    const off = credential?.kind === 'oauth' ? await this.dispatcher.unavailableFeatures(user?.id) : undefined;
     // A tools/call the token's scopes do not cover, but the user may allow: 403 for the whole request,
     // before anything runs (a batch mixing it with allowed calls is refused as a whole).
     const stepUp = (messages: readonly unknown[], single?: { id: RpcId | undefined; rctx: McpRequestContext }) => {
-      const missing = stepUpScopes(messages, { credential }, principal);
+      const missing = stepUpScopes(messages, { credential }, principal, off);
       if (!missing) return null;
       return async () => {
         await this.activity?.refusal(req, 'step_up', { missing: missing.join(' ') });

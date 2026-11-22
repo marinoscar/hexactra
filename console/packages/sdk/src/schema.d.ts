@@ -9901,6 +9901,16 @@ export interface components {
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
+             * @example KGRAPH_TASK_NOT_FOUND
+             * @example KGRAPH_OFF
+             * @example KGRAPH_PROCEDURE_NOT_FOUND
+             * @example KGRAPH_VERSION_NOT_RESTORABLE
+             * @example KGRAPH_REVIEW_NOT_FOUND
+             * @example KGRAPH_REVIEW_ANSWERED
+             * @example KGRAPH_REVIEW_CONSOLE_ONLY
+             * @example KGRAPH_VERSION_NOT_FOUND
+             * @example KGRAPH_RUN_NOT_FOUND
+             * @example KGRAPH_IMPORT_INVALID
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -9940,16 +9950,6 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
-             * @example KGRAPH_TASK_NOT_FOUND
-             * @example KGRAPH_OFF
-             * @example KGRAPH_PROCEDURE_NOT_FOUND
-             * @example KGRAPH_VERSION_NOT_RESTORABLE
-             * @example KGRAPH_REVIEW_NOT_FOUND
-             * @example KGRAPH_REVIEW_ANSWERED
-             * @example KGRAPH_REVIEW_CONSOLE_ONLY
-             * @example KGRAPH_VERSION_NOT_FOUND
-             * @example KGRAPH_RUN_NOT_FOUND
-             * @example KGRAPH_IMPORT_INVALID
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -10949,6 +10949,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled: boolean;
+            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -10963,10 +10967,6 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
-            };
-            kgraph?: {
-                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                enabled: boolean;
             };
             connections?: {
                 /**
@@ -11069,6 +11069,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled: boolean;
+            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -11083,10 +11087,6 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
-            };
-            kgraph?: {
-                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                enabled: boolean;
             };
             connections?: {
                 /**
@@ -11185,6 +11185,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             } | null;
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled?: boolean;
+            } | null;
             agentPricing?: ({
                 /** @constant */
                 currency?: "USD";
@@ -11198,10 +11202,6 @@ export interface components {
             } | null) | null;
             approvals?: {
                 paused?: boolean;
-            } | null;
-            kgraph?: {
-                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                enabled?: boolean;
             } | null;
             connections?: {
                 /**
@@ -11278,6 +11278,21 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            kgraph: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled: boolean;
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+                auditEvery: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing: "human" | "fast";
+            };
             agentPricing: {
                 /** @constant */
                 currency: "USD";
@@ -11344,21 +11359,6 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
-            };
-            kgraph: {
-                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
-                enabled: boolean;
-                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
-                auditEvery: number;
-                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
-                suspendAfterFailures: number;
-                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
-                retentionDays: number | null;
-                /**
-                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
-                 * @enum {string}
-                 */
-                pacing: "human" | "fast";
             };
             connections: {
                 mcp?: {
@@ -11590,6 +11590,21 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            kgraph?: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled: boolean;
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+                auditEvery: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing: "human" | "fast";
+            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -11656,21 +11671,6 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
-            };
-            kgraph?: {
-                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
-                enabled: boolean;
-                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
-                auditEvery: number;
-                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
-                suspendAfterFailures: number;
-                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
-                retentionDays: number | null;
-                /**
-                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
-                 * @enum {string}
-                 */
-                pacing: "human" | "fast";
             };
             connections?: {
                 mcp?: {
@@ -11907,6 +11907,21 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            kgraph?: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled?: boolean;
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+                auditEvery?: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures?: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays?: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing?: "human" | "fast";
+            };
             agentPricing?: {
                 /** @constant */
                 currency?: "USD";
@@ -11972,21 +11987,6 @@ export interface components {
                 keepDays?: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes?: number;
-            };
-            kgraph?: {
-                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
-                enabled?: boolean;
-                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
-                auditEvery?: number;
-                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
-                suspendAfterFailures?: number;
-                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
-                retentionDays?: number | null;
-                /**
-                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
-                 * @enum {string}
-                 */
-                pacing?: "human" | "fast";
             };
             connections?: {
                 mcp?: {
@@ -12542,6 +12542,10 @@ export interface components {
                     /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                     noticeSentAt?: string | null;
                 };
+                kgraph?: {
+                    /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                    enabled: boolean;
+                };
                 agentPricing?: {
                     /** @constant */
                     currency: "USD";
@@ -12556,10 +12560,6 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
-                };
-                kgraph?: {
-                    /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                    enabled: boolean;
                 };
                 connections?: {
                     /**

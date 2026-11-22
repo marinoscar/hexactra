@@ -15,7 +15,10 @@ import { createOAuthTestClient, mintOAuthTestToken, type OAuthTestClient } from 
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
+import { procedureVersionSchema } from '@marinoscar/hexactra-kgraph';
+
 import { FabricClient } from '../src/fabric/fabric.client';
+import { PrismaProcedureStore } from '../src/kgraph/prisma-procedure-store';
 import { createApp } from '../src/main';
 import { McpActivityPurgeHandler } from '../src/mcp/mcp-activity.jobs';
 import { McpSettingsReader } from '../src/mcp/mcp-settings.reader';
@@ -70,7 +73,7 @@ async function rpc(token: string, body: unknown, extra: { remoteAddress?: string
 const call = (token: string, name: string, args: Record<string, unknown> = {}) => rpc(token, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
 const ping = (token: string) => rpc(token, { jsonrpc: '2.0', id: 7, method: 'tools/list' });
 
-const api = (token: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown) =>
+const api = (token: string, method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, payload?: unknown) =>
   app.inject({ method, url: `/api${url}`, headers: { authorization: `Bearer ${token}` }, ...(payload !== undefined ? { payload: payload as object } : {}) });
 
 type ToolResult = { isError?: boolean; content: Array<{ type: string; text?: string }>; structuredContent?: Record<string, unknown> };
@@ -414,7 +417,17 @@ describe('secret egress over every tool (#465)', () => {
       const taskId = (await api(u.token, 'POST', '/tasks', { name: 'Egress', goal: 'Probe' })).json().data.id as string;
       const questionId = (await api(u.token, 'POST', '/questions', { prompt: 'Probe?', input: 'text', kind: 'other' })).json().data.id as string;
       const sessionId = (await api(p, 'POST', '/browser/sessions', { goal: 'Probe' })).json().data.runId as string;
-      const ids = { run_id: runId, task_id: taskId, question_id: questionId, session_id: sessionId, policy_id: 'builtin:balanced', script: 'document.body.innerText' };
+      // The learned-procedure tools (E46.22) are walked with the Knowledge Graph on, over a procedure whose step label carries the fabric token and whose literal carries the PAT.
+      await app.get(SystemSettingsService).patchSettings({ kgraph: { enabled: true } } as never, adminId);
+      await api(u.token, 'PATCH', '/user-settings', { kgraph: { enabled: true } });
+      await api(u.token, 'PUT', `/tasks/${taskId}/kgraph`, { mode: 'reuse' });
+      const procedureId = `kgp-egress-${stamp}`;
+      const store = app.get(PrismaProcedureStore);
+      const at = new Date().toISOString();
+      await store.putProcedure({ id: procedureId, owner: u.id, task: taskId, name: 'Egress', activeVersion: null, createdAt: at, updatedAt: at });
+      await store.putVersion(u.id, procedureVersionSchema.parse({ id: `kgv-egress-${stamp}`, procedure: procedureId, number: 1, state: 'active', changeClass: 'initial', sourceRun: null, parent: null, createdAt: at, entry: 's1', sites: [{ id: 'site1', domain: 'shop.example.test' }], steps: [{ id: 's1', kind: 'call', label: `Open ${fabricToken}`, tool: 'navigate', sites: ['site1'], args: { url: { kind: 'literal', value: `https://shop.example.test/?t=${p}` } } }], edges: [] }));
+      await store.putProcedure({ id: procedureId, owner: u.id, task: taskId, name: 'Egress', activeVersion: `kgv-egress-${stamp}`, createdAt: at, updatedAt: at });
+      const ids = { run_id: runId, task_id: taskId, question_id: questionId, session_id: sessionId, policy_id: 'builtin:balanced', script: 'document.body.innerText', procedure_id: procedureId };
       const secrets = [p, oat, fabricToken, 'handoff-secret-value-4242', ...planted.split(' ').filter((s) => s.startsWith('ort_') || s.startsWith('whsec_'))];
       // The walk is meaningful: every tool's generated arguments pass its schema (the call reaches the tool), except
       // policy_create, whose full policy spec is not generated (its invalid-arguments answer is still checked).
@@ -441,7 +454,12 @@ describe('secret egress over every tool (#465)', () => {
       expect(JSON.stringify(ev)).toContain('[redacted token]');
       for (const s of secrets) expect(JSON.stringify(ev).includes(s)).toBe(false);
       expect(fabric.actions().length).toBeGreaterThan(0);
+      // The walk reached the learned-procedure tools (not their "turned off" answer).
+      const got = (await call(p, 'procedure_get', { procedure_id: procedureId })).json.result as ToolResult;
+      expect(got.isError).toBeFalsy();
+      for (const s of secrets) expect(JSON.stringify(got).includes(s)).toBe(false);
     } finally {
+      await app.get(SystemSettingsService).patchSettings({ kgraph: { enabled: false } } as never, adminId);
       jest.restoreAllMocks();
     }
   }, 180_000);

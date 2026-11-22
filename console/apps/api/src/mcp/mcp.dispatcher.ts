@@ -37,7 +37,8 @@ import {
   type RpcId,
   type RpcResponse,
 } from './mcp.results';
-import { MCP_TOOLS, instructionsFor, toolAnnotations, type McpTool } from './mcp.tools';
+import { MCP_TOOLS, MCP_TOOL_FEATURES, featureOffText, instructionsFor, toolAnnotations, type McpTool, type McpToolFeature } from './mcp.tools';
+import { KgraphEnabledService } from '../kgraph/kgraph-enabled.service';
 import { challengeScopes, isScopeGated, missingScopes, scopeUsable, toolAccess, toolScopes, type GatePrincipal, type ToolAccess } from './mcp.access';
 import { MCP_OAUTH_RESOURCE_ID } from './mcp.scopes';
 import { McpActivityService, activityDetail, activityTargets, type McpActivityOutcome } from './mcp-activity.service';
@@ -170,23 +171,32 @@ export function offeredTools(rctx: Pick<McpRequestContext, 'credential' | 'clien
  * The tools `tools/list` gives a caller (#460), in registry order: what
  * `offeredTools` offers, less, for an OAuth app, the `forbidden` tools, and
  * the `needs_scope` ones unless `advertiseStepUp` (they are then marked).
- * Every other caller gets exactly `offeredTools`.
+ * Every other caller gets exactly `offeredTools`. A tool whose switch is off
+ * for the caller (`off`, E46.22) is left out for every caller.
  */
-export function listedTools(rctx: Pick<McpRequestContext, 'credential' | 'clientCapabilities'>, principal: GatePrincipal | undefined, advertiseStepUp: boolean): Array<{ tool: McpTool; access: ToolAccess }> {
+export function listedTools(
+  rctx: Pick<McpRequestContext, 'credential' | 'clientCapabilities'>,
+  principal: GatePrincipal | undefined,
+  advertiseStepUp: boolean,
+  off: ReadonlySet<McpToolFeature> = new Set(),
+): Array<{ tool: McpTool; access: ToolAccess }> {
   return offeredTools(rctx)
+    // A tool whose switch is off for this caller is not listed at all (E46.22).
+    .filter((tool) => !tool.feature || !off.has(tool.feature))
     .map((tool) => ({ tool, access: toolAccess(tool, rctx.credential, principal) }))
     .filter((t) => t.access === 'allowed' || (t.access === 'needs_scope' && advertiseStepUp));
 }
 
 /** The scopes a step-up must add for these messages, or `null` when no `tools/call` among them needs one (#460). */
-export function stepUpScopes(messages: readonly unknown[], rctx: Pick<McpRequestContext, 'credential'>, principal: GatePrincipal | undefined): string[] | null {
+export function stepUpScopes(messages: readonly unknown[], rctx: Pick<McpRequestContext, 'credential'>, principal: GatePrincipal | undefined, off: ReadonlySet<McpToolFeature> = new Set()): string[] | null {
   if (!isScopeGated(rctx.credential)) return null;
   const missing = new Set<string>();
   for (const m of messages) {
     if (m === null || typeof m !== 'object' || (m as RpcMessage).method !== 'tools/call') continue;
     const name = String(((m as RpcMessage).params as { name?: unknown } | undefined)?.name ?? '');
     const tool = MCP_TOOLS.find((t) => t.name === name);
-    if (!tool || toolAccess(tool, rctx.credential, principal) !== 'needs_scope') continue;
+    // A tool that is turned off answers "turned off" (in the dispatch), never a step-up for a scope it could not use anyway.
+    if (!tool || (tool.feature && off.has(tool.feature)) || toolAccess(tool, rctx.credential, principal) !== 'needs_scope') continue;
     for (const s of missingScopes(tool, rctx.credential)) missing.add(s);
   }
   return missing.size > 0 ? [...missing] : null;
@@ -272,7 +282,21 @@ export class McpDispatcher {
     @Optional() private readonly activity?: McpActivityService,
     @Optional() private readonly clients?: RequestClientService,
     @Optional() private readonly fabric?: FabricClient,
+    @Optional() private readonly kgraph?: KgraphEnabledService,
   ) {}
+
+  /**
+   * The switches that are off for this caller (E46.22, `McpTool.feature`): `kgraph` unless the Knowledge Graph is on for the deployment and
+   * the user. Read once per request; an error, an unknown user or no Knowledge Graph module counts as off.
+   */
+  async unavailableFeatures(userId: string | undefined): Promise<ReadonlySet<McpToolFeature>> {
+    if (!userId || !this.kgraph) return new Set(MCP_TOOL_FEATURES);
+    try {
+      return (await this.kgraph.status(userId)).available ? new Set() : new Set(MCP_TOOL_FEATURES);
+    } catch {
+      return new Set(MCP_TOOL_FEATURES);
+    }
+  }
 
   /** Exact secret values a result must never carry: the fabric's service token, when configured (#465). */
   private async secretValues(): Promise<string[]> {
@@ -486,7 +510,8 @@ export class McpDispatcher {
         // Deterministic order: the registry's own order. An OAuth app sees what its consent covers, plus (by default) what it may ask for.
         const version = serverInfo().version;
         const advertise = isScopeGated(rctx.credential) ? await this.advertiseStepUpTools() : false;
-        const tools = listedTools(rctx, principal, advertise).map(({ tool, access }) =>
+        const off = await this.unavailableFeatures(extra.userId);
+        const tools = listedTools(rctx, principal, advertise, off).map(({ tool, access }) =>
           toolListEntry(tool, flags, { uiAvailable: (uri) => uiResourceAvailable(uri, version), stepUp: access === 'needs_scope' }),
         );
         return ok({ tools }, true);
@@ -546,6 +571,8 @@ export class McpDispatcher {
     const kind = credentialKindOf(rctx);
     const limits = limitsFor(kind);
     const finalize = (r: McpToolResult) => finalizeResult(r, { structured: flags.structuredContent, limits });
+    // Per-request availability (E46.22): a tool whose switch is off for this caller is refused before anything else, for every credential.
+    if (tool.feature && (await this.unavailableFeatures(extra.userId)).has(tool.feature)) return ok({ ...finalize(errorResult(featureOffText(tool), 'TURNED_OFF')) });
     // The scope gate (#460). The transport answers `needs_scope` with `403 insufficient_scope` before
     // dispatching; reaching here with it (a direct dispatch) is refused as a tool error all the same.
     const access = toolAccess(tool, rctx.credential, principal);
