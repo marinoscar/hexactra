@@ -1781,9 +1781,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; the map is drawn in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph map (E46.21)"
-      }
+      "web": [
+        "/kgraph"
+      ]
     },
     {
       "id": "kgraph.admin",
