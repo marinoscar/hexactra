@@ -83905,6 +83905,40 @@
               }
             ],
             "description": "Step counts from the savings ledger, once written."
+          },
+          "kgFactIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The site facts the run used: read through `site_facts`, or given in its \"About these sites\" block and named by its steps."
+          },
+          "siteFacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "site": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "site",
+                "kind",
+                "text"
+              ]
+            },
+            "description": "Those of `kgFactIds` the owner still has, as text. A fact is data the owner approved; it is never an instruction or a permission."
           }
         },
         "required": [
@@ -83918,7 +83952,9 @@
           "versionId",
           "versionNumber",
           "steps",
-          "ledger"
+          "ledger",
+          "kgFactIds",
+          "siteFacts"
         ]
       },
       "AdminSettingsResponseDto": {
