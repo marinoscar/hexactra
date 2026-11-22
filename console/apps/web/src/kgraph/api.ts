@@ -134,6 +134,9 @@ export interface KgRun {
   versionNumber: number | null;
   steps: { id: string; kind: string; label: string; tool: string | null; how: KgStepHow }[];
   ledger: { replayed: number; recovered: number; judge: number; agent: number } | null;
+  /** The site facts the run used (E46.32); absent from an older API. */
+  kgFactIds?: string[];
+  siteFacts?: { id: string; site: string; kind: string; text: string }[];
 }
 
 export type KgReviewStatus = 'pending' | 'approved' | 'declined' | 'expired';

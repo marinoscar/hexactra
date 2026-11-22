@@ -29391,7 +29391,7 @@
     },
     "/api/kgraph": {
       "delete": {
-        "description": "Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes and run records. Nobody else's. Turning a switch off deletes nothing; this does.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "description": "Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes, run records and site facts. Nobody else's. Turning a switch off deletes nothing; this does.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
         "operationId": "kgraph_purge",
         "parameters": [],
         "responses": {
@@ -29881,6 +29881,183 @@
         }
       }
     },
+    "/api/kgraph/reviews/site-facts": {
+      "get": {
+        "description": "Proposals derived from your runs or written by the agent. None is used by a run until you approve it.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphSiteFactReviews_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteFactResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Site facts waiting for your review",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/reviews/site-facts/{id}/answer": {
+      "post": {
+        "description": "`403 KGRAPH_REVIEW_CONSOLE_ONLY` for a personal access token, an OAuth app or any credential but a browser session. Approved: the fact is active (with your edit, if any). Declined: it is archived and the same fact is not proposed again for 30 days.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphSiteFactReviews_answer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9:_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerSiteFactDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteFactResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Approve, edit then approve, or decline a site fact (signed-in console only)",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
     "/api/kgraph/reviews": {
       "get": {
         "description": "Repairs that would add or change a send, a payment, a recipient, a site, an account or a saved login. They never pause a run.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
@@ -30143,6 +30320,451 @@
           }
         ],
         "summary": "Approve or decline a change (signed-in console only)",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/sites": {
+      "get": {
+        "description": "Each site (registrable domain) you have facts about, with how many are active, proposed and archived.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphSiteFacts_sites",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteSummaryResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Your sites with facts",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/sites/{site}/facts": {
+      "get": {
+        "description": "Oldest first; optionally only one status.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphSiteFacts_list",
+        "parameters": [
+          {
+            "name": "site",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 3,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "proposed",
+                "active",
+                "archived"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteFactResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A site's facts",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Your own words, active at once. `422 KGRAPH_SITE_FACT_REFUSED` for a password, code, token or full number, an instruction, or a link to another site. `409 KGRAPH_OFF` while the Knowledge Graph is off.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphSiteFacts_create",
+        "parameters": [
+          {
+            "name": "site",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 3,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSiteFactDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteFactResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add a fact about a site (active at once)",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/site-facts/{id}": {
+      "patch": {
+        "description": "`422 KGRAPH_SITE_FACT_REFUSED` for a refused text; `409 KGRAPH_SITE_FACT_EXISTS` when the edit equals another of your facts; `409 KGRAPH_SITE_FACT_STATUS` for a move that is not allowed (a proposal is approved in Reviews).\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphSiteFacts_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9:_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSiteFactDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteFactResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Edit, archive or restore a site fact",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Permanently. A deleted proposal may be proposed again.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphSiteFacts_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9:_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a site fact",
         "tags": [
           "Knowledge Graph"
         ],
@@ -31018,7 +31640,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence."
+            "description": "A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence. Your active site facts travel in `siteFacts` (site, kind, text, source)."
           },
           "401": {
             "description": "Unauthorized - Invalid or missing token",
@@ -50209,6 +50831,10 @@
               "KGRAPH_VERSION_NOT_FOUND",
               "KGRAPH_RUN_NOT_FOUND",
               "KGRAPH_IMPORT_INVALID",
+              "KGRAPH_SITE_FACT_NOT_FOUND",
+              "KGRAPH_SITE_FACT_REFUSED",
+              "KGRAPH_SITE_FACT_EXISTS",
+              "KGRAPH_SITE_FACT_STATUS",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -81366,6 +81992,9 @@
               },
               "ledger": {
                 "type": "number"
+              },
+              "siteFacts": {
+                "type": "number"
               }
             },
             "required": [
@@ -81378,7 +82007,8 @@
               "reviews",
               "evidence",
               "traces",
-              "ledger"
+              "ledger",
+              "siteFacts"
             ]
           }
         },
@@ -81482,6 +82112,134 @@
           "retired"
         ]
       },
+      "SiteFactResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "navigation",
+              "sign_in",
+              "quirk",
+              "timing",
+              "other"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "At most 300 characters, shown as text. Data about the site, never an instruction or a permission."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "derived",
+              "agent_proposed"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "active",
+              "archived"
+            ]
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "steps": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "screens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "runId",
+              "steps",
+              "screens"
+            ],
+            "description": "What a proposal came from: the run and how many of its calls and screens. Ids and counts only."
+          },
+          "declinedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "site",
+          "kind",
+          "text",
+          "source",
+          "status",
+          "evidence",
+          "declinedAt",
+          "lastUsedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AnswerSiteFactDto": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "Approve with your own edit of the kind.",
+            "type": "string",
+            "enum": [
+              "navigation",
+              "sign_in",
+              "quirk",
+              "timing",
+              "other"
+            ]
+          },
+          "text": {
+            "description": "Approve with your own edit of the text.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "approve"
+        ],
+        "additionalProperties": false
+      },
       "ReviewResponseDto": {
         "type": "object",
         "properties": {
@@ -81554,6 +82312,89 @@
         "required": [
           "approve"
         ],
+        "additionalProperties": false
+      },
+      "SiteSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "type": "string"
+          },
+          "active": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "proposed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "archived": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "site",
+          "active",
+          "proposed",
+          "archived"
+        ]
+      },
+      "CreateSiteFactDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "navigation",
+              "sign_in",
+              "quirk",
+              "timing",
+              "other"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateSiteFactDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "navigation",
+              "sign_in",
+              "quirk",
+              "timing",
+              "other"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "status": {
+            "description": "`archived` sets a fact aside; `active` restores an archived one. A proposal is approved in Reviews.",
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "ProceduresResponseDto": {
@@ -83085,6 +83926,40 @@
               }
             ],
             "description": "Step counts from the savings ledger, once written."
+          },
+          "kgFactIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The site facts the run used: read through `site_facts`, or given in its \"About these sites\" block and named by its steps."
+          },
+          "siteFacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "site": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "site",
+                "kind",
+                "text"
+              ]
+            },
+            "description": "Those of `kgFactIds` the owner still has, as text. A fact is data the owner approved; it is never an instruction or a permission."
           }
         },
         "required": [
@@ -83099,7 +83974,9 @@
           "versionId",
           "versionNumber",
           "steps",
-          "ledger"
+          "ledger",
+          "kgFactIds",
+          "siteFacts"
         ]
       },
       "AdminSettingsResponseDto": {
@@ -83244,11 +84121,32 @@
                 "reason"
               ]
             }
+          },
+          "siteFacts": {
+            "type": "object",
+            "properties": {
+              "proposed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "proposed",
+              "skipped"
+            ],
+            "description": "Site facts in the file: each one stored as a proposal for your review, or skipped (refused, already known or declined lately)."
           }
         },
         "required": [
           "imported",
-          "skipped"
+          "skipped",
+          "siteFacts"
         ]
       },
       "ImportBodyDto": {

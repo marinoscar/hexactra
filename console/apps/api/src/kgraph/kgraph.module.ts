@@ -12,6 +12,9 @@ import { KgraphService } from './kgraph.service';
 import { PrismaProcedureStore } from './prisma-procedure-store';
 import { KgraphReviewsController } from './reviews.controller';
 import { KgraphReviewsService } from './reviews.service';
+import { PrismaSiteFactStore } from './prisma-site-fact-store';
+import { KgraphSiteFactReviewsController, KgraphSiteFactsController } from './site-facts.controller';
+import { KgraphSiteFactsService } from './site-facts.service';
 import { KgraphTransferController } from './transfer.controller';
 import { KgraphTransferService } from './transfer.service';
 import './kgraph.errors';
@@ -23,8 +26,8 @@ import { KgraphUpkeepService } from './upkeep.service';
  * `KgraphEnabledService.modeFor` and nothing else whether a run uses it.
  */
 @Module({
-  controllers: [KgraphController, KgraphReviewsController, KgraphReadController, KgraphAdminController, KgraphTransferController],
-  providers: [KgraphTransferService, KgraphUpkeepService, KgraphUpkeepHandler, KgraphUpkeepTask, KgraphUpkeepDoctorCheck, KgraphReadService, KgraphAdminService, KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun],
-  exports: [KgraphEnabledService, PrismaProcedureStore, KgraphAfterRun],
+  controllers: [KgraphController, KgraphSiteFactReviewsController, KgraphReviewsController, KgraphSiteFactsController, KgraphReadController, KgraphAdminController, KgraphTransferController],
+  providers: [KgraphTransferService, KgraphUpkeepService, KgraphUpkeepHandler, KgraphUpkeepTask, KgraphUpkeepDoctorCheck, KgraphReadService, KgraphAdminService, KgraphReviewsService, KgraphEnabledService, KgraphService, PrismaProcedureStore, KgraphCompileService, KgraphCompileHandler, KgraphAfterRun, PrismaSiteFactStore, KgraphSiteFactsService],
+  exports: [KgraphEnabledService, PrismaProcedureStore, KgraphAfterRun, KgraphSiteFactsService],
 })
 export class KgraphModule {}

@@ -95,6 +95,26 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
           ))}
         </List>
       )}
+      {(run.siteFacts?.length ?? 0) > 0 && (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="body2" component="h3" sx={{ fontWeight: 500 }}>
+            Site facts used
+          </Typography>
+          <List dense disablePadding aria-label="Site facts used in this run" data-testid="run-kgraph-facts">
+            {run.siteFacts!.map((f) => (
+              <ListItem key={f.id} divider disableGutters sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                <Typography variant="body2" component="span">
+                  {f.text}
+                  <Typography variant="caption" color="text.secondary" component="span">
+                    {' · '}
+                    {f.site}
+                  </Typography>
+                </Typography>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      )}
     </Paper>
   );
 }

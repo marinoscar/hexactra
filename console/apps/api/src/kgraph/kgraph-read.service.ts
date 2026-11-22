@@ -298,6 +298,9 @@ export class KgraphReadService {
     const db = this.db(userId);
     const [enabled, kg, ledger] = await Promise.all([this.enabled(userId), db.kgRun.findFirst({ where: { runId, userId } }), db.kgLedger.findFirst({ where: { runId, userId }, select: { stepsReplayed: true, stepsRecovered: true, stepsJudge: true, stepsAgent: true } })]);
     const version = kg?.procedureVersionId ? await this.store.getVersion(userId, kg.procedureVersionId) : null;
+    // The site facts the run used (E46.32): ids on its kg_runs row; the owner's own facts only.
+    const kgFactIds = kg?.factIds ?? [];
+    const usedFacts = kgFactIds.length ? await db.kgSiteFact.findMany({ where: { userId, id: { in: kgFactIds } }, select: { id: true, site: true, kind: true, text: true } }) : [];
     const procedure = version ? await db.kgProcedure.findFirst({ where: { userId, id: version.procedure }, select: { name: true } }) : null;
     const replay = row.replay && row.replay.version === version?.id ? row.replay : null;
     const done = new Set(arr<string>(replay?.done));
@@ -323,6 +326,10 @@ export class KgraphReadService {
       versionNumber: version?.number ?? null,
       steps,
       ledger: ledger ? { replayed: ledger.stepsReplayed, recovered: ledger.stepsRecovered, judge: ledger.stepsJudge, agent: ledger.stepsAgent } : null,
+      kgFactIds,
+      siteFacts: kgFactIds
+        .map((id) => usedFacts.find((f) => f.id === id))
+        .filter((f): f is (typeof usedFacts)[number] => Boolean(f)),
     };
   }
 }
