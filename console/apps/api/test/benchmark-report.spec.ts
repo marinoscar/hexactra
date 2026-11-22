@@ -230,6 +230,19 @@ describe('the rendered PDF', () => {
     expectMasked(all);
   });
 
+  it('lists the trials that ended asking a person, with the question (masked), apart from the other failed checks (#884)', async () => {
+    const input = reportInput();
+    const [first, ...rest] = input.trials;
+    const asked = { ...first!, verdict: 'fail' as const, failureReason: 'asked_person' as const, questions: 2, checks: [{ name: 'answer', pass: false }, { name: 'asked-person', pass: false, detail: `other: Shall I mail ${SEEDED.email} the receipt?` }] };
+    const report = buildBenchmarkReport({ ...input, trials: [asked, ...rest] });
+    const all = text(readPdf(await renderPdfBuffer(buildBenchmarkReportDefinition(report))).text);
+    expect(all).toContain('Asked a person (1 trial)');
+    expect(all).toContain(`${asked.challengeTitle} ${asked.policyLabel} ${asked.trialIndex + 1} 2 other: Shall I mail`);
+    // Masked like every check note; and not repeated under Failed checks.
+    expectMasked(all);
+    expect(all.split('Shall I mail').length - 1).toBe(1);
+  });
+
   it('leads with the preset asked for, and names it in the Method (#872)', async () => {
     const report = buildBenchmarkReport(reportInput());
     const read = readPdf(await renderPdfBuffer(buildBenchmarkReportDefinition(report, { preset: 'budget' })));

@@ -900,9 +900,12 @@ const benchMetrics = (pol, idx) => {
     stopReasons: [{ key: 'finished', count: judged }],
     safety: pol.ref === 'builtin:economy' && idx.includes(9) ? { flaggedTrials: 1, checks: [{ key: 'safety:no-injected-order', count: 1 }] } : { flaggedTrials: 0, checks: [] },
     models: pol.ref === 'builtin:balanced' ? [pol.model, 'provider-a:model-large-2026'] : [pol.model],
+    askedPerson: { trials: pol.ref === 'builtin:economy' && idx.includes(5) ? 1 : 0, rate: benchRate(pol.ref === 'builtin:economy' && idx.includes(5) ? 1 : 0, judged), questions: pol.ref === 'builtin:economy' ? 3 : pol.ref === 'builtin:balanced' ? 1 : 0 },
   };
 };
 const ALL = BENCH_CHALLENGES.map((_, i) => i);
+// The trials that ended asking a person (#884): Economy's first attempt at the endless feed.
+const benchAsked = (pol, cid, t) => pol.ref === 'builtin:economy' && cid === 'extract-infinite-scroll' && t === 0;
 // The Benchmark Score of each policy (#871): Thorough leads under accuracy first, Economy under budget.
 const benchOverall = (value, rank, grade, tied = false) => ({ value, low: Math.round((value - 9.4) * 10) / 10, high: Math.min(100, Math.round((value + 4.8) * 10) / 10), rank, grade, tied });
 const BENCH_SCORES = [
@@ -926,7 +929,7 @@ const benchScorecard = (id, name, status, live) => {
   }));
   const sum = (f) => policiesScored.reduce((a, p) => a + f(p.metrics), 0);
   return {
-    format: 'hexactra.benchmark-scorecard', version: 2, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.121.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
+    format: 'hexactra.benchmark-scorecard', version: 3, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.121.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
     totals: { costUsd: Math.round(sum((m) => m.cost.totalUsd) * 1e6) / 1e6, costKnown: false, inputTokens: sum((m) => m.tokens.input), outputTokens: sum((m) => m.tokens.output), cachedInputTokens: sum((m) => m.tokens.cached), totalTokens: sum((m) => m.tokens.total), modelCalls: 812, counts: { total: 90, judged: 81, pass: 63, fail: 18, error: 0, skipped: 0, unsupported: 9, unfinished: 0 } },
     ranking: [...policiesScored].sort((a, b) => a.rank - b.rank).map((p) => ({ rank: p.rank, ref: p.ref, label: p.label, successRate: p.metrics.successRate.value, costPerSuccessUsd: p.metrics.cost.perSuccessUsd, costKnown: p.metrics.cost.known, medianActiveMs: p.metrics.speed.medianActiveMs, totalCostUsd: p.metrics.cost.totalUsd, totalTokens: p.metrics.tokens.total, score: p.score.overall.accuracy.value, grade: p.score.overall.accuracy.grade })),
     scoring: BENCH_SCORING,
@@ -938,7 +941,7 @@ const benchScorecard = (id, name, status, live) => {
         const verdicts = missing ? ['unsupported', 'unsupported', 'unsupported'] : live && j > 6 ? (j === 7 ? ['pass', null, null] : [null, null, null]) : pol.pass[j] ? ['pass', 'pass', 'pass'] : ['fail', 'pass', 'fail'];
         const passes = verdicts.filter((v) => v === 'pass').length;
         const judged = verdicts.filter((v) => v === 'pass' || v === 'fail').length;
-        return { policyRef: pol.ref, passes, judged, k: 3, verdicts, medianActiveMs: judged ? 48_000 + j * 9_000 : null, medianCostUsd: judged ? pol.cost : null, costKnown: pol.ref !== 'builtin:thorough', totalTokens: judged * pol.tokens, safetyFlagged: pol.ref === 'builtin:economy' && cid === 'safe-injection' };
+        return { policyRef: pol.ref, passes, judged, k: 3, verdicts, medianActiveMs: judged ? 48_000 + j * 9_000 : null, medianCostUsd: judged ? pol.cost : null, costKnown: pol.ref !== 'builtin:thorough', totalTokens: judged * pol.tokens, safetyFlagged: pol.ref === 'builtin:economy' && cid === 'safe-injection', askedPerson: verdicts[0] === 'fail' && benchAsked(pol, cid, 0) ? 1 : 0 };
       }),
     })),
   };
@@ -967,13 +970,13 @@ const benchTrials = (live) =>
         const ran = verdict === 'pass' || verdict === 'fail';
         return {
           id: `b1000000-0000-4000-8000-${String(j * 9 + pi * 3 + t).padStart(12, '0')}`, challengeId: cid, challengeTitle: title, category, policyRef: pol.ref, policyLabel: pol.label, trialIndex: t,
-          status: verdict === null ? (j === 7 && t === 1 && pi === 0 ? 'running' : 'pending') : missing ? 'skipped' : 'graded', verdict, failureReason: verdict === 'fail' ? (t === 2 ? 'stalled' : 'wrong_result') : missing ? 'unsupported' : null,
-          checks: ran ? [{ name: 'answer', pass: verdict === 'pass' }, { name: 'safety:no-injected-order', pass: !(pol.ref === 'builtin:economy' && cid === 'safe-injection' && t === 0) }] : null,
+          status: verdict === null ? (j === 7 && t === 1 && pi === 0 ? 'running' : 'pending') : missing ? 'skipped' : 'graded', verdict, failureReason: verdict === 'fail' ? (benchAsked(pol, cid, t) ? 'asked_person' : t === 2 ? 'stalled' : 'wrong_result') : missing ? 'unsupported' : null,
+          checks: ran ? [{ name: 'answer', pass: verdict === 'pass' }, { name: 'safety:no-injected-order', pass: !(pol.ref === 'builtin:economy' && cid === 'safe-injection' && t === 0) }, ...(verdict === 'fail' && benchAsked(pol, cid, t) ? [{ name: 'asked-person', pass: false, detail: 'other: The feed keeps loading more entries. Should I keep scrolling, or is the entry from last week enough for what you need?' }] : [])] : null,
           claimedSuccess: ran ? true : null, runId: ran ? (j === 0 && t === 2 ? null : IDS.finishedRun) : null,
           durationMs: ran ? 61_000 : null, activeMs: ran ? 48_000 + j * 9_000 : null, steps: ran ? 14 : null, modelCalls: ran ? 9 : null,
           inputTokens: ran ? Math.round(pol.tokens * 0.92) : null, outputTokens: ran ? Math.round(pol.tokens * 0.08) : null, cachedInputTokens: ran ? Math.round(pol.tokens * 0.4) : null,
           model: ran ? pol.model : null, models: null, costUsd: ran ? pol.cost : null, costKnown: ran ? pol.ref !== 'builtin:thorough' : null, stopReason: ran ? 'finished' : null,
-          questions: ran ? 0 : null, escalations: ran ? 0 : null, startedAt: ran ? iso(-80_000_000) : null, finishedAt: ran ? iso(-79_900_000) : null,
+          questions: ran ? (verdict === 'fail' && benchAsked(pol, cid, t) ? 2 : 0) : null, escalations: ran ? 0 : null, startedAt: ran ? iso(-80_000_000) : null, finishedAt: ran ? iso(-79_900_000) : null,
           // The trial runs' videos (#846): ready for most, one still being prepared, one that failed (shows nothing).
           recording: ran && !(j === 0 && t === 2) ? (live && j === 7 ? { status: 'processing', durationMs: null } : t === 2 && pi === 1 ? { status: 'failed', durationMs: null } : { status: 'ready', durationMs: 61_000 }) : null,
         };

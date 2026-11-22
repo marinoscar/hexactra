@@ -57,6 +57,8 @@ export interface BenchmarkTrialView {
   model: string | null;
   costUsd: number | null;
   costKnown: boolean | null;
+  /** The grader's checks; an asked_person trial ends with `asked-person`, whose detail is the question (#884). */
+  checks?: { name: string; pass: boolean; detail?: string }[] | null;
   /**
    * The trial run's recording (#846): `ready` plays on the run page (`/runs/<runId>#recording`), `recording`/`processing` not yet,
    * `failed` never. Null when not recorded or for a viewer without `runs:read`; absent from an older console.
@@ -87,6 +89,8 @@ export interface ScoreMetricsView {
   successRate: RateView;
   passAllK: { k: number; challenges: number; allPassed: number; rate: RateView };
   falseSuccess: RateView;
+  /** Trials that ended because the agent asked a person, and every question asked (#884). Absent from an older console. */
+  askedPerson?: { trials: number; rate: RateView; questions: number };
   speed: { medianActiveMs: number | null; p90ActiveMs: number | null; medianSteps: number | null; medianModelCalls: number | null };
   cost: { totalUsd: number; known: boolean; medianPerTrialUsd: number | null; perSuccessUsd: number | null };
   tokens: { input: number; output: number; cached: number; total: number; medianInput: number | null; medianOutput: number | null; medianCached: number | null; perSuccess: number | null };
@@ -224,6 +228,7 @@ function metricLines(m: ScoreMetricsView, indent: string): string[] {
     `${indent}tokens      ${int(t.total)} (${tokenSplit(t.input, t.output, t.cached)})   median per trial ${t.medianInput === null ? '-' : tokenSplit(t.medianInput, t.medianOutput ?? 0, t.medianCached ?? 0)}   per success ${t.perSuccess === null ? '-' : int(t.perSuccess)}`,
     `${indent}cost        ${usd(c.totalUsd, c.known)}   median per trial ${usd(c.medianPerTrialUsd, c.known)}   per success ${usd(c.perSuccessUsd, c.known)}`,
     `${indent}speed       median ${duration(m.speed.medianActiveMs)}, p90 ${duration(m.speed.p90ActiveMs)}, ${m.speed.medianSteps ?? '-'} steps`,
+    ...(m.askedPerson ? [`${indent}asked       ${m.askedPerson.trials} of ${m.askedPerson.rate.n} judged trials ended asking a person; ${m.askedPerson.questions} question${m.askedPerson.questions === 1 ? '' : 's'} asked in all`] : []),
   ];
 }
 
@@ -318,7 +323,9 @@ export function trialLines(trials: BenchmarkTrialView[], opts: { webUrl?: string
     const tokens = t.inputTokens === null ? '' : `  ${tokenSplit(t.inputTokens, t.outputTokens ?? 0, t.cachedInputTokens ?? 0)}  ${usd(t.costUsd, t.costKnown !== false)}`;
     const rec = recordingText(t);
     const line = `  ${t.challengeId.padEnd(26)} ${t.policyLabel.slice(0, 20).padEnd(20)} #${t.trialIndex + 1}  ${`${verdict}${why}`.padEnd(30)} ${duration(t.activeMs).padStart(9)}${tokens}${t.runId ? `  run ${t.runId.slice(0, 8)}` : ''}${rec ? `  ${rec}` : ''}`;
-    return t.recording?.status === 'ready' && t.runId ? [line, `      ${recordingUrl(t.runId, opts.webUrl)}`] : [line];
+    // The question that ended an asked_person trial (#884).
+    const question = t.failureReason === 'asked_person' ? t.checks?.find((c) => c.name === 'asked-person')?.detail : undefined;
+    return [line, ...(question ? [`      asked: ${question}`] : []), ...(t.recording?.status === 'ready' && t.runId ? [`      ${recordingUrl(t.runId, opts.webUrl)}`] : [])];
   });
 }
 
