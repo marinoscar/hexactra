@@ -134,6 +134,17 @@ A job can die at any point (a crash, a deploy, a lost lease). Three mechanisms m
 
 Phases, the counters (`app.runs.recovered`) and the alert rule: [runs.md, Crash safety](runs.md#crash-safety-e383). What to do when it happens: [operations runbook](runbooks/operations.md#a-run-recovered-after-a-restart).
 
+## Replay: a saved procedure before the loop (E46.9)
+
+A task in the Knowledge Graph's `reuse` mode ([decision record](decisions/knowledge-graph.md)) may replay a learned procedure before the loop, inside the same run: the same lease, step rows, run page and Stop.
+
+- **When.** `GoalRunnerService.advance` calls `maybeReplay` (`host/kgraph/replay.ts`) between `beforeLoop` and `loop.run`. It returns `null` at once unless `KgraphEnabledService.modeFor` is `reuse` and the task has an `active`, `verified` or `candidate` version. With the feature off at any level nothing of it is entered.
+- **How.** The executor (`@marinoscar/hexactra-kgraph/execute`) walks the version; the bridge (`@marinoscar/hexactra-kgraph/harness`) gives it `harnessToolInvoker`, which looks the tool up in the run's registry (a tool not offered is a refusal) and calls **`executeTool`**: Stop, Pause, the site and risk gates, saved approvals, the span, intent recording and the step row apply exactly as for a model-chosen call. `before(step)` uses `ctx.preflight()` and the hop deadline. A `judge` step is one model call on the `fast` tier, counted like any other.
+- **Handover.** A failed check, a refusal, an `agent` step, an owner question or an error hands the run to the loop with one line in the model's log: "A saved procedure did steps 1 to N without the model. Step N+1 did not match: … Look at the page and continue toward the goal." The run memory's `kgraphReplay.handedOver` stops a later job from replaying again.
+- **Finish.** A procedure that reaches its end closes the run (`closeRun`, `succeeded`, with the task's outputs when declared).
+- **Crash and hop.** `kgraphReplay` in the run memory keeps the ids of the steps done and of a commit-class step whose intent was recorded. A later job skips the done steps; a step left in intent is never sent again (the agent takes over, the gates ask the owner). A hop mid-procedure resumes at the next step.
+- **Errors never fail the run:** anything thrown is caught, logged and handed over. `kg_runs` records the version and the outcome (`replayed`, `fell_back`).
+
 ## Traces (E38.4)
 
 `AgentTrace` (`apps/api/src/runner/agent-trace.ts`, bound to `TelemetryPort`) makes one OpenTelemetry trace per job: `invoke_agent hexactra.browser_agent` > `hexactra.chunk` > `chat <model>` and `execute_tool <tool>` (> `hexactra.fabric <action>`), with `hexactra.ask_human` events. The harness sees only `TelemetryPort` (`@opentelemetry/api` is its only telemetry import) and the host hands it a no-op when the telemetry slice is off. Attribute names are spelled in one file, `trace-attributes.ts`, and follow the GenAI semantic conventions; spans carry names, counts, sizes and outcomes, never prompts, page text, typed text, URLs beyond the host or any secret (`agent-trace.db.spec.ts` plants marker strings and fails if one reaches a span). `runs.trace_id` holds the latest job's trace id. Finding and reading a trace: [operations runbook](runbooks/operations.md#find-a-runs-trace-and-read-it). A trace is telemetry, **not** the audit trail.

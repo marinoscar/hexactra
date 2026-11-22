@@ -9,6 +9,7 @@ import type { ApprovalRulesService } from '../../approvals/approval-rules.servic
 import type { FabricClient } from '../../fabric/fabric.client';
 import type { KgraphAfterRun } from '../../kgraph/kgraph-compile.job';
 import type { KgraphEnabledService } from '../../kgraph/kgraph-enabled.service';
+import type { PrismaProcedureStore } from '../../kgraph/prisma-procedure-store';
 import type { MemoryContext } from '../../memories/memory-context';
 import type { MemoryProposals } from '../../memories/memory-proposals.service';
 import type { ModelTiersService } from '../../policies/model-tiers.service';
@@ -49,6 +50,8 @@ export interface HostDeps {
   traces?: Pick<RunTraceService, 'exportPdf'>;
   /** The Knowledge Graph's gate (E46): absent, or `off` for the run, and nothing watches its tool calls. */
   kgraph?: Pick<KgraphEnabledService, 'modeFor'>;
+  /** The Knowledge Graph's store (E46.9): absent, and no run replays a procedure. */
+  kgraphStore?: PrismaProcedureStore;
   /** After a run's final transition (E46.7): enqueues the compile job when the run was captured. Best effort. */
   kgraphAfterRun?: Pick<KgraphAfterRun, 'finished'>;
   /** The wall clock; tests replace it to pass time without waiting. */
