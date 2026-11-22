@@ -27,33 +27,48 @@ async function activeOf(d: HostDeps, userId: string, p: Procedure): Promise<Proc
   return v?.state === 'active' ? v : null;
 }
 
+/** The owner's active procedures other than `taskId`'s own, newest first, at most 50, each with its active version. */
+export async function usableProcedures(d: HostDeps, userId: string, taskId: string | null): Promise<Array<{ p: Procedure; v: ProcedureVersion }>> {
+  const all = (await d.kgraphStore!.listProcedures(userId)).filter((p) => p.task !== taskId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const out: Array<{ p: Procedure; v: ProcedureVersion }> = [];
+  for (const p of all) {
+    if (out.length >= LIST_LIMIT) break;
+    const v = await activeOf(d, userId, p);
+    if (v) out.push({ p, v });
+  }
+  return out;
+}
+
+/** One procedure as the model reads it: its id, masked name, parameter names and non-sensitive output names. Never a value. */
+export function procedureLine({ p, v }: { p: Procedure; v: ProcedureVersion }): string {
+  const params = v.parameters.map((x) => `${mask(x.name)}${x.required ? '' : ' (optional)'}${x.sensitive ? ' (sensitive: from the run)' : ''}`);
+  const outs = v.outputs.filter((o) => !o.sensitive).map((o) => mask(o.name));
+  return `- ${p.id} "${mask(p.name)}": parameters ${params.length ? params.join(', ') : 'none'}; returns ${outs.length ? outs.join(', ') : 'nothing'}`;
+}
+
+/** What a `run_procedure` call that walked a procedure reports to the host (E46.28: the everyday ledger). Never a value. */
+export interface ProcedureRan {
+  versionId: string;
+  /** The steps it completed without the model. */
+  done: number;
+  /** Whether it finished. */
+  ok: boolean;
+}
+
 /**
  * The port of the `procedures` tools for one run. `profile` is read when a procedure runs (the registry and the gate pipeline of this run);
- * `taskId` is the run's own task, whose procedure is never offered as a sub-procedure.
+ * `taskId` is the run's own task, whose procedure is never offered as a sub-procedure. `onRan` (an everyday run, E46.28) is told when a
+ * procedure was walked; its failure is the host's and never the run's.
  */
-export function subProcedures(d: HostDeps, userId: string, taskId: string | null, runInputs: unknown, profile: () => LoopProfile<HostContext>): ProceduresPort {
-  const usable = async (): Promise<Array<{ p: Procedure; v: ProcedureVersion }>> => {
-    const all = (await d.kgraphStore!.listProcedures(userId)).filter((p) => p.task !== taskId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    const out: Array<{ p: Procedure; v: ProcedureVersion }> = [];
-    for (const p of all) {
-      if (out.length >= LIST_LIMIT) break;
-      const v = await activeOf(d, userId, p);
-      if (v) out.push({ p, v });
-    }
-    return out;
-  };
+export function subProcedures(d: HostDeps, userId: string, taskId: string | null, runInputs: unknown, profile: () => LoopProfile<HostContext>, onRan?: (r: ProcedureRan) => Promise<void>): ProceduresPort {
+  const usable = () => usableProcedures(d, userId, taskId);
 
   return {
     async list() {
       try {
         const rows = await usable();
         if (rows.length === 0) return { text: 'The owner has no other saved procedure you can run.', count: 0 };
-        const line = ({ p, v }: { p: Procedure; v: ProcedureVersion }) => {
-          const params = v.parameters.map((x) => `${mask(x.name)}${x.required ? '' : ' (optional)'}${x.sensitive ? ' (sensitive: from the run)' : ''}`);
-          const outs = v.outputs.filter((o) => !o.sensitive).map((o) => mask(o.name));
-          return `- ${p.id} "${mask(p.name)}": parameters ${params.length ? params.join(', ') : 'none'}; returns ${outs.length ? outs.join(', ') : 'nothing'}`;
-        };
-        return { text: `Saved procedures (run one with run_procedure):\n${rows.map(line).join('\n')}`, count: rows.length };
+        return { text: `Saved procedures (run one with run_procedure):\n${rows.map(procedureLine).join('\n')}`, count: rows.length };
       } catch (err) {
         d.log.warn(`procedures_list failed: ${err instanceof Error ? err.name : 'error'}`);
         return { text: 'The saved procedures could not be read. Do the work yourself.', count: 0 };
@@ -97,6 +112,7 @@ export function subProcedures(d: HostDeps, userId: string, taskId: string | null
             telemetry: noopTelemetry,
           },
         });
+        if (result.report && onRan) await onRan({ versionId: version.id, done: result.report.steps.filter((x) => x.status === 'done').length, ok: result.ok }).catch(() => undefined);
         return { ok: result.ok, text: result.text };
       } catch (err) {
         d.log.warn(`run ${ctx.run.id}: run_procedure failed: ${err instanceof Error ? err.name : 'error'}`);

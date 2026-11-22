@@ -50,7 +50,7 @@ export interface HostDeps {
   /** The run's trace and PDF report (E35): `file_upload` hands the report to a connection. */
   traces?: Pick<RunTraceService, 'exportPdf'>;
   /** The Knowledge Graph's gate (E46): absent, or `off` for the run, and nothing watches its tool calls. */
-  kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'>;
+  kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'> & Partial<Pick<KgraphEnabledService, 'everydayFor' | 'countError'>>;
   /** The Knowledge Graph's store (E46.9): absent, and no run replays a procedure. */
   kgraphStore?: PrismaProcedureStore;
   /** The owner's site facts (E46.31): absent, and no run is offered `propose_site_fact`. */
