@@ -7,6 +7,7 @@ import type { CapabilityHub } from '../../connections/capability-hub';
 import type { McpRunService } from '../../connections/mcp/mcp-run.service';
 import type { ApprovalRulesService } from '../../approvals/approval-rules.service';
 import type { FabricClient } from '../../fabric/fabric.client';
+import type { KgraphEnabledService } from '../../kgraph/kgraph-enabled.service';
 import type { MemoryContext } from '../../memories/memory-context';
 import type { MemoryProposals } from '../../memories/memory-proposals.service';
 import type { ModelTiersService } from '../../policies/model-tiers.service';
@@ -45,6 +46,8 @@ export interface HostDeps {
   mcp?: Pick<McpRunService, 'toolsFor' | 'call' | 'check' | 'exactSecrets'>;
   /** The run's trace and PDF report (E35): `file_upload` hands the report to a connection. */
   traces?: Pick<RunTraceService, 'exportPdf'>;
+  /** The Knowledge Graph's gate (E46): absent, or `off` for the run, and nothing watches its tool calls. */
+  kgraph?: Pick<KgraphEnabledService, 'modeFor'>;
   /** The wall clock; tests replace it to pass time without waiting. */
   clock: () => number;
   log: Logger;

@@ -304,7 +304,8 @@ model Run {
   deliveries RunDelivery[]
 
   // composed from app:kgraph.prisma
-  kg KgRun?
+  kg       KgRun?
+  kgTraces KgTrace[]
 
   // composed from app:questions.prisma
   questions Question[]

@@ -48,14 +48,18 @@ describe('the kgraph settings', () => {
   });
 });
 
-describe('the kgraph migration', () => {
+describe('the kgraph migrations', () => {
   const dir = join(__dirname, '..', 'prisma', 'migrations');
-  const kg = readdirSync(dir).filter((d) => /_kgraph/.test(d));
-  it('exists, sorts after every earlier migration and creates kg_ tables only', () => {
+  const kg = readdirSync(dir).filter((d) => /_kgraph/.test(d)).sort();
+  it('exist and sort after every earlier migration', () => {
     expect(kg.length).toBeGreaterThanOrEqual(1);
-    const sql = readFileSync(join(dir, kg[0]!, 'migration.sql'), 'utf8');
+    const all = readdirSync(dir).filter((d) => /^\d{14}_/.test(d)).sort();
+    expect(all.slice(-kg.length)).toEqual(kg);
+  });
+  it.each(kg)('%s creates or indexes kg_ tables only', (folder) => {
+    const sql = readFileSync(join(dir, folder, 'migration.sql'), 'utf8');
     const statements = sql.split(';').map((s) => s.replace(/--.*$/gm, '').trim()).filter(Boolean);
-    expect(statements.length).toBeGreaterThan(10);
+    expect(statements.length).toBeGreaterThan(0);
     for (const s of statements) {
       const target = /^(?:CREATE TABLE|CREATE (?:UNIQUE )?INDEX "[^"]+" ON|ALTER TABLE)\s+"([^"]+)"/.exec(s)?.[1];
       expect({ statement: s.slice(0, 80), target: target?.startsWith('kg_') ? 'kg_' : target }).toEqual({ statement: s.slice(0, 80), target: 'kg_' });

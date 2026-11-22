@@ -148,6 +148,7 @@ model User {
   documents Document[]
 
   // composed from app:kgraph.prisma
+  kgTraces           KgTrace[]
   kgTaskSettings     KgTaskSettings[]
   kgRuns             KgRun[]
   kgNodes            KgNode[]

@@ -1,6 +1,6 @@
 import type { ModelOwnershipDef, UserOwnedModelDef } from '@marinoscar/platform-api/core';
 
-const KG_MODELS = ['KgTaskSettings', 'KgRun', 'KgNode', 'KgEdge', 'KgProcedure', 'KgProcedureVersion', 'KgEvidence', 'KgReview'] as const;
+const KG_MODELS = ['KgTaskSettings', 'KgRun', 'KgNode', 'KgEdge', 'KgProcedure', 'KgProcedureVersion', 'KgEvidence', 'KgReview', 'KgTrace'] as const;
 type KgModel = (typeof KG_MODELS)[number];
 
 /** The Knowledge Graph belongs to the user whose runs it learned from (E46.3, #777). */

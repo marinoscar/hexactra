@@ -6,6 +6,7 @@ export type { ControlPort } from './control';
 export type { EventsPort } from './events';
 export type { ModelPort, ModelRequest, ModelResult, ModelRoute, ModelStep, ModelTool } from './model';
 export { ModelUnavailable } from './model';
+export type { ObservedStep, ObserverPort, ToolCallObservation } from './observer';
 export type { Picture, PicturePort } from './picture';
 export type { PolicyPort, RunPolicy, TierRouting } from './policy';
 export type { Ports } from './ports';

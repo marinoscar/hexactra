@@ -52,6 +52,7 @@ import { buildSavedCardTools } from './tools/saved-card-tools';
 import { savedIdentityTools } from './tools/saved-identity';
 import { savedLoginTools } from './tools/saved-logins';
 import { proposeMemory, proposeSavingLogin } from './tools/propose';
+import { kgraphObserverFor } from './kgraph/kgraph-observer';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -112,6 +113,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   const browser = new FabricBrowser(session, d.fabric, sessionId, s.connections.lazyBrowser ? ensureSession : undefined);
   const masking = readMasking(memory, browser, () => currentUrlOf(browser));
   const store = new PrismaRunStore(d, userId, run.id, lease, { run, session, sessionId: () => sessionRef.id });
+  // The Knowledge Graph's capture (E46.5): bound only when the run's mode is learn or reuse; otherwise no observer at all.
+  const observer = await kgraphObserverFor(d, userId, run);
   const ports: Ports = {
     model: new AiModelPort(d.ai, userId, orgId),
     store,
@@ -124,6 +127,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     ids: { uuid: () => randomUUID() },
     approvals: approvalPort({ d, userId, orgId, run, currentUrl: () => currentUrlOf(browser), hasBrowser: () => Boolean(sessionRef.id) }),
     pictures: picturesPort({ d, userId, runId: run.id, memory, browser, masking, hasBrowser: () => Boolean(sessionRef.id) }),
+    ...(observer ? { observer } : {}),
   };
   const browserState: BrowserState = { labels: new Map(), marks: new Map(), view: null };
   const identityParams = readRunInputs(run.inputs)?.identity ?? [];
