@@ -240,7 +240,16 @@ The characterisation snapshot changes when a family's text or a tool is offered 
 
 Changing the instructions, a tool description, a gate or a model is otherwise a guess: the only check is trying a real task and watching. The **replay suite** (E38.6) runs scenarios against the runner and says whether the agent still reaches the goal, how many steps and tokens it took, and whether it broke a safety rule. A change that makes the agent click "Pay" without asking fails in CI, not in the owner's bank account.
 
-The replay suite checks the harness against a fake website. Comparing agent policies or models on the real product, in real Chrome on a node, is a **benchmark** (E44): see the decision record [decisions/benchmark.md](decisions/benchmark.md), which also says how the two differ.
+Two checks, for two questions:
+
+| | The replay suite | A benchmark |
+|---|---|---|
+| Answers | Does the harness still behave (goal reached, steps, tokens, safety rules) after this change? | Is this policy or model better than that one on the real product, and did this change make it better or worse? |
+| Runs | In CI, in seconds, against a fake website and scripted or recorded models | On a node, in real Chrome, against the challenge site at `/benchmark/`, with real models; it spends on model calls |
+| Start it | `npm run scenarios --workspace=api` (below) | Administration → Benchmarks, or `hexactra benchmarks run --policy builtin:economy --policy builtin:thorough --trials 3 --cap-usd 10 --wait`, then `hexactra benchmarks compare <id> <baseline>` |
+| Reference | this section | [benchmark.md](benchmark.md); the design in [decisions/benchmark.md](decisions/benchmark.md) |
+
+Run the replay suite on every change; run a benchmark before and after a change to a prompt, a tool, a gate or a model choice, and compare the two on the same suite version.
 
 ### The test kit
 

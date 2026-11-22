@@ -19,6 +19,7 @@ import { enqueueBenchmarkAdvance } from './benchmark.jobs.enqueue';
 import { BenchmarkMetrics } from './benchmark.metrics';
 import { BenchmarkOwner } from './benchmark-owner';
 import { BenchmarkRunStarter } from './benchmark-run-starter';
+import { ScorecardService } from './scorecard.service';
 
 /** A pass's result, for the job log. */
 export type AdvanceOutcome = 'gone' | 'ended' | 'waiting' | 'started' | 'completed' | 'failed';
@@ -58,6 +59,7 @@ export class BenchmarkRunner {
     private readonly owner: BenchmarkOwner,
     private readonly grader: BenchmarkGrader,
     private readonly metrics: BenchmarkMetrics,
+    private readonly scorecard: ScorecardService,
   ) {}
 
   /** One pass, alone on its benchmark. */
@@ -83,7 +85,11 @@ export class BenchmarkRunner {
     for (const trial of await this.prisma.benchmarkTrial.findMany({ where: { benchmarkId, status: 'running' } })) {
       busy = (await this.tend(owner, config, trial, live ? null : (found.finishedAt ?? new Date()))) || busy;
     }
-    if (!live) return 'ended';
+    if (!live) {
+      // A cancelled benchmark's last trial was just graded: its scorecard is final now.
+      if (!busy) await this.scorecard.cacheIfEnded(benchmarkId);
+      return 'ended';
+    }
     if (busy) return 'waiting';
 
     if (found.status === 'queued') await this.prisma.benchmark.updateMany({ where: { id: benchmarkId, status: 'queued' }, data: { status: 'running', startedAt: new Date() } });
@@ -174,10 +180,13 @@ export class BenchmarkRunner {
     return count;
   }
 
-  /** Ends a live benchmark. The scorecard (#742) is computed from here. */
+  /** Ends a live benchmark and caches its scorecard (#742) in `Benchmark.summary`. */
   private async finish(benchmarkId: string, status: Extract<BenchmarkStatus, 'completed' | 'failed'>): Promise<AdvanceOutcome> {
     const { count } = await this.prisma.benchmark.updateMany({ where: { id: benchmarkId, status: { in: [...LIVE_BENCHMARK_STATUSES] } }, data: { status, finishedAt: new Date() } });
-    if (count === 1) this.log.log(`benchmark ${benchmarkId}: ${status}`);
+    if (count === 1) {
+      this.log.log(`benchmark ${benchmarkId}: ${status}`);
+      await this.scorecard.cacheIfEnded(benchmarkId);
+    }
     return count === 1 ? status : 'ended';
   }
 }

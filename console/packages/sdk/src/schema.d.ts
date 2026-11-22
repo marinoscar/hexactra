@@ -9758,6 +9758,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/benchmarks/{id}/scorecard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A benchmark's scorecard
+         * @description Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the ranking (success rate, then cost per success, then median active time; no composite score); and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_scorecard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/{id}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare a benchmark with a baseline
+         * @description Matches the policies by ref, then by label, and returns each metric's delta (a rate's delta is `withinNoise` when the two 95% intervals overlap), the challenges whose outcome flipped, and both benchmarks' console version and commit. Only within one suite key and version.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_compare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a benchmark report as JSON, CSV or PDF
+         * @description A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:read`.
+         */
+        get: operations["benchmarks_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/benchmarks/{id}/cancel": {
         parameters: {
             query?: never;
@@ -9971,6 +10037,7 @@ export interface components {
              * @example BENCHMARK_HOST_NOT_FOUND
              * @example CHALLENGE_UNKNOWN
              * @example POLICY_DUPLICATE
+             * @example BENCHMARK_SUITE_MISMATCH
              * @example ERROR
              */
             code: string;
@@ -24223,6 +24290,1095 @@ export interface components {
                 startedAt: string | null;
                 finishedAt: string | null;
             }[];
+        };
+        ScorecardResponseDto: {
+            /** @constant */
+            format: "hexactra.benchmark-scorecard";
+            /** @description The scorecard format. A cached summary of another version is recomputed. */
+            version: number;
+            benchmarkId: string;
+            name: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "cancelled" | "failed";
+            /** @description True: computed now from trials still running; false: the final scorecard, cached when the benchmark ended. */
+            live: boolean;
+            suiteKey: string;
+            suiteVersion: number;
+            appVersion: string;
+            commit: string | null;
+            /** @description Trials per challenge and policy. */
+            k: number;
+            computedAt: string;
+            totals: {
+                /** @description Total cost of the benchmark (its `spentUsd`). */
+                costUsd: number;
+                /** @description False: some cost is unknown and `costUsd` is "at least". */
+                costKnown: boolean;
+                inputTokens: number;
+                outputTokens: number;
+                cachedInputTokens: number;
+                /** @description input + output. */
+                totalTokens: number;
+                modelCalls: number;
+                counts: {
+                    total: number;
+                    /** @description `pass` + `fail`: the denominator of every rate. */
+                    judged: number;
+                    pass: number;
+                    fail: number;
+                    /** @description Could not be judged (node down, provider error): excluded from the rates, counted here. */
+                    error: number;
+                    /** @description Never ran or were stopped (cancelled, the cap): excluded, counted here. */
+                    skipped: number;
+                    /** @description The challenge needs a capability the agent lacks: excluded, counted here. */
+                    unsupported: number;
+                    /** @description Pending or running: only while the benchmark is live. */
+                    unfinished: number;
+                };
+            };
+            /** @description Best first. No composite score. */
+            ranking: {
+                rank: number;
+                ref: string;
+                label: string;
+                successRate: number | null;
+                costPerSuccessUsd: number | null;
+                costKnown: boolean;
+                medianActiveMs: number | null;
+                totalCostUsd: number;
+                totalTokens: number;
+            }[];
+            /** @description In the benchmark's policy order (columns). */
+            policies: {
+                ref: string;
+                label: string;
+                /** @description 1 is best: success rate, then cost per success, then median active time. */
+                rank: number;
+                metrics: {
+                    counts: {
+                        total: number;
+                        /** @description `pass` + `fail`: the denominator of every rate. */
+                        judged: number;
+                        pass: number;
+                        fail: number;
+                        /** @description Could not be judged (node down, provider error): excluded from the rates, counted here. */
+                        error: number;
+                        /** @description Never ran or were stopped (cancelled, the cap): excluded, counted here. */
+                        skipped: number;
+                        /** @description The challenge needs a capability the agent lacks: excluded, counted here. */
+                        unsupported: number;
+                        /** @description Pending or running: only while the benchmark is live. */
+                        unfinished: number;
+                    };
+                    /** @description Passes over judged trials. */
+                    successRate: {
+                        /** @description How many counted (the numerator). */
+                        k: number;
+                        /** @description Out of how many (the denominator). */
+                        n: number;
+                        /** @description k / n, 0 to 1; null when n is 0. */
+                        value: number | null;
+                        /** @description Lower bound of the Wilson 95% interval. */
+                        low: number | null;
+                        /** @description Upper bound of the Wilson 95% interval. */
+                        high: number | null;
+                    };
+                    /** @description Reliability (pass^k): the share of challenges where every one of the k trials passed. */
+                    passAllK: {
+                        /** @description Trials per challenge. */
+                        k: number;
+                        /** @description Challenges with at least one judged trial: the denominator. */
+                        challenges: number;
+                        /** @description Challenges whose k trials were all judged and all passed. */
+                        allPassed: number;
+                        rate: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                    };
+                    /** @description Claimed success and graded fail, over judged trials. */
+                    falseSuccess: {
+                        /** @description How many counted (the numerator). */
+                        k: number;
+                        /** @description Out of how many (the denominator). */
+                        n: number;
+                        /** @description k / n, 0 to 1; null when n is 0. */
+                        value: number | null;
+                        /** @description Lower bound of the Wilson 95% interval. */
+                        low: number | null;
+                        /** @description Upper bound of the Wilson 95% interval. */
+                        high: number | null;
+                    };
+                    /** @description Claimed failure (or no claim) and graded pass, over judged trials. */
+                    falseFailure: {
+                        /** @description How many counted (the numerator). */
+                        k: number;
+                        /** @description Out of how many (the denominator). */
+                        n: number;
+                        /** @description k / n, 0 to 1; null when n is 0. */
+                        value: number | null;
+                        /** @description Lower bound of the Wilson 95% interval. */
+                        low: number | null;
+                        /** @description Upper bound of the Wilson 95% interval. */
+                        high: number | null;
+                    };
+                    speed: {
+                        /** @description Median active time of the judged trials. */
+                        medianActiveMs: number | null;
+                        /** @description 90th percentile (nearest rank) of the active time of the judged trials. */
+                        p90ActiveMs: number | null;
+                        medianSteps: number | null;
+                        medianModelCalls: number | null;
+                    };
+                    cost: {
+                        /** @description Sum of the cost of every trial that ran (judged, error, or stopped part way): the same trials as the benchmark's spend. */
+                        totalUsd: number;
+                        /** @description False when any of those trials had a model call with no price: every cost figure is then "at least". */
+                        known: boolean;
+                        /** @description Median cost of a judged trial. */
+                        medianPerTrialUsd: number | null;
+                        /** @description totalUsd / passes; null when there is no pass. */
+                        perSuccessUsd: number | null;
+                    };
+                    tokens: {
+                        /** @description Total input tokens of every trial that ran. */
+                        input: number;
+                        output: number;
+                        /** @description Total input tokens served from the provider cache: part of `input`. */
+                        cached: number;
+                        /** @description input + output. */
+                        total: number;
+                        /** @description Median per judged trial. */
+                        medianInput: number | null;
+                        medianOutput: number | null;
+                        medianCached: number | null;
+                        /** @description total / passes; null when there is no pass. */
+                        perSuccess: number | null;
+                    };
+                    /** @description Trials by `failureReason` (every trial that has one), most first. */
+                    failureReasons: {
+                        key: string;
+                        count: number;
+                    }[];
+                    /** @description Trials that ran by their run's `stopReason`, most first. */
+                    stopReasons: {
+                        key: string;
+                        count: number;
+                    }[];
+                    /** @description A flag, never averaged into the success rate. */
+                    safety: {
+                        /** @description Trials with at least one failed `safety:` check. */
+                        flaggedTrials: number;
+                        /** @description Each failed `safety:` check by name, with how many trials failed it. */
+                        checks: {
+                            key: string;
+                            count: number;
+                        }[];
+                    };
+                    /** @description The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on. */
+                    models: string[];
+                };
+                /** @description Only the categories the benchmark has, in the suite's order. */
+                categories: {
+                    /** @enum {string} */
+                    category: "navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety";
+                    label: string;
+                    metrics: {
+                        counts: {
+                            total: number;
+                            /** @description `pass` + `fail`: the denominator of every rate. */
+                            judged: number;
+                            pass: number;
+                            fail: number;
+                            /** @description Could not be judged (node down, provider error): excluded from the rates, counted here. */
+                            error: number;
+                            /** @description Never ran or were stopped (cancelled, the cap): excluded, counted here. */
+                            skipped: number;
+                            /** @description The challenge needs a capability the agent lacks: excluded, counted here. */
+                            unsupported: number;
+                            /** @description Pending or running: only while the benchmark is live. */
+                            unfinished: number;
+                        };
+                        /** @description Passes over judged trials. */
+                        successRate: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        /** @description Reliability (pass^k): the share of challenges where every one of the k trials passed. */
+                        passAllK: {
+                            /** @description Trials per challenge. */
+                            k: number;
+                            /** @description Challenges with at least one judged trial: the denominator. */
+                            challenges: number;
+                            /** @description Challenges whose k trials were all judged and all passed. */
+                            allPassed: number;
+                            rate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                        };
+                        /** @description Claimed success and graded fail, over judged trials. */
+                        falseSuccess: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        /** @description Claimed failure (or no claim) and graded pass, over judged trials. */
+                        falseFailure: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        speed: {
+                            /** @description Median active time of the judged trials. */
+                            medianActiveMs: number | null;
+                            /** @description 90th percentile (nearest rank) of the active time of the judged trials. */
+                            p90ActiveMs: number | null;
+                            medianSteps: number | null;
+                            medianModelCalls: number | null;
+                        };
+                        cost: {
+                            /** @description Sum of the cost of every trial that ran (judged, error, or stopped part way): the same trials as the benchmark's spend. */
+                            totalUsd: number;
+                            /** @description False when any of those trials had a model call with no price: every cost figure is then "at least". */
+                            known: boolean;
+                            /** @description Median cost of a judged trial. */
+                            medianPerTrialUsd: number | null;
+                            /** @description totalUsd / passes; null when there is no pass. */
+                            perSuccessUsd: number | null;
+                        };
+                        tokens: {
+                            /** @description Total input tokens of every trial that ran. */
+                            input: number;
+                            output: number;
+                            /** @description Total input tokens served from the provider cache: part of `input`. */
+                            cached: number;
+                            /** @description input + output. */
+                            total: number;
+                            /** @description Median per judged trial. */
+                            medianInput: number | null;
+                            medianOutput: number | null;
+                            medianCached: number | null;
+                            /** @description total / passes; null when there is no pass. */
+                            perSuccess: number | null;
+                        };
+                        /** @description Trials by `failureReason` (every trial that has one), most first. */
+                        failureReasons: {
+                            key: string;
+                            count: number;
+                        }[];
+                        /** @description Trials that ran by their run's `stopReason`, most first. */
+                        stopReasons: {
+                            key: string;
+                            count: number;
+                        }[];
+                        /** @description A flag, never averaged into the success rate. */
+                        safety: {
+                            /** @description Trials with at least one failed `safety:` check. */
+                            flaggedTrials: number;
+                            /** @description Each failed `safety:` check by name, with how many trials failed it. */
+                            checks: {
+                                key: string;
+                                count: number;
+                            }[];
+                        };
+                        /** @description The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on. */
+                        models: string[];
+                    };
+                }[];
+            }[];
+            /** @description The categories the benchmark has, in the suite's order. */
+            categories: {
+                /** @enum {string} */
+                id: "navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety";
+                label: string;
+            }[];
+            /** @description One row per challenge, in the benchmark's order. */
+            matrix: {
+                challengeId: string;
+                title: string;
+                category: ("navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety") | null;
+                /** @description One per policy, in the benchmark's policy order. */
+                cells: {
+                    policyRef: string;
+                    passes: number;
+                    judged: number;
+                    /** @description Trials per cell. */
+                    k: number;
+                    /** @description Each attempt's verdict by `trialIndex`; null while it has not ended. */
+                    verdicts: (string | null)[];
+                    medianActiveMs: number | null;
+                    medianCostUsd: number | null;
+                    costKnown: boolean;
+                    totalTokens: number;
+                    safetyFlagged: boolean;
+                }[];
+            }[];
+        };
+        BenchmarkComparisonResponseDto: {
+            current: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                suiteKey: string;
+                suiteVersion: number;
+                appVersion: string;
+                commit: string | null;
+                finishedAt: string | null;
+            };
+            baseline: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                suiteKey: string;
+                suiteVersion: number;
+                appVersion: string;
+                commit: string | null;
+                finishedAt: string | null;
+            };
+            /** @description The whole benchmark: total cost, total tokens and the input, output and cached input split. */
+            totals: {
+                /** @enum {string} */
+                metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                current: number | null;
+                baseline: number | null;
+                /** @description current - baseline; null when either is null. */
+                delta: number | null;
+                /**
+                 * @description Which direction is an improvement.
+                 * @enum {string}
+                 */
+                better: "higher" | "lower";
+                /** @description Whether the delta goes the better way; null when there is no delta or it is 0, or it is within noise. */
+                improved: boolean | null;
+                /** @description A rate only: true when the two Wilson 95% intervals overlap, so the change is not shown to be real. Null for a metric with no interval. */
+                withinNoise: boolean | null;
+                /** @description A cost only: true when either side has an unknown cost. */
+                atLeast: boolean;
+            }[];
+            policies: {
+                /** @description The policy in this benchmark. */
+                ref: string;
+                label: string;
+                baselineRef: string;
+                baselineLabel: string;
+                /** @enum {string} */
+                matchedBy: "ref" | "label";
+                deltas: {
+                    /** @enum {string} */
+                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                    current: number | null;
+                    baseline: number | null;
+                    /** @description current - baseline; null when either is null. */
+                    delta: number | null;
+                    /**
+                     * @description Which direction is an improvement.
+                     * @enum {string}
+                     */
+                    better: "higher" | "lower";
+                    /** @description Whether the delta goes the better way; null when there is no delta or it is 0, or it is within noise. */
+                    improved: boolean | null;
+                    /** @description A rate only: true when the two Wilson 95% intervals overlap, so the change is not shown to be real. Null for a metric with no interval. */
+                    withinNoise: boolean | null;
+                    /** @description A cost only: true when either side has an unknown cost. */
+                    atLeast: boolean;
+                }[];
+            }[];
+            unmatched: {
+                /** @description Policies of this benchmark with no counterpart in the baseline. */
+                current: {
+                    ref: string;
+                    label: string;
+                }[];
+                baseline: {
+                    ref: string;
+                    label: string;
+                }[];
+            };
+            /** @description Challenges of a matched policy whose outcome changed (all passed, none passed, or mixed). */
+            flipped: {
+                challengeId: string;
+                title: string;
+                category: ("navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety") | null;
+                policyRef: string;
+                policyLabel: string;
+                baseline: {
+                    /** @enum {string} */
+                    outcome: "pass" | "fail" | "mixed";
+                    passes: number;
+                    judged: number;
+                };
+                current: {
+                    /** @enum {string} */
+                    outcome: "pass" | "fail" | "mixed";
+                    passes: number;
+                    judged: number;
+                };
+                /**
+                 * @description By the share of passes.
+                 * @enum {string}
+                 */
+                direction: "better" | "worse";
+            }[];
+        };
+        BenchmarkReportDto: {
+            /** @constant */
+            type: "hexactra.benchmark-report";
+            /**
+             * @description Version of this file format
+             * @constant
+             */
+            formatVersion: 1;
+            exportedAt: string;
+            /** @description True for a benchmark still in progress (queued or running) when it was exported: the scorecard is live. */
+            partial: boolean;
+            console: {
+                /** @description The console version that wrote the file */
+                version: string;
+            };
+            masking: {
+                /**
+                 * @description Always true: there is no unmasked export
+                 * @constant
+                 */
+                applied: true;
+                patternsVersion: number;
+                /** @description How many matches of each pattern were masked; patterns with none are left out */
+                hits: {
+                    [key: string]: number;
+                };
+            };
+            /** @description The benchmark: its config, suite key and version, `appVersion`, `commit`, spend and totals. */
+            benchmark: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                suiteKey: string;
+                suiteVersion: number;
+                config: {
+                    challengeIds: string[];
+                    policies: {
+                        ref: string;
+                        label: string;
+                    }[];
+                    trials: number;
+                    hostId: string | null;
+                    profile: string;
+                    capUsd: number;
+                    trialTimeoutMinutes: number;
+                };
+                /** @description The console version when the benchmark started. */
+                appVersion: string;
+                /** @description The build's commit when it started; null on a development build. */
+                commit: string | null;
+                /** @description USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`. */
+                spentUsd: number;
+                progress: {
+                    total: number;
+                    pending: number;
+                    running: number;
+                    /** @description Trials that ran and were judged: `pass` + `fail` + `error`. */
+                    graded: number;
+                    /** @description Trials that never ran, or were stopped: cancelled, the spend cap, an unsupported challenge. */
+                    skipped: number;
+                    pass: number;
+                    fail: number;
+                    error: number;
+                    unsupported: number;
+                };
+                totals: {
+                    inputTokens: number;
+                    outputTokens: number;
+                    /** @description Input tokens served from the provider cache: a subset of `inputTokens`. */
+                    cachedInputTokens: number;
+                    modelCalls: number;
+                    /** @description USD on model calls. The same sum as `spentUsd`. */
+                    costUsd: number;
+                    /** @description False when a model call of any trial could not be priced: `costUsd` is then a lower bound. */
+                    costKnown: boolean;
+                };
+                baselineId: string | null;
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+            };
+            /** @description The scorecard, with the ranking, the per-policy and per-category metrics (tokens and cost included) and the challenge x policy matrix. */
+            scorecard: {
+                /** @constant */
+                format: "hexactra.benchmark-scorecard";
+                /** @description The scorecard format. A cached summary of another version is recomputed. */
+                version: number;
+                benchmarkId: string;
+                name: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                /** @description True: computed now from trials still running; false: the final scorecard, cached when the benchmark ended. */
+                live: boolean;
+                suiteKey: string;
+                suiteVersion: number;
+                appVersion: string;
+                commit: string | null;
+                /** @description Trials per challenge and policy. */
+                k: number;
+                computedAt: string;
+                totals: {
+                    /** @description Total cost of the benchmark (its `spentUsd`). */
+                    costUsd: number;
+                    /** @description False: some cost is unknown and `costUsd` is "at least". */
+                    costKnown: boolean;
+                    inputTokens: number;
+                    outputTokens: number;
+                    cachedInputTokens: number;
+                    /** @description input + output. */
+                    totalTokens: number;
+                    modelCalls: number;
+                    counts: {
+                        total: number;
+                        /** @description `pass` + `fail`: the denominator of every rate. */
+                        judged: number;
+                        pass: number;
+                        fail: number;
+                        /** @description Could not be judged (node down, provider error): excluded from the rates, counted here. */
+                        error: number;
+                        /** @description Never ran or were stopped (cancelled, the cap): excluded, counted here. */
+                        skipped: number;
+                        /** @description The challenge needs a capability the agent lacks: excluded, counted here. */
+                        unsupported: number;
+                        /** @description Pending or running: only while the benchmark is live. */
+                        unfinished: number;
+                    };
+                };
+                /** @description Best first. No composite score. */
+                ranking: {
+                    rank: number;
+                    ref: string;
+                    label: string;
+                    successRate: number | null;
+                    costPerSuccessUsd: number | null;
+                    costKnown: boolean;
+                    medianActiveMs: number | null;
+                    totalCostUsd: number;
+                    totalTokens: number;
+                }[];
+                /** @description In the benchmark's policy order (columns). */
+                policies: {
+                    ref: string;
+                    label: string;
+                    /** @description 1 is best: success rate, then cost per success, then median active time. */
+                    rank: number;
+                    metrics: {
+                        counts: {
+                            total: number;
+                            /** @description `pass` + `fail`: the denominator of every rate. */
+                            judged: number;
+                            pass: number;
+                            fail: number;
+                            /** @description Could not be judged (node down, provider error): excluded from the rates, counted here. */
+                            error: number;
+                            /** @description Never ran or were stopped (cancelled, the cap): excluded, counted here. */
+                            skipped: number;
+                            /** @description The challenge needs a capability the agent lacks: excluded, counted here. */
+                            unsupported: number;
+                            /** @description Pending or running: only while the benchmark is live. */
+                            unfinished: number;
+                        };
+                        /** @description Passes over judged trials. */
+                        successRate: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        /** @description Reliability (pass^k): the share of challenges where every one of the k trials passed. */
+                        passAllK: {
+                            /** @description Trials per challenge. */
+                            k: number;
+                            /** @description Challenges with at least one judged trial: the denominator. */
+                            challenges: number;
+                            /** @description Challenges whose k trials were all judged and all passed. */
+                            allPassed: number;
+                            rate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                        };
+                        /** @description Claimed success and graded fail, over judged trials. */
+                        falseSuccess: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        /** @description Claimed failure (or no claim) and graded pass, over judged trials. */
+                        falseFailure: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        speed: {
+                            /** @description Median active time of the judged trials. */
+                            medianActiveMs: number | null;
+                            /** @description 90th percentile (nearest rank) of the active time of the judged trials. */
+                            p90ActiveMs: number | null;
+                            medianSteps: number | null;
+                            medianModelCalls: number | null;
+                        };
+                        cost: {
+                            /** @description Sum of the cost of every trial that ran (judged, error, or stopped part way): the same trials as the benchmark's spend. */
+                            totalUsd: number;
+                            /** @description False when any of those trials had a model call with no price: every cost figure is then "at least". */
+                            known: boolean;
+                            /** @description Median cost of a judged trial. */
+                            medianPerTrialUsd: number | null;
+                            /** @description totalUsd / passes; null when there is no pass. */
+                            perSuccessUsd: number | null;
+                        };
+                        tokens: {
+                            /** @description Total input tokens of every trial that ran. */
+                            input: number;
+                            output: number;
+                            /** @description Total input tokens served from the provider cache: part of `input`. */
+                            cached: number;
+                            /** @description input + output. */
+                            total: number;
+                            /** @description Median per judged trial. */
+                            medianInput: number | null;
+                            medianOutput: number | null;
+                            medianCached: number | null;
+                            /** @description total / passes; null when there is no pass. */
+                            perSuccess: number | null;
+                        };
+                        /** @description Trials by `failureReason` (every trial that has one), most first. */
+                        failureReasons: {
+                            key: string;
+                            count: number;
+                        }[];
+                        /** @description Trials that ran by their run's `stopReason`, most first. */
+                        stopReasons: {
+                            key: string;
+                            count: number;
+                        }[];
+                        /** @description A flag, never averaged into the success rate. */
+                        safety: {
+                            /** @description Trials with at least one failed `safety:` check. */
+                            flaggedTrials: number;
+                            /** @description Each failed `safety:` check by name, with how many trials failed it. */
+                            checks: {
+                                key: string;
+                                count: number;
+                            }[];
+                        };
+                        /** @description The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on. */
+                        models: string[];
+                    };
+                    /** @description Only the categories the benchmark has, in the suite's order. */
+                    categories: {
+                        /** @enum {string} */
+                        category: "navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety";
+                        label: string;
+                        metrics: {
+                            counts: {
+                                total: number;
+                                /** @description `pass` + `fail`: the denominator of every rate. */
+                                judged: number;
+                                pass: number;
+                                fail: number;
+                                /** @description Could not be judged (node down, provider error): excluded from the rates, counted here. */
+                                error: number;
+                                /** @description Never ran or were stopped (cancelled, the cap): excluded, counted here. */
+                                skipped: number;
+                                /** @description The challenge needs a capability the agent lacks: excluded, counted here. */
+                                unsupported: number;
+                                /** @description Pending or running: only while the benchmark is live. */
+                                unfinished: number;
+                            };
+                            /** @description Passes over judged trials. */
+                            successRate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            /** @description Reliability (pass^k): the share of challenges where every one of the k trials passed. */
+                            passAllK: {
+                                /** @description Trials per challenge. */
+                                k: number;
+                                /** @description Challenges with at least one judged trial: the denominator. */
+                                challenges: number;
+                                /** @description Challenges whose k trials were all judged and all passed. */
+                                allPassed: number;
+                                rate: {
+                                    /** @description How many counted (the numerator). */
+                                    k: number;
+                                    /** @description Out of how many (the denominator). */
+                                    n: number;
+                                    /** @description k / n, 0 to 1; null when n is 0. */
+                                    value: number | null;
+                                    /** @description Lower bound of the Wilson 95% interval. */
+                                    low: number | null;
+                                    /** @description Upper bound of the Wilson 95% interval. */
+                                    high: number | null;
+                                };
+                            };
+                            /** @description Claimed success and graded fail, over judged trials. */
+                            falseSuccess: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            /** @description Claimed failure (or no claim) and graded pass, over judged trials. */
+                            falseFailure: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            speed: {
+                                /** @description Median active time of the judged trials. */
+                                medianActiveMs: number | null;
+                                /** @description 90th percentile (nearest rank) of the active time of the judged trials. */
+                                p90ActiveMs: number | null;
+                                medianSteps: number | null;
+                                medianModelCalls: number | null;
+                            };
+                            cost: {
+                                /** @description Sum of the cost of every trial that ran (judged, error, or stopped part way): the same trials as the benchmark's spend. */
+                                totalUsd: number;
+                                /** @description False when any of those trials had a model call with no price: every cost figure is then "at least". */
+                                known: boolean;
+                                /** @description Median cost of a judged trial. */
+                                medianPerTrialUsd: number | null;
+                                /** @description totalUsd / passes; null when there is no pass. */
+                                perSuccessUsd: number | null;
+                            };
+                            tokens: {
+                                /** @description Total input tokens of every trial that ran. */
+                                input: number;
+                                output: number;
+                                /** @description Total input tokens served from the provider cache: part of `input`. */
+                                cached: number;
+                                /** @description input + output. */
+                                total: number;
+                                /** @description Median per judged trial. */
+                                medianInput: number | null;
+                                medianOutput: number | null;
+                                medianCached: number | null;
+                                /** @description total / passes; null when there is no pass. */
+                                perSuccess: number | null;
+                            };
+                            /** @description Trials by `failureReason` (every trial that has one), most first. */
+                            failureReasons: {
+                                key: string;
+                                count: number;
+                            }[];
+                            /** @description Trials that ran by their run's `stopReason`, most first. */
+                            stopReasons: {
+                                key: string;
+                                count: number;
+                            }[];
+                            /** @description A flag, never averaged into the success rate. */
+                            safety: {
+                                /** @description Trials with at least one failed `safety:` check. */
+                                flaggedTrials: number;
+                                /** @description Each failed `safety:` check by name, with how many trials failed it. */
+                                checks: {
+                                    key: string;
+                                    count: number;
+                                }[];
+                            };
+                            /** @description The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on. */
+                            models: string[];
+                        };
+                    }[];
+                }[];
+                /** @description The categories the benchmark has, in the suite's order. */
+                categories: {
+                    /** @enum {string} */
+                    id: "navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety";
+                    label: string;
+                }[];
+                /** @description One row per challenge, in the benchmark's order. */
+                matrix: {
+                    challengeId: string;
+                    title: string;
+                    category: ("navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety") | null;
+                    /** @description One per policy, in the benchmark's policy order. */
+                    cells: {
+                        policyRef: string;
+                        passes: number;
+                        judged: number;
+                        /** @description Trials per cell. */
+                        k: number;
+                        /** @description Each attempt's verdict by `trialIndex`; null while it has not ended. */
+                        verdicts: (string | null)[];
+                        medianActiveMs: number | null;
+                        medianCostUsd: number | null;
+                        costKnown: boolean;
+                        totalTokens: number;
+                        safetyFlagged: boolean;
+                    }[];
+                }[];
+            };
+            /** @description Every trial in run order: verdict, checks, metrics (tokens, cost, models) and run id. */
+            trials: {
+                id: string;
+                challengeId: string;
+                /** @description The challenge's title; its id when the suite no longer has it. */
+                challengeTitle: string;
+                category: ("navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety") | null;
+                policyRef: string;
+                policyLabel: string;
+                /** @description 0-based attempt of this challenge under this policy. */
+                trialIndex: number;
+                /** @enum {string} */
+                status: "pending" | "running" | "graded" | "skipped";
+                /** @description Null until the trial is judged or skipped. */
+                verdict: ("pass" | "fail" | "error" | "skipped" | "unsupported") | null;
+                failureReason: ("wrong_result" | "gave_up" | "budget" | "stalled" | "asked_person" | "timeout" | "error" | "no_model" | "cancelled" | "cap" | "unsupported") | null;
+                /** @description The grader's named checks. A trial passes only when every check passes; `safety:<name>` guards an invariant. */
+                checks: {
+                    name: string;
+                    pass: boolean;
+                    detail?: string;
+                }[] | null;
+                /** @description Whether the agent said it succeeded: compared with the verdict for the false-success rate. */
+                claimedSuccess: boolean | null;
+                /** @description The trial's run (`GET /api/runs/{id}`); null before it starts and after the run is deleted. */
+                runId: string | null;
+                durationMs: number | null;
+                activeMs: number | null;
+                steps: number | null;
+                modelCalls: number | null;
+                inputTokens: number | null;
+                outputTokens: number | null;
+                cachedInputTokens: number | null;
+                /** @description The model of the run's start tier (`provider:modelId`); null before grading or when unknown. */
+                model: string | null;
+                models: {
+                    startTier: string;
+                    maxTier: string;
+                    /** @description The tier the run was on when it ended. */
+                    finalTier: string;
+                    /** @description The start tier's model, `provider:modelId`. */
+                    model: string | null;
+                    /** @description The tiers from start to max: the only ones the run may use. */
+                    tiers: {
+                        tier: string;
+                        model: string | null;
+                        fallbackModel: string | null;
+                    }[];
+                } | null;
+                costUsd: number | null;
+                /** @description False when a model call could not be priced: `costUsd` is then a lower bound. */
+                costKnown: boolean | null;
+                /** @description The run's stop reason (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`). */
+                stopReason: string | null;
+                /** @description Questions the agent asked a person. */
+                questions: number | null;
+                escalations: number | null;
+                startedAt: string | null;
+                finishedAt: string | null;
+                /** @description The trial run's goal, masked, with the trial's site token hidden; null when the run was deleted or never started. */
+                goal: string | null;
+                /** @description What the agent answered, masked; null when it said nothing or the run is gone. */
+                result: string | null;
+            }[];
+            /** @description The comparison with `baseline`, when asked. */
+            baseline: {
+                current: {
+                    id: string;
+                    name: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                    suiteKey: string;
+                    suiteVersion: number;
+                    appVersion: string;
+                    commit: string | null;
+                    finishedAt: string | null;
+                };
+                baseline: {
+                    id: string;
+                    name: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "cancelled" | "failed";
+                    suiteKey: string;
+                    suiteVersion: number;
+                    appVersion: string;
+                    commit: string | null;
+                    finishedAt: string | null;
+                };
+                /** @description The whole benchmark: total cost, total tokens and the input, output and cached input split. */
+                totals: {
+                    /** @enum {string} */
+                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                    current: number | null;
+                    baseline: number | null;
+                    /** @description current - baseline; null when either is null. */
+                    delta: number | null;
+                    /**
+                     * @description Which direction is an improvement.
+                     * @enum {string}
+                     */
+                    better: "higher" | "lower";
+                    /** @description Whether the delta goes the better way; null when there is no delta or it is 0, or it is within noise. */
+                    improved: boolean | null;
+                    /** @description A rate only: true when the two Wilson 95% intervals overlap, so the change is not shown to be real. Null for a metric with no interval. */
+                    withinNoise: boolean | null;
+                    /** @description A cost only: true when either side has an unknown cost. */
+                    atLeast: boolean;
+                }[];
+                policies: {
+                    /** @description The policy in this benchmark. */
+                    ref: string;
+                    label: string;
+                    baselineRef: string;
+                    baselineLabel: string;
+                    /** @enum {string} */
+                    matchedBy: "ref" | "label";
+                    deltas: {
+                        /** @enum {string} */
+                        metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                        current: number | null;
+                        baseline: number | null;
+                        /** @description current - baseline; null when either is null. */
+                        delta: number | null;
+                        /**
+                         * @description Which direction is an improvement.
+                         * @enum {string}
+                         */
+                        better: "higher" | "lower";
+                        /** @description Whether the delta goes the better way; null when there is no delta or it is 0, or it is within noise. */
+                        improved: boolean | null;
+                        /** @description A rate only: true when the two Wilson 95% intervals overlap, so the change is not shown to be real. Null for a metric with no interval. */
+                        withinNoise: boolean | null;
+                        /** @description A cost only: true when either side has an unknown cost. */
+                        atLeast: boolean;
+                    }[];
+                }[];
+                unmatched: {
+                    /** @description Policies of this benchmark with no counterpart in the baseline. */
+                    current: {
+                        ref: string;
+                        label: string;
+                    }[];
+                    baseline: {
+                        ref: string;
+                        label: string;
+                    }[];
+                };
+                /** @description Challenges of a matched policy whose outcome changed (all passed, none passed, or mixed). */
+                flipped: {
+                    challengeId: string;
+                    title: string;
+                    category: ("navigation" | "forms" | "extraction" | "pointer" | "dynamic" | "long" | "safety") | null;
+                    policyRef: string;
+                    policyLabel: string;
+                    baseline: {
+                        /** @enum {string} */
+                        outcome: "pass" | "fail" | "mixed";
+                        passes: number;
+                        judged: number;
+                    };
+                    current: {
+                        /** @enum {string} */
+                        outcome: "pass" | "fail" | "mixed";
+                        passes: number;
+                        judged: number;
+                    };
+                    /**
+                     * @description By the share of passes.
+                     * @enum {string}
+                     */
+                    direction: "better" | "worse";
+                }[];
+            } | null;
         };
     };
     responses: never;
@@ -54780,6 +55936,219 @@ export interface operations {
             };
             /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_scorecard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ScorecardResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_compare: {
+        parameters: {
+            query: {
+                /** @description The earlier benchmark, on the same suite key and version. */
+                baseline: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkComparisonResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `BENCHMARK_SUITE_MISMATCH`: the baseline is on another suite key or version; `details` names both. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_export: {
+        parameters: {
+            query?: {
+                /** @description `json` (the default): the `hexactra.benchmark-report` file. `csv`: one row per trial. `pdf`: the report. */
+                format?: "json" | "csv" | "pdf";
+                /** @description The PDF's paper: `a4` (the default) or `letter`. Ignored for `json` and `csv`. */
+                paper?: "a4" | "letter";
+                /** @description An earlier benchmark on the same suite key and version: the report adds the comparison with it (409 `BENCHMARK_SUITE_MISMATCH` otherwise). */
+                baseline?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report file (`format=json`, not wrapped in the `data` envelope), the trials as CSV (`format=csv`) or the PDF report (`format=pdf`), sent as an attachment `hexactra-benchmark-<first 8 of id>-<yyyymmdd>.json`, `.csv` or `.pdf`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarkReportDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                    "text/csv": string;
+                    "application/pdf": string;
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                    "text/csv": components["schemas"]["ErrorDto"];
+                    "application/pdf": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                    "text/csv": components["schemas"]["ErrorDto"];
+                    "application/pdf": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `BENCHMARK_SUITE_MISMATCH`: the baseline is on another suite key or version. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `EXPORT_RATE_LIMITED`: more than 10 benchmark exports in a minute (every format together); `details.retryAfterS` says when to try again. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

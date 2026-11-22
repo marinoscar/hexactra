@@ -156,6 +156,8 @@ describe('browser agent cards', () => {
       ['Run recordings', '/admin/settings/run-recordings', 'system_settings:read', undefined],
       // E46.20 (#794), appended: what GET and PUT /api/admin/kgraph/settings enforce.
       ['Knowledge Graph', '/admin/settings/kgraph', 'kgraph:admin', undefined],
+      // E44.5 (#743), appended: what GET /api/benchmarks enforces.
+      ['Benchmarks', '/admin/settings/benchmarks', 'benchmarks:read', undefined],
     ]);
     expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');
