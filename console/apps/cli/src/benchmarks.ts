@@ -28,7 +28,7 @@ export interface BenchmarkView {
   status: string;
   suiteKey: string;
   suiteVersion: number;
-  config: { challengeIds: string[]; policies: { ref: string; label: string }[]; trials: number; hostId: string | null; profile: string; capUsd: number | null; trialTimeoutMinutes: number; recordVideo?: boolean };
+  config: { challengeIds: string[]; policies: { ref: string; label: string; recordVideo?: boolean }[]; trials: number; hostId: string | null; profile: string; capUsd: number | null; trialTimeoutMinutes: number; recordVideo?: boolean };
   appVersion: string;
   commit: string | null;
   spentUsd: number;
@@ -194,6 +194,13 @@ function metricLines(m: ScoreMetricsView, indent: string): string[] {
 }
 
 /** `show`: the benchmark, the whole benchmark's tokens and cost, then every policy (ranked) with its categories. */
+/** The policies whose trial runs record a video (#841, #845): `null` for none, "all policies", or their labels. */
+export function recordedText(config: Pick<BenchmarkView['config'], 'policies' | 'recordVideo'>): string | null {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : recorded.map((p) => p.label).join(', ');
+}
+
 export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
   const t = s.totals;
   const c = t.counts;
@@ -205,6 +212,8 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
     `  Tokens     ${int(t.totalTokens)} (${tokenSplit(t.inputTokens, t.outputTokens, t.cachedInputTokens)}), ${int(t.modelCalls)} model calls`,
     `  Cost       ${usd(t.costUsd, t.costKnown)}${b.config.capUsd === null ? ', no cap' : ` of a ${usd(b.config.capUsd)} cap`}${t.costKnown ? '' : ' (a model call had no price: at least this much)'}`,
   ];
+  const recorded = recordedText(b.config);
+  if (recorded) lines.push(`  Recorded   ${recorded} (videos on each run page)`);
   const byRef = new Map(s.policies.map((p) => [p.ref, p]));
   const ordered = s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);
   for (const p of ordered.length === s.policies.length ? ordered : s.policies) {

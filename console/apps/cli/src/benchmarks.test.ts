@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { benchmarkRequest, benchmarksCommand, setBenchmarkExportTarget, setBenchmarkPollMs } from './benchmarks.command.js';
-import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, scorecardText, usd, withCode, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
+import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, recordedText, scorecardText, usd, withCode, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
 import { setConsoleApiFactory } from './console-api.js';
 
 resetCliForTests();
@@ -260,6 +260,33 @@ describe('hexactra benchmarks', () => {
       profile: 'bench',
     });
     expect(out).toContain(`started ${ID} (12 trials, cap $10)`);
+  });
+
+  it('run --record <policy> records only that policy, --record alone every one, and the output names them (#845)', async () => {
+    const { seen } = fakeConsole((u, init) => {
+      if (u.pathname === '/api/agent-policies') return { body: [{ id: '44444444-4444-4444-8444-444444444444', name: 'Pinned A', builtin: false, description: null, version: 1, isDefault: false, hasNoHardStop: false, usage: { tasks: 0, schedules: 0 }, spec: {} }] };
+      if (u.pathname === '/api/benchmarks' && init?.method === 'POST') {
+        const sent = JSON.parse(String(init.body)) as { recordVideo?: boolean; policies: { ref: string; label?: string; recordVideo?: boolean }[] };
+        return { status: 201, body: benchmark({ status: 'queued', config: { ...benchmark().config, recordVideo: sent.recordVideo ?? false, policies: sent.policies.map((p) => ({ ref: p.ref, label: p.label ?? p.ref, recordVideo: p.recordVideo ?? false })) } }) };
+      }
+      return undefined;
+    });
+    const one = await run('benchmarks', 'run', '--policy', 'builtin:economy', '--policy', 'Pinned A=Model A', '--record', 'Model A');
+    expect(seen.filter((s) => s.method === 'POST').at(-1)!.body).toMatchObject({ policies: [{ ref: 'builtin:economy' }, { ref: '44444444-4444-4444-8444-444444444444', label: 'Model A', recordVideo: true }] });
+    expect(seen.filter((s) => s.method === 'POST').at(-1)!.body).not.toHaveProperty('recordVideo');
+    expect(one.out).toContain('recording Model A)');
+
+    await run('benchmarks', 'run', '--policy', 'builtin:economy', '--policy', 'Pinned A', '--record', 'builtin:economy', '--record', 'pinned a');
+    expect((seen.filter((s) => s.method === 'POST').at(-1)!.body as { policies: { recordVideo?: boolean }[] }).policies.map((p) => p.recordVideo)).toEqual([true, true]);
+
+    const all = await run('benchmarks', 'run', '--policy', 'builtin:economy', '--policy', 'Pinned A', '--record');
+    expect(seen.filter((s) => s.method === 'POST').at(-1)!.body).toMatchObject({ recordVideo: true, policies: [{ ref: 'builtin:economy' }, { ref: '44444444-4444-4444-8444-444444444444' }] });
+    expect(all.out).toContain('recording all policies)');
+
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], record: ['builtin:thorough'] })).rejects.toThrow(/--record builtin:thorough: not one of the --policy values/);
+    expect(recordedText({ recordVideo: true, policies: [{ ref: 'a', label: 'A' }] })).toBe('all policies');
+    expect(recordedText({ recordVideo: false, policies: [{ ref: 'a', label: 'A', recordVideo: true }, { ref: 'b', label: 'B' }] })).toBe('A');
+    expect(recordedText({ recordVideo: false, policies: [{ ref: 'a', label: 'A' }] })).toBeNull();
   });
 
   it('run refuses bad flags before any request', async () => {

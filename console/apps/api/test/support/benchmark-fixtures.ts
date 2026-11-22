@@ -54,7 +54,7 @@ export async function createGradedBenchmark(prisma: PrismaService, userId: strin
   const id = randomUUID();
   const config: StoredBenchmarkConfig = {
     challengeIds: opts.challengeIds ?? ['nav-lookup', 'form-multistep'],
-    policies: opts.policies ?? [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:balanced', label: 'Balanced' }],
+    policies: (opts.policies ?? [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:balanced', label: 'Balanced' }]).map((p) => ({ recordVideo: false, ...p })),
     trials: opts.trials ?? 3,
     hostId: null,
     profile: 'default',

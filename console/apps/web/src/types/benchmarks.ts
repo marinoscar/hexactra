@@ -16,13 +16,14 @@ export type Capability = 'pointer' | 'real_keys' | 'file_upload' | 'file_downloa
 
 export interface BenchmarkConfig {
   challengeIds: string[];
-  policies: { ref: string; label: string }[];
+  /** `recordVideo`: this policy's trial runs record a video (#845); absent on a benchmark read from an older console. */
+  policies: { ref: string; label: string; recordVideo?: boolean }[];
   trials: number;
   hostId: string | null;
   profile: string;
   /** The spend cap in USD; null: no cap (#840). */
   capUsd: number | null;
-  /** Every trial's run records a video (#841). */
+  /** Every policy's trial runs record a video (#841): true when every policy's `recordVideo` is. */
   recordVideo: boolean;
   trialTimeoutMinutes: number;
 }
@@ -139,13 +140,14 @@ export interface BenchmarkSuite {
 export interface CreateBenchmarkInput {
   name?: string;
   challengeIds?: string[];
-  policies: { ref: string; label?: string }[];
+  /** `recordVideo`: record a video of this policy's trial runs (#845). */
+  policies: { ref: string; label?: string; recordVideo?: boolean }[];
   trials?: number;
   hostId?: string | null;
   profile?: string;
   /** Absent: the deployment default; null: no cap (#840). */
   capUsd?: number | null;
-  /** Record a video of each trial run (#841). */
+  /** Record a video of every trial run, for every policy (#841); the form sets each policy's own instead (#845). */
   recordVideo?: boolean;
   trialTimeoutMinutes?: number;
 }

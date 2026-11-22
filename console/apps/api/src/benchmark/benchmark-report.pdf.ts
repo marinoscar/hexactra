@@ -342,6 +342,16 @@ function baselineSection(r: BenchmarkReport): Content[] {
   return out;
 }
 
+/** The Recordings row (#841, #845): all the policies, the ones recorded by name, or off. */
+export function recordingsText(config: { recordVideo?: boolean; policies: { label: string; recordVideo?: boolean }[] }): string {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return 'Off.';
+  const where = '(on each run page; not in this report)';
+  return recorded.length === config.policies.length
+    ? `All policies: every trial run recorded a video of its browser tab ${where}.`
+    : `${recorded.map((p) => p.label).join(', ')}: these policies' trial runs recorded a video of their browser tab ${where}; the others did not.`;
+}
+
 function methodSection(r: BenchmarkReport): Content[] {
   const b = r.benchmark;
   return [
@@ -350,7 +360,7 @@ function methodSection(r: BenchmarkReport): Content[] {
       ['Suite', `${b.suiteKey} version ${b.suiteVersion}: benchmarks compare only within one suite version.`],
       ['Trials', `${b.config.trials} per challenge and policy, one at a time, the policies alternating, on ${b.config.hostId ? 'one node' : 'a node the fabric picks'} (browser profile ${b.config.profile}).`],
       ['Spend cap', `${b.config.capUsd === null ? 'No cap: each run kept its own policy budget' : `${money(b.config.capUsd)}: no new trial starts once it is spent`}. Trial timeout ${b.config.trialTimeoutMinutes} min.`],
-      ['Recordings', b.config.recordVideo ? 'Every trial run recorded a video of its browser tab (on each run page; not in this report).' : 'Off.'],
+      ['Recordings', recordingsText(b.config)],
     ]),
     { text: 'How a trial is graded', style: 'boxTitle', margin: [0, 8, 0, 2] },
     {

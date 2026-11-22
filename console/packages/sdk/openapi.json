@@ -105805,6 +105805,11 @@
                           },
                           "label": {
                             "type": "string"
+                          },
+                          "recordVideo": {
+                            "default": false,
+                            "description": "This policy's trial runs record a video of their browser tab (not masked, owner-only).",
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -105841,7 +105846,7 @@
                     },
                     "recordVideo": {
                       "default": false,
-                      "description": "Every trial's run records a video of its browser tab (not masked, owner-only).",
+                      "description": "Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).",
                       "type": "boolean"
                     }
                   },
@@ -106073,6 +106078,11 @@
                     },
                     "label": {
                       "type": "string"
+                    },
+                    "recordVideo": {
+                      "default": false,
+                      "description": "This policy's trial runs record a video of their browser tab (not masked, owner-only).",
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -106109,7 +106119,7 @@
               },
               "recordVideo": {
                 "default": false,
-                "description": "Every trial's run records a video of its browser tab (not masked, owner-only).",
+                "description": "Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).",
                 "type": "boolean"
               }
             },
@@ -106320,6 +106330,10 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "recordVideo": {
+                  "description": "Record a video of the browser tab of this policy's trial runs (run recordings, epic #755; #845). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false.",
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -106373,7 +106387,7 @@
             "maximum": 120
           },
           "recordVideo": {
-            "description": "Record a video of each trial's browser tab (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false.",
+            "description": "`true`: record a video of every trial's browser tab, for every policy, whatever each policy's own `recordVideo` says (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false: only the policies that set `recordVideo` are recorded (#845).",
             "type": "boolean"
           }
         },
@@ -108889,6 +108903,11 @@
                         },
                         "label": {
                           "type": "string"
+                        },
+                        "recordVideo": {
+                          "default": false,
+                          "description": "This policy's trial runs record a video of their browser tab (not masked, owner-only).",
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -108925,7 +108944,7 @@
                   },
                   "recordVideo": {
                     "default": false,
-                    "description": "Every trial's run records a video of its browser tab (not masked, owner-only).",
+                    "description": "Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).",
                     "type": "boolean"
                   }
                 },

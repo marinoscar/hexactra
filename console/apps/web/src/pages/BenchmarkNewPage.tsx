@@ -12,7 +12,6 @@ import {
   MenuItem,
   Paper,
   Stack,
-  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -64,7 +63,7 @@ export function BenchmarkNewPage() {
       (s) => {
         setSuite(s);
         // Every challenge the agent can attempt is chosen by default.
-        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd), recordVideo: false });
+        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd) });
       },
       (e) => setError(errorText(e, 'Could not load the benchmark suite')),
     );
@@ -90,7 +89,12 @@ export function BenchmarkNewPage() {
   const update = (patch: Partial<NewBenchmarkForm>) => setForm({ ...form, ...patch });
   const toggleChallenge = (id: string) => update({ challengeIds: form.challengeIds.includes(id) ? form.challengeIds.filter((x) => x !== id) : [...form.challengeIds, id] });
   const togglePolicy = (ref: string, name: string) =>
-    update({ policies: form.policies.some((p) => p.ref === ref) ? form.policies.filter((p) => p.ref !== ref) : [...form.policies, { ref, label: name }] });
+    update({ policies: form.policies.some((p) => p.ref === ref) ? form.policies.filter((p) => p.ref !== ref) : [...form.policies, { ref, label: name, recordVideo: false }] });
+  // Recording per policy (#845): each chosen policy's own tick, and "Record all" for every chosen one.
+  const recorded = form.policies.filter((p) => p.recordVideo);
+  const allRecorded = form.policies.length > 0 && recorded.length === form.policies.length;
+  const setRecord = (ref: string, on: boolean) => update({ policies: form.policies.map((p) => (p.ref === ref ? { ...p, recordVideo: on } : p)) });
+  const setRecordAll = (on: boolean) => update({ policies: form.policies.map((p) => ({ ...p, recordVideo: on })) });
   const show = (field: keyof typeof problems) => (touched ? problems[field] : undefined);
   const canSend = Object.keys(problems).length === 0 && suite.site.reachable;
 
@@ -104,7 +108,12 @@ export function BenchmarkNewPage() {
         <>
           {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {form.trials} trials, one at a time on {host ? host.name : 'any available node'}. They spend on model calls;{' '}
           {budget ? <>no new trial starts once {money(budget)} is spent</> : <><strong>No budget</strong>: every trial runs, and each run stops only at its own policy budget</>}.
-          {form.recordVideo ? ' Every run records a video of its browser tab (not masked).' : ''}
+          {recorded.length > 0 && (
+            <>
+              {' '}
+              {allRecorded ? 'Every run records' : `The runs of ${recorded.map((p) => p.label.trim()).join(', ')} record`} a video of the browser tab (not masked).
+            </>
+          )}
         </>
       ),
       confirmLabel: 'Start benchmark',
@@ -113,12 +122,11 @@ export function BenchmarkNewPage() {
     const input: CreateBenchmarkInput = {
       ...(form.name.trim() ? { name: form.name.trim() } : {}),
       challengeIds: form.challengeIds.filter((id) => suite.challenges.some((c) => c.id === id && c.supported)),
-      policies: form.policies.map((p) => ({ ref: p.ref, label: p.label.trim() })),
+      policies: form.policies.map((p) => ({ ref: p.ref, label: p.label.trim(), ...(p.recordVideo ? { recordVideo: true } : {}) })),
       trials: Number(form.trials),
       hostId: form.hostId,
       profile: form.profile,
       capUsd: budget ?? null,
-      ...(form.recordVideo ? { recordVideo: true } : {}),
     };
     setBusy(true);
     setError(null);
@@ -258,11 +266,47 @@ export function BenchmarkNewPage() {
                       sx={{ flex: { sm: '0 1 240px' }, pl: { xs: 4, sm: 0 } }}
                     />
                   )}
+                  {chosen && (
+                    // The Stack resets its children's margins: the indent on a phone is the box's padding.
+                    <Box sx={{ flex: '0 0 auto', pl: { xs: 4, sm: 0 } }}>
+                      <FormControlLabel
+                        sx={{ mr: 0, minHeight: 44 }}
+                        control={<Checkbox checked={chosen.recordVideo} onChange={(e) => setRecord(p.id, e.target.checked)} slotProps={{ input: { 'aria-label': `Record video for ${p.name}` } }} />}
+                        label="Record video"
+                      />
+                    </Box>
+                  )}
                 </Stack>
               );
             })}
           </FormGroup>
           {show('policies') && <FormHelperText error>{show('policies')}</FormHelperText>}
+          <Box role="group" aria-label="Recordings" sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+            <FormControlLabel
+              sx={{ m: 0, minHeight: 44 }}
+              control={
+                <Checkbox
+                  checked={allRecorded}
+                  indeterminate={recorded.length > 0 && !allRecorded}
+                  disabled={form.policies.length === 0}
+                  onChange={() => setRecordAll(!allRecorded)}
+                  slotProps={{ input: { 'aria-label': 'Record all' } }}
+                />
+              }
+              label="Record all"
+              data-testid="benchmark-record-all"
+            />
+            <FormHelperText sx={{ mt: 0 }}>
+              {form.policies.length === 0
+                ? 'Choose a policy, then tick Record video for the ones whose trial runs should keep a video of their browser tab.'
+                : 'Ticks Record video for every chosen policy, or clears them all.'}
+            </FormHelperText>
+            {recorded.length > 0 && (
+              <Alert severity="warning" sx={{ mt: 1 }} data-testid="benchmark-record-warning">
+                {allRecorded ? 'Every trial run' : `The trial runs of ${recorded.map((p) => p.label.trim() || p.ref).join(', ')}`} will record a video of the browser tab, to watch on the run page. The video is not masked: whatever the page shows is visible. Only you can play it; it is kept for the recordings retention set in Administration and counts toward storage.
+              </Alert>
+            )}
+          </Box>
         </Section>
 
         <Section title="Trials, node and budget">
@@ -318,18 +362,6 @@ export function BenchmarkNewPage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> }, htmlInput: { inputMode: 'decimal' } }}
             />
           </Stack>
-        </Section>
-
-        <Section title="Recordings">
-          <FormControlLabel
-            control={<Switch checked={form.recordVideo} onChange={(e) => update({ recordVideo: e.target.checked })} />}
-            label="Record a video of each run"
-            data-testid="benchmark-record"
-          />
-          <FormHelperText sx={{ mt: 0 }}>
-            Each trial's run records its browser tab, to watch on the run page. The video is not masked: whatever the page shows is visible. Only you can play it; it is kept for the
-            recordings retention set in Administration and uses storage.
-          </FormHelperText>
         </Section>
 
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 } }} data-testid="benchmark-plan">

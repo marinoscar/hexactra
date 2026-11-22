@@ -217,6 +217,19 @@ export const ROUTES = [
   // Benchmarks (E44.5, #743): the list, the new form, a completed benchmark (scorecard, charts, matrix, trials), a live one, the comparison.
   ['admin-benchmarks', '/admin/settings/benchmarks'],
   ['admin-benchmark-new', '/admin/settings/benchmarks/new'],
+  // Its policies chosen with one Record video tick on (#845): the per-policy ticks, Record all and the warning.
+  [
+    'admin-benchmark-new-recorded',
+    '/admin/settings/benchmarks/new',
+    {
+      action: async (page) => {
+        const policies = page.getByRole('group', { name: 'Recordings' }).locator('xpath=..').getByRole('checkbox', { name: /built-in|Careful/ });
+        for (let i = 0; i < Math.min(2, await policies.count()); i++) await policies.nth(i).check({ timeout: 5_000 });
+        await page.getByRole('checkbox', { name: /^Record video for / }).first().check({ timeout: 5_000 });
+        await page.waitForTimeout(300);
+      },
+    },
+  ],
   ['admin-benchmark', '/admin/settings/benchmarks/{benchmark}'],
   ['admin-benchmark-live', '/admin/settings/benchmarks/{liveBenchmark}'],
   // Its Export menu (E44.6, #744), open.
