@@ -2,4 +2,5 @@
 export * from './core';
 export * from './step';
 export * from './procedure';
+export * from './site-fact';
 export { SCHEMA_DOC_ENTRIES, schemaMarkdown } from './doc';

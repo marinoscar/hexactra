@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { accountSchema, EDGE_TYPES, edgeSchema, elementSchema, graphNodeSchema, NODE_TYPES, outputSchema, parameterSchema, screenSchema, secretRefSchema, siteSchema, toolSchema } from './core';
 import { evidenceSchema, modeSchema, procedureSchema, procedureVersionSchema, VERSION_TRANSITIONS } from './procedure';
+import { siteFactEvidenceSchema, siteFactSchema, SITE_FACT_TRANSITIONS } from './site-fact';
 import { bindingSchema, checkSchema, STEP_KINDS, stepSchema } from './step';
 import { transferFileSchema } from '../transfer';
 
@@ -23,6 +24,8 @@ export const SCHEMA_DOC_ENTRIES: readonly { name: string; about: string; schema:
   { name: 'Element', about: 'An element on a screen.', schema: elementSchema },
   { name: 'Evidence', about: 'Counts of what happened to a version or a step.', schema: evidenceSchema },
   { name: 'Mode', about: 'The per-task mode.', schema: modeSchema },
+  { name: 'SiteFact', about: 'A short note about one site (phase 5): data, never an instruction or a permission. Only the owner makes one `active`; it never holds Secret Material.', schema: siteFactSchema },
+  { name: 'SiteFactEvidence', about: 'What a derived fact was read from: the run, its calls and the screens. Ids only.', schema: siteFactEvidenceSchema },
   { name: 'TransferFile', about: 'The export and import file (`hexactra.kgraph`, formatVersion 1). Never trusted on arrival.', schema: transferFileSchema },
 ];
 
@@ -40,6 +43,12 @@ export function schemaMarkdown(): string {
     '| From | May move to |',
     '|---|---|',
     ...Object.entries(VERSION_TRANSITIONS).map(([from, to]) => `| \`${from}\` | ${to.length ? to.map((t) => `\`${t}\``).join(', ') : '(none: final)'} |`),
+    '',
+    '## Site fact statuses',
+    '',
+    '| From | May move to |',
+    '|---|---|',
+    ...Object.entries(SITE_FACT_TRANSITIONS).map(([from, to]) => `| \`${from}\` | ${to.map((t) => `\`${t}\``).join(', ')} |`),
     '',
   ];
   for (const e of SCHEMA_DOC_ENTRIES) {

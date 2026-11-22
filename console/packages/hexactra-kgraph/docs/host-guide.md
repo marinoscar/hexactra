@@ -113,6 +113,8 @@ runStoreConformance({
 
 The package runs the kit against its own in-memory store (`test/store-conformance.spec.ts`). The console runs it against PostgreSQL (`apps/api/test/kgraph-switches.db.spec.ts`).
 
+`runSiteFactStoreConformance(host)` does the same for a `SiteFactStorePort` binding (site facts, phase 5): a proposal is stored `proposed` whatever its source, one fact per identity (an archived fact is not proposed again), compare-and-set along `SITE_FACT_TRANSITIONS` only, listing by exact site and status, `touchSiteFacts`, and owner isolation. Its `open` returns `{ store, owners, close }`. The package runs it against its in-memory store and against the second host's own store.
+
 `test/second-host.spec.ts` is a second, minimal host with no harness, browser or database: a key-value "app" with three tools that binds the ports by hand and runs a procedure.
 
 ## The harness bridge

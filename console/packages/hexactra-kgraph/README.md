@@ -100,15 +100,15 @@ As `package.json` `exports` declares them:
 | Import | What |
 |---|---|
 | `@marinoscar/hexactra-kgraph` | Everything in `./schema`, `./validate`, `./ports`, `./compile`, `./execute`, `./repair`, `./view` and `./transfer`. Not `./testing`, `./mcp` or `./harness`. |
-| `./schema` | The typed graph: nodes, edges, step kinds, bindings, checks, parameters, outputs, the surface graph (screens and elements), versions, the state machine (`canTransition`, `VERSION_TRANSITIONS`), evidence. Zod schemas and their types. |
-| `./validate` | `validateVersion` (typed violations; empty means valid), `VIOLATION_RULES`, `defaultIsSensitive`. |
-| `./compile` | The trace types and `bindArguments` (argument provenance), `compileTrace` (trace to a `candidate` version), `cleanTrace`, `findLoop`, `mergeBranches`. |
+| `./schema` | The typed graph: nodes, edges, step kinds, bindings, checks, parameters, outputs, the surface graph (screens and elements), versions, the state machine (`canTransition`, `VERSION_TRANSITIONS`), evidence, site facts (`SiteFact`, `siteFactKey`, `SITE_FACT_TRANSITIONS`). Zod schemas and their types. |
+| `./validate` | `validateVersion` (typed violations; empty means valid), `VIOLATION_RULES`, `defaultIsSensitive`, and `validateSiteFact` with its `SecretCheckPort` (`defaultSecretCheck`). |
+| `./compile` | The trace types and `bindArguments` (argument provenance), `compileTrace` (trace to a `candidate` version), `cleanTrace`, `findLoop`, `mergeBranches`, `deriveSiteFacts` (site-fact proposals from a trace, the surface graph and the interrupt handlers that fired). |
 | `./execute` | `executeProcedure` (walks a version through the ports and returns an `ExecutionReport` with a resume point), the outcome check (`checkOutcome`, `learnShape`, `isAuditRun`), and the recovery ladder (`RecoveryLadder`, `RUNGS`, `RECOVERY_LIMITS`). |
 | `./repair` | `diffVersions`, `classifyRepair` (`structural` or `sensitive`, with reasons), `breaker` (the circuit breaker, `BREAKER`). |
 | `./transfer` | `exportFile`, `exportProcedure` and `readTransferFile`: the `hexactra.kgraph` file, with no ids, tokens, secret values, evidence or traces. |
-| `./ports` | `ProcedureStorePort`, `ToolInvokerPort`, `StateProbePort`, `JudgePort`, `ClockPort`, `IdPort`, `TelemetryPort` (`noopTelemetry`), `KgraphPorts`, `effectiveMode`. |
+| `./ports` | `ProcedureStorePort`, `ToolInvokerPort`, `StateProbePort`, `JudgePort`, `ClockPort`, `IdPort`, `TelemetryPort` (`noopTelemetry`), the optional `SiteFactStorePort`, `KgraphPorts`, `effectiveMode`. |
 | `./view` | The plain view model the console's Map, API and CLI read: `buildGraphView` (nodes, edges, clusters, `unused` capabilities, folding and paging above a node limit), `stepList`, `readableDiff`, `healthOf`, `defaultMask`. |
-| `./testing` | In-memory fakes of every port (`fakePorts`, `InMemoryProcedureStore`, `ScriptedToolInvoker`, `FakeStateProbe`, `FakeJudge`, `FakeClock`, `SequentialIds`, `RecordingTelemetry`), `replies`, builders (`aProcedure`, `aVersion`, `call`, `lit`, `param`, `out`, `secret`, `TOOLS`), and `runStoreConformance`, the host conformance kit. |
+| `./testing` | In-memory fakes of every port (`fakePorts`, `InMemoryProcedureStore`, `ScriptedToolInvoker`, `FakeStateProbe`, `FakeJudge`, `FakeClock`, `SequentialIds`, `RecordingTelemetry`, `InMemorySiteFactStore`), `replies`, builders (`aProcedure`, `aVersion`, `call`, `lit`, `param`, `out`, `secret`, `TOOLS`), and the host conformance kits `runStoreConformance` and `runSiteFactStoreConformance`. |
 | `./mcp` | Host-neutral MCP tool descriptors and handlers over the ports: `procedures_list`, `procedure_get`, `procedure_run`. No MCP SDK ([docs/mcp.md](docs/mcp.md)). |
 | `./harness` | The bridge to `@marinoscar/hexactra-agent`: `replayPhase`, `harnessToolInvoker` (every call through `executeTool`), `watchCalls`, `harnessJudge`, `harnessProbe`, `handoverNote`, and `runSubProcedure` and `bindParameters` (a procedure called as a tool inside a run, depth 1). The only folder that imports the harness. |
 
