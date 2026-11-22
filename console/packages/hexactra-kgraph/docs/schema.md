@@ -8,11 +8,12 @@ The typed graph of `@marinoscar/hexactra-kgraph`, as JSON Schema generated from 
 
 | From | May move to |
 |---|---|
-| `candidate` | `verified`, `retired` |
+| `candidate` | `verified`, `retired`, `rejected` |
 | `verified` | `active`, `suspended`, `retired` |
 | `active` | `suspended`, `retired` |
 | `suspended` | `active`, `retired` |
 | `retired` | (none: final) |
+| `rejected` | (none: final) |
 
 ## Procedure
 
@@ -115,7 +116,8 @@ One version: the whole runnable graph. Immutable once stored, except its state a
         "verified",
         "active",
         "suspended",
-        "retired"
+        "retired",
+        "rejected"
       ]
     },
     "changeClass": {

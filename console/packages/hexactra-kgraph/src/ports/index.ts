@@ -13,6 +13,7 @@ export type EvidenceOutcome = 'success' | 'failure' | 'repair';
  * - **Versions are immutable.** `putVersion` refuses an id that exists; only `setVersionState` and `recordEvidence` change a stored version.
  * - **State moves are atomic and checked.** `setVersionState` applies only when the stored state equals `expected` (compare-and-set) and
  *   returns false otherwise; it never applies a move `canTransition` refuses.
+ * - **One active version.** `activate` leaves exactly one `active` version per procedure, in one transaction.
  * - **Deleting is complete.** `deleteAll` removes every procedure, version and evidence row of the owner.
  */
 export interface ProcedureStorePort {
@@ -28,6 +29,12 @@ export interface ProcedureStorePort {
   putVersion(owner: string, version: ProcedureVersion): Promise<void>;
   /** Compare-and-set the state. True when it moved. */
   setVersionState(owner: string, version: string, expected: VersionState, next: VersionState): Promise<boolean>;
+  /**
+   * Make a version the procedure's one active version, atomically: its state moves `from` → (`verified` →) `active` by compare-and-set,
+   * the procedure's earlier active version becomes `retired`, and the procedure's `activeVersion` is set. From `candidate` it passes through
+   * `verified`. True when it moved; false when the state was not `from` (another job won) or the move is not allowed.
+   */
+  activate(owner: string, version: string, from: 'candidate' | 'verified' | 'suspended'): Promise<boolean>;
   /** Add one outcome to the version's evidence, and to the step's when `step` is given. Returns the version's evidence after it. */
   recordEvidence(owner: string, version: string, step: string | null, outcome: EvidenceOutcome, at: string): Promise<Evidence>;
   /** Delete everything learned for the owner. Returns the number of procedures removed. */

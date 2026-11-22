@@ -53,6 +53,16 @@ export class InMemoryProcedureStore implements ProcedureStorePort {
     v.version.state = next;
     return true;
   }
+  async activate(owner: string, id: string, from: 'candidate' | 'verified' | 'suspended') {
+    const v = this.versions.get(id);
+    if (!v || v.owner !== owner || v.version.state !== from) return false;
+    if (from === 'candidate' ? false : !canTransition(from, 'active')) return false;
+    for (const other of this.versions.values()) if (other.owner === owner && other.version.procedure === v.version.procedure && other.version.state === 'active' && other.version.id !== id) other.version.state = 'retired';
+    v.version.state = 'active';
+    const p = this.procedures.get(v.version.procedure);
+    if (p) this.procedures.set(p.id, { ...p, activeVersion: id });
+    return true;
+  }
   async recordEvidence(owner: string, id: string, step: string | null, outcome: EvidenceOutcome, at: string) {
     const v = this.versions.get(id);
     if (!v || v.owner !== owner) throw new Error('version not found for this owner');

@@ -69,6 +69,20 @@ export function runStoreConformance(host: StoreHost): void {
       expect((await ctx.store.getVersion(a, 'kgc-v5'))?.state).toBe('verified');
     });
 
+    it('activates one version atomically: the earlier active one retires, and a second activation of the same version changes nothing', async () => {
+      const [a] = ctx.owners;
+      await ctx.store.putProcedure(aProcedure({ id: 'kgc-p7', owner: a, task: await ctx.task(a, 'kgc-t7') }));
+      await ctx.store.putVersion(a, aVersion([call('c1', 'navigate')], { id: 'kgc-v8', procedure: 'kgc-p7', number: 1 }));
+      await ctx.store.putVersion(a, aVersion([call('c1', 'navigate')], { id: 'kgc-v9', procedure: 'kgc-p7', number: 2 }));
+      expect(await ctx.store.activate(a, 'kgc-v8', 'candidate')).toBe(true);
+      const race = await Promise.all([ctx.store.activate(a, 'kgc-v9', 'candidate'), ctx.store.activate(a, 'kgc-v9', 'candidate')]);
+      expect(race.filter(Boolean)).toHaveLength(1);
+      expect((await ctx.store.getVersion(a, 'kgc-v8'))?.state).toBe('retired');
+      expect((await ctx.store.getVersion(a, 'kgc-v9'))?.state).toBe('active');
+      expect((await ctx.store.getProcedure(a, 'kgc-p7'))?.activeVersion).toBe('kgc-v9');
+      expect(await ctx.store.activate(a, 'kgc-v8', 'candidate')).toBe(false);
+    });
+
     it('records evidence per version and per step', async () => {
       const [a] = ctx.owners;
       await ctx.store.putProcedure(aProcedure({ id: 'kgc-p4', owner: a, task: await ctx.task(a, 'kgc-t4') }));
