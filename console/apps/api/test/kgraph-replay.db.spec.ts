@@ -190,6 +190,18 @@ describe('the Knowledge Graph replay (#783)', () => {
     expect(await prisma.runStep.count({ where: { runId, kind: 'action' } })).toBe(0);
   });
 
+  it('Pause pressed before replay: the run pauses, no step runs and nothing is recorded', async () => {
+    const taskId = await task('reuse');
+    await withVersion(taskId, pens);
+    const runId = await newRun(taskId);
+    await prisma.run.update({ where: { id: runId }, data: { pauseRequested: true } as never });
+    const fabric = fabricAt();
+    const s = scriptedAi([]);
+    expect(await runnerOf(fabric, s.ai).advance(runId, owner.userId, null)).toBe('paused');
+    expect(fabric.actions.filter((a) => a.type === 'navigate')).toHaveLength(0);
+    expect(await prisma.runStep.count({ where: { runId, kind: 'action' } })).toBe(0);
+  });
+
   it('a commit step whose intent was left open (a crash) is never sent again: the agent takes over and the owner decides', async () => {
     const taskId = await task('reuse');
     const v = await withVersion(taskId, [pens[0]!, { ...pens[2]!, commitClass: true }]);
