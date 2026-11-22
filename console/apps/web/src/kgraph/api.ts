@@ -234,3 +234,50 @@ export const putKgAdminSettings = (api: PlatformApiClient, body: Partial<KgAdmin
 export const setKgUserSwitch = (api: PlatformApiClient, enabled: boolean) => api.patch<unknown>('/user-settings', { kgraph: { enabled } });
 /** "Use in chats and one-off runs": `kgraph.everyday` of the user settings (the CLI's `kgraph everyday on|off` does the same). */
 export const setKgEverydaySwitch = (api: PlatformApiClient, everyday: boolean) => api.patch<unknown>('/user-settings', { kgraph: { everyday } });
+
+// ---------------------------------------------------------------- site facts (phase 5, E46.31 and E46.33)
+
+/** What a fact is about (`SITE_FACT_KINDS` of `@marinoscar/hexactra-kgraph`). */
+export const SITE_FACT_KINDS = ['navigation', 'sign_in', 'quirk', 'timing', 'other'] as const;
+export type KgSiteFactKind = (typeof SITE_FACT_KINDS)[number];
+export type KgSiteFactSource = 'owner' | 'derived' | 'agent_proposed';
+export type KgSiteFactStatus = 'proposed' | 'active' | 'archived';
+/** The longest text a fact may have. */
+export const SITE_FACT_MAX_TEXT = 300;
+
+/** One fact, as the API shows it. Its text is data about the site; the pages render it as text. */
+export interface KgSiteFact {
+  id: string;
+  site: string;
+  kind: KgSiteFactKind;
+  text: string;
+  source: KgSiteFactSource;
+  status: KgSiteFactStatus;
+  /** What a proposal came from: the run and how many of its calls and screens. */
+  evidence: { runId: string | null; steps: number; screens: number };
+  declinedAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+/** `GET /api/kgraph/sites`. */
+export interface KgSiteSummary {
+  site: string;
+  active: number;
+  proposed: number;
+  archived: number;
+}
+
+const sitePath = (site: string) => `/kgraph/sites/${encodeURIComponent(site)}/facts`;
+export const listKgSites = (api: PlatformApiClient) => api.get<KgSiteSummary[]>('/kgraph/sites');
+export const listSiteFacts = (api: PlatformApiClient, site: string, status?: KgSiteFactStatus) => api.get<KgSiteFact[]>(status ? `/kgraph/sites/${encodeURIComponent(site)}/facts?status=${status}` : sitePath(site));
+/** Active at once: the owner's own words. `422 KGRAPH_SITE_FACT_REFUSED` (with `details.rules`) for a secret, an instruction or another site. */
+export const createSiteFact = (api: PlatformApiClient, site: string, body: { kind: KgSiteFactKind; text: string }) => api.post<KgSiteFact>(`/kgraph/sites/${encodeURIComponent(site)}/facts`, body);
+export const updateSiteFact = (api: PlatformApiClient, id: string, body: { kind?: KgSiteFactKind; text?: string; status?: 'active' | 'archived' }) => api.patch<KgSiteFact>(`/kgraph/site-facts/${encodeURIComponent(id)}`, body);
+export const deleteSiteFact = (api: PlatformApiClient, id: string) => api.delete<void>(`/kgraph/site-facts/${encodeURIComponent(id)}`);
+export const listSiteFactReviews = (api: PlatformApiClient) => api.get<KgSiteFact[]>('/kgraph/reviews/site-facts');
+/** Answered only from a signed-in browser session (`403 KGRAPH_REVIEW_CONSOLE_ONLY` otherwise). `kind` and `text` approve with the owner's edit. */
+export const answerSiteFactReview = (api: PlatformApiClient, id: string, body: { approve: boolean; kind?: KgSiteFactKind; text?: string }) =>
+  api.post<KgSiteFact>(`/kgraph/reviews/site-facts/${encodeURIComponent(id)}/answer`, body);
+/** The Sites tab, optionally on one site. */
+export const sitesTabPath = (site?: string) => (site ? `/kgraph?tab=sites&site=${encodeURIComponent(site)}` : '/kgraph?tab=sites');

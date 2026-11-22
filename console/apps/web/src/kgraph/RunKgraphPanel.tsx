@@ -3,8 +3,74 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { getKgRun, type KgRun } from './api';
+import { getKgRun, listKgSites, listSiteFacts, sitesTabPath, type KgRun, type KgSiteFact } from './api';
 import { HowChip, kindLabel, RUN_MODE_LABEL } from './labels';
+import { factKindLabel } from './siteFacts';
+
+/**
+ * "Used site facts" (E46.33): the facts the run used, by the ids the run view lists (`kgFactIds`, E46.32), each with a link to its site
+ * in the Sites tab. The run view also carries those facts (`siteFacts`): they are used as they are, and only a run view without them makes
+ * the page look them up. Nothing when the run view has no ids. A fact deleted since is counted, not shown.
+ */
+export function UsedSiteFacts({ ids, known }: { ids: readonly string[] | null | undefined; known?: readonly { id: string; site: string; kind: string; text: string }[] | null }) {
+  const { api } = usePlatformHost();
+  const [fetched, setFacts] = useState<KgSiteFact[] | null>(null);
+  const facts: readonly { id: string; site: string; kind: string; text: string }[] | null = known ?? fetched;
+  const key = (ids ?? []).join(',');
+  useEffect(() => {
+    const wanted = new Set(key ? key.split(',') : []);
+    if (wanted.size === 0 || known) return;
+    let live = true;
+    (async () => {
+      const sites = await listKgSites(api);
+      const found: KgSiteFact[] = [];
+      for (const s of sites) {
+        if (found.length === wanted.size) break;
+        for (const f of await listSiteFacts(api, s.site)) if (wanted.has(f.id)) found.push(f);
+      }
+      if (live) setFacts(found);
+    })().catch(() => live && setFacts([]));
+    return () => {
+      live = false;
+    };
+  }, [api, key, known]);
+  if (!ids || ids.length === 0) return null;
+  const gone = facts ? ids.length - facts.length : 0;
+  return (
+    <Box component="section" aria-label="Used site facts" sx={{ mt: 1.5 }} data-testid="run-used-site-facts">
+      <Typography variant="subtitle2" component="h3">
+        Used site facts
+      </Typography>
+      {facts === null && (
+        <Typography variant="body2" color="text.secondary">
+          {ids.length} fact{ids.length === 1 ? '' : 's'}
+        </Typography>
+      )}
+      {facts && facts.length > 0 && (
+        <Stack component="ul" spacing={0.5} sx={{ pl: 2, my: 0.5 }}>
+          {facts.map((f) => (
+            <li key={f.id}>
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                {f.text}{' '}
+                <Typography component="span" variant="caption" color="text.secondary">
+                  ({factKindLabel(f.kind)}){' '}
+                </Typography>
+                <Link component={RouterLink} to={sitesTabPath(f.site)}>
+                  {f.site}
+                </Link>
+              </Typography>
+            </li>
+          ))}
+        </Stack>
+      )}
+      {gone > 0 && (
+        <Typography variant="body2" color="text.secondary">
+          {gone} fact{gone === 1 ? ' was' : 's were'} deleted since.
+        </Typography>
+      )}
+    </Box>
+  );
+}
 
 /** "14 of 17 steps without AI; 1 repaired": from the ledger once written, else from the steps' tags. */
 export function runSummary(run: KgRun): string {
@@ -42,7 +108,19 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
       live = false;
     };
   }, [api, runId, canRead, refreshKey]);
-  if (!run || (run.mode === 'off' && !run.aiOnly)) return null;
+  if (!run) return null;
+  if (run.mode === 'off' && !run.aiOnly) {
+    // A run without a procedure (an everyday run, #850) may still have read site facts: only that list, else nothing.
+    if (!run.kgFactIds?.length) return null;
+    return (
+      <Paper variant="outlined" component="section" aria-label="Knowledge Graph" sx={{ p: 2, my: 2, minWidth: 0 }} data-testid="run-kgraph">
+        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 500 }}>
+          Knowledge Graph
+        </Typography>
+        <UsedSiteFacts ids={run.kgFactIds} />
+      </Paper>
+    );
+  }
   return (
     <Paper variant="outlined" component="section" aria-label="Knowledge Graph" sx={{ p: 2, my: 2, minWidth: 0 }} data-testid="run-kgraph">
       <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 500 }}>
@@ -95,26 +173,7 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
           ))}
         </List>
       )}
-      {(run.siteFacts?.length ?? 0) > 0 && (
-        <Box sx={{ mt: 1 }}>
-          <Typography variant="body2" component="h3" sx={{ fontWeight: 500 }}>
-            Site facts used
-          </Typography>
-          <List dense disablePadding aria-label="Site facts used in this run" data-testid="run-kgraph-facts">
-            {run.siteFacts!.map((f) => (
-              <ListItem key={f.id} divider disableGutters sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                <Typography variant="body2" component="span">
-                  {f.text}
-                  <Typography variant="caption" color="text.secondary" component="span">
-                    {' · '}
-                    {f.site}
-                  </Typography>
-                </Typography>
-              </ListItem>
-            ))}
-          </List>
-        </Box>
-      )}
+      <UsedSiteFacts ids={run.kgFactIds} known={run.siteFacts} />
     </Paper>
   );
 }
