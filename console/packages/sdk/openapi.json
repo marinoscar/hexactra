@@ -30155,6 +30155,164 @@
         }
       }
     },
+    "/api/kgraph/export": {
+      "get": {
+        "operationId": "kgraphTransfer_export",
+        "parameters": [
+          {
+            "name": "procedureIds",
+            "required": false,
+            "in": "query",
+            "description": "Comma-separated procedure ids; all active procedures when omitted.",
+            "schema": {
+              "maxLength": 4000,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Export your procedures as a file",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `kgraph:read`."
+      }
+    },
+    "/api/kgraph/import": {
+      "post": {
+        "description": "Each procedure is validated, mapped only to accounts you choose, and stored as a candidate that needs your review and a verification run. `400 KGRAPH_IMPORT_INVALID` for a malformed, newer-format or over-limit file (nothing is imported).\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphTransfer_import",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImportResultDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Import procedures from a file",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
     "/api/kgraph/ledger": {
       "get": {
         "description": "One row per run of the task with the Knowledge Graph on (newest first): steps by how they ran, model calls, tokens, cost and active time, and the task's AI-only baseline. A cost with `costKnown: false` is a lower bound.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
@@ -48881,6 +49039,7 @@
               "KGRAPH_REVIEW_NOT_FOUND",
               "KGRAPH_REVIEW_ANSWERED",
               "KGRAPH_REVIEW_CONSOLE_ONLY",
+              "KGRAPH_IMPORT_INVALID",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -80164,6 +80323,101 @@
         },
         "required": [
           "approve"
+        ],
+        "additionalProperties": false
+      },
+      "ImportResultDto": {
+        "type": "object",
+        "properties": {
+          "imported": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "number"
+                },
+                "taskId": {
+                  "type": "string"
+                },
+                "procedureId": {
+                  "type": "string"
+                },
+                "versionId": {
+                  "type": "string"
+                },
+                "reviewId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "taskId",
+                "procedureId",
+                "versionId",
+                "reviewId"
+              ]
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "number"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "reason"
+              ]
+            }
+          }
+        },
+        "required": [
+          "imported",
+          "skipped"
+        ]
+      },
+      "ImportBodyDto": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "description": "A `hexactra.kgraph` file (formatVersion 1)."
+          },
+          "accounts": {
+            "description": "Which of your accounts stands for each exported placeholder (`account-1`).",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "attach": {
+            "description": "Attach procedure N (its index) to one of your tasks; otherwise a new task in learn mode is created.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 5
+            },
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "required": [
+          "file"
         ],
         "additionalProperties": false
       },

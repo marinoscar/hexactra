@@ -5997,6 +5997,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export your procedures as a file
+         * @description **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphTransfer_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import procedures from a file
+         * @description Each procedure is validated, mapped only to accounts you choose, and stored as a candidate that needs your review and a verification run. `400 KGRAPH_IMPORT_INVALID` for a malformed, newer-format or over-limit file (nothing is imported).
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraphTransfer_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kgraph/ledger": {
         parameters: {
             query?: never;
@@ -9723,6 +9765,7 @@ export interface components {
              * @example KGRAPH_REVIEW_NOT_FOUND
              * @example KGRAPH_REVIEW_ANSWERED
              * @example KGRAPH_REVIEW_CONSOLE_ONLY
+             * @example KGRAPH_IMPORT_INVALID
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -16789,6 +16832,31 @@ export interface components {
         };
         AnswerReviewDto: {
             approve: boolean;
+        };
+        ImportResultDto: {
+            imported: {
+                index: number;
+                taskId: string;
+                procedureId: string;
+                versionId: string;
+                reviewId: string;
+            }[];
+            skipped: {
+                index: number;
+                reason: string;
+            }[];
+        };
+        ImportBodyDto: {
+            /** @description A `hexactra.kgraph` file (formatVersion 1). */
+            file: unknown;
+            /** @description Which of your accounts stands for each exported placeholder (`account-1`). */
+            accounts?: {
+                [key: string]: string;
+            };
+            /** @description Attach procedure N (its index) to one of your tasks; otherwise a new task in learn mode is created. */
+            attach?: {
+                [key: string]: string;
+            };
         };
         LedgerResponseDto: {
             /** Format: uuid */
@@ -42768,6 +42836,106 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ReviewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphTransfer_export: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated procedure ids; all active procedures when omitted. */
+                procedureIds?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphTransfer_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBodyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImportResultDto"];
                     };
                 };
             };
