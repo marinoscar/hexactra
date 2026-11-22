@@ -165,6 +165,7 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: AccountTreeOutlinedIcon,
         path: '/admin/settings/kgraph',
         permission: 'kgraph:admin',
+      },
       // Benchmarks (E44.5, #743): `benchmarks:read` is what GET /api/benchmarks enforces; starting, cancelling and
       // deleting need `benchmarks:run`, checked in the pages.
       {
