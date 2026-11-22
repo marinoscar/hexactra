@@ -85,6 +85,11 @@ export function elementId(site: string, fp: NonNullable<TraceEvent['post']['elem
   return `el:${createHash('sha256').update(JSON.stringify([site, fp.selectors[0] ?? null, fp.role, fp.name, fp.tag, fp.anchor])).digest('hex').slice(0, 16)}`;
 }
 
+/** A stable screen id from its site id (`site:<domain>`) and path pattern (the same screen gets the same id in every procedure of the owner). */
+export function screenIdOf(site: string, pattern: string): string {
+  return `sc:${createHash('sha256').update(`${site}|${pattern}`).digest('hex').slice(0, 16)}`;
+}
+
 /** The registrable domain of a host (a best-effort public-suffix rule: `a.b.co.uk` → `b.co.uk`). */
 export function registrableDomain(host: string): string {
   const labels = host.toLowerCase().replace(/\.$/, '').split('.');
@@ -324,7 +329,7 @@ export function compileTrace(input: CompileInput): CompileResult {
     const fp = e.post.element;
     if (fp && e.post.host && hasElement(e)) {
       const site = siteId(e.post.host);
-      const screenId = `sc:${createHash('sha256').update(`${site}|${pathPattern(e.post.path ?? '/')}`).digest('hex').slice(0, 16)}`;
+      const screenId = screenIdOf(site, pathPattern(e.post.path ?? '/'));
       if (!screens.has(screenId)) screens.set(screenId, { id: screenId, site, label: `${e.post.host}${pathPattern(e.post.path ?? '/')}`.slice(0, 200), pathPattern: pathPattern(e.post.path ?? '/') });
       const elId = elementId(site, fp);
       elements.set(elId, { id: elId, screen: screenId, ...(fp.role ? { role: fp.role.slice(0, 64) } : {}), ...(fp.name ? { label: fp.name.slice(0, 200) } : {}), ...(fp.tag ? { tag: fp.tag.slice(0, 40) } : {}), ...(fp.inputType ? { inputType: fp.inputType.slice(0, 40) } : {}), ...(fp.anchor ? { anchor: fp.anchor.slice(0, 200) } : {}), selectors: fp.selectors.slice(0, 3) });

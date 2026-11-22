@@ -1,6 +1,6 @@
 // In-memory fakes of every port. Deterministic; no timers unless a test asks for them.
-import type { ClockPort, EvidenceOutcome, IdPort, JudgePort, JudgeRequest, JudgeResult, ProbedLocation, ProcedureStorePort, StateProbePort, TelemetryAttributes, TelemetryPort, ToolCallRequest, ToolInvocation, ToolInvokerPort } from '../ports';
-import { canTransition, emptyEvidence, type Evidence, type Procedure, type ProcedureVersion, type VersionState } from '../schema';
+import type { SiteFactStorePort, ClockPort, EvidenceOutcome, IdPort, JudgePort, JudgeRequest, JudgeResult, ProbedLocation, ProcedureStorePort, StateProbePort, TelemetryAttributes, TelemetryPort, ToolCallRequest, ToolInvocation, ToolInvokerPort } from '../ports';
+import { canMoveSiteFact, canTransition, emptyEvidence, type Evidence, type NewSiteFact, type Procedure, type ProcedureVersion, type SiteFact, siteFactKey, siteFactSchema, type SiteFactStatus, type VersionState } from '../schema';
 
 const clone = <T>(v: T): T => structuredClone(v);
 
@@ -89,6 +89,44 @@ export class InMemoryProcedureStore implements ProcedureStorePort {
       n++;
     }
     for (const [id, v] of this.versions) if (v.owner === owner) this.versions.delete(id);
+    return n;
+  }
+}
+
+/** A `SiteFactStorePort` in memory, keeping every guarantee of the port (owner isolation, one fact per identity, compare-and-set). */
+export class InMemorySiteFactStore implements SiteFactStorePort {
+  private readonly facts = new Map<string, { owner: string; fact: SiteFact }>();
+
+  async proposeSiteFact(owner: string, input: NewSiteFact) {
+    const key = siteFactKey(input);
+    for (const f of this.facts.values()) if (f.owner === owner && siteFactKey(f.fact) === key) return { fact: clone(f.fact), created: false };
+    if (this.facts.has(input.id)) throw new Error(`site fact ${input.id} exists`);
+    const fact = siteFactSchema.parse({ ...input, status: 'proposed', lastUsedAt: null });
+    this.facts.set(fact.id, { owner, fact });
+    return { fact: clone(fact), created: true };
+  }
+  async listSiteFacts(owner: string, sites: readonly string[], status: SiteFactStatus | readonly SiteFactStatus[]) {
+    const statuses: readonly SiteFactStatus[] = typeof status === 'string' ? [status] : status;
+    return [...this.facts.values()]
+      .filter((f) => f.owner === owner && sites.includes(f.fact.site) && statuses.includes(f.fact.status))
+      .map((f) => clone(f.fact))
+      .sort((a, b) => (a.site !== b.site ? (a.site < b.site ? -1 : 1) : a.createdAt !== b.createdAt ? (a.createdAt < b.createdAt ? -1 : 1) : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+  async setSiteFactStatus(owner: string, id: string, expected: SiteFactStatus, next: SiteFactStatus) {
+    const f = this.facts.get(id);
+    if (!f || f.owner !== owner || f.fact.status !== expected || !canMoveSiteFact(expected, next)) return false;
+    f.fact.status = next;
+    return true;
+  }
+  async touchSiteFacts(owner: string, ids: readonly string[], at: string) {
+    let n = 0;
+    for (const id of new Set(ids)) {
+      const f = this.facts.get(id);
+      if (f && f.owner === owner) {
+        f.fact.lastUsedAt = at;
+        n++;
+      }
+    }
     return n;
   }
 }
