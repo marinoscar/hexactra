@@ -5911,6 +5911,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/admin/upkeep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Knowledge Graph upkeep now
+         * @description Enqueues the daily upkeep job (traces, old versions, stale procedures, orphans, duplicates, health). Administrators.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:admin`.
+         */
+        post: operations["kgraph_upkeepNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kgraph/reviews": {
         parameters: {
             query?: never;
@@ -42557,6 +42579,44 @@ export interface operations {
                     };
                 };
             };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraph_upkeepNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description Unauthorized - Invalid or missing token */
             401: {
                 headers: {
