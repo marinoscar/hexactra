@@ -50,6 +50,29 @@ export interface ProcedureDetailView extends ProcedureItemView {
   activeVersion: (Omit<VersionItemView, 'steps'> & { steps: StepView[]; parameters: { name: string; sensitive: boolean }[]; outputs: { name: string }[]; sites: string[]; savedLogins: { kind: string; label: string }[] }) | null;
 }
 
+/** One row of `GET /api/kgraph/sites`. */
+export interface SiteSummaryView {
+  site: string;
+  active: number;
+  proposed: number;
+  archived: number;
+}
+/** One fact of `GET /api/kgraph/sites/{site}/facts`. */
+export interface SiteFactView {
+  id: string;
+  site: string;
+  kind: string;
+  text: string;
+  source: string;
+  status: string;
+  evidence: { runId: string | null; steps: number; screens: number };
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+export const SITE_FACT_KINDS = ['navigation', 'sign_in', 'quirk', 'timing', 'other'] as const;
+/** Where a proposal is answered: never in the CLI (a sensitive change is the owner's, signed in, in the console). */
+export const FACTS_APPROVE_NOTE = 'Proposed facts are approved, edited or declined in the console: Knowledge Graph, Reviews. The CLI cannot approve one.';
+
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
 };
@@ -84,6 +107,16 @@ export async function findProcedure(ref: string): Promise<ProcedureItemView> {
   if (matches.length === 1) return matches[0]!;
   if (matches.length > 1) throw new Error(`"${ref}" matches several procedures; use the id`);
   throw new Error(`No procedure matches "${ref}". Run \`kgraph list\`.`);
+}
+
+/** A site's fact line: id, status, kind, source, last use and the text (data, printed as is). */
+export function siteFactLine(f: SiteFactView): string {
+  const used = f.lastUsedAt ? `used ${f.lastUsedAt.slice(0, 10)}` : 'not used yet';
+  return `${f.id}  ${f.status.padEnd(8)}  ${f.kind.padEnd(10)}  ${f.source.padEnd(14)}  ${used.padEnd(15)}  ${f.text.replace(/\s+/g, ' ')}`;
+}
+
+export function siteLine(s: SiteSummaryView): string {
+  return `${s.site.padEnd(32)}  ${String(s.active).padStart(3)} active  ${String(s.proposed).padStart(3)} proposed  ${String(s.archived).padStart(3)} archived`;
 }
 
 async function setSwitch(enabled: boolean): Promise<void> {
@@ -167,6 +200,45 @@ export const kgraphCommand: CliCommandRegistration = (program: Command) => {
       const found = await findProcedure(ref);
       const r = await consoleApi().post<{ retired: number }>(`/kgraph/procedures/${encodeURIComponent(found.id)}/forget`, {});
       out(`forgot ${found.name}: ${r.retired} version${r.retired === 1 ? '' : 's'} retired`);
+    });
+  kg.command('sites')
+    .description('Your sites with facts: how many are active, proposed and archived')
+    .option('--json', 'print JSON')
+    .action(async (o: { json?: boolean }) => {
+      const sites = await consoleApi().get<SiteSummaryView[]>('/kgraph/sites');
+      if (o.json) return out(JSON.stringify(sites, null, 2));
+      if (sites.length === 0) return out('No site facts yet. Add one with `hexactra kgraph facts add <site> --kind <kind> --text <text>`.');
+      for (const s of sites) out(siteLine(s));
+    });
+  const facts = kg
+    .command('facts')
+    .description(`A site's facts (a registrable domain, such as example.com). ${FACTS_APPROVE_NOTE}`)
+    .argument('<site>', 'the site, such as example.com')
+    // Lets `kgraph facts approve <id>` reach the action below and be told where proposals are answered.
+    .allowExcessArguments(true)
+    .option('--status <status>', 'active, proposed or archived')
+    .option('--json', 'print JSON')
+    .addHelpText('after', `\n${FACTS_APPROVE_NOTE}`)
+    .action(async (site: string, o: { status?: string; json?: boolean }) => {
+      // `kgraph facts approve …` is not a command: say where a proposal is answered instead of reading a site called "approve".
+      if (['approve', 'decline'].includes(site.toLowerCase())) throw new Error(FACTS_APPROVE_NOTE);
+      const query: Record<string, string> = {};
+      if (o.status) query.status = o.status;
+      const list = await consoleApi().get<SiteFactView[]>(`/kgraph/sites/${encodeURIComponent(site.toLowerCase())}/facts`, { query });
+      if (o.json) return out(JSON.stringify(list, null, 2));
+      if (list.length === 0) return out(`No facts about ${site}.`);
+      for (const f of list) out(siteFactLine(f));
+      if (list.some((f) => f.status === 'proposed')) out(FACTS_APPROVE_NOTE);
+    });
+  facts
+    .command('add <site>')
+    .description('Add a fact about a site in your own words; it is active at once. No passwords, codes or instructions (refused)')
+    .requiredOption('--kind <kind>', SITE_FACT_KINDS.join(', '))
+    .requiredOption('--text <text>', 'the fact, at most 300 characters')
+    .action(async (site: string, o: { kind: string; text: string }) => {
+      if (!(SITE_FACT_KINDS as readonly string[]).includes(o.kind)) throw new Error(`--kind must be one of ${SITE_FACT_KINDS.join(', ')}`);
+      const f = await consoleApi().post<SiteFactView>(`/kgraph/sites/${encodeURIComponent(site.toLowerCase())}/facts`, { kind: o.kind, text: o.text });
+      out(`added ${f.id} about ${f.site} (${f.kind}), active`);
     });
   kg.command('off')
     .description('Turn the Knowledge Graph off for yourself (what was learned is kept, unused)')

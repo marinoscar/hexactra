@@ -14,7 +14,7 @@ createCli(APP_CLI_OPTIONS);
 
 const values = (s: CapabilitySurface): readonly string[] => (typeof s === 'string' ? [s] : 'none' in s ? [] : s);
 
-/** Every leaf command path of the app's own commands, e.g. `tasks list`. */
+/** Every leaf command path of the app's own commands, e.g. `tasks list`, and every group that runs an action of its own (`kgraph facts <site>`). */
 function leafPaths(): string[] {
   const program = new Command();
   for (const register of APP_CLI_OPTIONS.extraCommands ?? []) register(program);
@@ -22,8 +22,10 @@ function leafPaths(): string[] {
   const walk = (cmd: Command, prefix: string[]) => {
     for (const sub of cmd.commands) {
       const path = [...prefix, sub.name()];
-      if (sub.commands.length) walk(sub, path);
-      else out.push(path.join(' '));
+      if (sub.commands.length) {
+        if ((sub as unknown as { _actionHandler?: unknown })._actionHandler) out.push(path.join(' '));
+        walk(sub, path);
+      } else out.push(path.join(' '));
     }
   };
   walk(program, []);

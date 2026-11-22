@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { setConsoleApiFactory } from './console-api.js';
-import { kgraphCommand, procedureLine, statusText, stepLine, type ProcedureDetailView, type ProcedureItemView } from './kgraph.command.js';
+import { FACTS_APPROVE_NOTE, kgraphCommand, procedureLine, statusText, stepLine, type ProcedureDetailView, type ProcedureItemView, type SiteFactView } from './kgraph.command.js';
 
 resetCliForTests();
 createCli(APP_CLI_OPTIONS);
@@ -138,5 +138,50 @@ describe('hexactra kgraph', () => {
     expect(await run('kgraph', 'on')).toContain('available');
     await run('kgraph', 'off');
     expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.body)).toEqual([{ kgraph: { enabled: true } }, { kgraph: { enabled: false } }]);
+  });
+
+  const FACT: SiteFactView = { id: 'kgsf-1', site: 'example.com', kind: 'navigation', text: 'Invoices: Billing, then History', source: 'owner', status: 'active', evidence: { runId: null, steps: 0, screens: 0 }, lastUsedAt: '2026-11-20T10:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z' };
+  const PROPOSED: SiteFactView = { ...FACT, id: 'kgsf-2', kind: 'sign_in', text: 'Sign-in asks for a one-time code', source: 'derived', status: 'proposed', lastUsedAt: null };
+
+  it('sites lists each site with its counts', async () => {
+    fakeApi({ 'GET /kgraph/sites': [{ site: 'example.com', active: 2, proposed: 1, archived: 0 }] });
+    const text = await run('kgraph', 'sites');
+    expect(text).toMatch(/example\.com +2 active +1 proposed +0 archived/);
+    expect(JSON.parse(await run('kgraph', 'sites', '--json'))[0].site).toBe('example.com');
+    fakeApi({ 'GET /kgraph/sites': [] });
+    expect(await run('kgraph', 'sites')).toContain('No site facts yet');
+  });
+
+  it("facts <site> lists a site's facts, and says proposals are approved in the console", async () => {
+    const calls = fakeApi({ 'GET /kgraph/sites/example.com/facts': [FACT, PROPOSED] });
+    const text = await run('kgraph', 'facts', 'Example.com', '--status', 'active');
+    expect(calls[0]!.path).toBe('/kgraph/sites/example.com/facts');
+    expect(calls[0]!.query).toContain('status=active');
+    expect(text).toMatch(/kgsf-1 +active +navigation +owner +used 2026-11-20 +Invoices: Billing, then History/);
+    expect(text).toMatch(/kgsf-2 +proposed +sign_in +derived +not used yet/);
+    expect(text).toContain(FACTS_APPROVE_NOTE);
+  });
+
+  it('facts add posts an owner-written fact', async () => {
+    const calls = fakeApi({ 'POST /kgraph/sites/example.com/facts': FACT });
+    expect(await run('kgraph', 'facts', 'add', 'example.com', '--kind', 'navigation', '--text', 'Invoices: Billing, then History')).toContain('added kgsf-1 about example.com (navigation), active');
+    expect(calls[0]!.body).toEqual({ kind: 'navigation', text: 'Invoices: Billing, then History' });
+    await expect(run('kgraph', 'facts', 'add', 'example.com', '--kind', 'secret', '--text', 'x')).rejects.toThrow(/--kind must be one of/);
+  });
+
+  it('offers no approve command: a proposal is approved in the console', () => {
+    const program = new Command();
+    kgraphCommand(program);
+    const kg = program.commands.find((c) => c.name() === 'kgraph')!;
+    const facts = kg.commands.find((c) => c.name() === 'facts')!;
+    expect(facts.commands.map((c) => c.name())).toEqual(['add']);
+    expect(kg.commands.map((c) => c.name())).not.toContain('approve');
+    expect(facts.description()).toContain('approved, edited or declined in the console');
+  });
+
+  it('facts approve answers that proposals are approved in the console, and calls nothing', async () => {
+    const calls = fakeApi({});
+    await expect(run('kgraph', 'facts', 'approve', 'kgsf-2')).rejects.toThrow(/approved, edited or declined in the console/);
+    expect(calls).toEqual([]);
   });
 });
