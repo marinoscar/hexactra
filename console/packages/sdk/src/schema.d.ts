@@ -5975,6 +5975,188 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/procedures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your learned procedures
+         * @description Each with its shown version's state and health, its step count and its task's ledger summary. Filters: `taskId`, `state`, `q`. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_procedures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/procedures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One procedure
+         * @description The active version (else the newest) as an ordered step list: kind, tool, target, whether it uses AI, health, and each argument by where it comes from; its parameters and outputs. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_procedure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/procedures/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A procedure's versions
+         * @description Newest first, with state, change class, health and evidence counts. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/procedures/{id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One version of a procedure
+         * @description By its number, as an ordered step list. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/procedures/{id}/versions/{version}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What changed in a version
+         * @description Step by step in plain words, against `against` (a version number), else its parent, else the version before it. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Knowledge Graph map
+         * @description Nodes (procedures, steps, tools, sites, accounts, saved logins, parameters, outputs) with type, label, health and counts; edges; clusters per site and per account. Your connected accounts, added MCP tools and saved logins no procedure uses yet are included, flagged `unused` (not with `taskId` or `site`). Above 2,000 nodes, steps fold into their procedures, then the procedures are paged (`cursor`). While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_graph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How a run used the Knowledge Graph
+         * @description Its mode and outcome, and which steps of the procedure were replayed, recovered, judged (one small model call) or done by the agent. While the deployment or your own switch is off, the stored data is shown with `enabled: false`.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphRead_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/kgraph/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Knowledge Graph deployment settings
+         * @description Whether the Knowledge Graph is allowed on this deployment, and its audit, suspension, retention and pacing rules (the system setting `kgraph`).
+         *
+         *     **Requires:** authentication, plus permission `kgraph:admin`.
+         */
+        get: operations["kgraphAdmin_get"];
+        /**
+         * Change the Knowledge Graph deployment settings
+         * @description The fields sent change; the others keep their value. Turning it off keeps everything learned. Answers whatever the switches are.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:admin`.
+         */
+        put: operations["kgraphAdmin_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kgraph/ledger": {
         parameters: {
             query?: never;
@@ -9701,6 +9883,8 @@ export interface components {
              * @example KGRAPH_REVIEW_NOT_FOUND
              * @example KGRAPH_REVIEW_ANSWERED
              * @example KGRAPH_REVIEW_CONSOLE_ONLY
+             * @example KGRAPH_VERSION_NOT_FOUND
+             * @example KGRAPH_RUN_NOT_FOUND
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -16767,6 +16951,377 @@ export interface components {
         };
         AnswerReviewDto: {
             approve: boolean;
+        };
+        ProceduresResponseDto: {
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            /** @description Newest first, at most 200. */
+            procedures: {
+                id: string;
+                /** Format: uuid */
+                taskId: string;
+                taskName: string;
+                name: string;
+                /** @description The version shown: the active one, else the newest. */
+                versionId: string | null;
+                versionNumber: number | null;
+                state: ("candidate" | "verified" | "active" | "suspended" | "retired" | "rejected") | null;
+                /**
+                 * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+                 * @enum {string}
+                 */
+                health: "healthy" | "degraded" | "failing" | "unknown";
+                steps: number;
+                updatedAt: string;
+                ledger: {
+                    /** @description Ledger rows of the task. */
+                    runs: number;
+                    /** @description Runs that executed a procedure version. */
+                    procedureRuns: number;
+                    /** @description `replayed_clean` runs over procedure runs; null with none. */
+                    cleanReplayRate: number | null;
+                };
+            }[];
+        };
+        ProcedureDetailResponseDto: {
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            taskName: string;
+            name: string;
+            /** @description The version shown: the active one, else the newest. */
+            versionId: string | null;
+            versionNumber: number | null;
+            state: ("candidate" | "verified" | "active" | "suspended" | "retired" | "rejected") | null;
+            /**
+             * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+             * @enum {string}
+             */
+            health: "healthy" | "degraded" | "failing" | "unknown";
+            steps: number;
+            updatedAt: string;
+            ledger: {
+                /** @description Ledger rows of the task. */
+                runs: number;
+                /** @description Runs that executed a procedure version. */
+                procedureRuns: number;
+                /** @description `replayed_clean` runs over procedure runs; null with none. */
+                cleanReplayRate: number | null;
+            };
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            /** @description The version shown as an ordered step list; null when the procedure has none. */
+            activeVersion: {
+                id: string;
+                number: number;
+                /** @enum {string} */
+                state: "candidate" | "verified" | "active" | "suspended" | "retired" | "rejected";
+                /** @enum {string} */
+                changeClass: "initial" | "structural" | "sensitive";
+                parentId: string | null;
+                sourceRunId: string | null;
+                createdAt: string;
+                /**
+                 * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+                 * @enum {string}
+                 */
+                health: "healthy" | "degraded" | "failing" | "unknown";
+                counts: {
+                    successes: number;
+                    failures: number;
+                    repairs: number;
+                };
+                steps: {
+                    id: string;
+                    kind: string;
+                    label: string;
+                    tool: string | null;
+                    /** @description The element's or screen's label, else the site. */
+                    target: string | null;
+                    /** @description A judge step (one small model call) or an agent step (the agent loop). */
+                    usesAi: boolean;
+                    /** @description Sends, pays or otherwise commits: intent-recorded and never repeated when its outcome is unknown. */
+                    commitClass: boolean;
+                    /**
+                     * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+                     * @enum {string}
+                     */
+                    health: "healthy" | "degraded" | "failing" | "unknown";
+                    counts: {
+                        successes: number;
+                        failures: number;
+                        repairs: number;
+                    };
+                    args: {
+                        name: string;
+                        /** @enum {string} */
+                        source: "literal" | "parameter" | "output" | "judge" | "secret";
+                        /** @description A masked literal, a parameter name, the earlier step, or a saved login by kind and label: never a typed value or a secret. */
+                        detail: string | null;
+                    }[];
+                }[];
+                parameters: {
+                    name: string;
+                    type: string;
+                    /** @description Its value is never stored or shown. */
+                    sensitive: boolean;
+                    required: boolean;
+                }[];
+                outputs: {
+                    name: string;
+                    sensitive: boolean;
+                }[];
+                sites: string[];
+                accounts: {
+                    connectionId: string;
+                    provider: string;
+                }[];
+                /** @description By label only. */
+                savedLogins: {
+                    /** @enum {string} */
+                    kind: "login" | "identity" | "card";
+                    label: string;
+                }[];
+            } | null;
+            versions: number;
+        };
+        VersionsResponseDto: {
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            procedureId: string;
+            /** @description Newest first. */
+            versions: {
+                id: string;
+                number: number;
+                /** @enum {string} */
+                state: "candidate" | "verified" | "active" | "suspended" | "retired" | "rejected";
+                /** @enum {string} */
+                changeClass: "initial" | "structural" | "sensitive";
+                parentId: string | null;
+                sourceRunId: string | null;
+                createdAt: string;
+                /**
+                 * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+                 * @enum {string}
+                 */
+                health: "healthy" | "degraded" | "failing" | "unknown";
+                counts: {
+                    successes: number;
+                    failures: number;
+                    repairs: number;
+                };
+                steps: number;
+            }[];
+        };
+        VersionResponseDto: {
+            id: string;
+            number: number;
+            /** @enum {string} */
+            state: "candidate" | "verified" | "active" | "suspended" | "retired" | "rejected";
+            /** @enum {string} */
+            changeClass: "initial" | "structural" | "sensitive";
+            parentId: string | null;
+            sourceRunId: string | null;
+            createdAt: string;
+            /**
+             * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+             * @enum {string}
+             */
+            health: "healthy" | "degraded" | "failing" | "unknown";
+            counts: {
+                successes: number;
+                failures: number;
+                repairs: number;
+            };
+            steps: {
+                id: string;
+                kind: string;
+                label: string;
+                tool: string | null;
+                /** @description The element's or screen's label, else the site. */
+                target: string | null;
+                /** @description A judge step (one small model call) or an agent step (the agent loop). */
+                usesAi: boolean;
+                /** @description Sends, pays or otherwise commits: intent-recorded and never repeated when its outcome is unknown. */
+                commitClass: boolean;
+                /**
+                 * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+                 * @enum {string}
+                 */
+                health: "healthy" | "degraded" | "failing" | "unknown";
+                counts: {
+                    successes: number;
+                    failures: number;
+                    repairs: number;
+                };
+                args: {
+                    name: string;
+                    /** @enum {string} */
+                    source: "literal" | "parameter" | "output" | "judge" | "secret";
+                    /** @description A masked literal, a parameter name, the earlier step, or a saved login by kind and label: never a typed value or a secret. */
+                    detail: string | null;
+                }[];
+            }[];
+            parameters: {
+                name: string;
+                type: string;
+                /** @description Its value is never stored or shown. */
+                sensitive: boolean;
+                required: boolean;
+            }[];
+            outputs: {
+                name: string;
+                sensitive: boolean;
+            }[];
+            sites: string[];
+            accounts: {
+                connectionId: string;
+                provider: string;
+            }[];
+            /** @description By label only. */
+            savedLogins: {
+                /** @enum {string} */
+                kind: "login" | "identity" | "card";
+                label: string;
+            }[];
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            procedureId: string;
+        };
+        DiffResponseDto: {
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            procedureId: string;
+            /** @description The older version number; null when there is none to compare with. */
+            from: number | null;
+            to: number;
+            changes: {
+                /** @enum {string} */
+                change: "unchanged" | "relocated" | "inserted" | "removed" | "rebound" | "retargeted";
+                before: {
+                    id: string;
+                    kind: string;
+                    label: string;
+                    tool: string | null;
+                } | null;
+                after: {
+                    id: string;
+                    kind: string;
+                    label: string;
+                    tool: string | null;
+                } | null;
+                args: string[];
+                text: string;
+            }[];
+        };
+        GraphResponseDto: {
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            nodes: {
+                id: string;
+                /** @enum {string} */
+                type: "Procedure" | "Step" | "Site" | "Account" | "Tool" | "SecretRef" | "Parameter" | "Output";
+                label: string;
+                /**
+                 * @description From the evidence: `failing` (suspended, or the last runs failed), `degraded`, `healthy`, or `unknown` (no runs yet).
+                 * @enum {string}
+                 */
+                health: "healthy" | "degraded" | "failing" | "unknown";
+                counts: {
+                    successes: number;
+                    failures: number;
+                    repairs: number;
+                    uses: number;
+                };
+                /** @description A connected account, added tool or saved login of yours that no procedure uses yet. */
+                unused: boolean;
+                cluster: string | null;
+                procedure: string | null;
+            }[];
+            edges: {
+                /** @enum {string} */
+                type: "has" | "then" | "feeds" | "uses";
+                from: string;
+                to: string;
+            }[];
+            clusters: {
+                id: string;
+                /** @enum {string} */
+                kind: "site" | "account";
+                label: string;
+                nodes: string[];
+            }[];
+            /** @description Above the node limit, steps, parameters and outputs fold into their procedures. */
+            collapsed: boolean;
+            /** @description Only part of the procedures is in this page. */
+            truncated: boolean;
+            totalNodes: number;
+            nodeLimit: number;
+            nextCursor: number | null;
+        };
+        KgRunResponseDto: {
+            /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
+            enabled: boolean;
+            /** Format: uuid */
+            runId: string;
+            taskId: string | null;
+            /**
+             * @description The effective mode the run had; `off` when the Knowledge Graph took no part.
+             * @enum {string}
+             */
+            mode: "off" | "learn" | "reuse";
+            aiOnly: boolean;
+            /** @description `replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running. */
+            outcome: string | null;
+            procedureId: string | null;
+            versionId: string | null;
+            versionNumber: number | null;
+            /** @description The version's steps and how each ran in this run. */
+            steps: {
+                id: string;
+                kind: string;
+                label: string;
+                tool: string | null;
+                /** @enum {string} */
+                how: "replayed" | "recovered" | "judged" | "agent" | "not_reached";
+            }[];
+            /** @description Step counts from the savings ledger, once written. */
+            ledger: {
+                replayed: number;
+                recovered: number;
+                judge: number;
+                agent: number;
+            } | null;
+        };
+        AdminSettingsResponseDto: {
+            /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+            enabled: boolean;
+            /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+            auditEvery: number;
+            /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+            suspendAfterFailures: number;
+            /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+            retentionDays: number | null;
+            /**
+             * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+             * @enum {string}
+             */
+            pacing: "human" | "fast";
+        };
+        PutAdminSettingsDto: {
+            /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+            enabled?: boolean;
+            /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+            auditEvery?: number;
+            /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+            suspendAfterFailures?: number;
+            /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+            retentionDays?: number | null;
+            /**
+             * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+             * @enum {string}
+             */
+            pacing?: "human" | "fast";
         };
         LedgerResponseDto: {
             /** Format: uuid */
@@ -42708,6 +43263,471 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ReviewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_procedures: {
+        parameters: {
+            query?: {
+                taskId?: string;
+                /** @description Only procedures whose shown version is in this state. */
+                state?: "candidate" | "verified" | "active" | "suspended" | "retired" | "rejected";
+                /** @description Words in the procedure or task name. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProceduresResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_procedure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProcedureDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["VersionsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["VersionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_diff: {
+        parameters: {
+            query?: {
+                /** @description The version number to compare with. Default: the version's parent, else the one before it. */
+                against?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiffResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_graph: {
+        parameters: {
+            query?: {
+                taskId?: string;
+                /** @description Only procedures on this registrable domain. */
+                site?: string;
+                /** @description Comma-separated node types: Procedure, Step, Site, Account, Tool, SecretRef, Parameter, Output. */
+                types?: string;
+                /** @description `nextCursor` of the previous page. */
+                cursor?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GraphResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphRead_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["KgRunResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphAdmin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminSettingsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphAdmin_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutAdminSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminSettingsResponseDto"];
                     };
                 };
             };
