@@ -106,7 +106,7 @@ export class ScorecardService {
       spentUsd: Number(b.spentUsd),
       config: { challengeIds: config.challengeIds, policies: config.policies, trials: config.trials },
     };
-    return computeScorecard(bench, rows.map(trialView), { live });
+    return computeScorecard(bench, rows.map((r) => trialView(r)), { live });
   }
 }
 

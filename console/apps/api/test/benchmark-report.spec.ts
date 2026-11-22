@@ -113,6 +113,9 @@ describe('the CSV', () => {
     expect([first[col('input_tokens')], first[col('output_tokens')], first[col('cached_tokens')], first[col('cost_usd')], first[col('cost_known')]]).toEqual(['10100', '510', '4010', '0.011', 'true']);
     expect(first[col('run_id')]).toBe('00000000-0000-4000-8000-000000000001');
     expect(first[col('benchmark_status')]).toBe('completed');
+    // The recording's status only (#846): ready, processing, then none. Never the video or a link to it.
+    expect(rows.map((r) => r[col('recording')]).slice(0, 3)).toEqual(['ready', 'processing', '']);
+    expect(csv).not.toMatch(/recording\.webm|run-recordings\//);
     // The formula-like label reads back with its leading quote.
     expect(rows.find((r) => r[col('policy_ref')] === POLICY_B.ref)![col('policy_label')]).toBe(`'${POLICY_B.label}`);
     const failed = rows.find((r) => r[col('verdict')] === 'fail')!;
