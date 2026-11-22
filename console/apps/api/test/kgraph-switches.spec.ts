@@ -100,9 +100,14 @@ describe('the kgraph migrations', () => {
       expect(s.replace(/ALTER COLUMN "[a-z_]+" DROP NOT NULL/, '')).not.toMatch(/\b(DROP|RENAME|ALTER COLUMN)\b/);
     }
     // An ALTER TABLE adds a constraint to a kg_ table (its foreign keys), adds a column with a default or nullable, or relaxes NOT NULL.
+    // One statement may carry several clauses (`ADD COLUMN …,\nADD COLUMN …`, E46.32's two array columns): each is checked on its own.
     for (const s of statements.filter((x) => x.startsWith('ALTER TABLE'))) {
-      expect(s).toMatch(/^ALTER TABLE "kg_[a-z_]+" (ADD CONSTRAINT|ADD COLUMN "[a-z_]+" [A-Z0-9(), ]+(DEFAULT .+)?$|ALTER COLUMN "[a-z_]+" DROP NOT NULL$)/);
-      if (/ADD COLUMN/.test(s) && /NOT NULL/.test(s)) expect(s).toMatch(/DEFAULT/);
+      const [, table, rest] = /^ALTER TABLE "([^"]+)" ([\s\S]+)$/.exec(s) ?? [];
+      expect(table).toMatch(/^kg_[a-z_]+$/);
+      for (const clause of (rest ?? '').split(/,\s*\n\s*/)) {
+        expect(clause).toMatch(/^(ADD CONSTRAINT|ADD COLUMN "[a-z_]+" [A-Z0-9(), ]+(\[\])?( NOT NULL)?( DEFAULT .+)?$|ALTER COLUMN "[a-z_]+" DROP NOT NULL$)/);
+        if (/ADD COLUMN/.test(clause) && /NOT NULL/.test(clause)) expect(clause).toMatch(/DEFAULT/);
+      }
     }
   });
 });
