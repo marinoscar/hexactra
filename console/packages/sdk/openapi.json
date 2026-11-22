@@ -47645,6 +47645,176 @@
         }
       }
     },
+    "/api/benchmarks/{id}/export": {
+      "get": {
+        "description": "A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "operationId": "benchmarks_export",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "required": false,
+            "in": "query",
+            "description": "`json` (the default): the `hexactra.benchmark-report` file. `csv`: one row per trial. `pdf`: the report.",
+            "schema": {
+              "default": "json",
+              "type": "string",
+              "enum": [
+                "json",
+                "csv",
+                "pdf"
+              ]
+            }
+          },
+          {
+            "name": "paper",
+            "required": false,
+            "in": "query",
+            "description": "The PDF's paper: `a4` (the default) or `letter`. Ignored for `json` and `csv`.",
+            "schema": {
+              "default": "a4",
+              "type": "string",
+              "enum": [
+                "a4",
+                "letter"
+              ]
+            }
+          },
+          {
+            "name": "baseline",
+            "required": false,
+            "in": "query",
+            "description": "An earlier benchmark on the same suite key and version: the report adds the comparison with it (409 `BENCHMARK_SUITE_MISMATCH` otherwise).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report file (`format=json`, not wrapped in the `data` envelope), the trials as CSV (`format=csv`) or the PDF report (`format=pdf`), sent as an attachment `hexactra-benchmark-<first 8 of id>-<yyyymmdd>.json`, `.csv` or `.pdf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarkReportDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one.",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's."
+          },
+          "409": {
+            "description": "`BENCHMARK_SUITE_MISMATCH`: the baseline is on another suite key or version."
+          },
+          "429": {
+            "description": "`EXPORT_RATE_LIMITED`: more than 10 benchmark exports in a minute (every format together); `details.retryAfterS` says when to try again."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Export a benchmark report as JSON, CSV or PDF",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:read"
+          ]
+        }
+      }
+    },
     "/api/benchmarks/{id}/cancel": {
       "post": {
         "description": "Nothing more starts, the trials that have not run are `skipped`, and the trial that is running is stopped like any run. A benchmark that already ended is returned unchanged.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
@@ -108519,6 +108689,2698 @@
           "policies",
           "unmatched",
           "flipped"
+        ]
+      },
+      "BenchmarkReportDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "hexactra.benchmark-report"
+          },
+          "formatVersion": {
+            "type": "number",
+            "const": 1,
+            "description": "Version of this file format"
+          },
+          "exportedAt": {
+            "type": "string"
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "True for a benchmark still in progress (queued or running) when it was exported: the scorecard is live."
+          },
+          "console": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "description": "The console version that wrote the file"
+              }
+            },
+            "required": [
+              "version"
+            ]
+          },
+          "masking": {
+            "type": "object",
+            "properties": {
+              "applied": {
+                "type": "boolean",
+                "const": true,
+                "description": "Always true: there is no unmasked export"
+              },
+              "patternsVersion": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "hits": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "enum": [
+                    "token",
+                    "urlSecret",
+                    "email",
+                    "iban",
+                    "card",
+                    "ssn",
+                    "routing",
+                    "account",
+                    "phone",
+                    "digits"
+                  ]
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "description": "How many matches of each pattern were masked; patterns with none are left out"
+              }
+            },
+            "required": [
+              "applied",
+              "patternsVersion",
+              "hits"
+            ]
+          },
+          "benchmark": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "completed",
+                  "cancelled",
+                  "failed"
+                ]
+              },
+              "suiteKey": {
+                "type": "string"
+              },
+              "suiteVersion": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "config": {
+                "type": "object",
+                "properties": {
+                  "challengeIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "policies": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ref": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "label"
+                      ]
+                    }
+                  },
+                  "trials": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "hostId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "profile": {
+                    "type": "string"
+                  },
+                  "capUsd": {
+                    "type": "number"
+                  },
+                  "trialTimeoutMinutes": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "challengeIds",
+                  "policies",
+                  "trials",
+                  "hostId",
+                  "profile",
+                  "capUsd",
+                  "trialTimeoutMinutes"
+                ]
+              },
+              "appVersion": {
+                "type": "string",
+                "description": "The console version when the benchmark started."
+              },
+              "commit": {
+                "description": "The build's commit when it started; null on a development build.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "spentUsd": {
+                "type": "number",
+                "description": "USD spent on model calls by the trials that ended. A lower bound when a trial has `costKnown: false`."
+              },
+              "progress": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "pending": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "running": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "graded": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Trials that ran and were judged: `pass` + `fail` + `error`."
+                  },
+                  "skipped": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Trials that never ran, or were stopped: cancelled, the spend cap, an unsupported challenge."
+                  },
+                  "pass": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "fail": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "error": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "unsupported": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "total",
+                  "pending",
+                  "running",
+                  "graded",
+                  "skipped",
+                  "pass",
+                  "fail",
+                  "error",
+                  "unsupported"
+                ]
+              },
+              "totals": {
+                "type": "object",
+                "properties": {
+                  "inputTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "outputTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "cachedInputTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Input tokens served from the provider cache: a subset of `inputTokens`."
+                  },
+                  "modelCalls": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "costUsd": {
+                    "type": "number",
+                    "description": "USD on model calls. The same sum as `spentUsd`."
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False when a model call of any trial could not be priced: `costUsd` is then a lower bound."
+                  }
+                },
+                "required": [
+                  "inputTokens",
+                  "outputTokens",
+                  "cachedInputTokens",
+                  "modelCalls",
+                  "costUsd",
+                  "costKnown"
+                ]
+              },
+              "baselineId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "startedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "finishedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "status",
+              "suiteKey",
+              "suiteVersion",
+              "config",
+              "appVersion",
+              "commit",
+              "spentUsd",
+              "progress",
+              "totals",
+              "baselineId",
+              "createdAt",
+              "startedAt",
+              "finishedAt"
+            ],
+            "description": "The benchmark: its config, suite key and version, `appVersion`, `commit`, spend and totals."
+          },
+          "scorecard": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "const": "hexactra.benchmark-scorecard"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "The scorecard format. A cached summary of another version is recomputed."
+              },
+              "benchmarkId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "completed",
+                  "cancelled",
+                  "failed"
+                ]
+              },
+              "live": {
+                "type": "boolean",
+                "description": "True: computed now from trials still running; false: the final scorecard, cached when the benchmark ended."
+              },
+              "suiteKey": {
+                "type": "string"
+              },
+              "suiteVersion": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "appVersion": {
+                "type": "string"
+              },
+              "commit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "k": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Trials per challenge and policy."
+              },
+              "computedAt": {
+                "type": "string"
+              },
+              "totals": {
+                "type": "object",
+                "properties": {
+                  "costUsd": {
+                    "type": "number",
+                    "description": "Total cost of the benchmark (its `spentUsd`)."
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False: some cost is unknown and `costUsd` is \"at least\"."
+                  },
+                  "inputTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "outputTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "cachedInputTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "totalTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "input + output."
+                  },
+                  "modelCalls": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "counts": {
+                    "type": "object",
+                    "properties": {
+                      "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "judged": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "`pass` + `fail`: the denominator of every rate."
+                      },
+                      "pass": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "fail": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "error": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Could not be judged (node down, provider error): excluded from the rates, counted here."
+                      },
+                      "skipped": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Never ran or were stopped (cancelled, the cap): excluded, counted here."
+                      },
+                      "unsupported": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "The challenge needs a capability the agent lacks: excluded, counted here."
+                      },
+                      "unfinished": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Pending or running: only while the benchmark is live."
+                      }
+                    },
+                    "required": [
+                      "total",
+                      "judged",
+                      "pass",
+                      "fail",
+                      "error",
+                      "skipped",
+                      "unsupported",
+                      "unfinished"
+                    ]
+                  }
+                },
+                "required": [
+                  "costUsd",
+                  "costKnown",
+                  "inputTokens",
+                  "outputTokens",
+                  "cachedInputTokens",
+                  "totalTokens",
+                  "modelCalls",
+                  "counts"
+                ]
+              },
+              "ranking": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "rank": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "successRate": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "costPerSuccessUsd": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "costKnown": {
+                      "type": "boolean"
+                    },
+                    "medianActiveMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "totalCostUsd": {
+                      "type": "number"
+                    },
+                    "totalTokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "rank",
+                    "ref",
+                    "label",
+                    "successRate",
+                    "costPerSuccessUsd",
+                    "costKnown",
+                    "medianActiveMs",
+                    "totalCostUsd",
+                    "totalTokens"
+                  ]
+                },
+                "description": "Best first. No composite score."
+              },
+              "policies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ref": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "rank": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "1 is best: success rate, then cost per success, then median active time."
+                    },
+                    "metrics": {
+                      "type": "object",
+                      "properties": {
+                        "counts": {
+                          "type": "object",
+                          "properties": {
+                            "total": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "judged": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "`pass` + `fail`: the denominator of every rate."
+                            },
+                            "pass": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "fail": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "error": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Could not be judged (node down, provider error): excluded from the rates, counted here."
+                            },
+                            "skipped": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Never ran or were stopped (cancelled, the cap): excluded, counted here."
+                            },
+                            "unsupported": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "The challenge needs a capability the agent lacks: excluded, counted here."
+                            },
+                            "unfinished": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Pending or running: only while the benchmark is live."
+                            }
+                          },
+                          "required": [
+                            "total",
+                            "judged",
+                            "pass",
+                            "fail",
+                            "error",
+                            "skipped",
+                            "unsupported",
+                            "unfinished"
+                          ]
+                        },
+                        "successRate": {
+                          "type": "object",
+                          "properties": {
+                            "k": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "How many counted (the numerator)."
+                            },
+                            "n": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Out of how many (the denominator)."
+                            },
+                            "value": {
+                              "description": "k / n, 0 to 1; null when n is 0.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "Lower bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "Upper bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "k",
+                            "n",
+                            "value",
+                            "low",
+                            "high"
+                          ],
+                          "description": "Passes over judged trials."
+                        },
+                        "passAllK": {
+                          "type": "object",
+                          "properties": {
+                            "k": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Trials per challenge."
+                            },
+                            "challenges": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Challenges with at least one judged trial: the denominator."
+                            },
+                            "allPassed": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Challenges whose k trials were all judged and all passed."
+                            },
+                            "rate": {
+                              "type": "object",
+                              "properties": {
+                                "k": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "How many counted (the numerator)."
+                                },
+                                "n": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "Out of how many (the denominator)."
+                                },
+                                "value": {
+                                  "description": "k / n, 0 to 1; null when n is 0.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "low": {
+                                  "description": "Lower bound of the Wilson 95% interval.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "high": {
+                                  "description": "Upper bound of the Wilson 95% interval.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "k",
+                                "n",
+                                "value",
+                                "low",
+                                "high"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "k",
+                            "challenges",
+                            "allPassed",
+                            "rate"
+                          ],
+                          "description": "Reliability (pass^k): the share of challenges where every one of the k trials passed."
+                        },
+                        "falseSuccess": {
+                          "type": "object",
+                          "properties": {
+                            "k": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "How many counted (the numerator)."
+                            },
+                            "n": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Out of how many (the denominator)."
+                            },
+                            "value": {
+                              "description": "k / n, 0 to 1; null when n is 0.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "Lower bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "Upper bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "k",
+                            "n",
+                            "value",
+                            "low",
+                            "high"
+                          ],
+                          "description": "Claimed success and graded fail, over judged trials."
+                        },
+                        "falseFailure": {
+                          "type": "object",
+                          "properties": {
+                            "k": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "How many counted (the numerator)."
+                            },
+                            "n": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Out of how many (the denominator)."
+                            },
+                            "value": {
+                              "description": "k / n, 0 to 1; null when n is 0.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "Lower bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "Upper bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "k",
+                            "n",
+                            "value",
+                            "low",
+                            "high"
+                          ],
+                          "description": "Claimed failure (or no claim) and graded pass, over judged trials."
+                        },
+                        "speed": {
+                          "type": "object",
+                          "properties": {
+                            "medianActiveMs": {
+                              "description": "Median active time of the judged trials.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "p90ActiveMs": {
+                              "description": "90th percentile (nearest rank) of the active time of the judged trials.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "medianSteps": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "medianModelCalls": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "medianActiveMs",
+                            "p90ActiveMs",
+                            "medianSteps",
+                            "medianModelCalls"
+                          ]
+                        },
+                        "cost": {
+                          "type": "object",
+                          "properties": {
+                            "totalUsd": {
+                              "type": "number",
+                              "description": "Sum of the cost of every trial that ran (judged, error, or stopped part way): the same trials as the benchmark's spend."
+                            },
+                            "known": {
+                              "type": "boolean",
+                              "description": "False when any of those trials had a model call with no price: every cost figure is then \"at least\"."
+                            },
+                            "medianPerTrialUsd": {
+                              "description": "Median cost of a judged trial.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "perSuccessUsd": {
+                              "description": "totalUsd / passes; null when there is no pass.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "totalUsd",
+                            "known",
+                            "medianPerTrialUsd",
+                            "perSuccessUsd"
+                          ]
+                        },
+                        "tokens": {
+                          "type": "object",
+                          "properties": {
+                            "input": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Total input tokens of every trial that ran."
+                            },
+                            "output": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "cached": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Total input tokens served from the provider cache: part of `input`."
+                            },
+                            "total": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "input + output."
+                            },
+                            "medianInput": {
+                              "description": "Median per judged trial.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "medianOutput": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "medianCached": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "perSuccess": {
+                              "description": "total / passes; null when there is no pass.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "input",
+                            "output",
+                            "cached",
+                            "total",
+                            "medianInput",
+                            "medianOutput",
+                            "medianCached",
+                            "perSuccess"
+                          ]
+                        },
+                        "failureReasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "count"
+                            ]
+                          },
+                          "description": "Trials by `failureReason` (every trial that has one), most first."
+                        },
+                        "stopReasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "count"
+                            ]
+                          },
+                          "description": "Trials that ran by their run's `stopReason`, most first."
+                        },
+                        "safety": {
+                          "type": "object",
+                          "properties": {
+                            "flaggedTrials": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Trials with at least one failed `safety:` check."
+                            },
+                            "checks": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "count": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "count"
+                                ]
+                              },
+                              "description": "Each failed `safety:` check by name, with how many trials failed it."
+                            }
+                          },
+                          "required": [
+                            "flaggedTrials",
+                            "checks"
+                          ],
+                          "description": "A flag, never averaged into the success rate."
+                        },
+                        "models": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on."
+                        }
+                      },
+                      "required": [
+                        "counts",
+                        "successRate",
+                        "passAllK",
+                        "falseSuccess",
+                        "falseFailure",
+                        "speed",
+                        "cost",
+                        "tokens",
+                        "failureReasons",
+                        "stopReasons",
+                        "safety",
+                        "models"
+                      ]
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "navigation",
+                              "forms",
+                              "extraction",
+                              "pointer",
+                              "dynamic",
+                              "long",
+                              "safety"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "metrics": {
+                            "type": "object",
+                            "properties": {
+                              "counts": {
+                                "type": "object",
+                                "properties": {
+                                  "total": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "judged": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "`pass` + `fail`: the denominator of every rate."
+                                  },
+                                  "pass": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "fail": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "error": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Could not be judged (node down, provider error): excluded from the rates, counted here."
+                                  },
+                                  "skipped": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Never ran or were stopped (cancelled, the cap): excluded, counted here."
+                                  },
+                                  "unsupported": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "The challenge needs a capability the agent lacks: excluded, counted here."
+                                  },
+                                  "unfinished": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Pending or running: only while the benchmark is live."
+                                  }
+                                },
+                                "required": [
+                                  "total",
+                                  "judged",
+                                  "pass",
+                                  "fail",
+                                  "error",
+                                  "skipped",
+                                  "unsupported",
+                                  "unfinished"
+                                ]
+                              },
+                              "successRate": {
+                                "type": "object",
+                                "properties": {
+                                  "k": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "How many counted (the numerator)."
+                                  },
+                                  "n": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Out of how many (the denominator)."
+                                  },
+                                  "value": {
+                                    "description": "k / n, 0 to 1; null when n is 0.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "low": {
+                                    "description": "Lower bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "high": {
+                                    "description": "Upper bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "k",
+                                  "n",
+                                  "value",
+                                  "low",
+                                  "high"
+                                ],
+                                "description": "Passes over judged trials."
+                              },
+                              "passAllK": {
+                                "type": "object",
+                                "properties": {
+                                  "k": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Trials per challenge."
+                                  },
+                                  "challenges": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Challenges with at least one judged trial: the denominator."
+                                  },
+                                  "allPassed": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Challenges whose k trials were all judged and all passed."
+                                  },
+                                  "rate": {
+                                    "type": "object",
+                                    "properties": {
+                                      "k": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "How many counted (the numerator)."
+                                      },
+                                      "n": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "Out of how many (the denominator)."
+                                      },
+                                      "value": {
+                                        "description": "k / n, 0 to 1; null when n is 0.",
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "low": {
+                                        "description": "Lower bound of the Wilson 95% interval.",
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "high": {
+                                        "description": "Upper bound of the Wilson 95% interval.",
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "k",
+                                      "n",
+                                      "value",
+                                      "low",
+                                      "high"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "k",
+                                  "challenges",
+                                  "allPassed",
+                                  "rate"
+                                ],
+                                "description": "Reliability (pass^k): the share of challenges where every one of the k trials passed."
+                              },
+                              "falseSuccess": {
+                                "type": "object",
+                                "properties": {
+                                  "k": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "How many counted (the numerator)."
+                                  },
+                                  "n": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Out of how many (the denominator)."
+                                  },
+                                  "value": {
+                                    "description": "k / n, 0 to 1; null when n is 0.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "low": {
+                                    "description": "Lower bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "high": {
+                                    "description": "Upper bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "k",
+                                  "n",
+                                  "value",
+                                  "low",
+                                  "high"
+                                ],
+                                "description": "Claimed success and graded fail, over judged trials."
+                              },
+                              "falseFailure": {
+                                "type": "object",
+                                "properties": {
+                                  "k": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "How many counted (the numerator)."
+                                  },
+                                  "n": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Out of how many (the denominator)."
+                                  },
+                                  "value": {
+                                    "description": "k / n, 0 to 1; null when n is 0.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "low": {
+                                    "description": "Lower bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "high": {
+                                    "description": "Upper bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "k",
+                                  "n",
+                                  "value",
+                                  "low",
+                                  "high"
+                                ],
+                                "description": "Claimed failure (or no claim) and graded pass, over judged trials."
+                              },
+                              "speed": {
+                                "type": "object",
+                                "properties": {
+                                  "medianActiveMs": {
+                                    "description": "Median active time of the judged trials.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "p90ActiveMs": {
+                                    "description": "90th percentile (nearest rank) of the active time of the judged trials.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "medianSteps": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "medianModelCalls": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "medianActiveMs",
+                                  "p90ActiveMs",
+                                  "medianSteps",
+                                  "medianModelCalls"
+                                ]
+                              },
+                              "cost": {
+                                "type": "object",
+                                "properties": {
+                                  "totalUsd": {
+                                    "type": "number",
+                                    "description": "Sum of the cost of every trial that ran (judged, error, or stopped part way): the same trials as the benchmark's spend."
+                                  },
+                                  "known": {
+                                    "type": "boolean",
+                                    "description": "False when any of those trials had a model call with no price: every cost figure is then \"at least\"."
+                                  },
+                                  "medianPerTrialUsd": {
+                                    "description": "Median cost of a judged trial.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "perSuccessUsd": {
+                                    "description": "totalUsd / passes; null when there is no pass.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "totalUsd",
+                                  "known",
+                                  "medianPerTrialUsd",
+                                  "perSuccessUsd"
+                                ]
+                              },
+                              "tokens": {
+                                "type": "object",
+                                "properties": {
+                                  "input": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Total input tokens of every trial that ran."
+                                  },
+                                  "output": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cached": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Total input tokens served from the provider cache: part of `input`."
+                                  },
+                                  "total": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "input + output."
+                                  },
+                                  "medianInput": {
+                                    "description": "Median per judged trial.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "medianOutput": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "medianCached": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "perSuccess": {
+                                    "description": "total / passes; null when there is no pass.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "input",
+                                  "output",
+                                  "cached",
+                                  "total",
+                                  "medianInput",
+                                  "medianOutput",
+                                  "medianCached",
+                                  "perSuccess"
+                                ]
+                              },
+                              "failureReasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "count": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "count"
+                                  ]
+                                },
+                                "description": "Trials by `failureReason` (every trial that has one), most first."
+                              },
+                              "stopReasons": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "count": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "count"
+                                  ]
+                                },
+                                "description": "Trials that ran by their run's `stopReason`, most first."
+                              },
+                              "safety": {
+                                "type": "object",
+                                "properties": {
+                                  "flaggedTrials": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Trials with at least one failed `safety:` check."
+                                  },
+                                  "checks": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "count": {
+                                          "type": "integer",
+                                          "minimum": -9007199254740991,
+                                          "maximum": 9007199254740991
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "count"
+                                      ]
+                                    },
+                                    "description": "Each failed `safety:` check by name, with how many trials failed it."
+                                  }
+                                },
+                                "required": [
+                                  "flaggedTrials",
+                                  "checks"
+                                ],
+                                "description": "A flag, never averaged into the success rate."
+                              },
+                              "models": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on."
+                              }
+                            },
+                            "required": [
+                              "counts",
+                              "successRate",
+                              "passAllK",
+                              "falseSuccess",
+                              "falseFailure",
+                              "speed",
+                              "cost",
+                              "tokens",
+                              "failureReasons",
+                              "stopReasons",
+                              "safety",
+                              "models"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "category",
+                          "label",
+                          "metrics"
+                        ]
+                      },
+                      "description": "Only the categories the benchmark has, in the suite's order."
+                    }
+                  },
+                  "required": [
+                    "ref",
+                    "label",
+                    "rank",
+                    "metrics",
+                    "categories"
+                  ]
+                },
+                "description": "In the benchmark's policy order (columns)."
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": [
+                        "navigation",
+                        "forms",
+                        "extraction",
+                        "pointer",
+                        "dynamic",
+                        "long",
+                        "safety"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ]
+                },
+                "description": "The categories the benchmark has, in the suite's order."
+              },
+              "matrix": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "navigation",
+                            "forms",
+                            "extraction",
+                            "pointer",
+                            "dynamic",
+                            "long",
+                            "safety"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cells": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "policyRef": {
+                            "type": "string"
+                          },
+                          "passes": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "judged": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "k": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Trials per cell."
+                          },
+                          "verdicts": {
+                            "type": "array",
+                            "items": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "description": "Each attempt's verdict by `trialIndex`; null while it has not ended."
+                          },
+                          "medianActiveMs": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "medianCostUsd": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "costKnown": {
+                            "type": "boolean"
+                          },
+                          "totalTokens": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "safetyFlagged": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "policyRef",
+                          "passes",
+                          "judged",
+                          "k",
+                          "verdicts",
+                          "medianActiveMs",
+                          "medianCostUsd",
+                          "costKnown",
+                          "totalTokens",
+                          "safetyFlagged"
+                        ]
+                      },
+                      "description": "One per policy, in the benchmark's policy order."
+                    }
+                  },
+                  "required": [
+                    "challengeId",
+                    "title",
+                    "category",
+                    "cells"
+                  ]
+                },
+                "description": "One row per challenge, in the benchmark's order."
+              }
+            },
+            "required": [
+              "format",
+              "version",
+              "benchmarkId",
+              "name",
+              "status",
+              "live",
+              "suiteKey",
+              "suiteVersion",
+              "appVersion",
+              "commit",
+              "k",
+              "computedAt",
+              "totals",
+              "ranking",
+              "policies",
+              "categories",
+              "matrix"
+            ],
+            "description": "The scorecard, with the ranking, the per-policy and per-category metrics (tokens and cost included) and the challenge x policy matrix."
+          },
+          "trials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "challengeId": {
+                  "type": "string"
+                },
+                "challengeTitle": {
+                  "type": "string",
+                  "description": "The challenge's title; its id when the suite no longer has it."
+                },
+                "category": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "navigation",
+                        "forms",
+                        "extraction",
+                        "pointer",
+                        "dynamic",
+                        "long",
+                        "safety"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "policyRef": {
+                  "type": "string"
+                },
+                "policyLabel": {
+                  "type": "string"
+                },
+                "trialIndex": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "0-based attempt of this challenge under this policy."
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "running",
+                    "graded",
+                    "skipped"
+                  ]
+                },
+                "verdict": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "fail",
+                        "error",
+                        "skipped",
+                        "unsupported"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null until the trial is judged or skipped."
+                },
+                "failureReason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "wrong_result",
+                        "gave_up",
+                        "budget",
+                        "stalled",
+                        "asked_person",
+                        "timeout",
+                        "error",
+                        "no_model",
+                        "cancelled",
+                        "cap",
+                        "unsupported"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "checks": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "pass": {
+                            "type": "boolean"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "pass"
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The grader's named checks. A trial passes only when every check passes; `safety:<name>` guards an invariant."
+                },
+                "claimedSuccess": {
+                  "description": "Whether the agent said it succeeded: compared with the verdict for the false-success rate.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "runId": {
+                  "description": "The trial's run (`GET /api/runs/{id}`); null before it starts and after the run is deleted.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "durationMs": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "activeMs": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "steps": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "modelCalls": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "outputTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cachedInputTokens": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model": {
+                  "description": "The model of the run's start tier (`provider:modelId`); null before grading or when unknown.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "models": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "startTier": {
+                          "type": "string"
+                        },
+                        "maxTier": {
+                          "type": "string"
+                        },
+                        "finalTier": {
+                          "type": "string",
+                          "description": "The tier the run was on when it ended."
+                        },
+                        "model": {
+                          "description": "The start tier's model, `provider:modelId`.",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tiers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "tier": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "fallbackModel": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "tier",
+                              "model",
+                              "fallbackModel"
+                            ]
+                          },
+                          "description": "The tiers from start to max: the only ones the run may use."
+                        }
+                      },
+                      "required": [
+                        "startTier",
+                        "maxTier",
+                        "finalTier",
+                        "model",
+                        "tiers"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "costUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "costKnown": {
+                  "description": "False when a model call could not be priced: `costUsd` is then a lower bound.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "stopReason": {
+                  "description": "The run's stop reason (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`).",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "questions": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Questions the agent asked a person."
+                },
+                "escalations": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "startedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "finishedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "goal": {
+                  "description": "The trial run's goal, masked, with the trial's site token hidden; null when the run was deleted or never started.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "result": {
+                  "description": "What the agent answered, masked; null when it said nothing or the run is gone.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "challengeId",
+                "challengeTitle",
+                "category",
+                "policyRef",
+                "policyLabel",
+                "trialIndex",
+                "status",
+                "verdict",
+                "failureReason",
+                "checks",
+                "claimedSuccess",
+                "runId",
+                "durationMs",
+                "activeMs",
+                "steps",
+                "modelCalls",
+                "inputTokens",
+                "outputTokens",
+                "cachedInputTokens",
+                "model",
+                "models",
+                "costUsd",
+                "costKnown",
+                "stopReason",
+                "questions",
+                "escalations",
+                "startedAt",
+                "finishedAt",
+                "goal",
+                "result"
+              ]
+            },
+            "description": "Every trial in run order: verdict, checks, metrics (tokens, cost, models) and run id."
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "current": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "running",
+                          "completed",
+                          "cancelled",
+                          "failed"
+                        ]
+                      },
+                      "suiteKey": {
+                        "type": "string"
+                      },
+                      "suiteVersion": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "appVersion": {
+                        "type": "string"
+                      },
+                      "commit": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "finishedAt": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "status",
+                      "suiteKey",
+                      "suiteVersion",
+                      "appVersion",
+                      "commit",
+                      "finishedAt"
+                    ]
+                  },
+                  "baseline": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "running",
+                          "completed",
+                          "cancelled",
+                          "failed"
+                        ]
+                      },
+                      "suiteKey": {
+                        "type": "string"
+                      },
+                      "suiteVersion": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "appVersion": {
+                        "type": "string"
+                      },
+                      "commit": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "finishedAt": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "status",
+                      "suiteKey",
+                      "suiteVersion",
+                      "appVersion",
+                      "commit",
+                      "finishedAt"
+                    ]
+                  },
+                  "totals": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "metric": {
+                          "type": "string",
+                          "enum": [
+                            "successRate",
+                            "passAllK",
+                            "falseSuccessRate",
+                            "medianActiveMs",
+                            "medianCostUsd",
+                            "totalCostUsd",
+                            "costPerSuccessUsd",
+                            "totalTokens",
+                            "tokensPerSuccess"
+                          ]
+                        },
+                        "current": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "baseline": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "delta": {
+                          "description": "current - baseline; null when either is null.",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "better": {
+                          "type": "string",
+                          "enum": [
+                            "higher",
+                            "lower"
+                          ],
+                          "description": "Which direction is an improvement."
+                        },
+                        "improved": {
+                          "description": "Whether the delta goes the better way; null when there is no delta or it is 0, or it is within noise.",
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "withinNoise": {
+                          "description": "A rate only: true when the two Wilson 95% intervals overlap, so the change is not shown to be real. Null for a metric with no interval.",
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "atLeast": {
+                          "type": "boolean",
+                          "description": "A cost only: true when either side has an unknown cost."
+                        }
+                      },
+                      "required": [
+                        "metric",
+                        "current",
+                        "baseline",
+                        "delta",
+                        "better",
+                        "improved",
+                        "withinNoise",
+                        "atLeast"
+                      ]
+                    },
+                    "description": "The whole benchmark: total cost and total tokens."
+                  },
+                  "policies": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ref": {
+                          "type": "string",
+                          "description": "The policy in this benchmark."
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "baselineRef": {
+                          "type": "string"
+                        },
+                        "baselineLabel": {
+                          "type": "string"
+                        },
+                        "matchedBy": {
+                          "type": "string",
+                          "enum": [
+                            "ref",
+                            "label"
+                          ]
+                        },
+                        "deltas": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "metric": {
+                                "type": "string",
+                                "enum": [
+                                  "successRate",
+                                  "passAllK",
+                                  "falseSuccessRate",
+                                  "medianActiveMs",
+                                  "medianCostUsd",
+                                  "totalCostUsd",
+                                  "costPerSuccessUsd",
+                                  "totalTokens",
+                                  "tokensPerSuccess"
+                                ]
+                              },
+                              "current": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "baseline": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "delta": {
+                                "description": "current - baseline; null when either is null.",
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "better": {
+                                "type": "string",
+                                "enum": [
+                                  "higher",
+                                  "lower"
+                                ],
+                                "description": "Which direction is an improvement."
+                              },
+                              "improved": {
+                                "description": "Whether the delta goes the better way; null when there is no delta or it is 0, or it is within noise.",
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "withinNoise": {
+                                "description": "A rate only: true when the two Wilson 95% intervals overlap, so the change is not shown to be real. Null for a metric with no interval.",
+                                "type": [
+                                  "boolean",
+                                  "null"
+                                ]
+                              },
+                              "atLeast": {
+                                "type": "boolean",
+                                "description": "A cost only: true when either side has an unknown cost."
+                              }
+                            },
+                            "required": [
+                              "metric",
+                              "current",
+                              "baseline",
+                              "delta",
+                              "better",
+                              "improved",
+                              "withinNoise",
+                              "atLeast"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "ref",
+                        "label",
+                        "baselineRef",
+                        "baselineLabel",
+                        "matchedBy",
+                        "deltas"
+                      ]
+                    }
+                  },
+                  "unmatched": {
+                    "type": "object",
+                    "properties": {
+                      "current": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "ref": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ref",
+                            "label"
+                          ]
+                        },
+                        "description": "Policies of this benchmark with no counterpart in the baseline."
+                      },
+                      "baseline": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "ref": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ref",
+                            "label"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "current",
+                      "baseline"
+                    ]
+                  },
+                  "flipped": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "challengeId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "navigation",
+                                "forms",
+                                "extraction",
+                                "pointer",
+                                "dynamic",
+                                "long",
+                                "safety"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "policyRef": {
+                          "type": "string"
+                        },
+                        "policyLabel": {
+                          "type": "string"
+                        },
+                        "baseline": {
+                          "type": "object",
+                          "properties": {
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "pass",
+                                "fail",
+                                "mixed"
+                              ]
+                            },
+                            "passes": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "judged": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "outcome",
+                            "passes",
+                            "judged"
+                          ]
+                        },
+                        "current": {
+                          "type": "object",
+                          "properties": {
+                            "outcome": {
+                              "type": "string",
+                              "enum": [
+                                "pass",
+                                "fail",
+                                "mixed"
+                              ]
+                            },
+                            "passes": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "judged": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "outcome",
+                            "passes",
+                            "judged"
+                          ]
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "better",
+                            "worse"
+                          ],
+                          "description": "By the share of passes."
+                        }
+                      },
+                      "required": [
+                        "challengeId",
+                        "title",
+                        "category",
+                        "policyRef",
+                        "policyLabel",
+                        "baseline",
+                        "current",
+                        "direction"
+                      ]
+                    },
+                    "description": "Challenges of a matched policy whose outcome changed (all passed, none passed, or mixed)."
+                  }
+                },
+                "required": [
+                  "current",
+                  "baseline",
+                  "totals",
+                  "policies",
+                  "unmatched",
+                  "flipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The comparison with `baseline`, when asked."
+          }
+        },
+        "required": [
+          "type",
+          "formatVersion",
+          "exportedAt",
+          "partial",
+          "console",
+          "masking",
+          "benchmark",
+          "scorecard",
+          "trials",
+          "baseline"
         ]
       }
     }
