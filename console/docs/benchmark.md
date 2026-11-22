@@ -121,6 +121,19 @@ A trial never returns its seed, its token, the site's state or an expected answe
 | `benchmark-grader.ts`, `trial-verdict.ts` | The run-end hook, and the verdict as a pure function |
 | `benchmark-site-address.ts` | The site's address and the reachability check |
 
+## In the console
+
+Administration → **Benchmarks** (`/admin/settings/benchmarks`, card permission `benchmarks:read`) has four pages. They draw what the API returns and compute no metric of their own.
+
+| Page | Path | What it shows |
+|---|---|---|
+| The list | `/admin/settings/benchmarks` | Every benchmark with its status, policies, the best policy's success rate (the scorecard's first ranking entry), spend against the cap, console and suite version, and date. **New benchmark** needs `benchmarks:run` |
+| New | `/admin/settings/benchmarks/new` (`benchmarks:run`) | The challenges by category, all the ones the agent can attempt chosen; an unsupported one is shown disabled with the capability it needs. 1 to 8 policies (built-in and your own), each with the label of its scorecard column; trials; node and profile; spend cap. It says how many runs it will start and asks before starting. A `409 BENCHMARK_RUNNING` names the benchmark already on that node with a link to it |
+| A benchmark | `/admin/settings/benchmarks/{id}` | Progress, read again every 5 seconds while it is queued or running; **Export** (PDF, CSV, JSON); **Cancel** (asks first) or **Delete** once it has ended. The totals strip (total cost, input, output and cached tokens, spend against the cap). The scorecard: one column per policy with every metric, including the models used, total cost, cost per success and tokens (one card per policy on a phone). Two charts, success per category and success against cost per success, each with a table of the same numbers that the chart names (`aria-describedby`). The challenge x policy matrix, in its own scrolling box. Every trial with its verdict, failure reason, checks, tokens (input, output, cached), cost and a link to its run ("run removed" once the run is gone). **Compare with** lists the ended benchmarks on the same suite key and version |
+| Compare | `/admin/settings/benchmarks/{id}/compare/{baseline}` | Both benchmarks' console version and commit; each metric's baseline, current value and change, read as better, worse, no change, or **within noise** (never coloured as a win or a loss); unmatched policies; the challenges whose outcome flipped |
+
+A status or verdict is a word and an icon as well as a colour. The pages are checked with `npm run ui:screens` (routes `admin-benchmarks`, `admin-benchmark-new`, `admin-benchmark`, `admin-benchmark-live`, `admin-benchmark-export`, `admin-benchmark-compare`). **Export** on a benchmark's page downloads the report (PDF report, CSV of trials, JSON report; [Exporting a report](#exporting-a-report)); when a baseline is chosen under **Compare with**, the report includes the comparison with it.
+
 ## Reading the scorecard
 
 `GET /api/benchmarks/{id}/scorecard` (`benchmarks:read`) turns the trials into a comparison of the policies. Every number is computed by the pure functions of `scorecard.ts` from the metrics copied onto the trials, so a deleted run, or a run past its retention, changes nothing. The shapes are in `scorecard.schemas.ts` (`scorecardSchema`, `benchmarkComparisonSchema`); the pages and the report files render them as they are.
