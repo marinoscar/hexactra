@@ -13,10 +13,12 @@ import { BenchmarkMetrics } from './benchmark.metrics';
 import { BenchmarkOwner } from './benchmark-owner';
 import { BenchmarkQuestionListener } from './benchmark-question-listener';
 import { BenchmarkRunStarter } from './benchmark-run-starter';
+import { BenchmarkReportService } from './benchmark-report.service';
 import { BenchmarkRunner } from './benchmark-runner.service';
 import { BenchmarkSiteAddress } from './benchmark-site-address';
 import { BenchmarksController } from './benchmarks.controller';
 import { BenchmarksService } from './benchmarks.service';
+import { ScorecardService } from './scorecard.service';
 import { BenchmarkSiteController } from './site/site.controller';
 import { BenchmarkSiteService } from './site/site.service';
 import { TrialStateService } from './site/trial-state.service';
@@ -36,6 +38,9 @@ const RUNS = isSliceEnabled('ai');
  * - Running one (#741): `BenchmarksService` (start, read, cancel, delete) behind `/api/benchmarks`, the `benchmark.advance` job
  *   (`BenchmarkRunner`), the run starter, the scripted owner and the grader. It starts runs and answers questions through the same
  *   services everything else uses; it holds no agent logic.
+ * - The scorecard (#742): `ScorecardService` (pure formulas in `scorecard.ts`, shapes in `scorecard.schemas.ts`) behind
+ *   `/api/benchmarks/{id}/scorecard` and `/compare`, cached in `Benchmark.summary` when a benchmark ends.
+ * - The report (#744): `BenchmarkReportService` behind `/api/benchmarks/{id}/export` (JSON, CSV, PDF), masked.
  */
 @Module({
   imports: RUNS ? [FabricModule, TasksModule, QuestionsModule, PoliciesModule] : [],
@@ -43,8 +48,8 @@ const RUNS = isSliceEnabled('ai');
   providers: [
     TrialStateService,
     BenchmarkSiteService,
-    ...(RUNS ? [BenchmarkSiteAddress, BenchmarkMetrics, BenchmarkOwner, BenchmarkGrader, BenchmarkRunStarter, BenchmarkRunner, BenchmarkAdvanceHandler, BenchmarkQuestionListener, BenchmarksService] : []),
+    ...(RUNS ? [BenchmarkSiteAddress, BenchmarkMetrics, BenchmarkOwner, BenchmarkGrader, BenchmarkRunStarter, BenchmarkRunner, BenchmarkAdvanceHandler, BenchmarkQuestionListener, ScorecardService, BenchmarksService, BenchmarkReportService] : []),
   ],
-  exports: [TrialStateService, ...(RUNS ? [BenchmarksService, BenchmarkRunner, BenchmarkGrader] : [])],
+  exports: [TrialStateService, ...(RUNS ? [BenchmarksService, ScorecardService, BenchmarkRunner, BenchmarkGrader] : [])],
 })
 export class BenchmarkModule {}

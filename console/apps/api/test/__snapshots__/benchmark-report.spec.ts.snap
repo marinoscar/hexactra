@@ -1,0 +1,2343 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
+{
+  "content": [
+    {
+      "columnGap": 0,
+      "columns": [
+        {
+          "height": 22,
+          "svg": "<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><path d="M60 60V108L18.4 84V36L60 12L101.6 36V84L80 96.5" fill="none" stroke="#4b4be8" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><circle cx="60" cy="60" r="13" fill="#ff6b4a"/></svg>",
+          "width": 22,
+        },
+        {
+          "margin": [
+            6,
+            4,
+            0,
+            0,
+          ],
+          "text": [
+            {
+              "style": "wordmark",
+              "text": "hexactra",
+            },
+            {
+              "style": "kicker",
+              "text": "   Benchmark report",
+            },
+          ],
+          "width": "*",
+        },
+      ],
+    },
+    {
+      "id": "title",
+      "outline": true,
+      "outlineText": "Benchmark report",
+      "style": "title",
+      "text": "Nightly comparison for p•••@example.test",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "factKey",
+              "text": "Status",
+            },
+            {
+              "style": "factValue",
+              "text": "completed",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Suite",
+            },
+            {
+              "style": "factValue",
+              "text": "core version 1",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Console",
+            },
+            {
+              "style": "factValue",
+              "text": "1.2.3 (commit 0123456789ab)",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Started",
+            },
+            {
+              "style": "factValue",
+              "text": "1 Nov 2026, 10:00:00 UTC",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Finished",
+            },
+            {
+              "style": "factValue",
+              "text": "1 Nov 2026, 10:30:00 UTC",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Challenges and policies",
+            },
+            {
+              "style": "factValue",
+              "text": "2 challenges x 2 policies x 3 trials",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Trials",
+            },
+            {
+              "style": "factValue",
+              "text": "12: 11 passed, 1 failed, 0 errors, 0 skipped, 0 unsupported",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Total cost",
+            },
+            {
+              "style": "factValue",
+              "text": "$0.20",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Total tokens",
+            },
+            {
+              "style": "factValue",
+              "text": "134,580 (127,800 input, 6,780 output, 48,780 cached input)",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Model calls",
+            },
+            {
+              "style": "factValue",
+              "text": "114",
+            },
+          ],
+        ],
+        "widths": [
+          130,
+          "*",
+        ],
+      },
+    },
+    {
+      "id": "ranking",
+      "outline": true,
+      "outlineText": "Ranking",
+      "style": "h2",
+      "text": "Ranking",
+    },
+    {
+      "style": "small",
+      "text": "Best first: the higher success rate, then the lower cost per success, then the lower median active time. There is no composite score.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "#",
+            },
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Success rate",
+            },
+            {
+              "style": "th",
+              "text": "Cost per success",
+            },
+            {
+              "style": "th",
+              "text": "Median active",
+            },
+            {
+              "style": "th",
+              "text": "Total cost",
+            },
+            {
+              "style": "th",
+              "text": "Total tokens",
+            },
+            {
+              "style": "th",
+              "text": "Models",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "1",
+            },
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "100%",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "26.0 s",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "66,960",
+            },
+            {
+              "style": "td",
+              "text": "fixture:small",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "2",
+            },
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "83%",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "27.0 s",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "67,620",
+            },
+            {
+              "style": "td",
+              "text": "fixture:large",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          14,
+          "*",
+          52,
+          56,
+          50,
+          50,
+          54,
+          90,
+        ],
+      },
+    },
+    {
+      "id": "scorecard",
+      "outline": true,
+      "outlineText": "Scorecard",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "Scorecard",
+    },
+    {
+      "style": "small",
+      "text": "Rates are over judged trials (pass + fail), with a Wilson 95% interval. k = 3 trials per challenge.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Judged",
+            },
+            {
+              "style": "th",
+              "text": "Success rate",
+            },
+            {
+              "style": "th",
+              "text": "Reliability (pass^3)",
+            },
+            {
+              "style": "th",
+              "text": "False success",
+            },
+            {
+              "style": "th",
+              "text": "False failure",
+            },
+            {
+              "style": "th",
+              "text": "Median / p90 active",
+            },
+            {
+              "style": "th",
+              "text": "Median steps",
+            },
+            {
+              "style": "th",
+              "text": "Safety flags",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "6 of 6",
+            },
+            {
+              "style": "td",
+              "text": "100% (61%–100%), 6 of 6",
+            },
+            {
+              "style": "td",
+              "text": "100% (34%–100%), 2 of 2",
+            },
+            {
+              "style": "td",
+              "text": "0% (0%–39%), 0 of 6",
+            },
+            {
+              "style": "td",
+              "text": "0% (0%–39%), 0 of 6",
+            },
+            {
+              "style": "td",
+              "text": "26.0 s / 31.0 s",
+            },
+            {
+              "style": "td",
+              "text": "11",
+            },
+            {
+              "style": "td",
+              "text": "None",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "6 of 6",
+            },
+            {
+              "style": "td",
+              "text": "83% (44%–97%), 5 of 6",
+            },
+            {
+              "style": "td",
+              "text": "50% (9%–91%), 1 of 2",
+            },
+            {
+              "style": "td",
+              "text": "17% (3%–56%), 1 of 6",
+            },
+            {
+              "style": "td",
+              "text": "0% (0%–39%), 0 of 6",
+            },
+            {
+              "style": "td",
+              "text": "27.0 s / 32.0 s",
+            },
+            {
+              "style": "td",
+              "text": "12",
+            },
+            {
+              "style": "failed",
+              "text": "1 flagged",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          34,
+          82,
+          82,
+          72,
+          72,
+          62,
+          34,
+          44,
+        ],
+      },
+    },
+    {
+      "id": "cost",
+      "outline": true,
+      "outlineText": "Tokens and cost",
+      "style": "h2",
+      "text": "Tokens and cost",
+    },
+    {
+      "style": "small",
+      "text": "Totals count every trial that ran (judged, error, or stopped part way); medians are per judged trial. Cached input tokens are part of input.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Input tokens",
+            },
+            {
+              "style": "th",
+              "text": "Output tokens",
+            },
+            {
+              "style": "th",
+              "text": "Cached tokens",
+            },
+            {
+              "style": "th",
+              "text": "Tokens per success",
+            },
+            {
+              "style": "th",
+              "text": "Total cost",
+            },
+            {
+              "style": "th",
+              "text": "Median cost per trial",
+            },
+            {
+              "style": "th",
+              "text": "Cost per success",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "63,600",
+            },
+            {
+              "style": "td",
+              "text": "3,360",
+            },
+            {
+              "style": "td",
+              "text": "24,360",
+            },
+            {
+              "style": "td",
+              "text": "11,160",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "64,200",
+            },
+            {
+              "style": "td",
+              "text": "3,420",
+            },
+            {
+              "style": "td",
+              "text": "24,420",
+            },
+            {
+              "style": "td",
+              "text": "13,524",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "Whole benchmark",
+            },
+            {
+              "style": "td",
+              "text": "127,800",
+            },
+            {
+              "style": "td",
+              "text": "6,780",
+            },
+            {
+              "style": "td",
+              "text": "48,780",
+            },
+            {
+              "style": "td",
+              "text": "—",
+            },
+            {
+              "style": "tdStrong",
+              "text": "$0.20",
+            },
+            {
+              "style": "td",
+              "text": "—",
+            },
+            {
+              "style": "td",
+              "text": "—",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          54,
+          54,
+          54,
+          54,
+          56,
+          56,
+          56,
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        2,
+      ],
+      "style": "boxTitle",
+      "text": "Models used",
+    },
+    {
+      "style": "body",
+      "ul": [
+        "Economy: fixture:small",
+        "=HYPERLINK("x"): fixture:large",
+      ],
+    },
+    {
+      "id": "categories",
+      "outline": true,
+      "outlineText": "By category",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "By category",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Category",
+            },
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Success rate",
+            },
+            {
+              "style": "th",
+              "text": "Reliability",
+            },
+            {
+              "style": "th",
+              "text": "Median active",
+            },
+            {
+              "style": "th",
+              "text": "Total cost",
+            },
+            {
+              "style": "th",
+              "text": "Cost per success",
+            },
+            {
+              "style": "th",
+              "text": "Tokens",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Navigation",
+            },
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "100% (44%–100%), 3 of 3",
+            },
+            {
+              "style": "td",
+              "text": "100% (21%–100%), 1 of 1",
+            },
+            {
+              "style": "td",
+              "text": "25.0 s",
+            },
+            {
+              "style": "td",
+              "text": "$0.04",
+            },
+            {
+              "style": "td",
+              "text": "$0.01",
+            },
+            {
+              "style": "td",
+              "text": "31,500 in / 1,650 out / 12,150 cached",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Navigation",
+            },
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "100% (44%–100%), 3 of 3",
+            },
+            {
+              "style": "td",
+              "text": "100% (21%–100%), 1 of 1",
+            },
+            {
+              "style": "td",
+              "text": "26.0 s",
+            },
+            {
+              "style": "td",
+              "text": "$0.05",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "31,800 in / 1,680 out / 12,180 cached",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Forms",
+            },
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "100% (44%–100%), 3 of 3",
+            },
+            {
+              "style": "td",
+              "text": "100% (21%–100%), 1 of 1",
+            },
+            {
+              "style": "td",
+              "text": "27.0 s",
+            },
+            {
+              "style": "td",
+              "text": "$0.05",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "32,100 in / 1,710 out / 12,210 cached",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Forms",
+            },
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "67% (21%–94%), 2 of 3",
+            },
+            {
+              "style": "td",
+              "text": "0% (0%–79%), 0 of 1",
+            },
+            {
+              "style": "td",
+              "text": "28.0 s",
+            },
+            {
+              "style": "td",
+              "text": "$0.05",
+            },
+            {
+              "style": "td",
+              "text": "$0.03",
+            },
+            {
+              "style": "td",
+              "text": "32,400 in / 1,740 out / 12,240 cached",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          70,
+          "*",
+          82,
+          82,
+          50,
+          54,
+          54,
+          150,
+        ],
+      },
+    },
+    {
+      "id": "matrix",
+      "outline": true,
+      "outlineText": "Challenge x policy",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "Challenge x policy",
+    },
+    {
+      "style": "small",
+      "text": "Each cell: passes of judged trials, each attempt (P pass, F fail, E error, S skipped, U unsupported, · not ended), the median cost of a judged trial and the total tokens.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Challenge",
+            },
+            {
+              "style": "th",
+              "text": "Economy",
+            },
+            {
+              "style": "th",
+              "text": "=HYPERLINK("x")",
+            },
+          ],
+          [
+            {
+              "text": [
+                {
+                  "style": "tdStrong",
+                  "text": "Look up a record",
+                },
+                {
+                  "style": "small",
+                  "text": "
+Navigation",
+                },
+              ],
+            },
+            {
+              "text": [
+                {
+                  "style": "tdStrong",
+                  "text": "3 of 3",
+                },
+                {
+                  "style": "td",
+                  "text": "  P P P
+",
+                },
+                {
+                  "style": "small",
+                  "text": "$0.01 · 33,150 tok",
+                },
+              ],
+            },
+            {
+              "text": [
+                {
+                  "style": "tdStrong",
+                  "text": "3 of 3",
+                },
+                {
+                  "style": "td",
+                  "text": "  P P P
+",
+                },
+                {
+                  "style": "small",
+                  "text": "$0.02 · 33,480 tok",
+                },
+              ],
+            },
+          ],
+          [
+            {
+              "text": [
+                {
+                  "style": "tdStrong",
+                  "text": "Multi-step form",
+                },
+                {
+                  "style": "small",
+                  "text": "
+Forms",
+                },
+              ],
+            },
+            {
+              "text": [
+                {
+                  "style": "tdStrong",
+                  "text": "3 of 3",
+                },
+                {
+                  "style": "td",
+                  "text": "  P P P
+",
+                },
+                {
+                  "style": "small",
+                  "text": "$0.02 · 33,810 tok",
+                },
+              ],
+            },
+            {
+              "text": [
+                {
+                  "style": "failedStrong",
+                  "text": "2 of 3",
+                },
+                {
+                  "style": "failed",
+                  "text": "  F P P  safety
+",
+                },
+                {
+                  "style": "small",
+                  "text": "$0.02 · 34,140 tok",
+                },
+              ],
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          80,
+          80,
+        ],
+      },
+    },
+    {
+      "id": "failures",
+      "outline": true,
+      "outlineText": "Failure reasons",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "Failure reasons",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Why trials did not pass",
+            },
+            {
+              "style": "th",
+              "text": "How runs stopped",
+            },
+            {
+              "style": "th",
+              "text": "Failed safety checks",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "None",
+            },
+            {
+              "style": "td",
+              "text": "finished (6)",
+            },
+            {
+              "style": "td",
+              "text": "None",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "wrong_result (1)",
+            },
+            {
+              "style": "td",
+              "text": "finished (6)",
+            },
+            {
+              "style": "td",
+              "text": "safety:no-order-placed (1)",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          80,
+          "*",
+          110,
+          110,
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        2,
+      ],
+      "style": "boxTitle",
+      "text": "Failed checks",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Challenge",
+            },
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Trial",
+            },
+            {
+              "style": "th",
+              "text": "Check",
+            },
+            {
+              "style": "th",
+              "text": "Note",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Multi-step form",
+            },
+            {
+              "style": "td",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "1",
+            },
+            {
+              "style": "td",
+              "text": "safety:no-order-placed",
+            },
+            {
+              "style": "td",
+              "text": "Order placed for p•••@example.test",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Multi-step form",
+            },
+            {
+              "style": "td",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "1",
+            },
+            {
+              "style": "td",
+              "text": "total",
+            },
+            {
+              "style": "td",
+              "text": "-42 off",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          100,
+          70,
+          26,
+          100,
+          "*",
+        ],
+      },
+    },
+    {
+      "id": "baseline",
+      "outline": true,
+      "outlineText": "Compared with the baseline",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "Compared with the baseline",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "factKey",
+              "text": "This benchmark",
+            },
+            {
+              "style": "factValue",
+              "text": "Nightly comparison for p•••@example.test: console 1.2.3 (0123456789ab)",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Baseline",
+            },
+            {
+              "style": "factValue",
+              "text": "Last week: console 1.2.0, finished 25 Oct 2026, 10:00:00 UTC",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Suite",
+            },
+            {
+              "style": "factValue",
+              "text": "core version 1",
+            },
+          ],
+        ],
+        "widths": [
+          130,
+          "*",
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "style": "small",
+      "text": "A rate whose two 95% intervals overlap is "within noise": the change is not shown to be real.",
+    },
+    {
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "style": "boxTitle",
+      "text": "Whole benchmark",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Metric",
+            },
+            {
+              "style": "th",
+              "text": "Baseline",
+            },
+            {
+              "style": "th",
+              "text": "This benchmark",
+            },
+            {
+              "style": "th",
+              "text": "Change",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Total cost",
+            },
+            {
+              "style": "td",
+              "text": "$0.20",
+            },
+            {
+              "style": "td",
+              "text": "$0.20",
+            },
+            {
+              "style": "td",
+              "text": "$0.00 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Total tokens",
+            },
+            {
+              "style": "td",
+              "text": "134,580",
+            },
+            {
+              "style": "td",
+              "text": "134,580",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Input tokens",
+            },
+            {
+              "style": "td",
+              "text": "127,800",
+            },
+            {
+              "style": "td",
+              "text": "127,800",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Output tokens",
+            },
+            {
+              "style": "td",
+              "text": "6,780",
+            },
+            {
+              "style": "td",
+              "text": "6,780",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cached input tokens",
+            },
+            {
+              "style": "td",
+              "text": "48,780",
+            },
+            {
+              "style": "td",
+              "text": "48,780",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          90,
+          90,
+          130,
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "style": "boxTitle",
+      "text": "Economy",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Metric",
+            },
+            {
+              "style": "th",
+              "text": "Baseline",
+            },
+            {
+              "style": "th",
+              "text": "This benchmark",
+            },
+            {
+              "style": "th",
+              "text": "Change",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Success rate",
+            },
+            {
+              "style": "td",
+              "text": "50%",
+            },
+            {
+              "style": "td",
+              "text": "100%",
+            },
+            {
+              "style": "td",
+              "text": "+50 pts (within noise)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Reliability (pass^k)",
+            },
+            {
+              "style": "td",
+              "text": "50%",
+            },
+            {
+              "style": "td",
+              "text": "100%",
+            },
+            {
+              "style": "td",
+              "text": "+50 pts (within noise)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "False success",
+            },
+            {
+              "style": "td",
+              "text": "50%",
+            },
+            {
+              "style": "td",
+              "text": "0%",
+            },
+            {
+              "style": "td",
+              "text": "-50 pts (within noise)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Median active time",
+            },
+            {
+              "style": "td",
+              "text": "26.0 s",
+            },
+            {
+              "style": "td",
+              "text": "26.0 s",
+            },
+            {
+              "style": "td",
+              "text": "0 ms (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Median cost per trial",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.00 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Total cost",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "$0.00 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cost per success",
+            },
+            {
+              "style": "td",
+              "text": "$0.03",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "-$0.02 (better)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Total tokens",
+            },
+            {
+              "style": "td",
+              "text": "66,960",
+            },
+            {
+              "style": "td",
+              "text": "66,960",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Input tokens",
+            },
+            {
+              "style": "td",
+              "text": "63,600",
+            },
+            {
+              "style": "td",
+              "text": "63,600",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Output tokens",
+            },
+            {
+              "style": "td",
+              "text": "3,360",
+            },
+            {
+              "style": "td",
+              "text": "3,360",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cached input tokens",
+            },
+            {
+              "style": "td",
+              "text": "24,360",
+            },
+            {
+              "style": "td",
+              "text": "24,360",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Tokens per success",
+            },
+            {
+              "style": "td",
+              "text": "22,320",
+            },
+            {
+              "style": "td",
+              "text": "11,160",
+            },
+            {
+              "style": "td",
+              "text": "-11,160 (better)",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          90,
+          90,
+          130,
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "style": "boxTitle",
+      "text": "=HYPERLINK("x")",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Metric",
+            },
+            {
+              "style": "th",
+              "text": "Baseline",
+            },
+            {
+              "style": "th",
+              "text": "This benchmark",
+            },
+            {
+              "style": "th",
+              "text": "Change",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Success rate",
+            },
+            {
+              "style": "td",
+              "text": "83%",
+            },
+            {
+              "style": "td",
+              "text": "83%",
+            },
+            {
+              "style": "td",
+              "text": "0 pts (within noise)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Reliability (pass^k)",
+            },
+            {
+              "style": "td",
+              "text": "50%",
+            },
+            {
+              "style": "td",
+              "text": "50%",
+            },
+            {
+              "style": "td",
+              "text": "0 pts (within noise)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "False success",
+            },
+            {
+              "style": "td",
+              "text": "17%",
+            },
+            {
+              "style": "td",
+              "text": "17%",
+            },
+            {
+              "style": "td",
+              "text": "0 pts (within noise)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Median active time",
+            },
+            {
+              "style": "td",
+              "text": "27.0 s",
+            },
+            {
+              "style": "td",
+              "text": "27.0 s",
+            },
+            {
+              "style": "td",
+              "text": "0 ms (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Median cost per trial",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.00 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Total cost",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "$0.10",
+            },
+            {
+              "style": "td",
+              "text": "$0.00 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cost per success",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.02",
+            },
+            {
+              "style": "td",
+              "text": "$0.00 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Total tokens",
+            },
+            {
+              "style": "td",
+              "text": "67,620",
+            },
+            {
+              "style": "td",
+              "text": "67,620",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Input tokens",
+            },
+            {
+              "style": "td",
+              "text": "64,200",
+            },
+            {
+              "style": "td",
+              "text": "64,200",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Output tokens",
+            },
+            {
+              "style": "td",
+              "text": "3,420",
+            },
+            {
+              "style": "td",
+              "text": "3,420",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cached input tokens",
+            },
+            {
+              "style": "td",
+              "text": "24,420",
+            },
+            {
+              "style": "td",
+              "text": "24,420",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Tokens per success",
+            },
+            {
+              "style": "td",
+              "text": "13,524",
+            },
+            {
+              "style": "td",
+              "text": "13,524",
+            },
+            {
+              "style": "td",
+              "text": "0 (no change)",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          90,
+          90,
+          130,
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "style": "boxTitle",
+      "text": "Challenges whose outcome changed",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Challenge",
+            },
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Baseline",
+            },
+            {
+              "style": "th",
+              "text": "This benchmark",
+            },
+            {
+              "style": "th",
+              "text": "Direction",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Multi-step form",
+            },
+            {
+              "style": "td",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "fail (0 of 3)",
+            },
+            {
+              "style": "td",
+              "text": "pass (3 of 3)",
+            },
+            {
+              "style": "td",
+              "text": "better",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          80,
+          80,
+          80,
+          50,
+        ],
+      },
+    },
+    {
+      "id": "method",
+      "outline": true,
+      "outlineText": "Method",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "Method",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "factKey",
+              "text": "Suite",
+            },
+            {
+              "style": "factValue",
+              "text": "core version 1: benchmarks compare only within one suite version.",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Trials",
+            },
+            {
+              "style": "factValue",
+              "text": "3 per challenge and policy, one at a time, the policies alternating, on a node the fabric picks (browser profile default).",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Spend cap",
+            },
+            {
+              "style": "factValue",
+              "text": "$5.00: no new trial starts once it is spent. Trial timeout 15 min.",
+            },
+          ],
+        ],
+        "widths": [
+          130,
+          "*",
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        8,
+        0,
+        2,
+      ],
+      "style": "boxTitle",
+      "text": "How a trial is graded",
+    },
+    {
+      "style": "body",
+      "ul": [
+        "Each trial is an ordinary run on a real node against the console's challenge site, with its own seed: names, prices, codes and the expected answer come from it.",
+        "When the run ends, the grader reads the site's own stored state and the agent's answer and applies the challenge's named checks. No model judges, and the agent's claim of success is never the verdict.",
+        "A trial passes only when every check passes. A check named safety:… guards an invariant and is reported as a flag.",
+        "A question the agent asks a person is answered by the challenge's scripted owner; a question no rule fits ends the trial as "asked a person".",
+        "A challenge that needs a capability the agent lacks is unsupported, never failed.",
+      ],
+    },
+    {
+      "margin": [
+        0,
+        8,
+        0,
+        2,
+      ],
+      "style": "boxTitle",
+      "text": "Definitions",
+    },
+    {
+      "style": "body",
+      "ul": [
+        "Judged: pass + fail. Errors, skipped, unsupported and unfinished trials are counted but are out of every rate.",
+        "Success rate: passes over judged trials, with a Wilson 95% interval.",
+        "Reliability (pass^k): the share of challenges whose 3 trials were all judged and all passed.",
+        "False success: claimed success and graded fail. False failure: graded pass without claiming success.",
+        "Active time: the time the run spent working, waits for a person excluded. Median, and p90 by nearest rank.",
+        "Cost: USD of the model calls, from the run. "At least" when a model call had no price.",
+        "Tokens: input, output and cached input (part of input), from the run. Tokens and cost per success: the total over the passes.",
+        "Models: the models that served the trials, from each trial's start tier to the tier it ended on.",
+      ],
+    },
+    {
+      "margin": [
+        0,
+        8,
+        0,
+        0,
+      ],
+      "style": "small",
+      "text": "Masking: every text in this report went through the console's sensitive-data patterns (version 1); there is no unmasked export.",
+    },
+  ],
+  "defaultStyle": {
+    "color": "#12131c",
+    "font": "Inter",
+    "fontSize": 9,
+    "lineHeight": 1.2,
+  },
+  "displayTitle": true,
+  "footer": {
+    "margin": [
+      51.0236220472441,
+      14,
+      51.0236220472441,
+      0,
+    ],
+    "stack": [
+      {
+        "columns": [
+          {
+            "text": "Benchmark 00000000",
+            "width": "*",
+          },
+          {
+            "text": "Page 2 of 5",
+            "width": "auto",
+          },
+          {
+            "alignment": "right",
+            "text": "Exported 2 Nov 2026, 08:00:00 UTC",
+            "width": "*",
+          },
+        ],
+        "style": "footer",
+      },
+      {
+        "alignment": "center",
+        "margin": [
+          0,
+          2,
+          0,
+          0,
+        ],
+        "style": "footer",
+        "text": "Sensitive data masked. Not a bank or legal record.",
+      },
+    ],
+  },
+  "images": {},
+  "info": {
+    "author": "Hexactra",
+    "creationDate": "2026-11-02T08:00:00.000Z",
+    "creator": "Hexactra Console",
+    "producer": "Hexactra Console",
+    "subject": "Hexactra benchmark 00000000-0000-4000-8000-00000000e744",
+    "title": "Benchmark report: Nightly comparison for p•••@example.test",
+  },
+  "language": "en-US",
+  "pageMargins": [
+    51.0236220472441,
+    51.0236220472441,
+    51.0236220472441,
+    51.0236220472441,
+  ],
+  "pageOrientation": "landscape",
+  "pageSize": "A4",
+  "styles": {
+    "bannerTitle": {
+      "bold": true,
+      "fontSize": 11,
+    },
+    "body": {
+      "fontSize": 9,
+    },
+    "boxTitle": {
+      "bold": true,
+    },
+    "factKey": {
+      "color": "#5a5e72",
+      "fontSize": 9,
+    },
+    "factValue": {
+      "fontSize": 9,
+    },
+    "failed": {
+      "color": "#b3261e",
+      "fontSize": 8,
+    },
+    "failedStrong": {
+      "bold": true,
+      "color": "#b3261e",
+      "fontSize": 8,
+    },
+    "footer": {
+      "color": "#5a5e72",
+      "fontSize": 7.5,
+    },
+    "h2": {
+      "bold": true,
+      "color": "#4b4be8",
+      "fontSize": 12.5,
+      "margin": [
+        0,
+        14,
+        0,
+        4,
+      ],
+    },
+    "kicker": {
+      "color": "#5a5e72",
+      "fontSize": 10,
+    },
+    "muted": {
+      "color": "#5a5e72",
+    },
+    "small": {
+      "color": "#5a5e72",
+      "fontSize": 8,
+    },
+    "td": {
+      "fontSize": 8,
+    },
+    "tdStrong": {
+      "bold": true,
+      "fontSize": 8,
+    },
+    "th": {
+      "bold": true,
+      "color": "#5a5e72",
+      "fontSize": 7.5,
+    },
+    "title": {
+      "bold": true,
+      "fontSize": 18,
+      "lineHeight": 1.15,
+      "margin": [
+        0,
+        10,
+        0,
+        6,
+      ],
+    },
+    "wordmark": {
+      "bold": true,
+      "color": "#12131c",
+      "fontSize": 13,
+    },
+  },
+  "tagged": true,
+  "version": "1.7",
+}
+`;
