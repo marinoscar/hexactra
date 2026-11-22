@@ -65,7 +65,7 @@ describe('a task builder turn', () => {
     const b = await builders.create({ id: alice.userId }, { seed: 'Pay my water bill every month' });
     const model = scriptedAi([
       [
-        ['update_spec', { patch: { objective: 'The monthly water bill is paid', sites: ['The water utility'] } }],
+        ['update_spec', { objective: 'The monthly water bill is paid', sites: ['The water utility'] }],
         ['ask_user', { question: 'How much is it usually, or does it change every month?', options: ['It changes', 'About the same'] }],
       ],
     ]);
@@ -89,8 +89,8 @@ describe('a task builder turn', () => {
     const b = await builders.create({ id: bob.userId }, { seed: 'Log in to my bank, the card is 4111 1111 1111 1111' });
     const model = scriptedAi([
       [
-        ['update_spec', { patch: { objective: 'Check the balance', edgeCases: ['Card 4111 1111 1111 1111 if asked'], parameters: [{ name: 'Password', type: 'text', default: 'hunter2' }, { name: 'Amount', type: 'money' }] } }],
-        ['update_spec', { patch: { goal: 'Pay with card 4111111111111111' } }],
+        ['update_spec', { objective: 'Check the balance', edgeCases: ['Card 4111 1111 1111 1111 if asked'], parameters: [{ name: 'Password', type: 'text', default: 'hunter2' }, { name: 'Amount', type: 'money' }] }],
+        ['update_spec', { goal: 'Pay with card 4111111111111111' }],
         ['ask_user', { question: 'Which bank?', options: null }],
       ],
     ]);
@@ -107,10 +107,10 @@ describe('a task builder turn', () => {
     const b = await builders.create({ id: carol.userId }, { seed: 'Weekly report' });
     const model = scriptedAi([
       [
-        ['update_spec', { patch: { schedules: [{ cron: 'every monday', timezone: 'UTC' }] } }],
-        ['update_spec', { patch: { name: 'One' } }],
-        ['update_spec', { patch: { name: 'Two' } }],
-        ['update_spec', { patch: { name: 'Three' } }],
+        ['update_spec', { schedules: [{ cron: 'every monday', timezone: 'UTC' }] }],
+        ['update_spec', { name: 'One' }],
+        ['update_spec', { name: 'Two' }],
+        ['update_spec', { name: 'Three' }],
         ['describe_schedule', { cron: '0 8 * * 1', timezone: 'UTC' }],
         ['ask_user', { question: 'Which day?', options: null }],
       ],
@@ -127,7 +127,7 @@ describe('a task builder turn', () => {
     const b = await builders.create({ id: dave.userId }, { seed: 'Check my miles balance every Monday' });
     const model = scriptedAi([
       [
-        ['update_spec', { patch: { objective: 'Know my miles balance', goal: 'Find my airline miles balance and report it.', outputs: [{ label: 'Miles balance', type: 'number' }], schedules: [{ cron: '0 8 * * 1', timezone: 'UTC' }] } }],
+        ['update_spec', { objective: 'Know my miles balance', goal: 'Find my airline miles balance and report it.', outputs: [{ label: 'Miles balance', type: 'number' }], schedules: [{ cron: '0 8 * * 1', timezone: 'UTC' }] }],
         ['mark_ready', { summary: 'Every Monday at 8:00 the agent finds your miles balance and records it.' }],
       ],
       [['create_task_draft', {}]],
