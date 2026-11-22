@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { benchmarkRequest, benchmarksCommand, setBenchmarkExportTarget, setBenchmarkPollMs } from './benchmarks.command.js';
-import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, scorecardText, usd, withCode, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
+import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, recordingLength, recordingSummary, scorecardText, trialLines, usd, withCode, type BenchmarkTrialView, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
 import { setConsoleApiFactory } from './console-api.js';
 
 resetCliForTests();
@@ -38,6 +38,12 @@ function benchmark(over: Partial<BenchmarkView> = {}): BenchmarkView {
     finishedAt: '2026-11-21T11:00:00.000Z',
     ...over,
   };
+}
+
+const RUN = '55555555-5555-4555-8555-555555555555';
+
+function trial(over: Partial<BenchmarkTrialView> = {}): BenchmarkTrialView {
+  return { id: 't1', challengeId: 'nav-lookup', policyLabel: 'Economy', trialIndex: 0, status: 'graded', verdict: 'pass', failureReason: null, claimedSuccess: true, runId: RUN, activeMs: 30_000, steps: 8, inputTokens: 5_000, outputTokens: 400, cachedInputTokens: 2_000, model: 'openai:model-a', costUsd: 0.05, costKnown: true, ...over };
 }
 
 const r = (k: number, n: number) => ({ k, n, value: n ? k / n : null, low: n ? 0.2 : null, high: n ? 0.9 : null });
@@ -222,6 +228,51 @@ describe('benchmark helpers', () => {
     expect(text).toMatch(/Navigation\s+50% \(3\/6\)\s+33,000 tok \(in 30,000 \/ out 3,000 \/ cached 10,000\)\s+≥ \$0\.25/);
     expect(text).toContain('failures    wrong_result 3');
   });
+
+  it("prints each trial's recording state, and the run page URL of a ready one (#863)", () => {
+    expect([recordingLength(45_000), recordingLength(72_000), recordingLength(3_725_000), recordingLength(0)]).toEqual(['45s', '1m12s', '1h02m05s', '0s']);
+    const lines = trialLines(
+      [
+        trial({ recording: { status: 'ready', durationMs: 72_000 } }),
+        trial({ id: 't2', trialIndex: 1, recording: { status: 'processing', durationMs: null } }),
+        trial({ id: 't3', trialIndex: 2, recording: { status: 'recording', durationMs: null } }),
+        trial({ id: 't4', trialIndex: 3, recording: { status: 'failed', durationMs: null } }),
+        trial({ id: 't5', trialIndex: 4, recording: null }),
+      ],
+      { webUrl: 'https://console.example.test/' },
+    );
+    expect(lines).toHaveLength(6);
+    expect(lines[0]).toMatch(/#1 .*run 55555555 {2}rec ready 1m12s$/);
+    expect(lines[1]).toBe(`      https://console.example.test/runs/${RUN}#recording`);
+    expect(lines[2]).toMatch(/#2 .*run 55555555 {2}rec processing$/);
+    expect(lines[3]).toMatch(/#3 .*rec recording$/);
+    expect(lines[4]).toMatch(/#4 .*rec failed$/);
+    expect(lines[5]).toMatch(/#5 .*run 55555555$/);
+    // No console URL: the path.
+    expect(trialLines([trial({ recording: { status: 'ready', durationMs: 72_000 } })])[1]).toBe(`      /runs/${RUN}#recording`);
+  });
+
+  it('counts the recordings in the summary, and prints nothing extra for an older console without the field (#863)', () => {
+    const recorded = [
+      trial({ recording: { status: 'ready', durationMs: 1000 } }),
+      trial({ recording: { status: 'ready', durationMs: 2000 } }),
+      trial({ recording: { status: 'processing', durationMs: null } }),
+      trial({ recording: { status: 'recording', durationMs: null } }),
+      trial({ recording: { status: 'failed', durationMs: null } }),
+      trial({ recording: null }),
+    ];
+    expect(recordingSummary(recorded)).toBe('  Recordings 2 ready, 2 processing, 1 failed');
+    const text = scorecardText(benchmark(), scorecard(), recorded);
+    expect(text[text.findIndex((l) => l.startsWith('  Cost')) + 1]).toBe('  Recordings 2 ready, 2 processing, 1 failed');
+    // Older console: no `recording` field at all. Nothing recorded: every one null.
+    const older = [trial(), trial({ id: 't2' })];
+    expect(trialLines(older, { webUrl: 'https://console.example.test' })).toHaveLength(2);
+    expect(trialLines(older).join('\n')).not.toMatch(/rec |#recording/);
+    expect(recordingSummary(older)).toBeNull();
+    expect(recordingSummary([trial({ recording: null })])).toBeNull();
+    expect(recordingSummary(undefined)).toBeNull();
+    expect(scorecardText(benchmark(), scorecard(), older)).toEqual(scorecardText(benchmark(), scorecard()));
+  });
 });
 
 describe('hexactra benchmarks', () => {
@@ -338,6 +389,38 @@ describe('hexactra benchmarks', () => {
     expect(out).toContain('Economy against Thorough  (11111111-1111-4111-8111-111111111111)');
     expect(out).toContain('Tokens     128,000 (in 120,000 / out 8,000 / cached 40,000)');
     expect(out).toMatch(/nav-lookup .*fail \(wrong_result, claimed success\).*in 5,000 \/ out 400 \/ cached 2,000 {2}\$0\.05 {2}run 55555555/);
+  });
+
+  it('show --trials prints the recording state and the run page URL on the configured console; the summary counts them (#863)', async () => {
+    vi.stubEnv('HEXACTRA_SERVER_URL', 'https://console.example.test');
+    try {
+      fakeConsole((u) => {
+        if (u.pathname === `/api/benchmarks/${ID}`) return { body: benchmark() };
+        if (u.pathname === `/api/benchmarks/${ID}/scorecard`) return { body: scorecard() };
+        if (u.pathname === `/api/benchmarks/${ID}/trials`)
+          return { body: { items: [trial({ recording: { status: 'ready', durationMs: 72_000 } }), trial({ id: 't2', trialIndex: 1, recording: { status: 'processing', durationMs: null } })] } };
+        return undefined;
+      });
+      const { out } = await run('benchmarks', 'show', ID, '--trials');
+      expect(out).toContain('  Recordings 1 ready, 1 processing, 0 failed');
+      expect(out).toMatch(/#1 .*rec ready 1m12s\n {6}https:\/\/console\.example\.test\/runs\/55555555-5555-4555-8555-555555555555#recording\n/);
+      expect(out).toMatch(/#2 .*rec processing\n/);
+      // Without --trials the summary still counts them.
+      expect((await run('benchmarks', 'show', ID)).out).toContain('  Recordings 1 ready, 1 processing, 0 failed');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('show prints no recording line for an older console whose trials have no recording field', async () => {
+    fakeConsole((u) => {
+      if (u.pathname === `/api/benchmarks/${ID}`) return { body: benchmark() };
+      if (u.pathname === `/api/benchmarks/${ID}/scorecard`) return { body: scorecard() };
+      if (u.pathname === `/api/benchmarks/${ID}/trials`) return { body: { items: [trial()] } };
+      return undefined;
+    });
+    const { out } = await run('benchmarks', 'show', ID, '--trials');
+    expect(out).not.toMatch(/Recordings|rec |#recording/);
   });
 
   it('show reports an unknown benchmark with its code', async () => {

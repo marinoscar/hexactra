@@ -1,9 +1,15 @@
 // A trial's recording status (#846) against a real, migrated database: `GET /api/benchmarks/{id}/trials` carries the trial run's
 // recording (ready, processing, recording, failed, none, run removed), read in the same query as the trials (never one query per trial),
-// only for a viewer with `runs:read`; the JSON and CSV exports carry the status, never the video or its key.
+// only for a viewer with `runs:read`; the JSON and CSV exports carry the status, never the video or its key. The PDF (#863) lists each
+// recorded trial with a link to its run page's player, on the console's origin, and has no such section without `runs:read`.
+import { Readable } from 'node:stream';
+
+import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { CSV_COLUMNS } from '../src/benchmark/benchmark-report';
+import { BENCHMARK_REPORT_SECTIONS } from '../src/benchmark/benchmark-report.pdf';
+import { BenchmarkReportService } from '../src/benchmark/benchmark-report.service';
 import type { BenchmarkReport } from '../src/benchmark/benchmark-report.schemas';
 import { canSeeRecordings } from '../src/benchmark/benchmarks.controller';
 import type { BenchmarkTrialView } from '../src/benchmark/benchmarks.schemas';
@@ -11,6 +17,7 @@ import { BenchmarksService } from '../src/benchmark/benchmarks.service';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { parseCsv } from './helpers/csv-parse';
+import { linkUris, readPdf } from './helpers/pdf-read';
 import { createGradedBenchmark } from './support/benchmark-fixtures';
 
 let app: NestFastifyApplication;
@@ -130,5 +137,29 @@ describe('a trial run recording (#846)', () => {
     const statusOf = (i: number) => rows.find((r) => r[col('run_id')] === bench.runIds[i])![col('recording')];
     expect([0, 1, 2, 3, 4].map(statusOf)).toEqual(['ready', 'processing', 'recording', 'failed', '']);
     expect(csv.body).not.toMatch(/run-recordings\/|recording\.webm/);
+  });
+
+  it('lists every recorded trial in the PDF with its status and a link to its run page on the console origin; none without runs:read (#863)', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/benchmarks/${bench.id}/export?format=pdf`, headers: admin.headers });
+    expect(res.statusCode).toBe(200);
+    const text = readPdf(res.rawPayload).text.join('\n').replace(/\s+/g, ' ');
+    expect(text).toContain(BENCHMARK_REPORT_SECTIONS.recordings);
+    for (const label of ['ready', 'still processing', 'still recording', 'failed']) expect(text).toContain(label);
+    expect(text).toContain(`5 of 8 trials recorded a video of the browser tab`);
+    const origin = app.get(ConfigService).get<string>('appUrl')!.replace(/\/+$/, '');
+    const ready = [0, 6].map((i) => `${origin}/runs/${bench.runIds[i]}#recording`);
+    const links = [...new Set(linkUris(res.rawPayload))];
+    expect(links).toHaveLength(5);
+    expect(links).toEqual(expect.arrayContaining(ready));
+    expect(links.every((l) => l.startsWith(`${origin}/runs/`) && l.endsWith('#recording'))).toBe(true);
+    expect(res.rawPayload.toString('latin1')).not.toMatch(/run-recordings\/|recording\.webm/);
+
+    // A viewer without runs:read gets no recording, so no section and no link.
+    const file = await app.get(BenchmarkReportService).export(admin.id, bench.id, { format: 'pdf', recordings: false });
+    const chunks: Buffer[] = [];
+    for await (const c of file.body as Readable) chunks.push(Buffer.from(c as Buffer));
+    const hidden = Buffer.concat(chunks);
+    expect(readPdf(hidden).text.join(' ')).not.toContain(BENCHMARK_REPORT_SECTIONS.recordings);
+    expect(linkUris(hidden)).toEqual([]);
   });
 });

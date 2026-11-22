@@ -60,12 +60,18 @@ function coded<A extends unknown[]>(fn: (...args: A) => Promise<void>): (...args
 
 const collect = (v: string, prev: string[] = []): string[] => [...prev, v];
 
-function webLink(id: string): string | null {
+/** The CLI's configured console URL (the web app), or null when it is not configured. */
+function webBase(): string | null {
   try {
-    return `${consoleWebUrl()}/admin/settings/benchmarks/${id}`;
+    return consoleWebUrl();
   } catch {
     return null;
   }
+}
+
+function webLink(id: string): string | null {
+  const base = webBase();
+  return base ? `${base}/admin/settings/benchmarks/${id}` : null;
 }
 
 async function showBenchmark(id: string): Promise<{ benchmark: BenchmarkView; scorecard: ScorecardView }> {
@@ -184,7 +190,7 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
 
   bm.command('show <id>')
     .description("A benchmark and its scorecard: success, reliability, speed, tokens (input, output, cached) and cost per policy, per category and for the benchmark")
-    .option('--trials', 'also list every trial with its verdict, tokens, cost and run')
+    .option('--trials', 'also list every trial with its verdict, tokens, cost, run and recording (with the run page URL of a ready one)')
     .option('--json', 'print JSON (the benchmark, its scorecard and, with --trials, its trials)')
     .action(
       coded(async (ref: string, o: { trials?: boolean; json?: boolean }) => {
@@ -192,11 +198,14 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         const { benchmark, scorecard } = await showBenchmark(id);
         const trials = o.trials ? (await consoleApi().get<{ items: BenchmarkTrialView[] }>(`/benchmarks/${id}/trials`)).items : undefined;
         if (o.json) return json({ benchmark, scorecard, ...(trials ? { trials } : {}) });
-        scorecardText(benchmark, scorecard).forEach(out);
+        // The summary counts the trial recordings (#863): without --trials the trials are read for that line alone, and a failure to read
+        // them only leaves the line out.
+        const counted = trials ?? (await consoleApi().get<{ items: BenchmarkTrialView[] }>(`/benchmarks/${id}/trials`).then((r) => r.items, () => undefined));
+        scorecardText(benchmark, scorecard, counted).forEach(out);
         if (trials) {
           out('');
           out('Trials');
-          trialLines(trials).forEach(out);
+          trialLines(trials, { webUrl: webBase() }).forEach(out);
         }
         if (!ENDED.has(benchmark.status)) out(`\nstill ${benchmark.status}: the numbers will change`);
       }),

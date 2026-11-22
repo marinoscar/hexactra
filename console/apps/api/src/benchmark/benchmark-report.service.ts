@@ -5,6 +5,7 @@
 import { PassThrough, type Readable } from 'node:stream';
 
 import { HttpException, HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { resolveApiVersion } from '@marinoscar/platform-api/host';
 
 import { MCP_RATE_LIMITER, type McpRateLimiter } from '../mcp/mcp.rate-limit';
@@ -50,7 +51,22 @@ export class BenchmarkReportService {
     private readonly benchmarks: BenchmarksService,
     private readonly scorecards: ScorecardService,
     @Optional() @Inject(MCP_RATE_LIMITER) private readonly limiter?: McpRateLimiter,
+    @Optional() private readonly config?: ConfigService,
   ) {}
+
+  /**
+   * The console's public origin (`APP_URL`, the `appUrl` the e-mails and report links use) for the PDF's links to each trial's run page
+   * (#863); null when it is not an http(s) URL, and the PDF then prints the path.
+   */
+  consoleUrl(): string | null {
+    const raw = (this.config?.get<string>('appUrl') ?? '').trim().replace(/\/+$/, '');
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' || url.protocol === 'http:' ? raw : null;
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * The report of one of the user's benchmarks (404 `BENCHMARK_NOT_FOUND` for any other), with the comparison when `baseline` is given
@@ -81,7 +97,7 @@ export class BenchmarkReportService {
     let body: string | Readable;
     if (opts.format === 'pdf') {
       const out = new PassThrough();
-      const pdf = renderPdf(buildBenchmarkReportDefinition(report, { paper }));
+      const pdf = renderPdf(buildBenchmarkReportDefinition(report, { paper, consoleUrl: this.consoleUrl() }));
       pdf.once('error', (err: Error) => {
         this.log.warn(`benchmarks.export: the PDF of benchmark ${id} could not be rendered: ${err.name}`);
         out.destroy(err);
