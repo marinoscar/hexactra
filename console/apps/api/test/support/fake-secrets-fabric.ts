@@ -173,6 +173,8 @@ export function fakeSecretsFabric(url: string) {
   /** The points covered (E37.7) in each cover drawn: a frame's field is covered by the element at its point. */
   const coverPoints: { x: number; y: number }[][] = [];
   const targets = new Map<string, Record<string, unknown> | null>([['#pay', { tag: 'button', label: 'Pay' }]]);
+  /** The page's controls for the surface graph's queries (E46.13). */
+  const surface: Record<string, unknown>[] = [];
   /** What the provider was asked (never a value). */
   const providerCalls: { op: 'lookup' | 'release' | 'one_time_code'; origin: string; itemId?: string; field?: string; purpose?: string; clientLabel?: string; runId?: string; kind?: string; part?: string; amount?: string; currency?: string; frameOrigin?: string | null }[] = [];
   const registrations: { owner: string; provider: string; kind: string }[] = [];
@@ -253,6 +255,12 @@ export function fakeSecretsFabric(url: string) {
     }
     if (method === 'POST' && path.endsWith('/actions')) {
       const action = opts.body!.action as Record<string, unknown>;
+      // The surface graph's page queries (E46.13) read the page like describe-target: not actions, answered from `surface`.
+      if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-elements */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: surface } };
+      if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-describe */')) {
+        const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string };
+        return { id: 'op', state: 'succeeded', result: { type: 'object', value: surface.find((e) => e.selector === where.selector || (e.selectors as string[] | undefined)?.includes(where.selector ?? '')) ?? null } };
+      }
       if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:describe-target */')) {
         const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
         return { id: 'op', state: 'succeeded', result: { type: 'object', value: targets.get(where.selector ?? `${where.x},${where.y}`) ?? null } };
@@ -450,7 +458,7 @@ export function fakeSecretsFabric(url: string) {
   const typed = () => providerCalls.filter((c) => c.op !== 'lookup');
   /** Answer the handoff the way the fabric reports a finished one. */
   const answer = (h: Handoff, response: Record<string, unknown>) => Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false, ...response } });
-  return { client, request, actions, handoffs, page, targets, state, providerCalls, typed, registrations, sessions, answer, shots, covers, coverPoints, saves };
+  return { client, request, actions, handoffs, page, targets, surface, state, providerCalls, typed, registrations, sessions, answer, shots, covers, coverPoints, saves };
 }
 
 export type SecretsFabric = ReturnType<typeof fakeSecretsFabric>;

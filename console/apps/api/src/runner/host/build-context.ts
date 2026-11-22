@@ -53,6 +53,7 @@ import { savedIdentityTools } from './tools/saved-identity';
 import { savedLoginTools } from './tools/saved-logins';
 import { proposeMemory, proposeSavingLogin } from './tools/propose';
 import { kgraphObserverFor } from './kgraph/kgraph-observer';
+import { surfaceCapture } from './kgraph/surface';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -114,7 +115,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   const masking = readMasking(memory, browser, () => currentUrlOf(browser));
   const store = new PrismaRunStore(d, userId, run.id, lease, { run, session, sessionId: () => sessionRef.id });
   // The Knowledge Graph's capture (E46.5): bound only when the run's mode is learn or reuse; otherwise no observer at all.
-  const observer = await kgraphObserverFor(d, userId, run);
+  const observer = await kgraphObserverFor(d, userId, run, false, (tool, args) => surfaceCapture(browser, browserState, tool, args));
   const ports: Ports = {
     model: new AiModelPort(d.ai, userId, orgId),
     store,

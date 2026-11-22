@@ -90,3 +90,27 @@ describe('compileTrace', () => {
     expect(bad.violations).toEqual([expect.objectContaining({ rule: 'sensitive_literal', step: 's1' })]);
   });
 });
+
+describe('compileTrace with the surface graph (E46.13)', () => {
+  const tools = [...fixture.tools, { name: 'click_mark', family: 'browser', commits: false }];
+  const el = { role: 'button', name: 'Download', tag: 'button', inputType: null, selectors: ['#dl', 'main > button:nth-child(2)'], anchor: 'Daily report' };
+  it('a pointer click with element facts compiles to a click on that element, with its screen and element in the version', () => {
+    const trace: TraceEvent[] = [
+      { seq: 1, tool: 'navigate', family: 'browser', commits: false, ok: true, outcome: 'ran', bindings: { url: { kind: 'literal', value: 'https://reports.example.com/daily' } }, post: { host: 'reports.example.com', path: '/daily' } },
+      { seq: 2, tool: 'click_mark', family: 'browser', commits: false, ok: true, outcome: 'ran', bindings: { n: { kind: 'literal', value: 4 } }, post: { host: 'reports.example.com', path: '/daily', element: el } },
+    ];
+    const r = compileTrace(input({ trace, tools, outputs: [] }));
+    expect(r.status).toBe('candidate');
+    const click = r.version!.steps[1]!;
+    expect(click).toMatchObject({ kind: 'call', tool: 'click', args: { selector: { kind: 'literal', value: '#dl' } } });
+    expect(click.element).toMatch(/^el:/);
+    expect(r.version!.elements).toEqual([expect.objectContaining({ id: click.element, role: 'button', label: 'Download', anchor: 'Daily report', selectors: ['#dl', 'main > button:nth-child(2)'] })]);
+    expect(r.version!.screens).toHaveLength(1);
+    // The same element on the same site has the same id in every compile.
+    expect(compileTrace(input({ trace, tools, outputs: [] })).version!.steps[1]!.element).toBe(click.element);
+  });
+  it('a pointer click without element facts stays with the agent', () => {
+    const trace: TraceEvent[] = [{ seq: 1, tool: 'click_mark', family: 'browser', commits: false, ok: true, outcome: 'ran', bindings: { n: { kind: 'literal', value: 4 } }, post: {} }];
+    expect(compileTrace(input({ trace, tools, outputs: [] })).status).toBe('empty');
+  });
+});

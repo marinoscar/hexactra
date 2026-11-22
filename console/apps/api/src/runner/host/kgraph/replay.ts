@@ -10,6 +10,7 @@ import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls
 import { declaredOutputs, learnShapes, readShapes } from '../../../kgraph/output-shapes';
 import { readRunInputs } from '../../../tasks/task-params.schemas';
 import type { BuiltRun } from '../build-context';
+import { surfaceInvoker } from './surface';
 import type { HostDeps } from '../deps';
 import type { RunStart } from '../start';
 
@@ -71,7 +72,7 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
       inputs,
       ports: {
         store: d.kgraphStore,
-        tools: harnessToolInvoker(ctx, profile, watch),
+        tools: surfaceInvoker(harnessToolInvoker(ctx, profile, watch), version, ctx.ext.browser, async (id) => ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Element', key: id } }))?.props ?? null) as never),
         probe: harnessProbe(() => currentUrl(ctx as never), watch),
         judge: harnessJudge(ctx, ctx.ports.policy.routing.route('fast')),
         clock: { now: () => new Date(ctx.ports.clock.now()), sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },

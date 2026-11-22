@@ -118,6 +118,10 @@ VISION §17 keeps the Agent Experience Framework independent, optional and cross
 - Shipping products use the same shape (cached steps, a check, fallback to the model, self-healing): Stagehand caching, Skyvern code caching, UiPath Healing Agent.
 - A table-backed graph scales when queries are shallow and data is partitioned by owner: TAO, [USENIX ATC 2013](https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson).
 
+## The surface graph and the browser toolset (E46.13)
+
+The surface graph (screens, element fingerprints, re-resolution) is browser-specific, so it lives in `@marinoscar/hexactra-browser-agent` (`./surface`). That package imports only the harness and itself (its import scan), so it does **not** import `@marinoscar/hexactra-kgraph`: the fingerprint, screen key and page element are **duplicated as plain interfaces** in the toolset, and the console host maps them onto the graph's `Element` and `Screen` (`apps/api/src/runner/host/kgraph/surface.ts`). Elements are shared per owner as `kg_nodes` rows of type `Element`, keyed by a stable id derived from the site and the fingerprint, so a repaired fingerprint is used by every procedure that references it. Resolution uses page queries only (never a model); exactly one confident match is used, otherwise the step fails its check. A label passes the trace masking table before it is stored; a password field stores no name.
+
 ## Out of scope
 
 Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database.
