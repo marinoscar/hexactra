@@ -259,7 +259,11 @@ export const ROUTES = [
   // (`task-detail`), a finished run (`run-finished`) and the Inbox (`inbox`) show its control, panel and review card in the mock.
   ['kgraph', '/kgraph'],
   ['kgraph-reviews', '/kgraph?tab=reviews'],
-  ['kgraph-map', '/kgraph?tab=map'],
+  // The Map (E46.21): the canvas from 768 px up, the short note and link below; then a task opened in the side panel and expanded, and
+  // "what uses this site" (run these two at 768, 1024 and 1440: below 768 there is no map to press).
+  ['kgraph-map', '/kgraph?tab=map', { action: settleMap }],
+  ['kgraph-map-task', '/kgraph?tab=map', { action: mapPress('Task: Export the open orders', 'Show its steps') }],
+  ['kgraph-map-site', '/kgraph?tab=map', { action: mapPress('Site: portal.example.test', 'What uses this site') }],
   ['kgraph-history', '/kgraph?tab=history', { action: pressButton('What changed') }],
   ['kgraph-procedure', '/kgraph/procedures/kgp-ui-1'],
   ['settings-kgraph', '/settings/kgraph'],
@@ -273,6 +277,24 @@ export const ROUTES = [
     },
   }],
 ];
+
+/** The Map (E46.21): from 768 px up, wait for the lazily loaded canvas and its fit; below, the note is the page. */
+async function settleMap(page, width) {
+  if (width < 768) return;
+  await page.locator('.react-flow__node').first().waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(600);
+}
+
+/** The Map: choose a node in the keyboard list (its accessible name starts with `node`), then press `button` in the side panel. */
+function mapPress(node, button) {
+  return async (page, width) => {
+    if (width < 768) return;
+    await settleMap(page, width);
+    await page.getByRole('list', { name: 'Nodes on the map' }).getByRole('button', { name: new RegExp(`^${node.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first().click({ timeout: 5_000 });
+    await page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: button, exact: true }).click({ timeout: 5_000 });
+    await page.waitForTimeout(800);
+  };
+}
 
 /** The task form: open "Accounts the agent may use" and "Where the result goes". */
 async function openSections(page) {

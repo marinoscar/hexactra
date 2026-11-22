@@ -159,6 +159,39 @@ export interface KgTaskSummary {
   saving: { modelCalls: number; costUsd: number; costKnown: boolean; activeMs: number } | null;
 }
 
+/** `GET /api/kgraph/graph`: the Map's view model (`@marinoscar/hexactra-kgraph/view`), every label masked by the API. */
+export type KgViewNodeType = 'Procedure' | 'Step' | 'Site' | 'Account' | 'Tool' | 'SecretRef' | 'Parameter' | 'Output';
+export type KgViewEdgeType = 'has' | 'then' | 'feeds' | 'uses';
+export interface KgViewNode {
+  id: string;
+  type: KgViewNodeType;
+  label: string;
+  health: KgHealth;
+  counts: KgCounts & { uses: number };
+  /** A connected account, added tool or saved login that no procedure uses yet. */
+  unused: boolean;
+  /** `site:<domain>` or `account:<connection id>`. */
+  cluster: string | null;
+  /** The procedure node (`procedure:<id>`) a step, parameter or output belongs to. */
+  procedure: string | null;
+}
+export interface KgViewEdge {
+  type: KgViewEdgeType;
+  from: string;
+  to: string;
+}
+export interface KgGraph {
+  enabled: boolean;
+  nodes: KgViewNode[];
+  edges: KgViewEdge[];
+  clusters: { id: string; kind: 'site' | 'account'; label: string; nodes: string[] }[];
+  collapsed: boolean;
+  truncated: boolean;
+  totalNodes: number;
+  nodeLimit: number;
+  nextCursor: number | null;
+}
+
 /** The deployment settings (`kgraph` of the system settings). */
 export interface KgAdminSettings {
   enabled: boolean;
@@ -179,6 +212,8 @@ export const getKgRun = (api: PlatformApiClient, runId: string) => api.get<KgRun
 export const listReviews = (api: PlatformApiClient, status?: KgReviewStatus) => api.get<KgReview[]>(status ? `/kgraph/reviews?status=${status}` : '/kgraph/reviews');
 /** Answered only from a signed-in browser session: the API refuses a token, an OAuth app or MCP (`403 KGRAPH_REVIEW_CONSOLE_ONLY`). */
 export const answerReview = (api: PlatformApiClient, id: string, approve: boolean) => api.post<KgReview>(`/kgraph/reviews/${id}/answer`, { approve });
+/** The Map's view model; `cursor` is the previous page's `nextCursor` (the API folds and pages above 2,000 nodes). */
+export const getKgGraph = (api: PlatformApiClient, cursor?: number) => api.get<KgGraph>(cursor ? `/kgraph/graph?cursor=${cursor}` : '/kgraph/graph');
 export const getKgSummary = (api: PlatformApiClient) => api.get<{ tasks: KgTaskSummary[] }>('/kgraph/summary');
 export const restoreVersion = (api: PlatformApiClient, procedureId: string, versionId: string) => api.post<{ procedureId: string; restoredFrom: string; versionId: string }>(`/kgraph/procedures/${encodeURIComponent(procedureId)}/restore`, { versionId });
 export const forgetProcedure = (api: PlatformApiClient, procedureId: string) => api.post<{ procedureId: string; retired: number }>(`/kgraph/procedures/${encodeURIComponent(procedureId)}/forget`, {});
