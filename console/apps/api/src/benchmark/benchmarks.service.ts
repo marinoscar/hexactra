@@ -121,8 +121,8 @@ export class BenchmarksService {
       trials: dto.trials ?? settings.defaultTrials,
       hostId,
       profile: dto.profile,
-      // `null` is the owner's choice of no cap (#840); only an absent cap takes the deployment default.
-      capUsd: dto.capUsd === undefined ? settings.defaultCapUsd : dto.capUsd,
+      // `null` or 0 is the owner's choice of no budget (#840, #844), stored as `null`; only an absent cap takes the deployment default.
+      capUsd: dto.capUsd === undefined ? settings.defaultCapUsd : dto.capUsd || null,
       trialTimeoutMinutes: dto.trialTimeoutMinutes ?? settings.trialTimeoutMinutes,
       // The owner's opt-in (#841), copied onto every trial's run when it is created, as a task's choice is.
       recordVideo: dto.recordVideo ?? false,
