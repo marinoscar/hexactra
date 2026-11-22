@@ -33,6 +33,7 @@ export const APP_USER_DATA_CATEGORIES: readonly UserDataCategoryDef[] = [
   { id: 'documents', label: 'Documents', description: 'Every document you wrote.', content: true },
   { id: 'memories', label: 'Memories', description: 'Every fact you let the agent use (people, accounts, preferences), with their earlier versions.', content: true },
   { id: 'saved-logins', label: 'Saved logins', description: "The logins you saved in Hexactra's built-in store, their earlier versions and your encryption key. Deleting them is permanent: nothing can decrypt them afterwards.", content: true },
+  { id: 'kgraph', label: 'Knowledge Graph', description: 'What the agent learned from your saved tasks: procedures, their versions and evidence, and your Knowledge Graph choices per task and run.', content: true },
   { id: 'browser-tasks', label: 'Browser tasks and runs', description: 'Your browser tasks, their runs, the steps the agents took, the videos of the runs you recorded, the questions they asked you, your chats, your agent policies, your limits for connected AI apps and what those apps did, your saved approvals, your email triggers with what they did, and the benchmarks you started.', content: true },
 ];
 
@@ -72,6 +73,15 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'Benchmark', category: 'browser-tasks' },
   // A run's video (epic #755): with its run.
   { model: 'RunRecording', category: 'browser-tasks' },
+  // The Knowledge Graph (epic E46).
+  { model: 'KgTaskSettings', category: 'kgraph' },
+  { model: 'KgRun', category: 'kgraph' },
+  { model: 'KgNode', category: 'kgraph' },
+  { model: 'KgEdge', category: 'kgraph' },
+  { model: 'KgProcedure', category: 'kgraph' },
+  { model: 'KgProcedureVersion', category: 'kgraph' },
+  { model: 'KgEvidence', category: 'kgraph' },
+  { model: 'KgReview', category: 'kgraph' },
   // AI usage summed per hour (#732): the same category as the ledger it sums (`AiUsageEvent`).
   { model: 'AiUsageHourly', category: 'ai' },
 ];

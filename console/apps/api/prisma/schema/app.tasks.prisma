@@ -130,6 +130,10 @@ model Task {
   // composed from app:deliveries.prisma
   deliveries TaskDelivery[]
 
+  // composed from app:kgraph.prisma
+  kgSettings   KgTaskSettings?
+  kgProcedures KgProcedure[]
+
   // composed from app:mail-triggers.prisma
   mailTriggers MailTrigger[]
 
@@ -298,6 +302,9 @@ model Run {
 
   // composed from app:deliveries.prisma
   deliveries RunDelivery[]
+
+  // composed from app:kgraph.prisma
+  kg KgRun?
 
   // composed from app:questions.prisma
   questions Question[]

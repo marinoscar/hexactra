@@ -1620,6 +1620,46 @@
       "web": {
         "none": "Arrives with the Benchmarks admin pages (E44.5, #743)"
       }
+    },
+    {
+      "id": "kgraph.status",
+      "description": "See whether the Knowledge Graph is available to you (the deployment and your own switch) and a task's Knowledge Graph mode",
+      "rest": [
+        "GET /api/kgraph/status",
+        "GET /api/tasks/{id}/kgraph"
+      ],
+      "cli": {
+        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
+      },
+      "mcp": {
+        "none": "Deliberate for now: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); procedures as MCP tools arrive in E46.22"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
+    },
+    {
+      "id": "kgraph.manage",
+      "description": "Choose a task's Knowledge Graph mode (off, learn, reuse) and delete everything learned",
+      "rest": [
+        "PUT /api/tasks/{id}/kgraph",
+        "DELETE /api/kgraph"
+      ],
+      "cli": {
+        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
+      },
+      "mcp": {
+        "none": "Deliberate: only the owner, signed in to the console, turns learning on or deletes it; no hosted AI app changes it (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
     }
   ]
 }

@@ -278,6 +278,8 @@ export class RunDeleteService {
         await tx.mcpActivity.updateMany({ where: { userId, sessionId: { in: goneIds } }, data: { sessionId: null } });
         // A memory the agent proposed in the run (#551) is the owner's and stays; only its pointer to the run goes.
         await tx.memory.updateMany({ where: { userId, sourceRunId: { in: goneIds } }, data: { sourceRunId: null } });
+        // A Knowledge Graph version compiled from the run (E46.3) is the owner's and stays; only its pointer to the run goes.
+        await tx.kgProcedureVersion.updateMany({ where: { userId, sourceRunId: { in: goneIds } }, data: { sourceRunId: null } });
         // Saved approvals (#554) outlive the run: the last use and the use history forget it.
         await tx.approvalRule.updateMany({ where: { userId, lastUsedRunId: { in: goneIds } }, data: { lastUsedRunId: null } });
         await tx.approvalRuleUse.updateMany({ where: { runId: { in: goneIds }, rule: { userId } }, data: { runId: null } });
