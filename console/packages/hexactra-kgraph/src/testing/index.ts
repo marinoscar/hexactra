@@ -2,7 +2,7 @@
 // conformance kit.
 export * from './fakes';
 export * from './builders';
-export { runStoreConformance, type StoreHost } from './conformance';
+export { runSiteFactStoreConformance, runStoreConformance, type SiteFactStoreHost, type StoreHost } from './conformance';
 
 import type { KgraphPorts } from '../ports';
 import { FakeClock, FakeJudge, FakeStateProbe, InMemoryProcedureStore, RecordingTelemetry, ScriptedToolInvoker, SequentialIds } from './fakes';

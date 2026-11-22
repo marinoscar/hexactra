@@ -1,6 +1,7 @@
 // The host conformance kit: a host runs `runStoreConformance` against its `ProcedureStorePort` binding (in its own jest suite) to prove the
 // port's guarantees. It uses jest's globals (`describe`, `it`, `expect`, `beforeEach`), like the harness's `runHarnessHostConformance`.
-import type { ProcedureStorePort } from '../ports';
+import type { ProcedureStorePort, SiteFactStorePort } from '../ports';
+import type { NewSiteFact } from '../schema';
 import { aProcedure, aVersion, call, T0 } from './builders';
 
 export interface StoreHost {
@@ -101,6 +102,102 @@ export function runStoreConformance(host: StoreHost): void {
       expect(await ctx.store.deleteAll(a)).toBe(1);
       expect(await ctx.store.getVersion(a, 'kgc-v7')).toBeNull();
       expect((await ctx.store.getProcedure(b, 'kgc-p6'))?.id).toBe('kgc-p6');
+    });
+  });
+}
+
+export interface SiteFactStoreHost {
+  name: string;
+  /** A fresh store and two distinct owners that exist in the host's user table. */
+  open(): Promise<{ store: SiteFactStorePort; owners: [string, string]; close(): Promise<void> }>;
+}
+
+const T1 = '2026-01-02T00:00:00.000Z';
+const aFact = (id: string, over: Partial<NewSiteFact> = {}): NewSiteFact => ({ id, site: 'example.com', kind: 'navigation', text: 'Invoices: Billing → History', source: 'derived', evidence: { runId: 'run-1', stepIds: ['s3', 's4'] }, createdAt: T0, ...over });
+
+/** The guarantees of `SiteFactStorePort` (E46.30). A host runs it against its binding, in its own jest suite. */
+export function runSiteFactStoreConformance(host: SiteFactStoreHost): void {
+  let ctx: Awaited<ReturnType<SiteFactStoreHost['open']>>;
+  beforeEach(async () => {
+    ctx = await host.open();
+  });
+  afterEach(async () => {
+    await ctx.close();
+  });
+
+  describe(`site fact store conformance: ${host.name}`, () => {
+    it('stores a proposal as proposed, whatever its source, and reads it back with its evidence', async () => {
+      const [a] = ctx.owners;
+      const r = await ctx.store.proposeSiteFact(a, aFact('kgf-1', { source: 'owner' }));
+      expect(r.created).toBe(true);
+      expect(r.fact.status).toBe('proposed');
+      const [f] = await ctx.store.listSiteFacts(a, ['example.com'], 'proposed');
+      expect(f?.id).toBe('kgf-1');
+      expect(f?.evidence).toEqual({ runId: 'run-1', stepIds: ['s3', 's4'] });
+      expect(f?.lastUsedAt).toBeNull();
+    });
+
+    it('keeps one fact per identity: the same site, kind and normalised text is never proposed twice', async () => {
+      const [a] = ctx.owners;
+      await ctx.store.proposeSiteFact(a, aFact('kgf-2'));
+      const again = await ctx.store.proposeSiteFact(a, aFact('kgf-3', { text: '  invoices: billing → history. ' }));
+      expect(again.created).toBe(false);
+      expect(again.fact.id).toBe('kgf-2');
+      const other = await ctx.store.proposeSiteFact(a, aFact('kgf-4', { kind: 'other' }));
+      expect(other.created).toBe(true);
+      expect((await ctx.store.listSiteFacts(a, ['example.com'], ['proposed', 'active', 'archived'])).map((f) => f.id)).toEqual(['kgf-2', 'kgf-4']);
+    });
+
+    it('does not propose an archived fact again', async () => {
+      const [a] = ctx.owners;
+      await ctx.store.proposeSiteFact(a, aFact('kgf-5'));
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-5', 'proposed', 'archived')).toBe(true);
+      const again = await ctx.store.proposeSiteFact(a, aFact('kgf-6'));
+      expect(again.created).toBe(false);
+      expect(again.fact.status).toBe('archived');
+      expect(await ctx.store.listSiteFacts(a, ['example.com'], 'proposed')).toHaveLength(0);
+    });
+
+    it('moves status by compare-and-set along allowed moves only', async () => {
+      const [a] = ctx.owners;
+      await ctx.store.proposeSiteFact(a, aFact('kgf-7'));
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-7', 'active', 'archived')).toBe(false);
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-7', 'proposed', 'active')).toBe(true);
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-7', 'proposed', 'active')).toBe(false);
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-7', 'active', 'proposed')).toBe(false);
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-7', 'active', 'archived')).toBe(true);
+      expect(await ctx.store.setSiteFactStatus(a, 'kgf-7', 'archived', 'active')).toBe(true);
+      expect((await ctx.store.listSiteFacts(a, ['example.com'], 'active')).map((f) => f.id)).toEqual(['kgf-7']);
+    });
+
+    it('lists only the named sites and statuses, by site then creation time', async () => {
+      const [a] = ctx.owners;
+      await ctx.store.proposeSiteFact(a, aFact('kgf-8', { site: 'bank.co.uk', kind: 'sign_in', text: 'Sign-in asks for a one-time code', createdAt: T1 }));
+      await ctx.store.proposeSiteFact(a, aFact('kgf-9', { site: 'bank.co.uk', kind: 'quirk', text: 'A cookie banner appears on first visit' }));
+      await ctx.store.proposeSiteFact(a, aFact('kgf-10'));
+      await ctx.store.proposeSiteFact(a, aFact('kgf-11', { site: 'other.org' }));
+      expect((await ctx.store.listSiteFacts(a, ['example.com', 'bank.co.uk'], 'proposed')).map((f) => f.id)).toEqual(['kgf-9', 'kgf-8', 'kgf-10']);
+      expect(await ctx.store.listSiteFacts(a, ['sub.example.com'], 'proposed')).toHaveLength(0);
+      expect(await ctx.store.listSiteFacts(a, [], 'proposed')).toHaveLength(0);
+      expect(await ctx.store.listSiteFacts(a, ['example.com'], 'active')).toHaveLength(0);
+    });
+
+    it("touches lastUsedAt of the owner's facts only", async () => {
+      const [a, b] = ctx.owners;
+      await ctx.store.proposeSiteFact(a, aFact('kgf-12'));
+      expect(await ctx.store.touchSiteFacts(b, ['kgf-12'], T1)).toBe(0);
+      expect(await ctx.store.touchSiteFacts(a, ['kgf-12', 'kgf-missing'], T1)).toBe(1);
+      expect((await ctx.store.listSiteFacts(a, ['example.com'], 'proposed'))[0]?.lastUsedAt).toBe(T1);
+    });
+
+    it('isolates owners: another owner reads nothing, changes nothing and keeps its own facts', async () => {
+      const [a, b] = ctx.owners;
+      await ctx.store.proposeSiteFact(a, aFact('kgf-13'));
+      expect(await ctx.store.listSiteFacts(b, ['example.com'], ['proposed', 'active', 'archived'])).toHaveLength(0);
+      expect(await ctx.store.setSiteFactStatus(b, 'kgf-13', 'proposed', 'active')).toBe(false);
+      const own = await ctx.store.proposeSiteFact(b, aFact('kgf-14'));
+      expect(own.created).toBe(true);
+      expect((await ctx.store.listSiteFacts(a, ['example.com'], 'proposed')).map((f) => f.id)).toEqual(['kgf-13']);
     });
   });
 }
