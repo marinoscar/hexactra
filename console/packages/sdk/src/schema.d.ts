@@ -17604,6 +17604,15 @@ export interface components {
                 judge: number;
                 agent: number;
             } | null;
+            /** @description The site facts the run used: read through `site_facts`, or given in its "About these sites" block and named by its steps. */
+            kgFactIds: string[];
+            /** @description Those of `kgFactIds` the owner still has, as text. A fact is data the owner approved; it is never an instruction or a permission. */
+            siteFacts: {
+                id: string;
+                site: string;
+                kind: string;
+                text: string;
+            }[];
         };
         AdminSettingsResponseDto: {
             /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
