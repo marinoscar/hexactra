@@ -520,6 +520,69 @@ describe('a benchmark', () => {
   });
 });
 
+describe('deleting benchmarks with their runs (#873)', () => {
+  const responses = {
+    [`GET /benchmarks/${ID}`]: benchmark(),
+    [`GET /benchmarks/${ID}/trials`]: { items: trials },
+    [`GET /benchmarks/${ID}/scorecard`]: scorecard(),
+    'GET /benchmarks': { items: [benchmark()], total: 1 },
+    [`DELETE /benchmarks/${ID}?deleteRuns=true`]: undefined,
+    [`DELETE /benchmarks/${ID}`]: undefined,
+  };
+
+  it('asks with "Also delete its runs" ticked, counting them, and deletes them with the benchmark', async () => {
+    const host = mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read', 'benchmarks:run', 'runs:delete'], responses);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    const box = within(dialog).getByRole('checkbox', { name: /Also delete its 1 run/ });
+    expect(box).toBeChecked();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(host.requests.some((r) => r.method === 'DELETE' && r.path === `/benchmarks/${ID}?deleteRuns=true`)).toBe(true));
+    expect(await screen.findByTestId('elsewhere')).toBeInTheDocument();
+  });
+
+  it('keeps the runs when the box is unticked, and offers no box without runs:delete', async () => {
+    const host = mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read', 'benchmarks:run', 'runs:delete'], responses);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Also delete its/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(host.requests.some((r) => r.method === 'DELETE' && r.path === `/benchmarks/${ID}`)).toBe(true));
+    expect(host.requests.some((r) => r.path.includes('deleteRuns'))).toBe(false);
+  });
+
+  it('without runs:delete the dialog says the runs stay', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read', 'benchmarks:run'], responses);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('checkbox')).toBeNull();
+    expect(dialog).toHaveTextContent('stay in the run history');
+  });
+
+  it('the list deletes the selected benchmarks with their runs, a running one cannot be selected, and says what it did', async () => {
+    const host = mount(<BenchmarksPage />, '/b', '/b', ['benchmarks:read', 'benchmarks:run', 'runs:delete'], {
+      'GET /benchmarks': { items: [benchmark(), benchmark({ id: BASE, name: 'Baseline' }), benchmark({ id: 'live', name: 'Nightly', status: 'running' })], total: 3 },
+      [`GET /benchmarks/${ID}/scorecard`]: scorecard(),
+      [`GET /benchmarks/${BASE}/scorecard`]: scorecard(),
+      'GET /benchmarks/live/scorecard': scorecard(),
+      'POST /benchmarks/delete': { deleted: [ID, BASE], skippedRunning: [], notFound: [], runsDeleted: 24 },
+    });
+    const list = await screen.findByRole('table', { name: 'Benchmarks' });
+    expect(within(list).getByRole('checkbox', { name: /Nightly/ })).toBeDisabled();
+    fireEvent.click(within(list).getByRole('checkbox', { name: /After the planner change/ }));
+    fireEvent.click(within(list).getByRole('checkbox', { name: /Baseline/ }));
+    const bar = screen.getByRole('region', { name: 'Selection' });
+    expect(bar).toHaveTextContent('2 selected');
+    fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 2 benchmarks?' });
+    expect(within(dialog).getByRole('checkbox', { name: /Also delete their runs/ })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByTestId('delete-notice')).toHaveTextContent('Deleted 2 benchmarks and 24 runs.');
+    const post = host.requests.find((r) => r.method === 'POST' && r.path === '/benchmarks/delete');
+    expect(post?.body).toEqual({ ids: [ID, BASE], deleteRuns: true });
+  });
+});
+
 describe('the leaderboard (#871)', () => {
   const responses = {
     [`GET /benchmarks/${ID}`]: benchmark(),

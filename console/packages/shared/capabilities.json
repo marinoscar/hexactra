@@ -1611,15 +1611,17 @@
     },
     {
       "id": "benchmarks.run",
-      "description": "Start a benchmark (challenges, 1 to 8 agent policies, trials, node and profile, spend cap), cancel it and delete it",
+      "description": "Start a benchmark (challenges, 1 to 8 agent policies, trials, node and profile, spend cap), cancel it, and delete one or several, with or without the runs their trials started",
       "rest": [
         "POST /api/benchmarks",
         "POST /api/benchmarks/{id}/cancel",
-        "DELETE /api/benchmarks/{id}"
+        "DELETE /api/benchmarks/{id}",
+        "POST /api/benchmarks/delete"
       ],
       "cli": [
         "benchmarks run",
-        "benchmarks cancel"
+        "benchmarks cancel",
+        "benchmarks delete"
       ],
       "mcp": {
         "none": "Deliberate: it runs agents on a node and spends on model calls; no hosted assistant starts, stops or deletes a benchmark (docs/decisions/benchmark.md)"
@@ -1628,6 +1630,7 @@
         "none": "The TUI is for watching and answering; a benchmark is an administrator's report, read in the web app or the CLI"
       },
       "web": [
+        "/admin/settings/benchmarks",
         "/admin/settings/benchmarks/new",
         "/admin/settings/benchmarks/:id"
       ]

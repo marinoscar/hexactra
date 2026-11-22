@@ -217,3 +217,32 @@ export const benchmarkSuiteSchema = z.object({
 });
 export class BenchmarkSuiteResponseDto extends createZodDto(benchmarkSuiteSchema) {}
 export type BenchmarkSuiteView = z.infer<typeof benchmarkSuiteSchema>;
+
+// ---- Delete (#873) ----
+
+const deleteRunsFlag = z
+  .enum(['true', 'false'])
+  .default('false')
+  .transform((v) => v === 'true')
+  .describe('`true`: also delete the runs its trials started (their steps, screenshots and recordings; needs `runs:delete`). `false` (the default): the runs stay in the run history.');
+
+export const deleteBenchmarkQuerySchema = z.object({ deleteRuns: deleteRunsFlag });
+export class DeleteBenchmarkQueryDto extends createZodDto(deleteBenchmarkQuerySchema) {}
+
+/** At most this many benchmarks in one bulk delete. */
+export const BENCHMARK_DELETE_MAX = 100;
+
+export const deleteBenchmarksSchema = z.object({
+  ids: z.array(z.uuid()).min(1).max(BENCHMARK_DELETE_MAX).describe(`The benchmarks to delete, 1 to ${BENCHMARK_DELETE_MAX}.`),
+  deleteRuns: z.boolean().default(false).describe('Also delete the runs their trials started (needs `runs:delete`).'),
+});
+export class DeleteBenchmarksDto extends createZodDto(deleteBenchmarksSchema) {}
+
+export const benchmarksDeletedSchema = z.object({
+  deleted: z.array(z.string()).describe('The benchmarks deleted.'),
+  skippedRunning: z.array(z.string()).describe('Still queued or running: cancel them first.'),
+  notFound: z.array(z.string()).describe('Not one of your benchmarks, or not there.'),
+  runsDeleted: z.number().int().describe('Runs deleted with them.'),
+});
+export class BenchmarksDeletedResponseDto extends createZodDto(benchmarksDeletedSchema) {}
+export type BenchmarksDeleted = z.infer<typeof benchmarksDeletedSchema>;

@@ -516,3 +516,22 @@ export async function exportBenchmark(
   writeFileSync(path, bytes);
   return { path, bytes: bytes.length };
 }
+
+// ---- Delete (#873) ----
+
+/** `POST /benchmarks/delete`'s answer. */
+export interface BenchmarksDeletedView {
+  deleted: string[];
+  skippedRunning: string[];
+  notFound: string[];
+  runsDeleted: number;
+}
+
+/** What a delete did: `deleted 2 benchmarks and 24 runs`, then each one skipped or not found. */
+export function deleteLines(r: BenchmarksDeletedView): string[] {
+  const n = r.deleted.length;
+  const lines = [`deleted ${n} benchmark${n === 1 ? '' : 's'}${r.runsDeleted ? ` and ${r.runsDeleted} run${r.runsDeleted === 1 ? '' : 's'}` : ''}`];
+  for (const id of r.skippedRunning) lines.push(`skipped ${id.slice(0, 8)}: still running (cancel it first)`);
+  for (const id of r.notFound) lines.push(`not found ${id.slice(0, 8)}`);
+  return lines;
+}
