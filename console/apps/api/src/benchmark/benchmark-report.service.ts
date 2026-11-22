@@ -25,6 +25,8 @@ export interface BenchmarkExportOptions {
   paper?: BenchmarkReportPaper;
   baseline?: string;
   orgId?: string | null;
+  /** The viewer has `runs:read`: each trial carries its run's recording status (#846). Never the video. */
+  recordings?: boolean;
   /** The clock of `exportedAt` and the file name; default now. */
   now?: Date;
 }
@@ -54,11 +56,11 @@ export class BenchmarkReportService {
    * The report of one of the user's benchmarks (404 `BENCHMARK_NOT_FOUND` for any other), with the comparison when `baseline` is given
    * (409 `BENCHMARK_SUITE_MISMATCH` on another suite version). A benchmark still running is exported with `partial: true`.
    */
-  async build(userId: string, id: string, opts: { baseline?: string; now?: Date } = {}): Promise<BenchmarkReport> {
+  async build(userId: string, id: string, opts: { baseline?: string; now?: Date; recordings?: boolean } = {}): Promise<BenchmarkReport> {
     const benchmark = await this.benchmarks.get(userId, id);
     const [scorecard, trials, baseline] = await Promise.all([
       this.scorecards.scorecard(userId, id),
-      this.benchmarks.trials(userId, id),
+      this.benchmarks.trials(userId, id, {}, { recordings: opts.recordings }),
       opts.baseline ? this.scorecards.compare(userId, id, opts.baseline) : Promise.resolve(null),
     ]);
     const runIds = trials.items.map((t) => t.runId).filter((x): x is string => !!x);
@@ -73,7 +75,7 @@ export class BenchmarkReportService {
     const started = Date.now();
     await this.rateLimit(userId);
     const now = opts.now ?? new Date();
-    const report = await this.build(userId, id, { baseline: opts.baseline, now });
+    const report = await this.build(userId, id, { baseline: opts.baseline, now, recordings: opts.recordings });
     const filename = benchmarkExportFilename(id, now, opts.format);
     const paper = opts.paper ?? 'a4';
     let body: string | Readable;

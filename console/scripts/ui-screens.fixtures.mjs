@@ -957,6 +957,8 @@ const benchTrials = (live) =>
           inputTokens: ran ? Math.round(pol.tokens * 0.92) : null, outputTokens: ran ? Math.round(pol.tokens * 0.08) : null, cachedInputTokens: ran ? Math.round(pol.tokens * 0.4) : null,
           model: ran ? pol.model : null, models: null, costUsd: ran ? pol.cost : null, costKnown: ran ? pol.ref !== 'builtin:thorough' : null, stopReason: ran ? 'finished' : null,
           questions: ran ? 0 : null, escalations: ran ? 0 : null, startedAt: ran ? iso(-80_000_000) : null, finishedAt: ran ? iso(-79_900_000) : null,
+          // The trial runs' videos (#846): ready for most, one still being prepared, one that failed (shows nothing).
+          recording: ran && !(j === 0 && t === 2) ? (live && j === 7 ? { status: 'processing', durationMs: null } : t === 2 && pi === 1 ? { status: 'failed', durationMs: null } : { status: 'ready', durationMs: 61_000 }) : null,
         };
       }),
     ),

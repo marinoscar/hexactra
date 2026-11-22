@@ -47321,7 +47321,7 @@
     },
     "/api/benchmarks/{id}/trials": {
       "get": {
-        "description": "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "description": "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run, the run's id and, for a caller with `runs:read`, the status of the run's recording (`recording`; the video plays only on the run page). Never the seed, the site's state or an expected answer.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
         "operationId": "benchmarks_trials",
         "parameters": [
           {
@@ -106736,6 +106736,47 @@
                     "string",
                     "null"
                   ]
+                },
+                "recording": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "recording",
+                            "processing",
+                            "ready",
+                            "failed"
+                          ],
+                          "description": "`ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video."
+                        },
+                        "durationMs": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The length of the video once it is `ready`; null before."
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "durationMs"
+                      ],
+                      "description": "The trial run's video (epic #755), never the video itself: it is not masked and plays only on the run page."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`."
                 }
               },
               "required": [
@@ -106767,7 +106808,8 @@
                 "questions",
                 "escalations",
                 "startedAt",
-                "finishedAt"
+                "finishedAt",
+                "recording"
               ]
             },
             "description": "In the order the trials run."
@@ -110882,6 +110924,47 @@
                     "null"
                   ]
                 },
+                "recording": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "recording",
+                            "processing",
+                            "ready",
+                            "failed"
+                          ],
+                          "description": "`ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video."
+                        },
+                        "durationMs": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The length of the video once it is `ready`; null before."
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "durationMs"
+                      ],
+                      "description": "The trial run's video (epic #755), never the video itself: it is not masked and plays only on the run page."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`."
+                },
                 "goal": {
                   "description": "The trial run's goal, masked, with the trial's site token hidden; null when the run was deleted or never started.",
                   "type": [
@@ -110927,6 +111010,7 @@
                 "escalations",
                 "startedAt",
                 "finishedAt",
+                "recording",
                 "goal",
                 "result"
               ]
