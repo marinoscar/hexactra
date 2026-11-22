@@ -158,6 +158,8 @@ Design invariants to preserve when writing docs or code:
 - A value matching the sensitive patterns is never stored in the Knowledge Graph; a step that needs one binds a task parameter or a saved-login/identity/card reference, or stays with the agent.
 - A replayed commit-class step is intent-recorded and never repeated when its outcome is unknown.
 - A Knowledge Graph change that adds or changes a send, a payment, a recipient, a site, an account or a credential is approved only by the owner, signed in, in the console; never by a webhook, the CLI, MCP or a hosted AI app.
+- A site fact (E46 phase 5) is data, never an instruction or a permission: only the owner's own act makes one active, it never holds Secret Material, and it cannot widen a run's sites, accounts, recipients, secrets or approvals.
+- Reuse across goals only offers a matched procedure (exact registrable domain, active only); it runs only when the agent chooses it, through `executeTool`. With the everyday switch off, a chat or one-off run is byte-identical.
 
 Planned monorepo layout (target, directories do not exist yet): Cargo workspace `crates/hexactra-{control,agent,worker,native-host,cli,mcp,core,telemetry}`, pnpm workspace `packages/{sdk,contracts}`, `apps/{chrome-extension,dashboard}`, `api/openapi.yaml` + `api/schemas/`, `deploy/`, `docs/`, `tests/`. Planned stack: Rust/Tokio/Axum/Clap/Serde/SQLite, React+TypeScript dashboard, OpenAPI-generated SDKs.
 
