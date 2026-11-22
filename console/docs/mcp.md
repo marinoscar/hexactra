@@ -412,13 +412,13 @@ Example (a task that runs on weekdays, checked first):
 
 ## Learned procedures (E46.22)
 
-When the Knowledge Graph is on for the deployment **and** for the caller's own account ([decisions/knowledge-graph.md](decisions/knowledge-graph.md)), three more tools are listed, built from the host-neutral descriptors of `@marinoscar/hexactra-kgraph/mcp` (its own [docs/mcp.md](../packages/hexactra-kgraph/docs/mcp.md) explains how any MCP server can expose them):
+When the Knowledge Graph is on for the deployment **and** for the caller's own account ([owner guide](knowledge-graph.md), [decision record](decisions/knowledge-graph.md), [threat model](security-kgraph.md); experimental and off by default at every level), three more tools are listed, built from the host-neutral descriptors of `@marinoscar/hexactra-kgraph/mcp` (its own [docs/mcp.md](../packages/hexactra-kgraph/docs/mcp.md) explains how any MCP server can expose them):
 
 - **`procedures_list`** (`procedures:read`): the caller's learned procedures with their id, the task's name, the parameters they take and the outputs they return, state and health. Filters `state` and `query`, `limit` up to 50.
 - **`procedure_get`** (`procedures:read`): one procedure's masked steps in order. Step labels can come from web pages: the result starts with the untrusted notice and sets `untrusted: true`.
 - **`procedure_run`** (`procedures:run`, `openWorld`): starts a run of an **active** procedure's task with `inputs` by parameter name, through `POST /api/tasks/{id}/runs` (the same policy, limits, gates and Inbox questions as any run) and returns `{ run_id, status, procedure_id, task_id, follow }` at once: follow it with `run_wait`. It refuses a procedure that is not active (`PROCEDURE_NOT_ACTIVE`), a task whose mode is not `reuse` (`PROCEDURE_NOT_REUSED`) and a sensitive parameter (`SENSITIVE_INPUT`).
 
-**Availability is per request** (`McpTool.feature` in the registry): while either switch is off the three tools are absent from `tools/list` for every caller, which is then exactly the list of before, and a direct call answers `TURNED_OFF`. Both scopes are opt-in (not ticked by default). **Never over MCP:** creating, editing, approving, declining, restoring, forgetting, exporting or importing a procedure, or changing a switch.
+**Availability is per request** (`McpTool.feature` in the registry): while either switch is off the three tools are absent from `tools/list` for every caller, which is then exactly the list of before, and a direct call answers `TURNED_OFF`. Both scopes are opt-in (not ticked by default). **Never over MCP:** creating, editing, approving, declining, restoring, forgetting, exporting or importing a procedure, or changing a switch. Not verified (#796): the agent-framework recipes ([agent-frameworks.md](agent-frameworks.md)) were not run against these tools, and no test checks the consent screen itself with the switch off.
 
 ## Asking the user
 
