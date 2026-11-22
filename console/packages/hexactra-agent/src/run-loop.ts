@@ -36,6 +36,10 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
     if (spent) return wrapUp(ctx, profile, spent);
     ctx.noteWarnings();
     if (hopDue()) return (await pauseFlag(ctx)) ? pauseNow(ctx) : 'continue';
+    if (profile.betweenChunks) {
+      const resumed = await profile.betweenChunks(ctx);
+      if (resumed) return resumed;
+    }
     // A chunk boundary: the only place the model changes, so provider caching holds within a chunk (#405).
     await maybeDeEscalate(ctx, profile.visionNotes);
     memory.chunks += 1;

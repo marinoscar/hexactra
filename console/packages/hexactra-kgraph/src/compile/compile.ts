@@ -134,12 +134,72 @@ export function shapeKeys(shape: string): string[] {
   return keys.slice(0, 20);
 }
 
+/** A repeated block of calls that walks one list output (E46.18): `items.0.x`, then `items.1.x`, ... */
+export interface LoopBlock {
+  start: number;
+  length: number;
+  iterations: number;
+  source: number;
+  listPath: string;
+}
+
+const LIST_PATH = /^(.*?)(?:^|\.)(\d+)(?:\.(.*))?$/;
+
+function normalised(e: TraceEvent): { sig: string; index: number | null; source: number | null; listPath: string | null } {
+  let index: number | null = null;
+  let source: number | null = null;
+  let listPath: string | null = null;
+  const bindings = Object.fromEntries(
+    Object.entries(e.bindings).map(([k, b]) => {
+      if (b.kind === 'output' && b.path !== undefined) {
+        const m = LIST_PATH.exec(b.path);
+        if (m) {
+          index = Number(m[2]);
+          source = b.seq;
+          listPath = m[1] ?? '';
+          return [k, { kind: 'output', seq: b.seq, path: `${m[1]}.#.${m[3] ?? ''}` }];
+        }
+      }
+      return [k, b];
+    }),
+  );
+  return { sig: `${e.tool}|${JSON.stringify(bindings)}`, index, source, listPath };
+}
+
+/** The first loop block in the events: ≥2 consecutive repeats of 1–4 calls whose list index goes 0, 1, 2, ... */
+export function findLoop(events: readonly TraceEvent[]): LoopBlock | null {
+  const n = events.map(normalised);
+  for (let start = 0; start < events.length; start++) {
+    for (let length = 1; length <= 4; length++) {
+      const first = n.slice(start, start + length);
+      const head = first.find((x) => x.index !== null);
+      if (first.length < length || !head || head.index !== 0) continue;
+      let iterations = 1;
+      for (;;) {
+        const next = n.slice(start + iterations * length, start + (iterations + 1) * length);
+        if (next.length < length || next.some((x, i) => x.sig !== first[i]!.sig)) break;
+        if (next.find((x) => x.index !== null)!.index !== iterations) break;
+        iterations++;
+      }
+      if (iterations >= 2) return { start, length, iterations, source: head.source!, listPath: head.listPath! };
+    }
+  }
+  return null;
+}
+
 /** The whole compiler. Pure. */
 export function compileTrace(input: CompileInput): CompileResult {
   const tools = new Map(input.tools.map((t) => [t.name, t]));
   const events = cleanTrace(input.trace);
   const finish = events.find((e) => FINISH_TOOLS.has(e.tool));
-  const work = events.filter((e) => !FINISH_TOOLS.has(e.tool));
+  let work = events.filter((e) => !FINISH_TOOLS.has(e.tool));
+  // A loop (E46.18): keep the first iteration as the body, drop the repeats; its list bindings read the loop's item.
+  const loop = findLoop(work);
+  const loopBody = new Set<number>();
+  if (loop) {
+    work = [...work.slice(0, loop.start + loop.length), ...work.slice(loop.start + loop.length * loop.iterations)];
+    for (const e of work.slice(loop.start, loop.start + loop.length)) loopBody.add(e.seq);
+  }
   const steps: Step[] = [];
   const stepOfSeq = new Map<number, string>();
   const sites = new Map<string, string>(); // domain -> id
@@ -165,6 +225,10 @@ export function compileTrace(input: CompileInput): CompileResult {
         usedParams.add(b.parameter);
         return { kind: 'parameter', parameter: paramId(b.parameter) };
       case 'output': {
+        if (loop && loopBody.has(Number(consumer.replace(/^s/, ''))) && b.seq === loop.source && b.path !== undefined) {
+          const m = LIST_PATH.exec(b.path);
+          if (m && (m[1] ?? '') === loop.listPath) return m[3] ? { kind: 'output', step: `f${loop.source}`, path: m[3] } : { kind: 'output', step: `f${loop.source}` };
+        }
         const src = stepOfSeq.get(b.seq);
         if (!src) return null;
         if (b.path !== undefined) return { kind: 'output', step: src, path: b.path };
@@ -204,6 +268,10 @@ export function compileTrace(input: CompileInput): CompileResult {
   };
 
   for (const e of work) {
+    if (loop && e.seq === work[loop.start]!.seq) {
+      const src = stepOfSeq.get(loop.source);
+      if (src) steps.push({ id: `f${loop.source}`, kind: 'foreach', label: `each item of ${loop.listPath || 'the list'}`, over: loop.listPath ? { kind: 'output', step: src, path: loop.listPath } : { kind: 'output', step: src }, as: 'item', body: [], maxItems: 50, sites: [], commitClass: false, checks: [], segment: `seg${segment}` });
+    }
     const tool = tools.get(e.tool);
     const reason = notCompilableReason(e, tool);
     if (reason || !tool) {
@@ -312,10 +380,18 @@ export function compileTrace(input: CompileInput): CompileResult {
   const parameters: Parameter[] = input.parameters
     .filter((p) => usedParams.has(p.key))
     .map((p) => ({ id: paramId(p.key), name: p.name.slice(0, 100), type: 'string', sensitive: p.sensitive, required: true }));
-  const edges = [
-    ...steps.slice(1).map((s, i) => ({ type: 'then' as const, from: steps[i]!.id, to: s.id })),
-    ...steps.flatMap((s) => feedsOf(s)),
-  ];
+  let thenEdges: { type: 'then'; from: string; to: string; loop?: boolean }[] = steps.slice(1).map((s, i) => ({ type: 'then' as const, from: steps[i]!.id, to: s.id }));
+  const fe = steps.find((s) => s.kind === 'foreach');
+  if (fe && fe.kind === 'foreach' && loop) {
+    fe.body = steps.filter((s) => s.kind !== 'foreach' && loopBody.has(Number(s.id.replace(/^s/, '')))).map((s) => s.id);
+    const last = fe.body[fe.body.length - 1];
+    if (fe.body.length === 0 || !last) return { status: 'empty', version: null, violations: [], notCompilable };
+    const after = thenEdges.find((e) => e.from === last)?.to;
+    thenEdges = thenEdges.filter((e) => e.from !== last);
+    thenEdges.push({ type: 'then', from: last, to: fe.id, loop: true });
+    if (after) thenEdges.push({ type: 'then', from: fe.id, to: after });
+  }
+  const edges = [...thenEdges, ...steps.flatMap((s) => feedsOf(s))];
   const raw = {
     id: input.version,
     procedure: input.procedure,

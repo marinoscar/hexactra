@@ -10,3 +10,4 @@ registerErrorCode({ code: 'KGRAPH_REVIEW_ANSWERED', status: 409, description: 'T
 registerErrorCode({ code: 'KGRAPH_REVIEW_CONSOLE_ONLY', status: 403, description: 'A Knowledge Graph review is answered only by the owner signed in to the console: not with a token, an OAuth app or MCP.' });
 registerErrorCode({ code: 'KGRAPH_VERSION_NOT_FOUND', status: 404, description: "The procedure has no version with that number, or the procedure is not the caller's." });
 registerErrorCode({ code: 'KGRAPH_RUN_NOT_FOUND', status: 404, description: "The run does not exist or is not the caller's." });
+registerErrorCode({ code: 'KGRAPH_IMPORT_INVALID', status: 400, description: 'The file is not a Knowledge Graph file this console can read: malformed, a newer formatVersion, or over a limit. `details.reason` says which. Nothing was imported.' });

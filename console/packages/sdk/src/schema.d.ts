@@ -5911,6 +5911,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/admin/upkeep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Knowledge Graph upkeep now
+         * @description Enqueues the daily upkeep job (traces, old versions, stale procedures, orphans, duplicates, health). Administrators.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:admin`.
+         */
+        post: operations["kgraph_upkeepNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kgraph/reviews": {
         parameters: {
             query?: never;
@@ -6151,6 +6173,48 @@ export interface paths {
          */
         put: operations["kgraphAdmin_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export your procedures as a file
+         * @description **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphTransfer_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import procedures from a file
+         * @description Each procedure is validated, mapped only to accounts you choose, and stored as a candidate that needs your review and a verification run. `400 KGRAPH_IMPORT_INVALID` for a malformed, newer-format or over-limit file (nothing is imported).
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraphTransfer_import"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9837,6 +9901,16 @@ export interface components {
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
+             * @example KGRAPH_TASK_NOT_FOUND
+             * @example KGRAPH_OFF
+             * @example KGRAPH_PROCEDURE_NOT_FOUND
+             * @example KGRAPH_VERSION_NOT_RESTORABLE
+             * @example KGRAPH_REVIEW_NOT_FOUND
+             * @example KGRAPH_REVIEW_ANSWERED
+             * @example KGRAPH_REVIEW_CONSOLE_ONLY
+             * @example KGRAPH_VERSION_NOT_FOUND
+             * @example KGRAPH_RUN_NOT_FOUND
+             * @example KGRAPH_IMPORT_INVALID
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -9876,15 +9950,6 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
-             * @example KGRAPH_TASK_NOT_FOUND
-             * @example KGRAPH_OFF
-             * @example KGRAPH_PROCEDURE_NOT_FOUND
-             * @example KGRAPH_VERSION_NOT_RESTORABLE
-             * @example KGRAPH_REVIEW_NOT_FOUND
-             * @example KGRAPH_REVIEW_ANSWERED
-             * @example KGRAPH_REVIEW_CONSOLE_ONLY
-             * @example KGRAPH_VERSION_NOT_FOUND
-             * @example KGRAPH_RUN_NOT_FOUND
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -10884,6 +10949,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled: boolean;
+            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -10898,10 +10967,6 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
-            };
-            kgraph?: {
-                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                enabled: boolean;
             };
             connections?: {
                 /**
@@ -11004,6 +11069,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled: boolean;
+            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -11018,10 +11087,6 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
-            };
-            kgraph?: {
-                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                enabled: boolean;
             };
             connections?: {
                 /**
@@ -11120,6 +11185,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             } | null;
+            kgraph?: {
+                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                enabled?: boolean;
+            } | null;
             agentPricing?: ({
                 /** @constant */
                 currency?: "USD";
@@ -11133,10 +11202,6 @@ export interface components {
             } | null) | null;
             approvals?: {
                 paused?: boolean;
-            } | null;
-            kgraph?: {
-                /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                enabled?: boolean;
             } | null;
             connections?: {
                 /**
@@ -11213,6 +11278,21 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            kgraph: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled: boolean;
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+                auditEvery: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing: "human" | "fast";
+            };
             agentPricing: {
                 /** @constant */
                 currency: "USD";
@@ -11279,21 +11359,6 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
-            };
-            kgraph: {
-                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
-                enabled: boolean;
-                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
-                auditEvery: number;
-                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
-                suspendAfterFailures: number;
-                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
-                retentionDays: number | null;
-                /**
-                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
-                 * @enum {string}
-                 */
-                pacing: "human" | "fast";
             };
             connections: {
                 mcp?: {
@@ -11525,6 +11590,21 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            kgraph?: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled: boolean;
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+                auditEvery: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing: "human" | "fast";
+            };
             agentPricing?: {
                 /** @constant */
                 currency: "USD";
@@ -11591,21 +11671,6 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
-            };
-            kgraph?: {
-                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
-                enabled: boolean;
-                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
-                auditEvery: number;
-                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
-                suspendAfterFailures: number;
-                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
-                retentionDays: number | null;
-                /**
-                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
-                 * @enum {string}
-                 */
-                pacing: "human" | "fast";
             };
             connections?: {
                 mcp?: {
@@ -11842,6 +11907,21 @@ export interface components {
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
             };
+            kgraph?: {
+                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
+                enabled?: boolean;
+                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
+                auditEvery?: number;
+                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
+                suspendAfterFailures?: number;
+                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
+                retentionDays?: number | null;
+                /**
+                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
+                 * @enum {string}
+                 */
+                pacing?: "human" | "fast";
+            };
             agentPricing?: {
                 /** @constant */
                 currency?: "USD";
@@ -11907,21 +11987,6 @@ export interface components {
                 keepDays?: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes?: number;
-            };
-            kgraph?: {
-                /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
-                enabled?: boolean;
-                /** @description Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10. */
-                auditEvery?: number;
-                /** @description Consecutive failed replays that suspend a procedure (E46.12). Default 3. */
-                suspendAfterFailures?: number;
-                /** @description Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null. */
-                retentionDays?: number | null;
-                /**
-                 * @description How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.
-                 * @enum {string}
-                 */
-                pacing?: "human" | "fast";
             };
             connections?: {
                 mcp?: {
@@ -12477,6 +12542,10 @@ export interface components {
                     /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                     noticeSentAt?: string | null;
                 };
+                kgraph?: {
+                    /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
+                    enabled: boolean;
+                };
                 agentPricing?: {
                     /** @constant */
                     currency: "USD";
@@ -12491,10 +12560,6 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
-                };
-                kgraph?: {
-                    /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
-                    enabled: boolean;
                 };
                 connections?: {
                     /**
@@ -17322,6 +17387,31 @@ export interface components {
              * @enum {string}
              */
             pacing?: "human" | "fast";
+        };
+        ImportResultDto: {
+            imported: {
+                index: number;
+                taskId: string;
+                procedureId: string;
+                versionId: string;
+                reviewId: string;
+            }[];
+            skipped: {
+                index: number;
+                reason: string;
+            }[];
+        };
+        ImportBodyDto: {
+            /** @description A `hexactra.kgraph` file (formatVersion 1). */
+            file: unknown;
+            /** @description Which of your accounts stands for each exported placeholder (`account-1`). */
+            accounts?: {
+                [key: string]: string;
+            };
+            /** @description Attach procedure N (its index) to one of your tasks; otherwise a new task in learn mode is created. */
+            attach?: {
+                [key: string]: string;
+            };
         };
         LedgerResponseDto: {
             /** Format: uuid */
@@ -43141,6 +43231,44 @@ export interface operations {
             };
         };
     };
+    kgraph_upkeepNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     kgraphReviews_list: {
         parameters: {
             query?: {
@@ -43728,6 +43856,106 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AdminSettingsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphTransfer_export: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated procedure ids; all active procedures when omitted. */
+                procedureIds?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphTransfer_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportBodyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImportResultDto"];
                     };
                 };
             };
