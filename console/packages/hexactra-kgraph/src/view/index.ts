@@ -1,2 +1,25 @@
-// The plain view model the visualizer and exports read: filled in by E46.19.
-export {};
+// The plain view model the visualizer, the API, the CLI and exports read (`@marinoscar/hexactra-kgraph/view`, E46.19).
+export {
+  buildGraphView,
+  bindingsOf,
+  defaultMask,
+  DEFAULT_NODE_LIMIT,
+  healthOf,
+  VIEW_EDGE_TYPES,
+  VIEW_HEALTH,
+  VIEW_NODE_TYPES,
+  type DrawnStep,
+  type DrawnVersion,
+  type ExtraNode,
+  type GraphView,
+  type GraphViewInput,
+  type ViewCluster,
+  type ViewCounts,
+  type ViewEdge,
+  type ViewEdgeType,
+  type ViewHealth,
+  type ViewNode,
+  type ViewNodeType,
+  type ViewProcedure,
+} from './model';
+export { readableDiff, stepList, type DiffEntryView, type DiffStepView, type StepArgView, type StepView } from './steps';
