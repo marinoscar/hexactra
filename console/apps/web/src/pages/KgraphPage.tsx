@@ -7,15 +7,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getKgStatus, getKgSummary, listProcedures, type KgProcedureItem, type KgStatus, type KgTaskSummary } from '../kgraph/api';
 import { HealthChip, KgraphOffNotice, StateChip, savingText } from '../kgraph/labels';
 import { KgReviewCard, usePendingKgReviews } from '../kgraph/ReviewCard';
+import { SiteFactReviewCard, usePendingSiteFactReviews } from '../kgraph/SiteFactReviewCard';
+import { SitesTab } from '../kgraph/SitesTab';
 import { VersionHistory } from '../kgraph/VersionHistory';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, type Column } from '../ui';
 
 // The Map (E46.21) is its own chunk: no other page, and no other tab of this one, loads React Flow or the layout.
 const MapTab = lazy(() => import('../kgraph/map/MapTab'));
 
-const TABS = ['procedures', 'map', 'reviews', 'history'] as const;
+const TABS = ['procedures', 'map', 'sites', 'reviews', 'history'] as const;
 type KgTab = (typeof TABS)[number];
-const TAB_LABEL: Record<KgTab, string> = { procedures: 'Procedures', map: 'Map', reviews: 'Reviews', history: 'History' };
+const TAB_LABEL: Record<KgTab, string> = { procedures: 'Procedures', map: 'Map', sites: 'Sites', reviews: 'Reviews', history: 'History' };
 
 export const procedurePath = (id: string) => `/kgraph/procedures/${encodeURIComponent(id)}`;
 
@@ -111,7 +113,7 @@ function HistoryTab({ procedures, initial }: { procedures: KgProcedureItem[]; in
 
 /**
  * `/kgraph` (E46.20, #794): what the Knowledge Graph learned. Procedures (a task's learned steps, its state, health and what it saved
- * against AI only), Map (E46.21, a lazily loaded chunk), Reviews (sensitive changes waiting for the owner) and History (versions and their diffs). Every
+ * against AI only), Map (E46.21, a lazily loaded chunk), Sites (E46.33, facts about a site), Reviews (sensitive changes waiting for the owner) and History (versions and their diffs). Every
  * string from the graph is rendered as text, masked as the API returns it. While a switch is off the stored data is still shown.
  */
 export function KgraphPage() {
@@ -122,6 +124,7 @@ export function KgraphPage() {
     const p = new URLSearchParams(params);
     if (next === 'procedures') p.delete('tab');
     else p.set('tab', next);
+    p.delete('site');
     setParams(p, { replace: true });
   };
   const [status, setStatus] = useState<KgStatus | null>(null);
@@ -129,6 +132,14 @@ export function KgraphPage() {
   const [summaries, setSummaries] = useState<KgTaskSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const reviews = usePendingKgReviews();
+  const factReviews = usePendingSiteFactReviews();
+  const setSite = (site: string | null) => {
+    const p = new URLSearchParams(params);
+    p.set('tab', 'sites');
+    if (site) p.set('site', site);
+    else p.delete('site');
+    setParams(p);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -148,7 +159,7 @@ export function KgraphPage() {
   }, [load]);
 
   const byTask = useMemo(() => new Map(summaries.map((s) => [s.taskId, s])), [summaries]);
-  const pending = reviews.reviews?.length ?? 0;
+  const pending = (reviews.reviews?.length ?? 0) + (factReviews.facts?.length ?? 0);
   const empty = procedures !== null && procedures.length === 0;
 
   return (
@@ -166,12 +177,17 @@ export function KgraphPage() {
           <MapTab procedures={procedures} reviews={reviews.reviews} />
         </Suspense>
       )}
+      {tab === 'sites' && <SitesTab site={params.get('site')} onSite={setSite} />}
       {tab === 'reviews' && (
         <Box aria-label="Reviews" component="section">
           <ErrorBanner error={reviews.error} />
-          {reviews.reviews === null && <ListSkeleton />}
-          {reviews.reviews?.length === 0 && <EmptyState title="Nothing to review" body="When a repair would change what a procedure sends or pays, its recipients, its sites, its accounts or its saved logins, it waits here for you." />}
+          <ErrorBanner error={factReviews.error} />
+          {(reviews.reviews === null || factReviews.facts === null) && <ListSkeleton />}
+          {reviews.reviews?.length === 0 && factReviews.facts?.length === 0 && (
+            <EmptyState title="Nothing to review" body="When a repair would change what a procedure sends or pays, its recipients, its sites, its accounts or its saved logins, it waits here for you. So does a fact about a site that a run proposed." />
+          )}
           {reviews.reviews?.map((r) => <KgReviewCard key={r.id} review={r} onAnswered={() => reviews.drop(r.id)} />)}
+          {factReviews.facts?.map((f) => <SiteFactReviewCard key={f.id} fact={f} onAnswered={() => factReviews.drop(f.id)} />)}
         </Box>
       )}
       {(tab === 'procedures' || tab === 'history') && procedures === null && <ListSkeleton />}
