@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { classifyRepair, compileTrace, diffVersions, type ProcedureVersion, type Tool, type TraceBinding, type TraceEvent } from '@marinoscar/hexactra-kgraph';
+import { classifyRepair, compileTrace, diffVersions, mergeBranches, type ProcedureVersion, type Tool, type TraceBinding, type TraceEvent } from '@marinoscar/hexactra-kgraph';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { consoleIsSensitive } from '../runner/host/kgraph/observer-port';
@@ -14,7 +14,7 @@ import { readParameters } from '../tasks/task-params.schemas';
 import { PrismaProcedureStore } from './prisma-procedure-store';
 import { changeSignature, KgraphReviewsService } from './reviews.service';
 
-export type CompileOutcome = 'compiled' | 'repaired_structural' | 'repaired_sensitive' | 'repair_suppressed' | 'rejected' | 'empty' | 'skipped_not_clean' | 'skipped_has_version' | 'skipped_done' | 'skipped_no_trace';
+export type CompileOutcome = 'compiled' | 'branched' | 'repaired_structural' | 'repaired_sensitive' | 'repair_suppressed' | 'rejected' | 'empty' | 'skipped_not_clean' | 'skipped_has_version' | 'skipped_done' | 'skipped_no_trace';
 
 @Injectable()
 export class KgraphCompileService {
@@ -43,7 +43,9 @@ export class KgraphCompileService {
     // A repair (E46.17): the run replayed a version, handed over, and the agent finished it. Its trace becomes a proposed new version.
     const kg = await db.kgRun.findFirst({ where: { runId, userId, outcome: { in: ['fell_back', 'outcome_failed'] } }, select: { procedureVersionId: true } });
     const repairOf: ProcedureVersion | null = (kg?.procedureVersionId && versions.find((v) => v.id === kg.procedureVersionId && (v.state === 'active' || v.state === 'verified'))) || null;
-    if (!repairOf && versions.some((v) => v.state === 'candidate' || v.state === 'verified' || v.state === 'active')) return 'skipped_has_version';
+    // A second successful run that diverges from an unverified initial candidate (E46.18): the two may merge into one version with a branch.
+    const branchBase = !repairOf ? versions.find((v) => v.state === 'candidate' && v.changeClass !== 'sensitive' && v.sourceRun !== runId) : undefined;
+    if (!repairOf && !branchBase && versions.some((v) => v.state === 'candidate' || v.state === 'verified' || v.state === 'active')) return 'skipped_has_version';
 
     const rows = await db.kgTrace.findMany({ where: { runId, userId }, orderBy: { seq: 'asc' } });
     if (rows.length === 0) return 'skipped_no_trace';
@@ -66,6 +68,14 @@ export class KgraphCompileService {
       outputs: declared.map((o) => ({ name: (o as { key?: string }).key ?? o.label })),
       isSensitive: consoleIsSensitive,
     });
+    if (result.status === 'candidate' && branchBase) {
+      const merged = mergeBranches(branchBase, result.version, { id: result.version.id, number: result.version.number, createdAt: now, sourceRun: runId });
+      if (!merged) return 'skipped_has_version';
+      await this.store.putVersion(userId, merged);
+      await this.store.setVersionState(userId, branchBase.id, 'candidate', 'retired');
+      this.log.log(`run ${runId}: merged a branch into ${merged.id}`);
+      return 'branched';
+    }
     if (result.status === 'candidate' && repairOf) {
       const classification = classifyRepair(repairOf, result.version, diffVersions(repairOf, result.version), [...tools.values()]);
       if (classification.changeClass === 'sensitive' && (await this.reviews.recentlyDeclined(userId, changeSignature(procedure.id, classification)))) return 'repair_suppressed';
