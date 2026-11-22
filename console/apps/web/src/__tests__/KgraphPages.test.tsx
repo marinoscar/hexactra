@@ -31,9 +31,9 @@ configure({ asyncUtilTimeout: 5_000 });
 const TASK = '11111111-1111-4111-8111-111111111111';
 const RUN = '22222222-2222-4222-8222-222222222222';
 const REVIEW = '33333333-3333-4333-8333-333333333333';
-const ON = { deployment: true, user: true, available: true };
-const DEPLOYMENT_OFF = { deployment: false, user: true, available: false };
-const USER_OFF = { deployment: true, user: false, available: false };
+const ON = { deployment: true, user: true, available: true, everyday: false };
+const DEPLOYMENT_OFF = { deployment: false, user: true, available: false, everyday: false };
+const USER_OFF = { deployment: true, user: false, available: false, everyday: false };
 const READ = ['kgraph:read', 'kgraph:write', 'runs:read'];
 
 const PROC: KgProcedureItem = {
@@ -47,7 +47,7 @@ const PROC: KgProcedureItem = {
   health: 'healthy',
   steps: 3,
   updatedAt: '2026-11-20T10:00:00.000Z',
-  ledger: { runs: 8, procedureRuns: 6, cleanReplayRate: 0.83 },
+  ledger: { runs: 8, procedureRuns: 6, cleanReplayRate: 0.83, everydayRuns: 3 },
 };
 const DETAIL: KgProcedureDetail = {
   ...PROC,
@@ -206,6 +206,11 @@ describe('the procedure page', () => {
     expect(screen.getByText('Saved logins: Portal login')).toBeInTheDocument();
   });
 
+  it('counts the chats and one-off runs that used it, from the ledger (E46.29)', async () => {
+    open();
+    expect(await screen.findByTestId('kg-everyday-uses')).toHaveTextContent('Used in chats and one-off runs: 3');
+  });
+
   it('restores a retired version after asking', async () => {
     const host = open();
     const v1 = await screen.findByRole('listitem', { name: 'Version 1' });
@@ -272,6 +277,7 @@ describe("the run page's Knowledge Graph panel", () => {
     aiOnly: false,
     outcome: 'replayed',
     procedureId: 'kgp-1',
+    procedureName: 'invoices',
     versionId: 'kgv-2',
     versionNumber: 2,
     steps: [
@@ -294,6 +300,24 @@ describe("the run page's Knowledge Graph panel", () => {
 
   it('prefers the ledger once written', () => {
     expect(runSummary({ ...RUN_ROW, ledger: { replayed: 14, recovered: 1, judge: 1, agent: 1 } })).toBe('15 of 17 steps without AI; 1 repaired');
+  });
+
+  it('an everyday run names the saved procedure it used and links to it (E46.29)', async () => {
+    panel({ ...RUN_ROW, taskId: null, mode: 'everyday', outcome: 'procedure_done', procedureName: 'Export <b>invoices</b>', ledger: { replayed: 2, recovered: 0, judge: 0, agent: 3 } });
+    const line = await screen.findByTestId('run-kgraph-everyday');
+    expect(line).toHaveTextContent('Used saved procedure: Export <b>invoices</b>');
+    expect(within(line).getByRole('link', { name: 'Export <b>invoices</b>' })).toHaveAttribute('href', '/kgraph/procedures/kgp-1');
+    expect(document.querySelector('b')).toBeNull();
+    expect(screen.getByTestId('run-kgraph-summary')).toHaveTextContent('2 of 5 steps without AI');
+    expect(screen.getByText(/Chat or one-off run/)).toBeInTheDocument();
+    // The version's step tags describe a task's replay, not a run_procedure call: not shown for an everyday run.
+    expect(screen.queryByRole('list', { name: 'Procedure steps in this run' })).not.toBeInTheDocument();
+  });
+
+  it('a task run shows no everyday line', async () => {
+    panel(RUN_ROW);
+    await screen.findByTestId('run-kgraph-summary');
+    expect(screen.queryByTestId('run-kgraph-everyday')).not.toBeInTheDocument();
   });
 
   it('shows nothing for a run the Knowledge Graph took no part in', async () => {
@@ -339,6 +363,40 @@ describe('Settings, Knowledge Graph', () => {
     fireEvent.click(sw);
     await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { kgraph: { enabled: true } } }));
     expect(screen.getByRole('link', { name: 'See what was learned' })).toHaveAttribute('href', '/kgraph');
+  });
+
+  const everydaySwitch = () => screen.findByRole('switch', { name: 'Use in chats and one-off runs' }).catch(() => screen.findByRole('checkbox', { name: 'Use in chats and one-off runs' }));
+
+  it('turns "Use in chats and one-off runs" on through kgraph.everyday, and says what it does (E46.29)', async () => {
+    const host = settings(ON);
+    const sw = await everydaySwitch();
+    expect(sw).not.toBeChecked();
+    expect(sw).toBeEnabled();
+    expect(screen.getByText(/Offers your learned procedures to chats and one-off runs .*you still approve anything sensitive/)).toBeInTheDocument();
+    expect(screen.queryByTestId('kgraph-everyday-reason')).not.toBeInTheDocument();
+    fireEvent.click(sw);
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { kgraph: { everyday: true } } }));
+  });
+
+  it('turns it off again', async () => {
+    const host = settings({ ...ON, everyday: true });
+    const sw = await everydaySwitch();
+    expect(sw).toBeChecked();
+    fireEvent.click(sw);
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { kgraph: { everyday: false } } }));
+  });
+
+  it('"Use in chats and one-off runs" is disabled with the reason while the own switch is off', async () => {
+    settings(USER_OFF);
+    const sw = await everydaySwitch();
+    expect(sw).toBeDisabled();
+    expect(screen.getByTestId('kgraph-everyday-reason')).toHaveTextContent('Turn on "Use the Knowledge Graph for my saved tasks" first.');
+  });
+
+  it('"Use in chats and one-off runs" is disabled with the reason while the deployment switch is off', async () => {
+    settings(DEPLOYMENT_OFF);
+    expect(await everydaySwitch()).toBeDisabled();
+    expect(screen.getByTestId('kgraph-everyday-reason')).toHaveTextContent(/administrator allows the Knowledge Graph/);
   });
 
   it('says when the administrator has not allowed it', async () => {
