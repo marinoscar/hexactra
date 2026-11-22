@@ -83,6 +83,7 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'KgEvidence', category: 'kgraph' },
   { model: 'KgReview', category: 'kgraph' },
   { model: 'KgTrace', category: 'kgraph' },
+  { model: 'KgLedger', category: 'kgraph' },
   // AI usage summed per hour (#732): the same category as the ledger it sums (`AiUsageEvent`).
   { model: 'AiUsageHourly', category: 'ai' },
 ];

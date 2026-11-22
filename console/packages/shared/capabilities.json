@@ -1683,6 +1683,26 @@
       "web": {
         "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
       }
+    },
+    {
+      "id": "kgraph.ledger",
+      "description": "See what the Knowledge Graph saved: a task's savings ledger (each run's model calls, cost and time) and a per-task summary against its AI-only baseline",
+      "rest": [
+        "GET /api/kgraph/ledger",
+        "GET /api/kgraph/summary"
+      ],
+      "cli": {
+        "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
+      },
+      "mcp": {
+        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
     }
   ]
 }

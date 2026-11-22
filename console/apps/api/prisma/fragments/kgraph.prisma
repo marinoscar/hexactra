@@ -181,7 +181,44 @@ model KgTrace {
   @@map("kg_traces")
 }
 
+/// The savings ledger (E46.6): one row per run whose effective mode was not `off`, written by a queue job after the run ended. Its own
+/// counters copied from the run (model calls, tokens, cost, active time), the steps by how they ran and the outcome. Deleted with its run.
+model KgLedger {
+  runId              String   @id @map("run_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  taskId             String   @map("task_id") @db.Uuid
+  mode               String   @db.VarChar(8)
+  procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
+  /// The run's terminal status (`succeeded` | `failed` | `cancelled`): the baseline reads succeeded runs only.
+  runStatus          String   @map("run_status") @db.VarChar(16)
+  stepsReplayed      Int      @default(0) @map("steps_replayed")
+  stepsRecovered     Int      @default(0) @map("steps_recovered")
+  stepsJudge         Int      @default(0) @map("steps_judge")
+  stepsAgent         Int      @default(0) @map("steps_agent")
+  modelCalls         Int      @default(0) @map("model_calls")
+  inputTokens        Int      @default(0) @map("input_tokens")
+  outputTokens       Int      @default(0) @map("output_tokens")
+  cachedInputTokens  Int      @default(0) @map("cached_input_tokens")
+  costUsd            Decimal  @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  costKnown          Boolean  @default(true) @map("cost_known")
+  activeMs           Int      @default(0) @map("active_ms")
+  /// replayed_clean | recovered | repaired | fell_back | ai_only
+  outcome            String   @db.VarChar(16)
+  /// Whether the procedure's outcome checks passed; null when no procedure ran.
+  checksPassed       Boolean? @map("checks_passed")
+  finishedAt         DateTime @map("finished_at") @db.Timestamptz
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, taskId, finishedAt])
+  @@map("kg_ledger")
+}
+
 extend model User {
+  kgLedger           KgLedger[]
   kgTraces           KgTrace[]
   kgTaskSettings     KgTaskSettings[]
   kgRuns             KgRun[]
@@ -196,9 +233,11 @@ extend model User {
 extend model Task {
   kgSettings   KgTaskSettings?
   kgProcedures KgProcedure[]
+  kgLedger     KgLedger[]
 }
 
 extend model Run {
   kg       KgRun?
+  kgLedger KgLedger?
   kgTraces KgTrace[]
 }

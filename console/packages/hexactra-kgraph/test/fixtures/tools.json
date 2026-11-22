@@ -1,0 +1,7 @@
+[
+  { "name": "mail_search", "family": "accounts", "commits": false },
+  { "name": "navigate", "family": "browser", "commits": false },
+  { "name": "read_text", "family": "browser", "commits": false },
+  { "name": "sheet_append_rows", "family": "accounts", "commits": true },
+  { "name": "mail_send", "family": "accounts", "commits": true }
+]
