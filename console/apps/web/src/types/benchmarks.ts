@@ -20,7 +20,8 @@ export interface BenchmarkConfig {
   trials: number;
   hostId: string | null;
   profile: string;
-  capUsd: number;
+  /** The spend cap in USD; null: no cap (#840). */
+  capUsd: number | null;
   trialTimeoutMinutes: number;
 }
 
@@ -138,7 +139,8 @@ export interface CreateBenchmarkInput {
   trials?: number;
   hostId?: string | null;
   profile?: string;
-  capUsd?: number;
+  /** Absent: the deployment default; null: no cap (#840). */
+  capUsd?: number | null;
   trialTimeoutMinutes?: number;
 }
 

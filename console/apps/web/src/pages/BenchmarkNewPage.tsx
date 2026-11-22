@@ -12,6 +12,7 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -63,7 +64,7 @@ export function BenchmarkNewPage() {
       (s) => {
         setSuite(s);
         // Every challenge the agent can attempt is chosen by default.
-        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd) });
+        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd), noCap: false });
       },
       (e) => setError(errorText(e, 'Could not load the benchmark suite')),
     );
@@ -99,8 +100,8 @@ export function BenchmarkNewPage() {
       title: `Start ${runs.toLocaleString('en-US')} runs?`,
       body: (
         <>
-          {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {form.trials} trials, one at a time on {host ? host.name : 'any available node'}. They spend on model calls; no new trial starts once{' '}
-          {money(Number(form.capUsd))} is spent.
+          {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {form.trials} trials, one at a time on {host ? host.name : 'any available node'}. They spend on model calls;{' '}
+          {form.noCap ? <strong>there is no spend cap: each run stops only at its own policy budget</strong> : <>no new trial starts once {money(Number(form.capUsd))} is spent</>}.
         </>
       ),
       confirmLabel: 'Start benchmark',
@@ -113,7 +114,7 @@ export function BenchmarkNewPage() {
       trials: Number(form.trials),
       hostId: form.hostId,
       profile: form.profile,
-      capUsd: Number(form.capUsd),
+      capUsd: form.noCap ? null : Number(form.capUsd),
     };
     setBusy(true);
     setError(null);
@@ -299,12 +300,18 @@ export function BenchmarkNewPage() {
                 </MenuItem>
               ))}
             </TextField>
+            <FormControlLabel
+              control={<Switch checked={form.noCap} onChange={(e) => update({ noCap: e.target.checked })} />}
+              label="No spend cap"
+              data-testid="benchmark-no-cap"
+            />
             <TextField
               label="Spend cap"
+              disabled={form.noCap}
               value={form.capUsd}
               onChange={(e) => update({ capUsd: e.target.value })}
               error={Boolean(show('capUsd'))}
-              helperText={show('capUsd') ?? 'No new trial starts once the benchmark has spent this much on model calls.'}
+              helperText={show('capUsd') ?? (form.noCap ? 'No cap: the benchmark runs every trial; each run stops only at its own agent policy budget.' : 'No new trial starts once the benchmark has spent this much on model calls.')}
               slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> }, htmlInput: { inputMode: 'decimal' } }}
             />
           </Stack>

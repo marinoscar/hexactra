@@ -121,7 +121,8 @@ export class BenchmarksService {
       trials: dto.trials ?? settings.defaultTrials,
       hostId,
       profile: dto.profile,
-      capUsd: dto.capUsd ?? settings.defaultCapUsd,
+      // `null` is the owner's choice of no cap (#840); only an absent cap takes the deployment default.
+      capUsd: dto.capUsd === undefined ? settings.defaultCapUsd : dto.capUsd,
       trialTimeoutMinutes: dto.trialTimeoutMinutes ?? settings.trialTimeoutMinutes,
       orgId,
     };

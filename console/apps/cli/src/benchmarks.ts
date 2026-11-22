@@ -28,7 +28,7 @@ export interface BenchmarkView {
   status: string;
   suiteKey: string;
   suiteVersion: number;
-  config: { challengeIds: string[]; policies: { ref: string; label: string }[]; trials: number; hostId: string | null; profile: string; capUsd: number; trialTimeoutMinutes: number };
+  config: { challengeIds: string[]; policies: { ref: string; label: string }[]; trials: number; hostId: string | null; profile: string; capUsd: number | null; trialTimeoutMinutes: number };
   appVersion: string;
   commit: string | null;
   spentUsd: number;
@@ -179,7 +179,7 @@ export function benchmarkLine(b: BenchmarkView): string {
 export function progressLine(b: BenchmarkView): string {
   const p = b.progress;
   const done = p.graded + p.skipped + p.unsupported;
-  return `[${b.status}] ${done}/${p.total} trials: ${p.pass} pass, ${p.fail} fail, ${p.error} error, ${p.skipped} skipped, ${p.unsupported} unsupported; ${int(b.totals.inputTokens + b.totals.outputTokens)} tokens, ${usd(b.spentUsd, b.totals.costKnown)} of ${usd(b.config.capUsd)}`;
+  return `[${b.status}] ${done}/${p.total} trials: ${p.pass} pass, ${p.fail} fail, ${p.error} error, ${p.skipped} skipped, ${p.unsupported} unsupported; ${int(b.totals.inputTokens + b.totals.outputTokens)} tokens, ${usd(b.spentUsd, b.totals.costKnown)}${b.config.capUsd === null ? ' (no cap)' : ` of ${usd(b.config.capUsd)}`}`;
 }
 
 function metricLines(m: ScoreMetricsView, indent: string): string[] {
@@ -203,7 +203,7 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
     `  Suite      ${b.suiteKey} v${b.suiteVersion}, ${b.config.challengeIds.length} challenges x ${b.config.policies.length} policies x ${b.config.trials} trials; console ${b.appVersion}${b.commit ? ` (${b.commit.slice(0, 7)})` : ''}`,
     `  Trials     ${c.total}: ${c.pass} pass, ${c.fail} fail, ${c.error} error, ${c.skipped} skipped, ${c.unsupported} unsupported${c.unfinished ? `, ${c.unfinished} not finished` : ''}`,
     `  Tokens     ${int(t.totalTokens)} (${tokenSplit(t.inputTokens, t.outputTokens, t.cachedInputTokens)}), ${int(t.modelCalls)} model calls`,
-    `  Cost       ${usd(t.costUsd, t.costKnown)} of a ${usd(b.config.capUsd)} cap${t.costKnown ? '' : ' (a model call had no price: at least this much)'}`,
+    `  Cost       ${usd(t.costUsd, t.costKnown)}${b.config.capUsd === null ? ', no cap' : ` of a ${usd(b.config.capUsd)} cap`}${t.costKnown ? '' : ' (a model call had no price: at least this much)'}`,
   ];
   const byRef = new Map(s.policies.map((p) => [p.ref, p]));
   const ordered = s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);

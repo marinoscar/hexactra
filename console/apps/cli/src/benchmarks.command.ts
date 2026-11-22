@@ -98,7 +98,8 @@ export async function benchmarkRequest(o: RunOpts): Promise<Record<string, unkno
   if (o.name) body.name = o.name;
   if (o.challenge?.length) body.challengeIds = o.challenge;
   if (o.trials !== undefined) body.trials = positive('--trials', o.trials, true);
-  if (o.capUsd !== undefined) body.capUsd = positive('--cap-usd', o.capUsd);
+  // `--cap-usd none`: no spend cap (#840).
+  if (o.capUsd !== undefined) body.capUsd = o.capUsd.trim().toLowerCase() === 'none' ? null : positive('--cap-usd', o.capUsd);
   if (o.timeoutMinutes !== undefined) body.trialTimeoutMinutes = positive('--timeout-minutes', o.timeoutMinutes, true);
   if (o.host && o.host !== 'any') body.hostId = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), o.host).id;
   if (o.profile) body.profile = o.profile;
@@ -139,7 +140,7 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--policy <ref>', 'an agent policy, repeatable (1 to 8): builtin:<key>, an id, or a name; `<ref>=<label>` names its column', collect)
     .option('--challenge <id>', 'a challenge, repeatable (default: the whole suite; `benchmarks suite` lists them)', collect)
     .option('--trials <n>', 'attempts per challenge and policy (default: the deployment setting, usually 3)')
-    .option('--cap-usd <usd>', 'no new trial starts once this much is spent (default: the deployment setting)')
+    .option('--cap-usd <usd|none>', 'no new trial starts once this much is spent; "none": no cap (default: the deployment setting)')
     .option('--timeout-minutes <n>', 'how long one trial may take (default: the deployment setting)')
     .option('--host <name|id>', 'the node every trial runs on ("any": the fabric picks one per trial)')
     .option('--profile <name>', 'the browser profile on the node', 'default')
@@ -152,11 +153,11 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         const b = await api.post<BenchmarkView>('/benchmarks', await benchmarkRequest(o));
         if (!o.wait) {
           if (o.json) return json(b);
-          out(`started ${b.id} (${b.progress.total} trials, cap $${b.config.capUsd})`);
+          out(`started ${b.id} (${b.progress.total} trials, ${b.config.capUsd === null ? 'no cap' : `cap $${b.config.capUsd}`})`);
           const link = webLink(b.id);
           return out(`follow it: hexactra benchmarks show ${b.id.slice(0, 8)}${link ? ` or ${link}` : ''}`);
         }
-        if (!o.json) out(`started ${b.id} (${b.progress.total} trials, cap $${b.config.capUsd})`);
+        if (!o.json) out(`started ${b.id} (${b.progress.total} trials, ${b.config.capUsd === null ? 'no cap' : `cap $${b.config.capUsd}`})`);
         const ended = await waitForBenchmark(api, b.id, { intervalMs: pollMs, onChange: (line) => (o.json ? undefined : out(line)) });
         const scorecard = await api.get<ScorecardView>(`/benchmarks/${b.id}/scorecard`);
         if (o.json) json({ benchmark: ended, scorecard });

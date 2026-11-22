@@ -427,6 +427,26 @@ describe('the spend cap, the timeout, cancel and a node that is down', () => {
     expect((await service.trials(admin.id, b.id)).items.map((t) => [t.verdict, t.costUsd])).toEqual([['pass', 0.6], ['pass', 0.6], ['skipped', null]]);
   }, 120_000);
 
+  it('runs every trial when the owner chose no cap (`capUsd: null`, #840), and an absent cap takes the default', async () => {
+    const admin = await login('bench-nocap');
+    play = async (call, scene) => {
+      await prisma.run.update({ where: { id: scene.runId }, data: { costUsd: 0.6 } });
+      await honest(call, scene);
+    };
+    const b = await start(admin, { trials: 3, capUsd: null });
+    expect(b.config.capUsd).toBeNull();
+    await drive(b.id, admin.id);
+    expect(await service.get(admin.id, b.id)).toMatchObject({ status: 'completed', spentUsd: 1.8, progress: { total: 3, graded: 3, pass: 3, skipped: 0 } });
+
+    const res = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: (await login('bench-nocap-rest')).headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy' }], trials: 1, capUsd: null, profile: `nc-${stamp.slice(-6)}` } });
+    expect(res.statusCode).toBe(201);
+    const viaRest = res.json<{ data: BenchmarkView }>().data;
+    created.push(viaRest.id);
+    expect(viaRest.config.capUsd).toBeNull();
+    const defaulted = await start(admin, { trials: 1 });
+    expect(defaulted.config.capUsd).toBe(5);
+  }, 120_000);
+
   it('stops a trial that runs past its timeout, fails it as `timeout`, and carries on with the next', async () => {
     const admin = await login('bench-timeout');
     const b = await start(admin, { trials: 2, trialTimeoutMinutes: 5 });
