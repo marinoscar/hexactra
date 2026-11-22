@@ -7252,6 +7252,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{id}/recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A run's video recording: its status and when it is deleted
+         * @description Owner only. The video is NOT masked. 404 `RECORDING_NOT_FOUND` when the run has none (it was not opted in, or it was deleted).
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runRecording_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a run's video recording
+         * @description Owner only. The run and its masked trace stay. Audited as `runs.recording_deleted`.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        delete: operations["runRecording_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}/recording/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A short-lived link to play a run's video
+         * @description Owner only, a ready recording only. The link is valid for 15 minutes and names this recording; the browser's video player reads it with HTTP Range.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        post: operations["runRecording_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/recordings/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A run's video, by its playback link
+         * @description No session: the signed token from `POST /runs/{id}/recording/link` is the authority, for 15 minutes. Streams `video/webm` with HTTP Range (206) and `Cache-Control: private, no-store`. An expired, altered or unknown link, and a deleted recording, are all 404.
+         */
+        get: operations["recordingLink_play"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser/sessions": {
         parameters: {
             query?: never;
@@ -20677,6 +20747,34 @@ export interface components {
                 /** @description True when the caller's own model prices replaced the deployment's for this report. */
                 overridesApplied: boolean;
             };
+        };
+        RecordingViewDto: {
+            /**
+             * @description recording: the run works; processing: the video is being made; ready: playable; failed: no video
+             * @enum {string}
+             */
+            status: "recording" | "processing" | "ready" | "failed";
+            bytes: number;
+            durationMs: number;
+            mime: string;
+            /** @description Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit */
+            droppedFrames: number;
+            /** @description Why it ended early or failed: max_minutes, tab_closed, restarted, encoder_unavailable, storage_error, empty, … */
+            note: string | null;
+            startedAt: string;
+            endedAt: string | null;
+            /** @description When the retention policy deletes it; null while recordings are kept indefinitely, or while it records */
+            expiresAt: string | null;
+            /**
+             * @description A run recording is never masked
+             * @constant
+             */
+            masked: false;
+        };
+        RecordingLinkDto: {
+            /** @description A same-origin path to the video, valid until expiresAt */
+            url: string;
+            expiresAt: string;
         };
         OpenDto: {
             /** @default default */
@@ -46557,6 +46655,197 @@ export interface operations {
                 content: {
                     "text/csv": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runRecording_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RecordingViewDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runRecording_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runRecording_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RecordingLinkDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    recordingLink_play: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The signed token of the playback link. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The whole video (not masked). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested byte range. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `RECORDING_LINK_INVALID`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

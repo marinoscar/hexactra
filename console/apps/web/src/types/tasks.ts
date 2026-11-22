@@ -37,6 +37,8 @@ export interface Task {
   connections?: ConnectionSelectionView[] | null;
   /** Whether the task's runs open a browser (E39.7); absent: `auto`. */
   needsBrowser?: NeedsBrowser;
+  /** Record a video of each run's browser tab (epic #755); absent from an older console: off. The video is not masked. */
+  recordVideo?: boolean;
   createdAt?: string;
   /** When the task was last edited. */
   updatedAt?: string;

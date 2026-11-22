@@ -6,6 +6,7 @@
     "GET /api/mcp": "the MCP transport itself (405)",
     "POST /api/notification-actions": "the notification buttons' token-authenticated channel from the service worker; on every surface the same actions are runs.cancel and inbox.answer",
     "POST /api/questions/{id}/answer-by-token": "the webhook channel's single-use token answer for a receiver with no session; on every surface the same action is questions.answer",
+    "GET /api/recordings/{token}": "the short-lived playback link of a run's video (E45.5): the signed token is the authority, for the browser's video player, which cannot send a bearer token; on every surface the recording is runs.recording",
     "GET /api/reports/{token}": "the signed link to a run's masked PDF report (E39.6): the token in the path is the authority, for a webhook receiver or the person an email went to; on every surface the same file is the run export (runs.export)",
     "GET /api/deliveries/unsubscribe/{token}": "the page behind the unsubscribe link in a run report email (E39.6): the signed token is the authority, the recipient has no session; changes nothing until the button",
     "POST /api/deliveries/unsubscribe/{token}": "the recipient of a run report email stops the emails (E39.6): the signed token is the authority, the recipient has no session; the owner confirming the address again is deliveries.manage",
@@ -438,6 +439,25 @@
         "none": "The TUI is for watching and answering; this needs a form, so use the web app"
       },
       "web": "/settings/run-history"
+    },
+    {
+      "id": "runs.recording",
+      "description": "A run's video recording (epic #755): its status, playback by a 15-minute link, and Delete. Not masked, owner-only",
+      "rest": [
+        "GET /api/runs/{id}/recording",
+        "POST /api/runs/{id}/recording/link",
+        "DELETE /api/runs/{id}/recording"
+      ],
+      "cli": {
+        "none": "A video is watched in a browser: the run page plays it"
+      },
+      "mcp": {
+        "none": "Deliberate: the recording is not masked, so no AI app can read it, start it or delete it"
+      },
+      "tui": {
+        "none": "A terminal cannot play a video: use the run page"
+      },
+      "web": "/runs/:id"
     },
     {
       "id": "runs.viewer",
