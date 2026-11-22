@@ -37,14 +37,47 @@ describe('KgraphEnabledService.modeFor', () => {
   });
 });
 
+describe('KgraphEnabledService.everydayFor (E46.28)', () => {
+  function everydayGate(o: { deployment?: boolean; user?: boolean; everyday?: boolean; throwOn?: 'system' | 'user' }, add = jest.fn()) {
+    const prisma = { userSettings: { findUnique: async () => { if (o.throwOn === 'user') throw new Error('db down'); return { value: { kgraph: { enabled: o.user ?? true, ...(o.everyday === undefined ? {} : { everyday: o.everyday }) } } }; } } };
+    const systemSettings = { getNamespace: async () => { if (o.throwOn === 'system') throw new Error('db down'); return { ...KGRAPH_SYSTEM_DEFAULTS, enabled: o.deployment ?? true }; } };
+    return new KgraphEnabledService(prisma as never, systemSettings as never, { add } as never);
+  }
+  it('is on only with the deployment, user and everyday switches on, for a run that is not a saved task\'s', async () => {
+    expect(await everydayGate({ everyday: true }).everydayFor('u1', { isTaskRun: false })).toBe(true);
+    expect((await everydayGate({ everyday: true }).status('u1')).everyday).toBe(true);
+  });
+  it.each([
+    ['everyday was never set', {}, false],
+    ['everyday is off', { everyday: false }, false],
+    ['the user switch is off', { everyday: true, user: false }, false],
+    ['the deployment is off', { everyday: true, deployment: false }, false],
+    ["it is a saved task's run", { everyday: true }, true],
+    ['the system settings read throws', { everyday: true, throwOn: 'system' as const }, false],
+    ['the user settings read throws', { everyday: true, throwOn: 'user' as const }, false],
+  ])('is off when %s', async (_why, o, isTaskRun) => {
+    expect(await everydayGate(o as never).everydayFor('u1', { isTaskRun })).toBe(false);
+  });
+  it('counts an error as app.kgraph.errors{stage} with a bounded label, and never throws', () => {
+    const add = jest.fn();
+    const g = everydayGate({}, add);
+    g.countError('match');
+    g.countError('anything' as never);
+    expect(add.mock.calls).toEqual([['kgraphErrors', 1, { stage: 'match' }]]);
+    expect(() => everydayGate({}, jest.fn(() => { throw new Error('metrics down'); })).countError('match')).not.toThrow();
+  });
+});
+
 describe('the kgraph settings', () => {
   it('are off by default at the deployment and the user level', () => {
     expect(KGRAPH_SYSTEM_DEFAULTS).toEqual({ enabled: false, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' });
     expect(KGRAPH_USER_DEFAULTS).toEqual({ enabled: false });
     expect(readKgraphSystemSettings(undefined).enabled).toBe(false);
     expect(readKgraphSystemSettings({ enabled: 'yes', auditEvery: -1 })).toEqual(KGRAPH_SYSTEM_DEFAULTS);
-    expect(readKgraphUserSettings(null)).toEqual({ enabled: false });
-    expect(readKgraphUserSettings({ kgraph: { enabled: true } })).toEqual({ enabled: true });
+    expect(readKgraphUserSettings(null)).toEqual({ enabled: false, everyday: false });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true } })).toEqual({ enabled: true, everyday: false });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true, everyday: true } })).toEqual({ enabled: true, everyday: true });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true, everyday: 'yes' } })).toEqual({ enabled: false, everyday: false });
   });
 });
 
@@ -56,16 +89,20 @@ describe('the kgraph migrations', () => {
     const all = readdirSync(dir).filter((d) => /^\d{14}_/.test(d)).sort();
     expect(all.slice(-kg.length)).toEqual(kg);
   });
-  it.each(kg)('%s creates or indexes kg_ tables only', (folder) => {
+  it.each(kg)('%s creates, indexes or extends kg_ tables only', (folder) => {
     const sql = readFileSync(join(dir, folder, 'migration.sql'), 'utf8');
     const statements = sql.split(';').map((s) => s.replace(/--.*$/gm, '').trim()).filter(Boolean);
     expect(statements.length).toBeGreaterThan(0);
     for (const s of statements) {
       const target = /^(?:CREATE TABLE|CREATE (?:UNIQUE )?INDEX "[^"]+" ON|ALTER TABLE)\s+"([^"]+)"/.exec(s)?.[1];
       expect({ statement: s.slice(0, 80), target: target?.startsWith('kg_') ? 'kg_' : target }).toEqual({ statement: s.slice(0, 80), target: 'kg_' });
-      expect(s).not.toMatch(/\b(DROP|RENAME|ALTER COLUMN)\b/);
+      // Nothing is dropped or renamed. The one change to a column is relaxing NOT NULL on a kg_ column (E46.28: an everyday ledger row has no task).
+      expect(s.replace(/ALTER COLUMN "[a-z_]+" DROP NOT NULL/, '')).not.toMatch(/\b(DROP|RENAME|ALTER COLUMN)\b/);
     }
-    // An ALTER TABLE only adds a constraint to a new table (its foreign keys).
-    for (const s of statements.filter((x) => x.startsWith('ALTER TABLE'))) expect(s).toMatch(/^ALTER TABLE "kg_[a-z_]+" ADD CONSTRAINT/);
+    // An ALTER TABLE adds a constraint to a kg_ table (its foreign keys), adds a column with a default or nullable, or relaxes NOT NULL.
+    for (const s of statements.filter((x) => x.startsWith('ALTER TABLE'))) {
+      expect(s).toMatch(/^ALTER TABLE "kg_[a-z_]+" (ADD CONSTRAINT|ADD COLUMN "[a-z_]+" [A-Z0-9(), ]+(DEFAULT .+)?$|ALTER COLUMN "[a-z_]+" DROP NOT NULL$)/);
+      if (/ADD COLUMN/.test(s) && /NOT NULL/.test(s)) expect(s).toMatch(/DEFAULT/);
+    }
   });
 });

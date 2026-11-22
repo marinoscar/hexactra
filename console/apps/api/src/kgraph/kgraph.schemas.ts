@@ -11,6 +11,7 @@ export const kgraphStatusSchema = z.object({
   deployment: z.boolean().describe('Your administrator allows the Knowledge Graph (system setting `kgraph.enabled`).'),
   user: z.boolean().describe('You turned it on (your setting `kgraph.enabled`).'),
   available: z.boolean().describe('Both are on.'),
+  everyday: z.boolean().describe('You turned on "Use what was learned in chats and one-off runs" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected.'),
 });
 export const kgraphPurgeSchema = z.object({
   deleted: z.object({ procedures: z.number(), versions: z.number(), nodes: z.number(), edges: z.number(), tasks: z.number(), runs: z.number(), reviews: z.number(), evidence: z.number(), traces: z.number(), ledger: z.number() }),
