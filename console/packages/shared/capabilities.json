@@ -1589,9 +1589,13 @@
         "GET /api/benchmarks/{id}/scorecard",
         "GET /api/benchmarks/{id}/compare"
       ],
-      "cli": {
-        "none": "Arrives with the benchmark CLI (E44.8, #746); until then the REST API"
-      },
+      "cli": [
+        "benchmarks suite",
+        "benchmarks list",
+        "benchmarks show",
+        "benchmarks compare",
+        "benchmarks export"
+      ],
       "mcp": {
         "none": "Deliberate: a benchmark is an organization administrator's feature that spends on model calls; no hosted assistant reads or starts one (docs/decisions/benchmark.md)"
       },
@@ -1610,9 +1614,10 @@
         "POST /api/benchmarks/{id}/cancel",
         "DELETE /api/benchmarks/{id}"
       ],
-      "cli": {
-        "none": "Arrives with the benchmark CLI (E44.8, #746); until then the REST API"
-      },
+      "cli": [
+        "benchmarks run",
+        "benchmarks cancel"
+      ],
       "mcp": {
         "none": "Deliberate: it runs agents on a node and spends on model calls; no hosted assistant starts, stops or deletes a benchmark (docs/decisions/benchmark.md)"
       },
