@@ -87,6 +87,8 @@ export interface NewBenchmarkForm {
   capUsd: string;
   /** No spend cap (#840): the benchmark runs until its trials are done, each run within its own policy budget. */
   noCap: boolean;
+  /** Record a video of each trial run (#841). */
+  recordVideo: boolean;
 }
 
 export type NewFormField = 'name' | 'challenges' | 'policies' | 'trials' | 'profile' | 'capUsd';

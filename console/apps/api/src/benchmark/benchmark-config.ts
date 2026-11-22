@@ -7,7 +7,7 @@ import { benchmarkConfigSchema, type BenchmarkConfig } from './benchmarks.schema
 export const storedBenchmarkConfigSchema = benchmarkConfigSchema.extend({ orgId: z.string().nullable().default(null) });
 export type StoredBenchmarkConfig = z.infer<typeof storedBenchmarkConfigSchema>;
 
-const EMPTY: StoredBenchmarkConfig = { challengeIds: [], policies: [], trials: 1, hostId: null, profile: 'default', capUsd: 0, trialTimeoutMinutes: 15, orgId: null };
+const EMPTY: StoredBenchmarkConfig = { challengeIds: [], policies: [], trials: 1, hostId: null, profile: 'default', capUsd: 0, trialTimeoutMinutes: 15, recordVideo: false, orgId: null };
 
 /** The stored config, read defensively: a row this code cannot read behaves as an empty benchmark with no budget. */
 export function readBenchmarkConfig(value: unknown): StoredBenchmarkConfig {

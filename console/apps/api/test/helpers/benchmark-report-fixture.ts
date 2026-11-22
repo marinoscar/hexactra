@@ -83,7 +83,7 @@ export function reportInput(opts: { status?: BenchmarkView['status']; baseline?:
     status,
     suiteKey: 'core',
     suiteVersion: 1,
-    config: { challengeIds: ['nav-lookup', 'form-multistep'], policies: [POLICY_A, POLICY_B], trials: 3, hostId: null, profile: 'default', capUsd: 5, trialTimeoutMinutes: 15 },
+    config: { challengeIds: ['nav-lookup', 'form-multistep'], policies: [POLICY_A, POLICY_B], trials: 3, hostId: null, profile: 'default', capUsd: 5, trialTimeoutMinutes: 15, recordVideo: false },
     appVersion: '1.2.3',
     commit: '0123456789abcdef0123456789abcdef01234567',
     spentUsd: spent,

@@ -91,6 +91,8 @@ export class BenchmarkRunStarter {
         origin: 'system',
         policyRef: trial.policyRef,
         policySource: 'run',
+        // Fixed on the run when it is created (epic #755): the benchmark owner's opt-in (#841).
+        recordVideo: config.recordVideo,
         context: benchmarkRunContext({ benchmarkId: trial.benchmarkId, trialId: trial.id, allowedDomains: [site.host], confirmRiskyActions: challenge.run?.confirmRiskyActions === true }) as unknown as Prisma.InputJsonValue,
       },
       select: { id: true },

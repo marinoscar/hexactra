@@ -54,7 +54,7 @@ function benchmark(over: Partial<Benchmark> = {}): Benchmark {
     status: 'completed',
     suiteKey: 'builtin',
     suiteVersion: 2,
-    config: { challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25, trialTimeoutMinutes: 15 },
+    config: { challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25, trialTimeoutMinutes: 15, recordVideo: false },
     appVersion: '1.118.0',
     commit: '4f2c9a1e7b3d',
     spentUsd: 1.25,
@@ -187,7 +187,7 @@ function mount(element: ReactElement, path: string, routePath: string, permissio
 }
 
 describe('the benchmark helpers', () => {
-  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25', noCap: false };
+  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25', noCap: false, recordVideo: false };
 
   it('accepts a complete form and names each problem', () => {
     expect(newFormProblems(form, suite)).toEqual({});
@@ -295,6 +295,21 @@ describe('a new benchmark', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
     await screen.findByTestId('elsewhere');
     expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: null });
+  });
+
+  it('records a video of each run when the owner switches it on, with the not-masked warning (#841)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
+    expect(screen.getByText(/The video is not masked/)).toBeInTheDocument();
+    const record = screen.getByRole('switch', { name: 'Record a video of each run' });
+    expect(record).not.toBeChecked();
+    fireEvent.click(record);
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Every run records a video of its browser tab (not masked).');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ recordVideo: true });
   });
 
   it('names the benchmark already running on that node', async () => {
