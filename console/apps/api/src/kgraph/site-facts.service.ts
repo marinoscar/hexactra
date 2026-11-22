@@ -11,6 +11,8 @@ import {
   deriveSiteFacts,
   registrableDomain,
   siteFactKey,
+  siteFactsNamed,
+  type InputSiteFact,
   SITE_FACT_KINDS,
   SITE_FACT_SOURCES,
   validateSiteFact,
@@ -119,6 +121,56 @@ export class KgraphSiteFactsService {
     }
     const r = await this.store.proposeSiteFact(userId, { ...p, id: `kgsf-${randomUUID()}`, createdAt: now.toISOString() });
     return r.created ? 'proposed' : 'known';
+  }
+
+  // ------------------------------------------------------------------ runs (E46.32)
+
+  /** The owner's `active` facts of these sites, as a run reads them. */
+  async activeFor(userId: string, sites: readonly string[]): Promise<InputSiteFact[]> {
+    const facts = await this.store.listSiteFacts(userId, sites, 'active');
+    return facts.map((f) => ({ id: f.id, site: f.site, kind: f.kind, text: f.text, lastUsedAt: f.lastUsedAt, createdAt: f.createdAt }));
+  }
+
+  /** The facts a run was given in its block, in their order, when an earlier job of the run chose them; null when none was recorded. */
+  async offeredTo(userId: string, runId: string): Promise<string[] | null> {
+    const kg = await this.db(userId).kgRun.findFirst({ where: { runId, userId }, select: { offeredFactIds: true } });
+    return kg?.offeredFactIds.length ? kg.offeredFactIds : null;
+  }
+
+  /** Records the facts given in a run's block (ids only) on its `kg_runs` row. */
+  async recordOffered(userId: string, runId: string, mode: string, ids: readonly string[]): Promise<void> {
+    await this.db(userId).kgRun.upsert({ where: { runId }, create: { runId, userId, mode, offeredFactIds: [...ids] }, update: { offeredFactIds: [...ids] } });
+  }
+
+  /** Facts the run used: `lastUsedAt` now, and their ids added to the run's `fact_ids` (once each). Only the owner's own facts are kept. */
+  async markUsed(userId: string, runId: string, ids: readonly string[], now = new Date()): Promise<void> {
+    if (ids.length === 0) return;
+    const db = this.db(userId);
+    const mine = (await db.kgSiteFact.findMany({ where: { userId, id: { in: [...new Set(ids)] } }, select: { id: true } })).map((r) => r.id);
+    if (mine.length === 0) return;
+    await this.store.touchSiteFacts(userId, mine, now.toISOString());
+    const kg = await db.kgRun.findFirst({ where: { runId, userId }, select: { factIds: true } });
+    if (!kg) return;
+    const next = [...kg.factIds, ...mine.filter((id) => !kg.factIds.includes(id))];
+    if (next.length !== kg.factIds.length) await db.kgRun.updateMany({ where: { runId, userId }, data: { factIds: next } });
+  }
+
+  /**
+   * After a run's final transition: the facts given in its block whose words overlap its own step summaries (server-recorded rows) are marked
+   * used. Best effort: an error is logged and the run is unchanged. A run that was given no fact costs one read.
+   */
+  async afterRun(userId: string, runId: string): Promise<void> {
+    try {
+      const offered = await this.offeredTo(userId, runId);
+      if (!offered) return;
+      const facts = await this.db(userId).kgSiteFact.findMany({ where: { userId, id: { in: offered } }, select: { id: true, text: true } });
+      // The run is the owner's (its kg_runs row was read through forUser); its steps are read by run id, for their summaries only.
+      const steps = await this.prisma.runStep.findMany({ where: { runId }, select: { action: true, summary: true } });
+      const own = new Set(['site_facts', 'propose_site_fact']);
+      await this.markUsed(userId, runId, siteFactsNamed(facts, steps.filter((s) => !own.has(s.action ?? '')).map((s) => s.summary)));
+    } catch (err) {
+      this.log.warn(`run ${runId}: site facts not marked used: ${err instanceof Error ? err.name : 'error'}`);
+    }
   }
 
   // ------------------------------------------------------------------ routes

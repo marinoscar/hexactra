@@ -97,6 +97,8 @@ export async function finishRun(d: HostDeps, userId: string, runId: string, sess
   }
   // The Knowledge Graph (E46.7): a captured run that succeeded is compiled by a queue job. Never fails the run.
   await d.kgraphAfterRun?.finished(userId, runId, to).catch(() => undefined);
+  // Site facts given in the run's block and named by its steps are marked used (E46.32). Never fails the run.
+  await d.kgraphSiteFacts?.afterRun(userId, runId).catch(() => undefined);
   // Steps that went ahead on saved approvals (#555): one notification at the end of the run. Ask rules do not notify.
   try {
     const line = savedApprovalsLine((await d.approvals?.gateUsesOfRun(userId, runId)) ?? []);
