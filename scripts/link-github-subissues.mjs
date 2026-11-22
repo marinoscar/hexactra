@@ -60,6 +60,11 @@ const epicChildren = new Map([
   [738, [739, 740, 741, 742, 743, 744, 745, 746]],
   // E45 run recordings: opt-in video of a run, playback, and an admin retention policy (E45.1 to E45.6, in order).
   [755, [756, 757, 758, 759, 760, 761]],
+  [770, [771, 772, 773, 774]],
+  [771, [775, 776, 777, 778, 779, 780]],
+  [772, [781, 782, 783, 784, 785, 786]],
+  [773, [787, 788, 789, 790, 791, 792]],
+  [774, [793, 794, 795, 796, 797, 798, 799]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
