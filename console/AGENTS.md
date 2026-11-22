@@ -55,6 +55,18 @@ The agent harness and the browser toolset are workspace packages that the API **
 6. **The apps import the packages' built output.** Run `npm run build:packages` (from `console/`) after `npm ci` and after any change in `packages/hexactra-*`; the root `build`, `typecheck` and `test` scripts do it first, CI runs `build:packages`, `typecheck:packages` and `test:packages` before the apps, and the API image builds them. `npm run check:package-pack` dry-runs `npm pack`; publishing is off.
 7. **No runner file is over 400 lines**, and `goal-runner.service.ts` stays a thin service (under 250). Adding a tool: the checklist in [docs/runner.md](docs/runner.md#how-to-add-a-tool).
 
+## MANDATORY: Knowledge Graph
+
+The Knowledge Graph (epic E46, [decision record](docs/decisions/knowledge-graph.md)) learns a saved task's procedure from the owner's own runs and replays it. It is off by default at four levels (deployment, user, task, run). A later change must keep:
+
+1. **Off is byte-identical.** With the feature off at any level, `apps/api/test/runner-characterisation.db.spec.ts` passes unchanged: same instructions, tool list and schemas, round input, fabric actions, step rows and run row.
+2. **New tables only.** Knowledge Graph data lives in new `kg_` tables (per-task and per-run settings keyed by `task_id` / `run_id`); no column of an existing table changes, and no existing route, response or MCP tool changes shape.
+3. **A failure never fails a run.** An error in capture, compile, replay, check or repair is logged and counted, and the run continues with the agent loop.
+4. **Nothing bypasses `executeTool`.** A replayed step runs through the same wrapper as a model-chosen call: Stop, Pause, the gates, the span and intent recording.
+5. **The graph grants nothing.** The gates read the run's own limits, never the graph: no widened site, connection, recipient, secret or saved approval comes from it.
+6. **Sensitive changes need the owner.** A change that adds or changes a send, a payment, a recipient, a site, an account or a credential is approved only by the owner, signed in, in the console.
+7. **The package core imports no harness.** `@marinoscar/hexactra-kgraph` imports only itself, `zod`, `@opentelemetry/api` and `node:` built-ins; only `src/harness/` may import `@marinoscar/hexactra-agent` (a test scans the built output).
+
 ## MANDATORY: MCP tools
 
 The console is an MCP server (`POST /api/mcp`). Hosted assistants (ChatGPT, Claude) sign in with OAuth and get only the scopes the owner ticked; personal access tokens and sessions keep every tool. Reference: [docs/mcp.md](docs/mcp.md); threat model: [docs/security-hosted-clients.md](docs/security-hosted-clients.md).
