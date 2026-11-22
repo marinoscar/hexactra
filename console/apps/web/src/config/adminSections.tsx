@@ -1,6 +1,7 @@
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import AutoDeleteOutlinedIcon from '@mui/icons-material/AutoDeleteOutlined';
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
@@ -145,6 +146,14 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: InsightsOutlinedIcon,
         path: '/admin/settings/usage',
         permission: 'ai_config:read',
+      },
+      // Run recordings (E45.6, #761): the `recordings` namespace of the system settings document: how long the videos of runs are kept.
+      {
+        title: 'Run recordings',
+        description: 'How long the videos of recorded runs are kept (30 days by default, or indefinitely), and the longest one may be.',
+        Icon: VideocamOutlinedIcon,
+        path: '/admin/settings/run-recordings',
+        permission: 'system_settings:read',
       },
     ],
   },
