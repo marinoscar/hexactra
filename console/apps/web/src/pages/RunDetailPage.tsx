@@ -32,6 +32,7 @@ import { UsedSavedIdentity } from '../components/UsedSavedIdentity';
 import { UsedSavedCards } from '../components/UsedSavedCards';
 import { RunTimeline } from '../components/RunTimeline';
 import { RunRecording } from '../components/RunRecording';
+import { RunKgraphPanel } from '../kgraph/RunKgraphPanel';
 import { RunTraceId } from '../components/RunTraceId';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -398,6 +399,8 @@ export function RunDetailPage() {
   const deliveries = !isLive && run.taskId && viewer.hasPermission('runs:read') ? <RunDeliveries runId={run.id} canRetryDelivery={viewer.hasPermission('runs:write')} taskId={run.taskId} canOpenLinks={viewer.hasPermission('connections:read')} /> : null;
   // The run's video, when its owner chose to record it (epic #755): not masked, owner-only. Nothing for a run without one.
   const recording = viewer.hasPermission('runs:read') ? <RunRecording runId={run.id} canDelete={viewer.hasPermission('runs:delete')} /> : null;
+  // How the run used the Knowledge Graph (E46.20): only when it took part (a `kg_runs` row) and the viewer may read it.
+  const kgraph = <RunKgraphPanel runId={run.id} refreshKey={run.status} />;
   // Paused: nothing happens until the owner resumes or stops. The browser stays in view, and takeover stays available.
   const pausedBanner = paused && <PausedBanner onResume={canCancel ? resume : undefined} onStop={canCancel ? cancel : undefined} resuming={resuming} stopping={stopping} />;
   const waiting = run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>;
@@ -541,6 +544,7 @@ export function RunDetailPage() {
               {outputs}
               {deliveries}
               {recording}
+              {kgraph}
             </Box>
             <Box data-testid="run-timeline-scroll" tabIndex={0} role="region" aria-label="Timeline" sx={{ flex: '1 1 auto', minHeight: 240, overflowY: 'auto' }}>
               {timeline}
@@ -559,6 +563,7 @@ export function RunDetailPage() {
       {outputs}
       {deliveries}
       {recording}
+      {kgraph}
       {waiting}
       {pausedBanner}
       {compact ? (
