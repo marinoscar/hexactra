@@ -162,6 +162,10 @@ runPlatformConformance({
           why: 'Starting a benchmark (E44.3) takes a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtextextended(\'benchmark:start\', 0))`, a constant key) so two requests cannot both find the same node and profile free. The statement names no table and returns nothing.',
         },
         {
+          file: 'kgraph/kgraph-read.service.ts',
+          why: "The Knowledge Graph reads (E46.19, #793) pick each procedure's shown version with a LATERAL join and read only parts of its `graph` JSON (the step count, or the steps without their checks, guards and element references, none of its screens or elements), so the map never loads whole versions (the E46.4 load test); a run's replay ids are read out of `runs.transcript` so the transcript never leaves the database. Every statement binds the caller's `user_id` and joins only rows of that user; every value is a bound parameter.",
+        },
+        {
           file: 'home/home.service.ts',
           why: 'The Home summary (#430) reads each block in one statement: a window count beside the limited rows, a task name joined on the same user, three named fields out of `runs.policy_snapshot` (the snapshot never leaves the database), and the week bucketed by day in a time zone. Every statement binds the caller\'s `user_id` (`owner_user_id` for questions) and joins only rows of that user.',
         },
