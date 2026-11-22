@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { TasksModule } from '../tasks/tasks.module';
 import { RecordingLinkController, RunRecordingController } from './recordings.controller';
+import { RecordingsRetentionDoctorCheck, RecordingsRetentionHandler, RecordingsRetentionTask } from './recording-retention.jobs';
 import { RecordingsFinalizeHandler, RecordingsFinalizeTask } from './recordings.jobs';
 import { RecordingsService } from './recordings.service';
 
@@ -9,7 +10,7 @@ import { RecordingsService } from './recordings.service';
 @Module({
   imports: [TasksModule],
   controllers: [RunRecordingController, RecordingLinkController],
-  providers: [RecordingsService, RecordingsFinalizeHandler, RecordingsFinalizeTask],
+  providers: [RecordingsService, RecordingsFinalizeHandler, RecordingsFinalizeTask, RecordingsRetentionHandler, RecordingsRetentionTask, RecordingsRetentionDoctorCheck],
   exports: [RecordingsService],
 })
 export class RecordingsModule {}
