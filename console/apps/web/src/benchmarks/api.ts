@@ -38,6 +38,21 @@ export function cancelBenchmark(api: PlatformApiClient, id: string): Promise<Ben
   return api.post<Benchmark>(`/benchmarks/${enc(id)}/cancel`, {});
 }
 
-export function deleteBenchmark(api: PlatformApiClient, id: string): Promise<void> {
-  return api.delete<void>(`/benchmarks/${enc(id)}`);
+/** Deletes a benchmark that has ended; with `deleteRuns` the runs its trials started go too (#873). */
+export function deleteBenchmark(api: PlatformApiClient, id: string, opts: { deleteRuns?: boolean } = {}): Promise<void> {
+  return api.delete<void>(`/benchmarks/${enc(id)}${opts.deleteRuns ? '?deleteRuns=true' : ''}`);
+}
+
+/** `POST /benchmarks/delete`'s answer (#873). */
+export interface BenchmarksDeleted {
+  deleted: string[];
+  skippedRunning: string[];
+  notFound: string[];
+  /** Runs deleted with them; -1 when not reported (one benchmark through `DELETE`). */
+  runsDeleted: number;
+}
+
+/** Deletes several benchmarks; a live one is skipped, one that is not the caller's is listed as not found (#873). */
+export function deleteBenchmarks(api: PlatformApiClient, ids: string[], opts: { deleteRuns?: boolean } = {}): Promise<BenchmarksDeleted> {
+  return api.post<BenchmarksDeleted>('/benchmarks/delete', { ids, deleteRuns: !!opts.deleteRuns });
 }

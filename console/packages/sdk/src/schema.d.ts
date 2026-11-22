@@ -9848,7 +9848,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a benchmark
-         * @description Permanent. Only a benchmark that has ended.
+         * @description Permanent. Only a benchmark that has ended. Deleted with its trials; `deleteRuns=true` (#873) also deletes the runs its trials started, first (their steps, screenshots and recordings; a live run is never deleted). Without it the runs stay in the run history. Answers `runsDeleted`.
          *
          *     **Requires:** authentication, plus permission `benchmarks:run`.
          */
@@ -9962,6 +9962,28 @@ export interface paths {
          *     **Requires:** authentication, plus permission `benchmarks:run`.
          */
         post: operations["benchmarks_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/benchmarks/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete several benchmarks
+         * @description Permanent (#873). Each benchmark that has ended is deleted with its trials and, with `deleteRuns: true`, the runs its trials started (their steps, screenshots and recordings). One still queued or running is skipped (`skippedRunning`), one that is not yours is listed in `notFound`; neither fails the call.
+         *
+         *     **Requires:** authentication, plus permission `benchmarks:run`.
+         */
+        post: operations["benchmarks_removeMany"];
         delete?: never;
         options?: never;
         head?: never;
@@ -25856,6 +25878,25 @@ export interface components {
                     direction: "better" | "worse";
                 }[];
             } | null;
+        };
+        BenchmarksDeletedResponseDto: {
+            /** @description The benchmarks deleted. */
+            deleted: string[];
+            /** @description Still queued or running: cancel them first. */
+            skippedRunning: string[];
+            /** @description Not one of your benchmarks, or not there. */
+            notFound: string[];
+            /** @description Runs deleted with them. */
+            runsDeleted: number;
+        };
+        DeleteBenchmarksDto: {
+            /** @description The benchmarks to delete, 1 to 100. */
+            ids: string[];
+            /**
+             * @description Also delete the runs their trials started (needs `runs:delete`).
+             * @default false
+             */
+            deleteRuns?: boolean;
         };
     };
     responses: never;
@@ -56658,7 +56699,10 @@ export interface operations {
     };
     benchmarks_remove: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `true`: also delete the runs its trials started (their steps, screenshots and recordings; needs `runs:delete`). `false` (the default): the runs stay in the run history. */
+                deleteRuns?: "true" | "false";
+            };
             header?: never;
             path: {
                 id: string;
@@ -56667,7 +56711,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deleted, with its trials. The runs it started stay in the run history. */
+            /** @description Deleted, with its trials, and with `deleteRuns=true` the runs its trials started. The audit event `benchmarks.deleted` counts the runs deleted. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -56683,14 +56727,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
             };
-            /** @description Forbidden - Insufficient permissions */
+            /**
+             * @description Forbidden - Insufficient permissions
+             *
+             *     `RUNS_DELETE_FORBIDDEN`: `deleteRuns=true` without `runs:delete`. Nothing was deleted.
+             */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
+                content?: never;
             };
             /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
             404: {
@@ -57035,6 +57081,60 @@ export interface operations {
             };
             /** @description `BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    benchmarks_removeMany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteBenchmarksDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BenchmarksDeletedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /**
+             * @description Forbidden - Insufficient permissions
+             *
+             *     `RUNS_DELETE_FORBIDDEN`: `deleteRuns` without `runs:delete`. Nothing was deleted.
+             */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

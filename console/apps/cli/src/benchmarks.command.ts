@@ -4,6 +4,7 @@ import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 import { consoleApi, consoleCredentials, consoleWebUrl } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { resolvePolicyId } from './policies.js';
+import { confirmed } from './runs.command.js';
 import { sizeText } from './runs.js';
 import {
   ENDED,
@@ -18,6 +19,8 @@ import {
   positive,
   resolveBenchmarkId,
   scorecardText,
+  deleteLines,
+  type BenchmarksDeletedView,
   suiteText,
   trialLines,
   waitForBenchmark,
@@ -273,6 +276,22 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         const target = exportTargetFactory ? exportTargetFactory() : consoleCredentials();
         const file = await exportBenchmark(target, id, { format: format as ExportFormat, paper, ...(o.preset ? { preset: o.preset } : {}), ...(baseline ? { baseline } : {}), ...(o.output ? { output: o.output } : {}) });
         if (file.path !== '-') out(`wrote ${file.path} (${sizeText(file.bytes)})`);
+      }),
+    );
+
+  bm.command('delete <id...>')
+    .description('Delete benchmarks that have ended, with their trials and, unless --keep-runs, the runs their trials started (their steps, screenshots and recordings; needs runs:delete)')
+    .option('--keep-runs', 'keep the runs in the run history')
+    .option('-y, --yes', 'do not ask first (for a script)')
+    .action(
+      coded(async (refs: string[], o: { keepRuns?: boolean; yes?: boolean }) => {
+        const api = consoleApi();
+        const ids: string[] = [];
+        for (const ref of refs) ids.push(await resolveBenchmarkId(api, ref));
+        const what = `${ids.length === 1 ? 'benchmark' : `${ids.length} benchmarks`}${o.keepRuns ? ' (the runs stay)' : ' and the runs their trials started'}`;
+        if (!(await confirmed(`Delete ${what}?`, o.yes))) return out('nothing deleted');
+        const res = await api.post<BenchmarksDeletedView>('/benchmarks/delete', { ids, deleteRuns: !o.keepRuns });
+        deleteLines(res).forEach(out);
       }),
     );
 
