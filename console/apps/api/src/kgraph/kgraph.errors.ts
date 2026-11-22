@@ -5,3 +5,6 @@ registerErrorCode({ code: 'KGRAPH_TASK_NOT_FOUND', status: 404, description: "Th
 registerErrorCode({ code: 'KGRAPH_OFF', status: 409, description: 'The Knowledge Graph is turned off by your administrator (`kgraph.enabled` in the system settings) or by you (`kgraph.enabled` in your settings): turn it on before choosing a task mode.' });
 registerErrorCode({ code: 'KGRAPH_PROCEDURE_NOT_FOUND', status: 404, description: "The procedure does not exist or is not the caller's." });
 registerErrorCode({ code: 'KGRAPH_VERSION_NOT_RESTORABLE', status: 409, description: 'Only a retired or suspended version of this procedure can be restored.' });
+registerErrorCode({ code: 'KGRAPH_REVIEW_NOT_FOUND', status: 404, description: "The review does not exist or is not the caller's." });
+registerErrorCode({ code: 'KGRAPH_REVIEW_ANSWERED', status: 409, description: 'The review was already answered or has expired.' });
+registerErrorCode({ code: 'KGRAPH_REVIEW_CONSOLE_ONLY', status: 403, description: 'A Knowledge Graph review is answered only by the owner signed in to the console: not with a token, an OAuth app or MCP.' });

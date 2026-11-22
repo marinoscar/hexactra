@@ -5911,6 +5911,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Changes waiting for your review
+         * @description Repairs that would add or change a send, a payment, a recipient, a site, an account or a saved login. They never pause a run.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphReviews_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One review
+         * @description **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphReviews_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/reviews/{id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve or decline a change (signed-in console only)
+         * @description `403 KGRAPH_REVIEW_CONSOLE_ONLY` for a personal access token, an OAuth app or any credential but a browser session. Declined: the version retires and the same change is not proposed again for 30 days. Approved: its next run verifies it, asking before every step that sends or pays; it still passes every gate on every run.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraphReviews_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approval-rules": {
         parameters: {
             query?: never;
@@ -9590,6 +9654,9 @@ export interface components {
              * @example KGRAPH_OFF
              * @example KGRAPH_PROCEDURE_NOT_FOUND
              * @example KGRAPH_VERSION_NOT_RESTORABLE
+             * @example KGRAPH_REVIEW_NOT_FOUND
+             * @example KGRAPH_REVIEW_ANSWERED
+             * @example KGRAPH_REVIEW_CONSOLE_ONLY
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -16637,6 +16704,24 @@ export interface components {
             procedureId: string;
             /** @description Versions retired: the task learns again. */
             retired: number;
+        };
+        ReviewResponseDto: {
+            /** Format: uuid */
+            id: string;
+            versionId: string;
+            procedureId: string | null;
+            /** @enum {string} */
+            status: "pending" | "approved" | "declined" | "expired";
+            changes: {
+                reason: string;
+                /** @description What changes, in plain words, masked: never a typed value. */
+                text: string;
+            }[];
+            createdAt: string;
+            expiresAt: string;
+        };
+        AnswerReviewDto: {
+            approve: boolean;
         };
         ApprovalRulesListResponseDto: {
             /** @description Whether "Pause all" is on: while it is, no rule matches. */
@@ -42330,6 +42415,160 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ForgottenResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphReviews_list: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "declined" | "expired";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReviewResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphReviews_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReviewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphReviews_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerReviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ReviewResponseDto"];
                     };
                 };
             };
