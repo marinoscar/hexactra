@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -214,6 +214,12 @@ export const ROUTES = [
   ['admin-agent-ceilings', '/admin/settings/agent-ceilings'],
   ['admin-agent-pricing', '/admin/settings/agent-pricing'],
   ['admin-usage', '/admin/settings/usage'],
+  // Benchmarks (E44.5, #743): the list, the new form, a completed benchmark (scorecard, charts, matrix, trials), a live one, the comparison.
+  ['admin-benchmarks', '/admin/settings/benchmarks'],
+  ['admin-benchmark-new', '/admin/settings/benchmarks/new'],
+  ['admin-benchmark', '/admin/settings/benchmarks/{benchmark}'],
+  ['admin-benchmark-live', '/admin/settings/benchmarks/{liveBenchmark}'],
+  ['admin-benchmark-compare', '/admin/settings/benchmarks/{benchmark}/compare/{baselineBenchmark}'],
   ['admin-factory-reset', '/admin/settings/factory-reset'],
   ['admin-run-history', '/admin/settings/run-history'],
   ['admin-oauth-clients', '/admin/settings/oauth-clients'],
@@ -387,7 +393,7 @@ async function discoverIds(page) {
       const data = body.data ?? body;
       return Array.isArray(data) ? data : (data.items ?? []);
     };
-    const [runs, tasks, hosts, inbox, policies, groups, chats, apps] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups'), get('/chats'), get('/connected-apps')]);
+    const [runs, tasks, hosts, inbox, policies, groups, chats, apps, benchmarks] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups'), get('/chats'), get('/connected-apps'), get('/benchmarks')]);
     const live = new Set(['queued', 'running', 'waiting_human', 'paused']);
     return {
       liveRun: runs.find((r) => live.has(r.status))?.id,
@@ -405,6 +411,13 @@ async function discoverIds(page) {
       group: groups[0]?.id,
       chat: chats[0]?.id,
       app: apps[0]?.clientId,
+      // Benchmarks (E44.5): the newest ended one, a live one, and an earlier one on the same suite version to compare with.
+      ...(() => {
+        const ended = benchmarks.filter((b) => b.status !== 'queued' && b.status !== 'running');
+        const first = ended[0];
+        const base = first && ended.find((b) => b.id !== first.id && b.suiteKey === first.suiteKey && b.suiteVersion === first.suiteVersion);
+        return { benchmark: first?.id, liveBenchmark: benchmarks.find((b) => b.status === 'running')?.id, baselineBenchmark: base?.id };
+      })(),
     };
   });
 }
