@@ -2,6 +2,8 @@
 // each tool call it writes one `kg_traces` row: each argument's provenance (`bindArguments`, never a value unless a safe literal), the state
 // after the call (host and path, the stall detector's view digest, a result shape) and whether it worked. Outside the step transaction and
 // best effort: a failed write is logged and counted, and the run goes on exactly as without it. With the mode `off` nothing is bound.
+import { randomUUID } from 'node:crypto';
+
 import type { Logger } from '@nestjs/common';
 import type { ObserverPort, ToolCallObservation } from '@marinoscar/hexactra-agent';
 import { bindArguments, defaultIsSensitive, elementId, hostAndPath, registrableDomain, resultShapeOf, type EarlierResult, type PostState, type TraceParameter } from '@marinoscar/hexactra-kgraph';
@@ -50,7 +52,7 @@ export class KgraphObserver implements ObserverPort {
     try {
       const id = elementId(`site:${registrableDomain(host)}`, fp);
       const prisma = this.i.prisma as unknown as SharedElementStore;
-      await prisma.kgNode.upsert({ where: { userId_type_key: { userId: this.i.userId, type: 'Element', key: id } }, create: { id: `kgn-${id}`.replace(/:/g, '-').slice(0, 200), userId: this.i.userId, type: 'Element', key: id, label: (fp.name ?? fp.role ?? 'element').slice(0, 200), props: { ...fp, site: registrableDomain(host) } as never }, update: {} });
+      await prisma.kgNode.upsert({ where: { userId_type_key: { userId: this.i.userId, type: 'Element', key: id } }, create: { id: `kgn-${randomUUID()}`, userId: this.i.userId, type: 'Element', key: id, label: (fp.name ?? fp.role ?? 'element').slice(0, 200), props: { ...fp, site: registrableDomain(host) } as never }, update: {} });
     } catch {
       this.failures++;
     }
