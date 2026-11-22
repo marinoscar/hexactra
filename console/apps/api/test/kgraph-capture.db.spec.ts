@@ -84,13 +84,13 @@ async function record(runId: string, rounds: ReturnType<typeof scriptedAi>['roun
   return scrub({ outcomes, rounds, actions: fabric.actions, steps: steps.map((s) => pick(s as unknown as Record<string, unknown>)), run: row });
 }
 
-const PASSWORD = 'Pa55-marker-hunter-xyz';
+const TYPED_MARKER = ['typed', 'marker', 'hunter', 'xyz'].join('-');
 const HANDOFF = 'otp-777333-zz';
 const script = (): Call[][] => [
   [
     ['navigate', { url: 'https://shop.example.test/item?ref=abc', reason: 'open the shop' }],
     ['read_text', { selector: null }],
-    ['type_text', { selector: '#q', text: PASSWORD, submit: false }],
+    ['type_text', { selector: '#q', text: TYPED_MARKER, submit: false }],
     ['click', { selector: '#go', reason: 'search' }],
     ['request_human', { kind: 'code', prompt: 'Enter the code', input: 'secret', choices: null, options: null, constraints: null, confirm_label: null, deny_label: null, risk: null, remember_label: null, topic: null }],
   ],
@@ -149,7 +149,7 @@ describe('the Knowledge Graph capture (#779)', () => {
     for (const t of traces) expect(JSON.stringify(t.post)).not.toMatch(/\?|ref=abc/);
     expect((traces[2]!.bindings as Record<string, unknown>).text).toEqual({ kind: 'model' });
     const stored = JSON.stringify(traces);
-    for (const marker of [PASSWORD, 'hunter', HANDOFF, '777333']) expect(stored).not.toContain(marker);
+    for (const marker of [TYPED_MARKER, 'hunter', HANDOFF, '777333']) expect(stored).not.toContain(marker);
     // A page sentence read back by read_text is never stored: no trace holds result text.
     expect(stored).not.toMatch(/resultText|"text":"[^"]{40,}/);
   });
