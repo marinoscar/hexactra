@@ -11,3 +11,7 @@ registerErrorCode({ code: 'KGRAPH_REVIEW_CONSOLE_ONLY', status: 403, description
 registerErrorCode({ code: 'KGRAPH_VERSION_NOT_FOUND', status: 404, description: "The procedure has no version with that number, or the procedure is not the caller's." });
 registerErrorCode({ code: 'KGRAPH_RUN_NOT_FOUND', status: 404, description: "The run does not exist or is not the caller's." });
 registerErrorCode({ code: 'KGRAPH_IMPORT_INVALID', status: 400, description: 'The file is not a Knowledge Graph file this console can read: malformed, a newer formatVersion, or over a limit. `details.reason` says which. Nothing was imported.' });
+registerErrorCode({ code: 'KGRAPH_SITE_FACT_NOT_FOUND', status: 404, description: "The site fact does not exist or is not the caller's." });
+registerErrorCode({ code: 'KGRAPH_SITE_FACT_REFUSED', status: 422, description: 'A site fact never holds a password, code, token or full card, account or ID number, never an instruction and never a link to another site. `details.rules` names the rules it broke (`secret`, `instruction`, `domain`, `length`, `schema`); its text is not echoed.' });
+registerErrorCode({ code: 'KGRAPH_SITE_FACT_EXISTS', status: 409, description: 'The edit would make the fact the same as another of your facts about this site.' });
+registerErrorCode({ code: 'KGRAPH_SITE_FACT_STATUS', status: 409, description: 'That status move is not allowed: a proposal is approved in Knowledge Graph reviews; an archived fact is restored to active.' });

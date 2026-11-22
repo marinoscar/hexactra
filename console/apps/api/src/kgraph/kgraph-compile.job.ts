@@ -11,6 +11,7 @@ import { readStoredOutputs } from '../tasks/task-outputs.schemas';
 import { KgraphCompileService } from './kgraph-compile.service';
 import { declaredOutputs, readShapes } from './output-shapes';
 import { PrismaProcedureStore } from './prisma-procedure-store';
+import { KgraphSiteFactsService } from './site-facts.service';
 
 /** The job type that compiles a run's trace (E46.7). Permanent once jobs of this type exist: never rename it. */
 export const KGRAPH_COMPILE_JOB = 'kgraph.compile';
@@ -30,6 +31,7 @@ export class KgraphCompileHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly compiler: KgraphCompileService,
+    @Optional() private readonly siteFacts?: KgraphSiteFactsService,
   ) {}
 
   onModuleInit(): void {
@@ -40,6 +42,12 @@ export class KgraphCompileHandler implements JobHandler, OnModuleInit {
     const p = payloadSchema.parse(job.payload);
     const outcome = await this.compiler.compileRun(p.userId, p.runId);
     this.log.log(`job ${job.id}: run ${p.runId}: ${outcome}`);
+    // Site fact proposals (E46.31) from the same learn- or reuse-mode run, whatever the compile did. Idempotent (one fact per identity) and
+    // best effort: it never fails the job. Every proposal waits for the owner in Reviews.
+    if (this.siteFacts) {
+      const facts = await this.siteFacts.deriveForRun(p.userId, p.runId);
+      if (facts.proposed > 0) this.log.log(`job ${job.id}: run ${p.runId}: ${facts.proposed} site fact proposal(s)`);
+    }
   }
 }
 

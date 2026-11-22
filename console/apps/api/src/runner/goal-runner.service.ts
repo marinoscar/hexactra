@@ -31,6 +31,7 @@ import { buildRun } from './host/build-context';
 import { KgraphAfterRun } from '../kgraph/kgraph-compile.job';
 import { KgraphEnabledService } from '../kgraph/kgraph-enabled.service';
 import { PrismaProcedureStore } from '../kgraph/prisma-procedure-store';
+import { KgraphSiteFactsService } from '../kgraph/site-facts.service';
 import { maybeReplay } from './host/kgraph/replay';
 import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
@@ -86,6 +87,7 @@ export class GoalRunnerService {
     @Optional() public kgraph?: KgraphEnabledService,
     @Optional() public kgraphAfterRun?: KgraphAfterRun,
     @Optional() public kgraphStore?: PrismaProcedureStore,
+    @Optional() public kgraphSiteFacts?: KgraphSiteFactsService,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -115,6 +117,7 @@ export class GoalRunnerService {
       kgraph: this.kgraph,
       kgraphAfterRun: this.kgraphAfterRun,
       kgraphStore: this.kgraphStore,
+      kgraphSiteFacts: this.kgraphSiteFacts,
       clock: () => this.clock(),
       log: this.log,
     };

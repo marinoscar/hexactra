@@ -17,7 +17,13 @@ export interface SiteMemory {
 
 export const INTERRUPT_LIMITS = Object.freeze({ perStep: 2, perRun: 5 });
 
-export function interruptStrategy(o: { browser: BrowserPort; invoke: ToolInvokerPort; site(url: string | null): Promise<SiteMemory | null> }): RecoveryStrategy {
+/** An interrupt the page showed (E46.31): its kind and the page's URL, as the browser reported it. Never page text. */
+export interface InterruptSeen {
+  kind: 'consent' | 'overlay' | 'signed_out' | 'blocked';
+  url: string | null;
+}
+
+export function interruptStrategy(o: { browser: BrowserPort; invoke: ToolInvokerPort; site(url: string | null): Promise<SiteMemory | null>; seen?(i: InterruptSeen): Promise<void> }): RecoveryStrategy {
   const perStep = new Map<string, number>();
   let perRun = 0;
   const act = async (stepId: string, tool: string, args: Record<string, unknown>) => {
@@ -31,6 +37,8 @@ export function interruptStrategy(o: { browser: BrowserPort; invoke: ToolInvoker
       if (n >= INTERRUPT_LIMITS.perStep || perRun >= INTERRUPT_LIMITS.perRun) return 'no';
       const snap = await pageSnapshot(o.browser);
       const found = snap ? detectInterrupt(snap) : null;
+      // Kept for the site fact proposals of the run (best effort: never changes the recovery).
+      if (found && o.seen) await o.seen({ kind: found.kind, url: snap?.url ?? null }).catch(() => undefined);
       if (!found || found.kind === 'blocked') return 'no';
       perStep.set(f.step.id, n + 1);
       perRun++;

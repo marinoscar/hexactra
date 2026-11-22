@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { consoleIsSensitive } from '../runner/host/kgraph/observer-port';
 import { PrismaProcedureStore } from './prisma-procedure-store';
 import { KgraphReviewsService } from './reviews.service';
+import { KgraphSiteFactsService, type ExportedSiteFact } from './site-facts.service';
 
 export interface ImportOptions {
   /** Which of the owner's connections stands for each exported account placeholder (`account-1` → a connection id). */
@@ -26,9 +27,10 @@ export class KgraphTransferService {
     private readonly prisma: PrismaService,
     private readonly store: PrismaProcedureStore,
     private readonly reviews: KgraphReviewsService,
+    private readonly siteFacts: KgraphSiteFactsService,
   ) {}
 
-  async export(userId: string, procedureIds: string[] | null): Promise<{ file: TransferFile; filename: string }> {
+  async export(userId: string, procedureIds: string[] | null): Promise<{ file: TransferFile & { siteFacts: ExportedSiteFact[] }; filename: string }> {
     const db = this.prisma.forUser({ userId });
     const procedures = (await this.store.listProcedures(userId)).filter((p) => !procedureIds || procedureIds.includes(p.id));
     const items = [];
@@ -40,8 +42,9 @@ export class KgraphTransferService {
       items.push({ task: { name: task.name, goal: task.goal, parameters: Array.isArray(task.parameters) ? (task.parameters as unknown[]) : [], outputs: Array.isArray(task.outputs) ? (task.outputs as unknown[]) : [] }, version });
     }
     const now = new Date();
-    const file = exportFile(items, now, consoleIsSensitive);
-    await this.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'kgraph.exported', targetType: 'user', targetId: userId, meta: { procedures: items.length } } }).catch(() => undefined);
+    // The owner's active site facts (E46.31) travel beside the procedures: site, kind, text and source only. An import proposes each again.
+    const file = { ...exportFile(items, now, consoleIsSensitive), siteFacts: await this.siteFacts.exportFacts(userId) };
+    await this.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'kgraph.exported', targetType: 'user', targetId: userId, meta: { procedures: items.length, siteFacts: file.siteFacts.length } } }).catch(() => undefined);
     return { file, filename: `hexactra-kgraph-${now.toISOString().slice(0, 10).replace(/-/g, '')}.json` };
   }
 
@@ -96,7 +99,9 @@ export class KgraphTransferService {
       const reviewId = await this.reviews.open(userId, version.id, procedure.id, { changeClass: 'sensitive', reasons: [{ reason: 'commit_step', detail: 'an imported procedure: review all of it' }, ...classification.reasons] });
       imported.push({ index, taskId, procedureId: procedure.id, versionId: version.id, reviewId });
     }
-    await this.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'kgraph.imported', targetType: 'user', targetId: userId, meta: { imported: imported.length, skipped: skipped.length } } }).catch(() => undefined);
-    return { imported, skipped };
+    // Site facts (E46.31): never trusted, each validated and stored `proposed`, waiting for the owner in Reviews whatever the file says.
+    const siteFacts = await this.siteFacts.importFacts(userId, (raw as { siteFacts?: unknown } | null)?.siteFacts);
+    await this.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'kgraph.imported', targetType: 'user', targetId: userId, meta: { imported: imported.length, skipped: skipped.length, siteFacts: siteFacts.proposed } } }).catch(() => undefined);
+    return { imported, skipped, siteFacts };
   }
 }

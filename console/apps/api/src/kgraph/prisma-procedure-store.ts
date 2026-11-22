@@ -138,7 +138,7 @@ export class PrismaProcedureStore implements ProcedureStorePort {
 }
 
 /** Remove every `kg_` row of one user, and none of anyone else's. Returns the counts. */
-export async function purgeKgraph(prisma: PrismaService, userId: string): Promise<Record<'procedures' | 'versions' | 'nodes' | 'edges' | 'tasks' | 'runs' | 'reviews' | 'evidence' | 'traces' | 'ledger', number>> {
+export async function purgeKgraph(prisma: PrismaService, userId: string): Promise<Record<'procedures' | 'versions' | 'nodes' | 'edges' | 'tasks' | 'runs' | 'reviews' | 'evidence' | 'traces' | 'ledger' | 'siteFacts', number>> {
   return prisma.$transaction(async (tx) => {
     const evidence = (await tx.kgEvidence.deleteMany({ where: { userId } })).count;
     const reviews = (await tx.kgReview.deleteMany({ where: { userId } })).count;
@@ -150,6 +150,7 @@ export async function purgeKgraph(prisma: PrismaService, userId: string): Promis
     const runs = (await tx.kgRun.deleteMany({ where: { userId } })).count;
     const traces = (await tx.kgTrace.deleteMany({ where: { userId } })).count;
     const ledger = (await tx.kgLedger.deleteMany({ where: { userId } })).count;
-    return { procedures, versions, nodes, edges, tasks, runs, reviews, evidence, traces, ledger };
+    const siteFacts = (await tx.kgSiteFact.deleteMany({ where: { userId } })).count;
+    return { procedures, versions, nodes, edges, tasks, runs, reviews, evidence, traces, ledger, siteFacts };
   });
 }

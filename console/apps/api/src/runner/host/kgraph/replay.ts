@@ -6,11 +6,14 @@ import type { RunOutcome } from '@marinoscar/hexactra-agent';
 import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
 import { abortableSleep, resolveFingerprint, type ElementFingerprint } from '@marinoscar/hexactra-browser-agent/surface';
 import { breaker, checkOutcome, isAuditRun, noopTelemetry, RecoveryLadder, registrableDomain, type ProcedureVersion, type RunVerdict } from '@marinoscar/hexactra-kgraph';
-import { interruptStrategy, type SiteMemory } from './interrupts';
+import { randomUUID } from 'node:crypto';
+
+import { interruptStrategy, type InterruptSeen, type SiteMemory } from './interrupts';
 import { hostRungs } from './recovery';
 import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls, type ReplayMemory, type ReplayResult } from '@marinoscar/hexactra-kgraph/harness';
 
 import { declaredOutputs, learnShapes, readShapes } from '../../../kgraph/output-shapes';
+import { INTERRUPT_FIRING_NODE } from '../../../kgraph/site-facts.service';
 import { readRunInputs } from '../../../tasks/task-params.schemas';
 import type { BuiltRun } from '../build-context';
 import { fingerprintOf, surfaceInvoker } from './surface';
@@ -94,7 +97,7 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
       const base = harnessToolInvoker(ctx, profile, watch);
       const overrides = new Map<string, string>();
       const result = await replayPhase({
-        recovery: new RecoveryLadder([interruptStrategy({ browser: ctx.ext.browser, invoke: base, site: siteOf }), ...hostRungs({ browser: ctx.ext.browser, version: v, overrides, judge, signal: ctx.ports.control.haltSignal, propose })]),
+        recovery: new RecoveryLadder([interruptStrategy({ browser: ctx.ext.browser, invoke: base, site: siteOf, seen: (i) => recordInterrupt(d, userId, run.id, i, ctx.state.seq) }), ...hostRungs({ browser: ctx.ext.browser, version: v, overrides, judge, signal: ctx.ports.control.haltSignal, propose })]),
         ctx,
         version: v,
         inputs,
@@ -211,6 +214,22 @@ async function protect(d: HostDeps, userId: string, taskId: string, version: Pro
     await d.notifier?.kgraphSuspended?.(userId, taskId, task?.name ?? 'a task', version.id);
   } catch (err) {
     d.log.warn(`kgraph version ${version.id}: breaker not applied: ${err instanceof Error ? err.name : 'error'}`);
+  }
+}
+
+/**
+ * An interrupt the page showed during the replay (E46.31), kept as a `kg_nodes` row for the site fact proposals the compile job derives:
+ * its kind, host and path (as the browser reported the URL), and the step it happened at. Never page text. Best effort.
+ */
+async function recordInterrupt(d: HostDeps, userId: string, runId: string, i: InterruptSeen, seq: number): Promise<void> {
+  try {
+    const at = i.url ? new URL(i.url) : null;
+    if (!at?.hostname) return;
+    const props = { kind: i.kind, host: at.hostname.toLowerCase(), path: at.pathname.slice(0, 500), seq, runId };
+    await d.prisma.forUser({ userId }).kgNode.create({ data: { id: `kgn-${randomUUID()}`, userId, type: INTERRUPT_FIRING_NODE, key: `${runId}:${seq}:${i.kind}`.slice(0, 500), label: i.kind, props } });
+  } catch (err) {
+    // The same interrupt at the same step was kept already (unique key), or the write failed: the replay goes on.
+    if (!(err instanceof Error && /Unique constraint|P2002/.test(`${(err as { code?: string }).code ?? ''} ${err.message}`))) d.log.warn(`run ${runId}: interrupt not kept: ${err instanceof Error ? err.name : 'error'}`);
   }
 }
 
