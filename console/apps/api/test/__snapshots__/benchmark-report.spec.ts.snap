@@ -172,7 +172,7 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
     },
     {
       "style": "small",
-      "text": "Best first: the higher success rate, then the lower cost per success, then the lower median active time. There is no composite score.",
+      "text": "Best first by the Benchmark Score (0 to 100, accuracy first weighting); equal scores by the higher success rate, then the lower cost per success, then the lower median active time.",
     },
     {
       "layout": {
@@ -200,6 +200,10 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
             {
               "style": "th",
               "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Score",
             },
             {
               "style": "th",
@@ -237,6 +241,10 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
             },
             {
               "style": "td",
+              "text": "100.0 S",
+            },
+            {
+              "style": "td",
               "text": "100%",
             },
             {
@@ -271,6 +279,10 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
             },
             {
               "style": "td",
+              "text": "78.7 B",
+            },
+            {
+              "style": "td",
               "text": "83%",
             },
             {
@@ -300,12 +312,13 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
         "widths": [
           14,
           "*",
+          40,
           52,
           56,
           50,
           50,
           54,
-          90,
+          80,
         ],
       },
     },
@@ -1827,6 +1840,96 @@ Forms",
               "text": "-11,160 (better)",
             },
           ],
+          [
+            {
+              "style": "td",
+              "text": "Overall score",
+            },
+            {
+              "style": "td",
+              "text": "58.9",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "+41.1 pts (better)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Accuracy score",
+            },
+            {
+              "style": "td",
+              "text": "25.0",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "+75.0 pts (better)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cost score",
+            },
+            {
+              "style": "td",
+              "text": "90.2",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "+9.8 pts (better)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Time score",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "0.0 pts (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Tokens score",
+            },
+            {
+              "style": "td",
+              "text": "89.1",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "+10.9 pts (better)",
+            },
+          ],
         ],
         "dontBreakRows": true,
         "headerRows": 1,
@@ -2098,6 +2201,96 @@ Forms",
             {
               "style": "td",
               "text": "0 (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Overall score",
+            },
+            {
+              "style": "td",
+              "text": "80.4",
+            },
+            {
+              "style": "td",
+              "text": "78.7",
+            },
+            {
+              "style": "td",
+              "text": "-1.7 pts (worse)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Accuracy score",
+            },
+            {
+              "style": "td",
+              "text": "61.1",
+            },
+            {
+              "style": "td",
+              "text": "61.1",
+            },
+            {
+              "style": "td",
+              "text": "0.0 pts (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Cost score",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "94.7",
+            },
+            {
+              "style": "td",
+              "text": "-5.3 pts (worse)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Time score",
+            },
+            {
+              "style": "td",
+              "text": "99.2",
+            },
+            {
+              "style": "td",
+              "text": "99.2",
+            },
+            {
+              "style": "td",
+              "text": "0.0 pts (no change)",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Tokens score",
+            },
+            {
+              "style": "td",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "95.8",
+            },
+            {
+              "style": "td",
+              "text": "-4.2 pts (worse)",
             },
           ],
         ],

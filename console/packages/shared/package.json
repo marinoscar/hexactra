@@ -1,6 +1,6 @@
 {
   "name": "@app/shared",
-  "version": "1.128.0",
+  "version": "1.129.0",
   "private": true,
   "description": "The app's identity and slice manifest: the files every runtime reads its name, repository, CLI name, colours and enabled platform slices from, and the answer rules of a typed question (question-rules) the web form, the MCP Apps widgets and the API share, and the sensitive-text patterns (sensitive-patterns) the run trace, its exports and the extension mask with, and the task parameter rules (task-params): the `{{Name}}` placeholders of a task's goal, their definitions and value checks, and the task output rules (task-fields): the typed, named values a task's run must return, and the run trace to replay scenario skeleton converter (scenario-from-trace).",
   "type": "commonjs",

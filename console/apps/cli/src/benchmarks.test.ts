@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { benchmarkRequest, benchmarksCommand, setBenchmarkExportTarget, setBenchmarkPollMs } from './benchmarks.command.js';
-import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, recordedText, recordingLength, recordingSummary, scorecardText, trialLines, usd, withCode, type BenchmarkTrialView, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
+import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, recordedText, recordingLength, recordingSummary, scoreLine, scorecardText, trialLines, usd, withCode, type BenchmarkTrialView, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type ScoreView, type SuiteView } from './benchmarks.js';
 import { setConsoleApiFactory } from './console-api.js';
 
 resetCliForTests();
@@ -227,6 +227,29 @@ describe('benchmark helpers', () => {
     expect(text).toMatch(/#1 Thorough[\s\S]*cost\s+\$1\.25 .*per success \$0\.21/);
     expect(text).toMatch(/Navigation\s+50% \(3\/6\)\s+33,000 tok \(in 30,000 \/ out 3,000 \/ cached 10,000\)\s+≥ \$0\.25/);
     expect(text).toContain('failures    wrong_result 3');
+  });
+
+  it('prints the Benchmark Score per policy under the default or a chosen preset, and nothing from an older console (#871)', () => {
+    const o = (value: number, rank: number, grade: string, tied = false) => ({ value, low: value - 10, high: value + 5, rank, grade, tied });
+    const score = (accuracy: number, overall: Record<string, ReturnType<typeof o>>, badges: string[], provisional = false): ScoreView => ({ rated: true, provisional, accuracy, cost: 100, costKnown: true, time: 90, tokens: 80, overall, badges });
+    const base = scorecard();
+    const scored = scorecard({
+      scoring: { defaultPreset: 'accuracy', presets: [{ id: 'accuracy', label: 'Accuracy first', weights: {} }, { id: 'budget', label: 'Budget', weights: {} }] },
+      policies: [
+        { ...base.policies[0]!, score: score(56.7, { accuracy: o(78.4, 2, 'B', true), budget: o(84.8, 1, 'A') }, ['cheapest'], true) },
+        { ...base.policies[1]!, score: score(100, { accuracy: o(91, 1, 'S'), budget: o(81.9, 2, 'A') }, ['most_accurate']) },
+      ],
+    });
+    const text = scorecardText(benchmark(), scored).join('\n');
+    expect(text).toContain('Score      Accuracy first preset (--preset accuracy|balanced|budget|speed)');
+    expect(text.indexOf('#1 Thorough')).toBeLessThan(text.indexOf('#2 Economy'));
+    expect(text).toContain('score       91.0 S  (81.0-96.0)  accuracy 100.0 · cost 100.0 · time 90.0 · tokens 80.0  best: most accurate');
+    expect(text).toContain('score       78.4 B  (68.4-83.4)  accuracy 56.7 · cost 100.0 · time 90.0 · tokens 80.0  [provisional]  [tied with #1]  best: cheapest');
+    const budget = scorecardText(benchmark(), scored, undefined, 'budget').join('\n');
+    expect(budget.indexOf('#1 Economy')).toBeLessThan(budget.indexOf('#2 Thorough'));
+    expect(budget).toContain('Budget preset');
+    expect(scoreLine({ ...scored.policies[0]!.score!, rated: false }, 'accuracy')).toBe('  score       not rated (no judged trial)');
+    expect(scorecardText(benchmark(), base).join('\n')).not.toContain('score ');
   });
 
   it("prints each trial's recording state, and the run page URL of a ready one (#863)", () => {

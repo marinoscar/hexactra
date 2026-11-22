@@ -216,8 +216,8 @@ describe('computeScorecard', () => {
   it('policy columns in the configured order with their rank; the ranking best first', () => {
     expect(card.policies.map((p) => [p.ref, p.rank])).toEqual([[A, 1], [B, 2]]);
     expect(card.ranking).toEqual([
-      { rank: 1, ref: A, label: 'Economy', successRate: 0.8, costPerSuccessUsd: 0.03875, costKnown: true, medianActiveMs: 30_000, totalCostUsd: 0.155, totalTokens: 17_050 },
-      { rank: 2, ref: B, label: 'Balanced', successRate: 0, costPerSuccessUsd: null, costKnown: false, medianActiveMs: 15_000, totalCostUsd: 0.02, totalTokens: 2_100 },
+      { rank: 1, ref: A, label: 'Economy', successRate: 0.8, costPerSuccessUsd: 0.03875, costKnown: true, medianActiveMs: 30_000, totalCostUsd: 0.155, totalTokens: 17_050, score: 78.4, grade: 'B' },
+      { rank: 2, ref: B, label: 'Balanced', successRate: 0, costPerSuccessUsd: null, costKnown: false, medianActiveMs: 15_000, totalCostUsd: 0.02, totalTokens: 2_100, score: 0, grade: 'D' },
     ]);
   });
 

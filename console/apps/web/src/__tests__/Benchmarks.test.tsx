@@ -13,7 +13,7 @@ import { BenchmarkComparePage } from '../pages/BenchmarkComparePage';
 import { BenchmarkNewPage } from '../pages/BenchmarkNewPage';
 import { BenchmarkPage } from '../pages/BenchmarkPage';
 import { BenchmarksPage } from '../pages/BenchmarksPage';
-import type { Benchmark, BenchmarkComparison, BenchmarkSuite, BenchmarkTrial, MetricDelta, Scorecard, ScoreMetrics } from '../types/benchmarks';
+import type { Benchmark, BenchmarkComparison, BenchmarkScore, BenchmarkSuite, BenchmarkTrial, MetricDelta, Scorecard, ScoreMetrics, Scoring } from '../types/benchmarks';
 import { ConfirmProvider } from '../ui';
 import { mockViewport } from './matchMedia';
 
@@ -86,6 +86,39 @@ function metrics(pass: number, judged: number, costUsd: number, known = true): S
   };
 }
 
+const overall = (value: number, rank: number, grade: 'S' | 'A' | 'B' | 'C' | 'D', tied = false) => ({ value, low: value - 8, high: Math.min(100, value + 4), rank, grade, tied });
+function score(over: Partial<BenchmarkScore>): BenchmarkScore {
+  return {
+    rated: true,
+    provisional: true,
+    judged: 6,
+    accuracy: 50,
+    accuracyLow: 30,
+    accuracyHigh: 70,
+    cost: 50,
+    costKnown: true,
+    time: 50,
+    tokens: 50,
+    overall: { accuracy: overall(50, 1, 'D'), balanced: overall(50, 1, 'D'), budget: overall(50, 1, 'D'), speed: overall(50, 1, 'D') },
+    badges: [],
+    ...over,
+  };
+}
+const SCORING: Scoring = {
+  method: 'hexactra.benchmark-score/1',
+  defaultPreset: 'accuracy',
+  presets: [
+    { id: 'accuracy', label: 'Accuracy first', weights: { accuracy: 50, cost: 20, time: 15, tokens: 15 } },
+    { id: 'balanced', label: 'Balanced', weights: { accuracy: 25, cost: 25, time: 25, tokens: 25 } },
+    { id: 'budget', label: 'Budget', weights: { accuracy: 35, cost: 40, time: 10, tokens: 15 } },
+    { id: 'speed', label: 'Speed', weights: { accuracy: 35, cost: 15, time: 40, tokens: 10 } },
+  ],
+  provisionalBelow: 10,
+};
+// Thorough leads under accuracy first and balanced; Economy, eight times cheaper, leads under budget and speed.
+const ECO_SCORE = score({ accuracy: 56.7, cost: 100, time: 100, tokens: 100, costKnown: true, badges: ['cheapest', 'fastest', 'most_token_efficient'], overall: { accuracy: overall(78.4, 2, 'B', true), balanced: overall(89.2, 2, 'A'), budget: overall(84.8, 1, 'A'), speed: overall(84.8, 1, 'A') } });
+const THO_SCORE = score({ accuracy: 100, cost: 54.8, time: 100, tokens: 100, costKnown: false, badges: ['most_accurate', 'fastest', 'most_token_efficient'], overall: { accuracy: overall(91, 1, 'S'), balanced: overall(88.7, 1, 'A'), budget: overall(81.9, 2, 'A'), speed: overall(83.2, 2, 'A') } });
+
 function scorecard(): Scorecard {
   const eco = metrics(3, 6, 0.25);
   const tho = metrics(6, 6, 1, false);
@@ -104,12 +137,13 @@ function scorecard(): Scorecard {
     computedAt: '2026-11-21T11:00:00Z',
     totals: { costUsd: 1.25, costKnown: false, inputTokens: 1_200_000, outputTokens: 90_000, cachedInputTokens: 400_000, totalTokens: 1_290_000, modelCalls: 120, counts: { total: 12, judged: 12, pass: 9, fail: 3, error: 0, skipped: 0, unsupported: 0, unfinished: 0 } },
     ranking: [
-      { rank: 1, ref: 'builtin:thorough', label: 'Thorough', successRate: 1, costPerSuccessUsd: 1 / 6, costKnown: false, medianActiveMs: 65_000, totalCostUsd: 1, totalTokens: 540_000 },
-      { rank: 2, ref: 'builtin:economy', label: 'Economy', successRate: 0.5, costPerSuccessUsd: 0.25 / 3, costKnown: true, medianActiveMs: 65_000, totalCostUsd: 0.25, totalTokens: 540_000 },
+      { rank: 1, ref: 'builtin:thorough', label: 'Thorough', successRate: 1, costPerSuccessUsd: 1 / 6, costKnown: false, medianActiveMs: 65_000, totalCostUsd: 1, totalTokens: 540_000, score: 91, grade: 'S' },
+      { rank: 2, ref: 'builtin:economy', label: 'Economy', successRate: 0.5, costPerSuccessUsd: 0.25 / 3, costKnown: true, medianActiveMs: 65_000, totalCostUsd: 0.25, totalTokens: 540_000, score: 78.4, grade: 'B' },
     ],
+    scoring: SCORING,
     policies: [
-      { ref: 'builtin:economy', label: 'Economy', rank: 2, metrics: eco, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.1) }, { category: 'forms', label: 'Forms', metrics: metrics(0, 3, 0.15) }] },
-      { ref: 'builtin:thorough', label: 'Thorough', rank: 1, metrics: tho, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.5) }, { category: 'forms', label: 'Forms', metrics: metrics(3, 3, 0.5) }] },
+      { ref: 'builtin:economy', label: 'Economy', rank: 2, metrics: eco, score: ECO_SCORE, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.1) }, { category: 'forms', label: 'Forms', metrics: metrics(0, 3, 0.15) }] },
+      { ref: 'builtin:thorough', label: 'Thorough', rank: 1, metrics: tho, score: THO_SCORE, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.5) }, { category: 'forms', label: 'Forms', metrics: metrics(3, 3, 0.5) }] },
     ],
     categories: [
       { id: 'navigation', label: 'Navigation' },
@@ -235,6 +269,10 @@ describe('the list', () => {
     expect(within(list).getByText('running')).toBeInTheDocument();
     expect(within(list).getAllByText('Economy, Thorough')).toHaveLength(2);
     expect(await within(list).findByText('100% · Thorough')).toBeInTheDocument();
+    // The leader's Benchmark Score and grade (#871); n/a when its scorecard could not be read.
+    const top = within(list).getByTestId('top-score');
+    expect(top).toHaveTextContent('91.0');
+    expect(top).toHaveTextContent('S');
     expect(within(list).getAllByText('$1.25 of $25.00').length).toBe(2);
     expect(screen.getAllByRole('link', { name: /New benchmark/ }).length).toBeGreaterThan(0);
   });
@@ -479,6 +517,73 @@ describe('a benchmark', () => {
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel benchmark' }));
     await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === `/benchmarks/${ID}/cancel`)).toBe(true));
+  });
+});
+
+describe('the leaderboard (#871)', () => {
+  const responses = {
+    [`GET /benchmarks/${ID}`]: benchmark(),
+    [`GET /benchmarks/${ID}/trials`]: { items: trials },
+    [`GET /benchmarks/${ID}/scorecard`]: scorecard(),
+    'GET /benchmarks': { items: [benchmark()], total: 1 },
+  };
+  afterEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* none */
+    }
+  });
+
+  it('puts the leader first with its score, grade, band, sub-scores and badges, then every policy by rank', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const board = await screen.findByTestId('leaderboard');
+    const winner = within(board).getByTestId('leaderboard-winner');
+    expect(winner).toHaveTextContent('Thorough');
+    expect(within(winner).getByTestId('winner-score')).toHaveTextContent('91.0');
+    expect(within(winner).getByTestId('grade')).toHaveTextContent('S');
+    expect(winner).toHaveTextContent('95% band 83.0 to 95.0');
+    expect(winner).toHaveTextContent('Most accurate');
+    // An unknown cost makes the cost score an upper bound.
+    expect(winner.querySelector('[data-dimension="cost"]')).toHaveTextContent('≤ 54.8');
+    const rows = within(board).getAllByTestId('leaderboard-row');
+    expect(rows.map((r) => r.getAttribute('data-ref'))).toEqual(['builtin:thorough', 'builtin:economy']);
+    expect(rows[1]).toHaveTextContent('78.4');
+    expect(rows[1]).toHaveTextContent('Tied with #1');
+    expect(rows[1]).toHaveTextContent('Provisional');
+    expect(rows[1]).toHaveTextContent('Safety: 1 flagged');
+    expect(within(rows[1]!).getByRole('progressbar', { name: 'Accuracy score 56.7 of 100' })).toBeInTheDocument();
+    expect(board).toHaveTextContent('weights Accuracy 50 · Cost 20 · Time 15 · Tokens 15');
+    // The scorecard has the score row too.
+    expect(screen.getByTestId('scorecard-table').querySelector('[data-metric="score"]')).toHaveTextContent('78.4 · grade B · provisional');
+  });
+
+  it('re-ranks under another preset and remembers the choice for this viewer', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const board = await screen.findByTestId('leaderboard');
+    fireEvent.click(within(board).getByRole('button', { name: 'Budget' }));
+    expect(within(board).getByTestId('leaderboard-winner')).toHaveTextContent('Economy');
+    expect(within(board).getByTestId('winner-score')).toHaveTextContent('84.8');
+    expect(within(board).getAllByTestId('leaderboard-row').map((r) => r.getAttribute('data-ref'))).toEqual(['builtin:economy', 'builtin:thorough']);
+    expect(board).toHaveTextContent('weights Accuracy 35 · Cost 40 · Time 10 · Tokens 15');
+    expect(window.localStorage.getItem('hexactra.benchmarks.scorePreset')).toBe('budget');
+  });
+
+  it('says so when no policy is rated yet, and explains the method', async () => {
+    const card = scorecard();
+    const unrated = { ...card, policies: card.policies.map((p) => ({ ...p, score: { ...p.score, rated: false, overall: { ...p.score.overall, accuracy: { ...p.score.overall.accuracy, value: null, low: null, high: null, grade: null } } } })) };
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], { ...responses, [`GET /benchmarks/${ID}/scorecard`]: unrated });
+    expect(await screen.findByTestId('leaderboard-empty')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'How the score works' }));
+    expect(await screen.findByTestId('score-method')).toHaveTextContent('ten times 50');
+  });
+
+  it('fits a phone: the board stacks and the presets scroll', async () => {
+    restore = mockViewport(360);
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const board = await screen.findByTestId('leaderboard');
+    expect(within(board).getAllByRole('button', { name: /Accuracy first|Balanced|Budget|Speed/ })).toHaveLength(4);
+    expect(within(board).getAllByTestId('leaderboard-row')).toHaveLength(2);
   });
 });
 

@@ -105,7 +105,36 @@ export interface ScorecardView {
   k: number;
   totals: { costUsd: number; costKnown: boolean; inputTokens: number; outputTokens: number; cachedInputTokens: number; totalTokens: number; modelCalls: number; counts: ScoreMetricsView['counts'] };
   ranking: { rank: number; ref: string; label: string }[];
-  policies: { ref: string; label: string; rank: number; metrics: ScoreMetricsView; categories: { category: string; label: string; metrics: ScoreMetricsView }[] }[];
+  policies: { ref: string; label: string; rank: number; metrics: ScoreMetricsView; score?: ScoreView; categories: { category: string; label: string; metrics: ScoreMetricsView }[] }[];
+  /** Absent on a console older than the Benchmark Score (#871). */
+  scoring?: { defaultPreset: string; presets: { id: string; label: string; weights: Record<string, number> }[] };
+}
+
+/** The Benchmark Score of one policy (#871). */
+export interface ScoreView {
+  rated: boolean;
+  provisional: boolean;
+  accuracy: number | null;
+  cost: number | null;
+  costKnown: boolean;
+  time: number | null;
+  tokens: number | null;
+  overall: Record<string, { value: number | null; low: number | null; high: number | null; rank: number; grade: string | null; tied: boolean }>;
+  badges: string[];
+}
+
+export const SCORE_PRESETS = ['accuracy', 'balanced', 'budget', 'speed'] as const;
+export type ScorePresetFlag = (typeof SCORE_PRESETS)[number];
+
+const BADGE_TEXT: Record<string, string> = { most_accurate: 'most accurate', cheapest: 'cheapest', fastest: 'fastest', most_token_efficient: 'fewest tokens' };
+const sc = (v: number | null): string => (v === null ? '-' : v.toFixed(1));
+
+/** A policy's score line: `score  82.4 A  (78.1-85.0)  accuracy 90.0 · cost 70.0 · time 60.0 · tokens 80.0  [provisional] best: cheapest`. */
+export function scoreLine(score: ScoreView, preset: string): string {
+  const o = score.overall[preset];
+  if (!score.rated || !o || o.value === null) return '  score       not rated (no judged trial)';
+  const flags = [score.provisional ? '[provisional]' : '', o.tied ? '[tied with #1]' : '', score.badges.length ? `best: ${score.badges.map((b) => BADGE_TEXT[b] ?? b).join(', ')}` : ''].filter(Boolean).join('  ');
+  return `  score       ${sc(o.value)} ${o.grade ?? ''}  (${sc(o.low)}-${sc(o.high)})  accuracy ${sc(score.accuracy)} · cost ${sc(score.cost)}${score.costKnown ? '' : '≥'} · time ${sc(score.time)} · tokens ${sc(score.tokens)}${flags ? `  ${flags}` : ''}`;
 }
 
 export interface MetricDeltaView {
@@ -209,7 +238,7 @@ export function recordedText(config: Pick<BenchmarkView['config'], 'policies' | 
  * `show`: the benchmark, the whole benchmark's tokens and cost (and its trial recordings when `trials` carry any, #863), then every
  * policy (ranked) with its categories.
  */
-export function scorecardText(b: BenchmarkView, s: ScorecardView, trials?: readonly BenchmarkTrialView[]): string[] {
+export function scorecardText(b: BenchmarkView, s: ScorecardView, trials?: readonly BenchmarkTrialView[], preset?: string): string[] {
   const t = s.totals;
   const c = t.counts;
   const lines = [
@@ -225,10 +254,18 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView, trials?: reado
   const recordings = recordingSummary(trials);
   if (recordings) lines.push(recordings);
   const byRef = new Map(s.policies.map((p) => [p.ref, p]));
-  const ordered = s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);
+  const scored = !!s.scoring && s.policies.every((p) => p.score);
+  const use = scored ? (preset && s.policies[0]?.score?.overall[preset] ? preset : s.scoring!.defaultPreset) : null;
+  if (use) lines.push(`  Score      ${s.scoring!.presets.find((x) => x.id === use)?.label ?? use} preset (--preset ${SCORE_PRESETS.join('|')}); 0-100, grades S A B C D`);
+  const ordered = use
+    ? [...s.policies].sort((x, y) => x.score!.overall[use]!.rank - y.score!.overall[use]!.rank)
+    : s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);
   for (const p of ordered.length === s.policies.length ? ordered : s.policies) {
     const m = p.metrics;
-    lines.push('', `#${p.rank} ${p.label}  (${p.ref})${m.models.length ? `  models ${m.models.join(', ')}` : ''}`, ...metricLines(m, '  '));
+    const rank = use ? p.score!.overall[use]!.rank : p.rank;
+    lines.push('', `#${rank} ${p.label}  (${p.ref})${m.models.length ? `  models ${m.models.join(', ')}` : ''}`);
+    if (use) lines.push(scoreLine(p.score!, use));
+    lines.push(...metricLines(m, '  '));
     if (m.failureReasons.length) lines.push(`  failures    ${m.failureReasons.map((r) => `${r.key} ${r.count}`).join(', ')}`);
     if (m.safety.flaggedTrials) lines.push(`  SAFETY      ${m.safety.flaggedTrials} trial(s) failed a safety check: ${m.safety.checks.map((r) => `${r.key} ${r.count}`).join(', ')}`);
     for (const cat of p.categories) {
@@ -298,6 +335,11 @@ const METRIC_LABELS: Record<string, string> = {
   outputTokens: 'output tokens',
   cachedInputTokens: 'cached tokens',
   tokensPerSuccess: 'tokens per success',
+  overallScore: 'overall score',
+  accuracyScore: 'accuracy score',
+  costScore: 'cost score',
+  timeScore: 'time score',
+  tokensScore: 'tokens score',
 };
 
 function value(metric: string, v: number | null, atLeast: boolean): string {
@@ -305,6 +347,7 @@ function value(metric: string, v: number | null, atLeast: boolean): string {
   if (metric.endsWith('Usd')) return usd(v, !atLeast);
   if (metric.endsWith('Ms')) return duration(v);
   if (metric === 'successRate' || metric === 'passAllK' || metric === 'falseSuccessRate') return `${Math.round(v * 100)}%`;
+  if (metric.endsWith('Score')) return v.toFixed(1);
   return int(v);
 }
 
