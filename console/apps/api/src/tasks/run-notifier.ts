@@ -25,6 +25,11 @@ export interface RunRef {
   outputsComplete?: boolean | null;
 }
 
+/** The triggers whose runs never notify their owner (#883): a benchmark's trial runs. */
+export const QUIET_RUN_TRIGGERS: readonly string[] = ['benchmark'];
+/** Whether a run sends no notification: one a benchmark started. */
+export const isQuietRun = (run: { trigger?: string | null } | null | undefined): boolean => !!run?.trigger && QUIET_RUN_TRIGGERS.includes(run.trigger);
+
 /**
  * Tells a run's owner what happened, after the change committed. A no-op
  * without the notifications slice; a failure to notify never fails a run.
@@ -74,6 +79,15 @@ export class RunNotifier {
     return run.conversationId ? { conversationId: run.conversationId, [key]: this.url(`/chat/${run.conversationId}`) } : { [key]: this.url(path) };
   }
 
+  /**
+   * A run event's notification, unless the run is a benchmark trial (#883): a benchmark starts dozens of runs on its own, and its owner
+   * reads them on the benchmark's page, not one notification each. Webhooks are unchanged (they carry `trigger`).
+   */
+  private async sendFor(run: Pick<RunRef, 'trigger'>, event: string, userId: string, data: Record<string, unknown>): Promise<void> {
+    if (isQuietRun(run)) return;
+    await this.send(event, userId, data);
+  }
+
   private async send(event: string, userId: string, data: Record<string, unknown>): Promise<void> {
     if (!this.notifications) return;
     try {
@@ -91,7 +105,7 @@ export class RunNotifier {
   }
 
   async needsYou(userId: string, run: RunRef & { handoffId?: string | null }, prompt: string, kind: string, input = 'none', expiresAt: Date | null = null): Promise<void> {
-    await this.send(RUN_NEEDS_YOU_EVENT, userId, {
+    await this.sendFor(run, RUN_NEEDS_YOU_EVENT, userId, {
       runId: run.id,
       goal: run.goal.slice(0, 300),
       prompt: prompt.slice(0, 1000),
@@ -114,7 +128,7 @@ export class RunNotifier {
     when: { expiresAt: Date | null; reminderCount: number; now: Date },
   ): Promise<void> {
     const left = when.expiresAt ? (when.expiresAt.getTime() - when.now.getTime()) / 60_000 : null;
-    await this.send(RUN_REMINDER_EVENT, userId, {
+    await this.sendFor(run, RUN_REMINDER_EVENT, userId, {
       runId: run.id,
       goal: run.goal.slice(0, 300),
       prompt: ask.prompt.slice(0, 1000),
@@ -127,11 +141,11 @@ export class RunNotifier {
 
   /** A run has been paused for an hour (E38.2): once per pause. It leads to the chat or the run page, where it is resumed or stopped. No webhook. */
   async stillPaused(userId: string, run: RunRef): Promise<void> {
-    await this.send(RUN_STILL_PAUSED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
+    await this.sendFor(run, RUN_STILL_PAUSED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
   }
 
   async finished(userId: string, run: RunRef, status: string, result?: string | null): Promise<void> {
-    await this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
+    await this.sendFor(run, RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
     // The outputs the run returned (E39.5), masked like every view: a sensitive value is `[hidden]`. Additive.
     const outputs = outputsView(run.outputsSpec, run.outputs);
     // Additive (E39.6): `outputsComplete`, the run's page, and a signed link to the masked PDF (7 days, this run only).
@@ -150,7 +164,7 @@ export class RunNotifier {
    * webhook: nothing about the run's state changed.
    */
   async overBudget(userId: string, run: RunRef, usedOfLimit: string, label: string): Promise<void> {
-    await this.send(RUN_OVER_BUDGET_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), usedOfLimit, budget: label, ...this.at(run, `/runs/${run.id}`, 'runUrl') });
+    await this.sendFor(run, RUN_OVER_BUDGET_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), usedOfLimit, budget: label, ...this.at(run, `/runs/${run.id}`, 'runUrl') });
   }
 
   /**
@@ -159,7 +173,7 @@ export class RunNotifier {
    * No webhook and no values: the summaries are the rules' own, written by the server.
    */
   async savedApprovalsUsed(userId: string, run: RunRef, line: string): Promise<void> {
-    await this.send(RUN_SAVED_APPROVALS_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 500), runUrl: this.url(`/runs/${run.id}`) });
+    await this.sendFor(run, RUN_SAVED_APPROVALS_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 500), runUrl: this.url(`/runs/${run.id}`) });
   }
 
   /**
@@ -171,7 +185,7 @@ export class RunNotifier {
     if (shown.length === 0) return;
     const more = new Set(sites).size - shown.length;
     const line = `Signed in to ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''} with a saved login`;
-    await this.send(RUN_SAVED_LOGIN_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line, runUrl: this.url(`/runs/${run.id}`) });
+    await this.sendFor(run, RUN_SAVED_LOGIN_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line, runUrl: this.url(`/runs/${run.id}`) });
   }
 
   /**
@@ -179,12 +193,12 @@ export class RunNotifier {
    * shop.example.test: 42.50 USD"). The brand, last four, host and the declared amount only; never a number, an expiry or a code.
    */
   async cardUsed(userId: string, run: RunRef, line: string): Promise<void> {
-    await this.send(RUN_CARD_USED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 300), runUrl: this.url(`/runs/${run.id}`) });
+    await this.sendFor(run, RUN_CARD_USED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 300), runUrl: this.url(`/runs/${run.id}`) });
   }
 
   /** The amount read on the confirmation page differs from the declared one (E37.7). */
   async cardAmountMismatch(userId: string, run: RunRef, line: string): Promise<void> {
-    await this.send(RUN_CARD_AMOUNT_MISMATCH_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 300), runUrl: this.url(`/runs/${run.id}`) });
+    await this.sendFor(run, RUN_CARD_AMOUNT_MISMATCH_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), line: line.slice(0, 300), runUrl: this.url(`/runs/${run.id}`) });
   }
 
   /** The notice links to the task's schedules (`/tasks/:id#schedule`, #428), where the failing one carries a warning. */

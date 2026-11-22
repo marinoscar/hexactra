@@ -56,6 +56,7 @@ An organization administrator starts one with `POST /api/benchmarks` (permission
 - It asks before a risky step only when its challenge says so (`run.confirmRiskyActions`).
 - It uses no connection, saved login, identity detail or card, whatever the administrator's own defaults are.
 - How a run without a task carries those two limits is in the [decision record](decisions/benchmark.md#how-a-run-without-a-task-carries-its-allowed-sites-and-confirmriskyactions).
+- **It notifies nobody** (#883). A trial run sends no push, email or in-app notification: not when it finishes, fails or is stopped, not when it asks a question (the scripted owner answers it), and not for a reminder, a pause, a budget, a saved approval or sign-in, a card, or an owner card (a suggested memory, an offer to save a sign-in). The runs and their results are on the benchmark's page and in the run history. Webhooks are still sent, with `trigger: "benchmark"`, so an integration can filter them. The rule is `isQuietRun` in `apps/api/src/tasks/run-notifier.ts` (its `QUIET_RUN_TRIGGERS`), also read by the question notifications channel.
 
 ## The scripted owner
 
