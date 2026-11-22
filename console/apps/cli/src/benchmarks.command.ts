@@ -7,11 +7,14 @@ import { resolvePolicyId } from './policies.js';
 import { sizeText } from './runs.js';
 import {
   ENDED,
+  SCORE_PRESETS,
   EXPORT_FORMATS,
   benchmarkLine,
   comparisonText,
   exportBenchmark,
   parsePolicyFlag,
+  recordedText,
+  budget,
   positive,
   resolveBenchmarkId,
   scorecardText,
@@ -58,13 +61,21 @@ function coded<A extends unknown[]>(fn: (...args: A) => Promise<void>): (...args
 }
 
 const collect = (v: string, prev: string[] = []): string[] => [...prev, v];
+/** `--record` alone is every policy and wins; `--record <policy>` adds that one (#845). */
+const recordFlag = (v: string, prev: boolean | string[] | undefined): boolean | string[] => (prev === true ? true : [...(Array.isArray(prev) ? prev : []), v]);
 
-function webLink(id: string): string | null {
+/** The CLI's configured console URL (the web app), or null when it is not configured. */
+function webBase(): string | null {
   try {
-    return `${consoleWebUrl()}/admin/settings/benchmarks/${id}`;
+    return consoleWebUrl();
   } catch {
     return null;
   }
+}
+
+function webLink(id: string): string | null {
+  const base = webBase();
+  return base ? `${base}/admin/settings/benchmarks/${id}` : null;
 }
 
 async function showBenchmark(id: string): Promise<{ benchmark: BenchmarkView; scorecard: ScorecardView }> {
@@ -78,7 +89,11 @@ interface RunOpts {
   challenge?: string[];
   trials?: string;
   capUsd?: string;
+  /** `--cap`, the short spelling of `--cap-usd` (#844). */
+  cap?: string;
   timeoutMinutes?: string;
+  /** `--record`: every policy (`true`); `--record <policy>` (repeatable): only those (#845). */
+  record?: boolean | string[];
   host?: string;
   profile?: string;
   name?: string;
@@ -86,20 +101,46 @@ interface RunOpts {
   json?: boolean;
 }
 
+/** "started <id> (12 trials, cap $5, recording Economy)". */
+export function startedLine(b: BenchmarkView): string {
+  const recorded = recordedText(b.config);
+  return `started ${b.id} (${b.progress.total} trials, ${b.config.capUsd === null ? 'no cap' : `cap $${b.config.capUsd}`}${recorded ? `, recording ${recorded}` : ''})`;
+}
+
 /** The body of `POST /benchmarks` from the flags; policy names and prefixes are resolved to ids. */
 export async function benchmarkRequest(o: RunOpts): Promise<Record<string, unknown>> {
   if (!o.policy?.length) throw new Error('Name at least one policy: --policy builtin:economy --policy builtin:thorough (hexactra policies list shows them).');
-  const policies = [];
+  const policies: { ref: string; label?: string; recordVideo?: boolean }[] = [];
+  const given: string[] = [];
   for (const raw of o.policy) {
     const p = parsePolicyFlag(raw);
+    given.push(p.ref);
     policies.push({ ...p, ref: await resolvePolicyId(p.ref) });
+  }
+  // `--record <policy>` (#845): one of the --policy values, its label, or anything that resolves to the same policy.
+  if (Array.isArray(o.record)) {
+    for (const want of o.record) {
+      const w = want.trim().toLowerCase();
+      let i = policies.findIndex((p, n) => given[n]!.toLowerCase() === w || p.ref.toLowerCase() === w || p.label?.toLowerCase() === w);
+      if (i < 0) {
+        const id = await resolvePolicyId(want.trim()).catch(() => null);
+        i = id ? policies.findIndex((p) => p.ref === id) : -1;
+      }
+      if (i < 0) throw new Error(`--record ${want}: not one of the --policy values (give its ref, id, name or label, or --record alone for every policy).`);
+      policies[i]!.recordVideo = true;
+    }
   }
   const body: Record<string, unknown> = { policies };
   if (o.name) body.name = o.name;
   if (o.challenge?.length) body.challengeIds = o.challenge;
   if (o.trials !== undefined) body.trials = positive('--trials', o.trials, true);
-  if (o.capUsd !== undefined) body.capUsd = positive('--cap-usd', o.capUsd);
+  // `none`, `0` or an empty value: no budget (#840, #844).
+  if (o.cap !== undefined && o.capUsd !== undefined) throw new Error('Give the budget once: --cap or --cap-usd.');
+  const cap = o.cap ?? o.capUsd;
+  if (cap !== undefined) body.capUsd = budget(o.cap !== undefined ? '--cap' : '--cap-usd', cap);
   if (o.timeoutMinutes !== undefined) body.trialTimeoutMinutes = positive('--timeout-minutes', o.timeoutMinutes, true);
+  // `--record` alone (#841): every policy's trial runs record a video (not masked, owner-only).
+  if (o.record === true) body.recordVideo = true;
   if (o.host && o.host !== 'any') body.hostId = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), o.host).id;
   if (o.profile) body.profile = o.profile;
   return body;
@@ -139,8 +180,10 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--policy <ref>', 'an agent policy, repeatable (1 to 8): builtin:<key>, an id, or a name; `<ref>=<label>` names its column', collect)
     .option('--challenge <id>', 'a challenge, repeatable (default: the whole suite; `benchmarks suite` lists them)', collect)
     .option('--trials <n>', 'attempts per challenge and policy (default: the deployment setting, usually 3)')
-    .option('--cap-usd <usd>', 'no new trial starts once this much is spent (default: the deployment setting)')
+    .option('--cap-usd <usd|none>', 'the budget: no new trial starts once this much is spent; 0 or "none": no budget (default: the deployment setting)')
+    .option('--cap <usd|none>', 'the same as --cap-usd')
     .option('--timeout-minutes <n>', 'how long one trial may take (default: the deployment setting)')
+    .option('--record [policy]', 'record a video of the trial runs (not masked; watch it on the run page): alone, of every policy; with a policy (repeatable), of that one only', recordFlag)
     .option('--host <name|id>', 'the node every trial runs on ("any": the fabric picks one per trial)')
     .option('--profile <name>', 'the browser profile on the node', 'default')
     .option('--name <name>', 'the benchmark\'s name (default: "Benchmark" and the date)')
@@ -152,11 +195,11 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         const b = await api.post<BenchmarkView>('/benchmarks', await benchmarkRequest(o));
         if (!o.wait) {
           if (o.json) return json(b);
-          out(`started ${b.id} (${b.progress.total} trials, cap $${b.config.capUsd})`);
+          out(startedLine(b));
           const link = webLink(b.id);
           return out(`follow it: hexactra benchmarks show ${b.id.slice(0, 8)}${link ? ` or ${link}` : ''}`);
         }
-        if (!o.json) out(`started ${b.id} (${b.progress.total} trials, cap $${b.config.capUsd})`);
+        if (!o.json) out(startedLine(b));
         const ended = await waitForBenchmark(api, b.id, { intervalMs: pollMs, onChange: (line) => (o.json ? undefined : out(line)) });
         const scorecard = await api.get<ScorecardView>(`/benchmarks/${b.id}/scorecard`);
         if (o.json) json({ benchmark: ended, scorecard });
@@ -173,19 +216,24 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
 
   bm.command('show <id>')
     .description("A benchmark and its scorecard: success, reliability, speed, tokens (input, output, cached) and cost per policy, per category and for the benchmark")
-    .option('--trials', 'also list every trial with its verdict, tokens, cost and run')
+    .option('--trials', 'also list every trial with its verdict, tokens, cost, run and recording (with the run page URL of a ready one)')
     .option('--json', 'print JSON (the benchmark, its scorecard and, with --trials, its trials)')
+    .option('--preset <preset>', `the Benchmark Score's weighting: ${SCORE_PRESETS.join(', ')} (default: accuracy)`)
     .action(
-      coded(async (ref: string, o: { trials?: boolean; json?: boolean }) => {
+      coded(async (ref: string, o: { trials?: boolean; json?: boolean; preset?: string }) => {
+        if (o.preset !== undefined && !(SCORE_PRESETS as readonly string[]).includes(o.preset)) throw new Error(`--preset must be one of ${SCORE_PRESETS.join(', ')}`);
         const id = await resolveBenchmarkId(consoleApi(), ref);
         const { benchmark, scorecard } = await showBenchmark(id);
         const trials = o.trials ? (await consoleApi().get<{ items: BenchmarkTrialView[] }>(`/benchmarks/${id}/trials`)).items : undefined;
         if (o.json) return json({ benchmark, scorecard, ...(trials ? { trials } : {}) });
-        scorecardText(benchmark, scorecard).forEach(out);
+        // The summary counts the trial recordings (#863): without --trials the trials are read for that line alone, and a failure to read
+        // them only leaves the line out.
+        const counted = trials ?? (await consoleApi().get<{ items: BenchmarkTrialView[] }>(`/benchmarks/${id}/trials`).then((r) => r.items, () => undefined));
+        scorecardText(benchmark, scorecard, counted, o.preset).forEach(out);
         if (trials) {
           out('');
           out('Trials');
-          trialLines(trials).forEach(out);
+          trialLines(trials, { webUrl: webBase() }).forEach(out);
         }
         if (!ENDED.has(benchmark.status)) out(`\nstill ${benchmark.status}: the numbers will change`);
       }),
@@ -210,18 +258,20 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--format <format>', EXPORT_FORMATS.join(', '), 'json')
     .option('--paper <size>', "the PDF's paper: a4 or letter", 'a4')
     .option('--baseline <id>', 'include the comparison with this earlier benchmark')
+    .option('--preset <preset>', `the PDF leaderboard's Benchmark Score weighting: ${SCORE_PRESETS.join(', ')} (default: accuracy)`)
     .option('-o, --output <file>', 'write to this file ("-" for stdout; default: the console\'s file name in the current directory)')
     .action(
-      coded(async (ref: string, o: { format: string; paper: string; baseline?: string; output?: string }) => {
+      coded(async (ref: string, o: { format: string; paper: string; preset?: string; baseline?: string; output?: string }) => {
         const format = o.format.toLowerCase();
         if (!EXPORT_FORMATS.includes(format as ExportFormat)) throw new Error(`--format is one of ${EXPORT_FORMATS.join(', ')}, not "${o.format}".`);
         const paper = o.paper.toLowerCase();
         if (paper !== 'a4' && paper !== 'letter') throw new Error(`--paper is a4 or letter, not "${o.paper}".`);
+        if (o.preset !== undefined && !(SCORE_PRESETS as readonly string[]).includes(o.preset)) throw new Error(`--preset must be one of ${SCORE_PRESETS.join(', ')}`);
         const api = consoleApi();
         const id = await resolveBenchmarkId(api, ref);
         const baseline = o.baseline ? await resolveBenchmarkId(api, o.baseline) : undefined;
         const target = exportTargetFactory ? exportTargetFactory() : consoleCredentials();
-        const file = await exportBenchmark(target, id, { format: format as ExportFormat, paper, ...(baseline ? { baseline } : {}), ...(o.output ? { output: o.output } : {}) });
+        const file = await exportBenchmark(target, id, { format: format as ExportFormat, paper, ...(o.preset ? { preset: o.preset } : {}), ...(baseline ? { baseline } : {}), ...(o.output ? { output: o.output } : {}) });
         if (file.path !== '-') out(`wrote ${file.path} (${sizeText(file.bytes)})`);
       }),
     );

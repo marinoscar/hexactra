@@ -18,7 +18,7 @@ import { benchmarkRunContext } from '../runner/host/run-limits';
 import { BENCHMARK_RUN_TRIGGER } from './benchmark.constants';
 import { BenchmarkGrader } from './benchmark-grader';
 import { BenchmarkSiteAddress } from './benchmark-site-address';
-import type { StoredBenchmarkConfig } from './benchmark-config';
+import { recordsVideo, type StoredBenchmarkConfig } from './benchmark-config';
 import { TrialStateService, trialBaseUrl } from './site/trial-state.service';
 import { challengeById } from './suite/registry';
 
@@ -91,6 +91,8 @@ export class BenchmarkRunStarter {
         origin: 'system',
         policyRef: trial.policyRef,
         policySource: 'run',
+        // Fixed on the run when it is created (epic #755): the benchmark owner's opt-in for this trial's policy (#841, #845).
+        recordVideo: recordsVideo(config, trial.policyRef),
         context: benchmarkRunContext({ benchmarkId: trial.benchmarkId, trialId: trial.id, allowedDomains: [site.host], confirmRiskyActions: challenge.run?.confirmRiskyActions === true }) as unknown as Prisma.InputJsonValue,
       },
       select: { id: true },

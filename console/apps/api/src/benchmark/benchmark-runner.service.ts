@@ -97,7 +97,8 @@ export class BenchmarkRunner {
       // Read again each time round: a trial that just ended added its cost, and Cancel may have come in.
       const now = await this.prisma.benchmark.findUnique({ where: { id: benchmarkId }, select: { status: true, spentUsd: true } });
       if (!now || !isLive(now.status)) return 'ended';
-      if (Number(now.spentUsd) >= config.capUsd) {
+      // No cap (`null`, #840): only each run's own policy budget limits spend.
+      if (config.capUsd !== null && Number(now.spentUsd) >= config.capUsd) {
         await this.skipRest(benchmarkId, 'cap');
         return this.finish(benchmarkId, 'completed');
       }

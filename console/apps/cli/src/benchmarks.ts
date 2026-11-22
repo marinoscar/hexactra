@@ -28,7 +28,7 @@ export interface BenchmarkView {
   status: string;
   suiteKey: string;
   suiteVersion: number;
-  config: { challengeIds: string[]; policies: { ref: string; label: string }[]; trials: number; hostId: string | null; profile: string; capUsd: number; trialTimeoutMinutes: number };
+  config: { challengeIds: string[]; policies: { ref: string; label: string; recordVideo?: boolean }[]; trials: number; hostId: string | null; profile: string; capUsd: number | null; trialTimeoutMinutes: number; recordVideo?: boolean };
   appVersion: string;
   commit: string | null;
   spentUsd: number;
@@ -57,6 +57,11 @@ export interface BenchmarkTrialView {
   model: string | null;
   costUsd: number | null;
   costKnown: boolean | null;
+  /**
+   * The trial run's recording (#846): `ready` plays on the run page (`/runs/<runId>#recording`), `recording`/`processing` not yet,
+   * `failed` never. Null when not recorded or for a viewer without `runs:read`; absent from an older console.
+   */
+  recording?: { status: string; durationMs: number | null } | null;
 }
 
 export interface SuiteView {
@@ -100,7 +105,36 @@ export interface ScorecardView {
   k: number;
   totals: { costUsd: number; costKnown: boolean; inputTokens: number; outputTokens: number; cachedInputTokens: number; totalTokens: number; modelCalls: number; counts: ScoreMetricsView['counts'] };
   ranking: { rank: number; ref: string; label: string }[];
-  policies: { ref: string; label: string; rank: number; metrics: ScoreMetricsView; categories: { category: string; label: string; metrics: ScoreMetricsView }[] }[];
+  policies: { ref: string; label: string; rank: number; metrics: ScoreMetricsView; score?: ScoreView; categories: { category: string; label: string; metrics: ScoreMetricsView }[] }[];
+  /** Absent on a console older than the Benchmark Score (#871). */
+  scoring?: { defaultPreset: string; presets: { id: string; label: string; weights: Record<string, number> }[] };
+}
+
+/** The Benchmark Score of one policy (#871). */
+export interface ScoreView {
+  rated: boolean;
+  provisional: boolean;
+  accuracy: number | null;
+  cost: number | null;
+  costKnown: boolean;
+  time: number | null;
+  tokens: number | null;
+  overall: Record<string, { value: number | null; low: number | null; high: number | null; rank: number; grade: string | null; tied: boolean }>;
+  badges: string[];
+}
+
+export const SCORE_PRESETS = ['accuracy', 'balanced', 'budget', 'speed'] as const;
+export type ScorePresetFlag = (typeof SCORE_PRESETS)[number];
+
+const BADGE_TEXT: Record<string, string> = { most_accurate: 'most accurate', cheapest: 'cheapest', fastest: 'fastest', most_token_efficient: 'fewest tokens' };
+const sc = (v: number | null): string => (v === null ? '-' : v.toFixed(1));
+
+/** A policy's score line: `score  82.4 A  (78.1-85.0)  accuracy 90.0 · cost 70.0 · time 60.0 · tokens 80.0  [provisional] best: cheapest`. */
+export function scoreLine(score: ScoreView, preset: string): string {
+  const o = score.overall[preset];
+  if (!score.rated || !o || o.value === null) return '  score       not rated (no judged trial)';
+  const flags = [score.provisional ? '[provisional]' : '', o.tied ? '[tied with #1]' : '', score.badges.length ? `best: ${score.badges.map((b) => BADGE_TEXT[b] ?? b).join(', ')}` : ''].filter(Boolean).join('  ');
+  return `  score       ${sc(o.value)} ${o.grade ?? ''}  (${sc(o.low)}-${sc(o.high)})  accuracy ${sc(score.accuracy)} · cost ${sc(score.cost)}${score.costKnown ? '' : '≥'} · time ${sc(score.time)} · tokens ${sc(score.tokens)}${flags ? `  ${flags}` : ''}`;
 }
 
 export interface MetricDeltaView {
@@ -179,7 +213,7 @@ export function benchmarkLine(b: BenchmarkView): string {
 export function progressLine(b: BenchmarkView): string {
   const p = b.progress;
   const done = p.graded + p.skipped + p.unsupported;
-  return `[${b.status}] ${done}/${p.total} trials: ${p.pass} pass, ${p.fail} fail, ${p.error} error, ${p.skipped} skipped, ${p.unsupported} unsupported; ${int(b.totals.inputTokens + b.totals.outputTokens)} tokens, ${usd(b.spentUsd, b.totals.costKnown)} of ${usd(b.config.capUsd)}`;
+  return `[${b.status}] ${done}/${p.total} trials: ${p.pass} pass, ${p.fail} fail, ${p.error} error, ${p.skipped} skipped, ${p.unsupported} unsupported; ${int(b.totals.inputTokens + b.totals.outputTokens)} tokens, ${usd(b.spentUsd, b.totals.costKnown)}${b.config.capUsd === null ? ' (no cap)' : ` of ${usd(b.config.capUsd)}`}`;
 }
 
 function metricLines(m: ScoreMetricsView, indent: string): string[] {
@@ -193,8 +227,18 @@ function metricLines(m: ScoreMetricsView, indent: string): string[] {
   ];
 }
 
-/** `show`: the benchmark, the whole benchmark's tokens and cost, then every policy (ranked) with its categories. */
-export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
+/** The policies whose trial runs record a video (#841, #845): `null` for none, "all policies", or their labels. */
+export function recordedText(config: Pick<BenchmarkView['config'], 'policies' | 'recordVideo'>): string | null {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : recorded.map((p) => p.label).join(', ');
+}
+
+/**
+ * `show`: the benchmark, the whole benchmark's tokens and cost (and its trial recordings when `trials` carry any, #863), then every
+ * policy (ranked) with its categories.
+ */
+export function scorecardText(b: BenchmarkView, s: ScorecardView, trials?: readonly BenchmarkTrialView[], preset?: string): string[] {
   const t = s.totals;
   const c = t.counts;
   const lines = [
@@ -203,13 +247,25 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
     `  Suite      ${b.suiteKey} v${b.suiteVersion}, ${b.config.challengeIds.length} challenges x ${b.config.policies.length} policies x ${b.config.trials} trials; console ${b.appVersion}${b.commit ? ` (${b.commit.slice(0, 7)})` : ''}`,
     `  Trials     ${c.total}: ${c.pass} pass, ${c.fail} fail, ${c.error} error, ${c.skipped} skipped, ${c.unsupported} unsupported${c.unfinished ? `, ${c.unfinished} not finished` : ''}`,
     `  Tokens     ${int(t.totalTokens)} (${tokenSplit(t.inputTokens, t.outputTokens, t.cachedInputTokens)}), ${int(t.modelCalls)} model calls`,
-    `  Cost       ${usd(t.costUsd, t.costKnown)} of a ${usd(b.config.capUsd)} cap${t.costKnown ? '' : ' (a model call had no price: at least this much)'}`,
+    `  Cost       ${usd(t.costUsd, t.costKnown)}${b.config.capUsd === null ? ', no cap' : ` of a ${usd(b.config.capUsd)} cap`}${t.costKnown ? '' : ' (a model call had no price: at least this much)'}`,
   ];
+  const recorded = recordedText(b.config);
+  if (recorded) lines.push(`  Recorded   ${recorded} (videos on each run page)`);
+  const recordings = recordingSummary(trials);
+  if (recordings) lines.push(recordings);
   const byRef = new Map(s.policies.map((p) => [p.ref, p]));
-  const ordered = s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);
+  const scored = !!s.scoring && s.policies.every((p) => p.score);
+  const use = scored ? (preset && s.policies[0]?.score?.overall[preset] ? preset : s.scoring!.defaultPreset) : null;
+  if (use) lines.push(`  Score      ${s.scoring!.presets.find((x) => x.id === use)?.label ?? use} preset (--preset ${SCORE_PRESETS.join('|')}); 0-100, grades S A B C D`);
+  const ordered = use
+    ? [...s.policies].sort((x, y) => x.score!.overall[use]!.rank - y.score!.overall[use]!.rank)
+    : s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);
   for (const p of ordered.length === s.policies.length ? ordered : s.policies) {
     const m = p.metrics;
-    lines.push('', `#${p.rank} ${p.label}  (${p.ref})${m.models.length ? `  models ${m.models.join(', ')}` : ''}`, ...metricLines(m, '  '));
+    const rank = use ? p.score!.overall[use]!.rank : p.rank;
+    lines.push('', `#${rank} ${p.label}  (${p.ref})${m.models.length ? `  models ${m.models.join(', ')}` : ''}`);
+    if (use) lines.push(scoreLine(p.score!, use));
+    lines.push(...metricLines(m, '  '));
     if (m.failureReasons.length) lines.push(`  failures    ${m.failureReasons.map((r) => `${r.key} ${r.count}`).join(', ')}`);
     if (m.safety.flaggedTrials) lines.push(`  SAFETY      ${m.safety.flaggedTrials} trial(s) failed a safety check: ${m.safety.checks.map((r) => `${r.key} ${r.count}`).join(', ')}`);
     for (const cat of p.categories) {
@@ -220,13 +276,49 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
   return lines;
 }
 
-/** `show --trials`: one line per trial with its verdict, tokens and cost. */
-export function trialLines(trials: BenchmarkTrialView[]): string[] {
-  return trials.map((t) => {
+/** A recording's length: `45s`, `1m12s`, `1h02m05s`. */
+export function recordingLength(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  if (h) return `${h}h${String(m).padStart(2, '0')}m${sec}s`;
+  return m ? `${m}m${sec}s` : `${s % 60}s`;
+}
+
+/** The run page's player of a trial (#863): `<console>/runs/<id>#recording`, or the path when the console URL is not known. */
+export const recordingUrl = (runId: string, webUrl?: string | null): string => `${(webUrl ?? '').replace(/\/+$/, '')}/runs/${encodeURIComponent(runId)}#recording`;
+
+/** A trial's recording state for `show --trials`: `rec ready 1m12s`, `rec processing`, `rec recording`, `rec failed`, or nothing. */
+export function recordingText(t: BenchmarkTrialView): string {
+  const r = t.recording;
+  if (!r) return '';
+  return r.status === 'ready' ? `rec ready${r.durationMs === null ? '' : ` ${recordingLength(r.durationMs)}`}` : `rec ${r.status}`;
+}
+
+/**
+ * `Recordings N ready, M processing, K failed` for the `show` summary (#863), or null when no trial carries a recording (none recorded,
+ * no `runs:read`, or an older console without the field). Processing counts a run still recording too.
+ */
+export function recordingSummary(trials: readonly BenchmarkTrialView[] | undefined): string | null {
+  const recorded = (trials ?? []).filter((t) => t.recording);
+  if (!recorded.length) return null;
+  const n = (pred: (status: string) => boolean) => recorded.filter((t) => pred(t.recording!.status)).length;
+  return `  Recordings ${n((s) => s === 'ready')} ready, ${n((s) => s === 'processing' || s === 'recording')} processing, ${n((s) => s === 'failed')} failed`;
+}
+
+/**
+ * `show --trials`: one line per trial with its verdict, tokens, cost, run and recording state; a ready recording adds a line with the
+ * run page's player (`webUrl` is the CLI's console URL; without it, the path).
+ */
+export function trialLines(trials: BenchmarkTrialView[], opts: { webUrl?: string | null } = {}): string[] {
+  return trials.flatMap((t) => {
     const verdict = t.verdict ?? t.status;
     const why = t.failureReason ? ` (${t.failureReason}${t.claimedSuccess && t.verdict === 'fail' ? ', claimed success' : ''})` : '';
     const tokens = t.inputTokens === null ? '' : `  ${tokenSplit(t.inputTokens, t.outputTokens ?? 0, t.cachedInputTokens ?? 0)}  ${usd(t.costUsd, t.costKnown !== false)}`;
-    return `  ${t.challengeId.padEnd(26)} ${t.policyLabel.slice(0, 20).padEnd(20)} #${t.trialIndex + 1}  ${`${verdict}${why}`.padEnd(30)} ${duration(t.activeMs).padStart(9)}${tokens}${t.runId ? `  run ${t.runId.slice(0, 8)}` : ''}`;
+    const rec = recordingText(t);
+    const line = `  ${t.challengeId.padEnd(26)} ${t.policyLabel.slice(0, 20).padEnd(20)} #${t.trialIndex + 1}  ${`${verdict}${why}`.padEnd(30)} ${duration(t.activeMs).padStart(9)}${tokens}${t.runId ? `  run ${t.runId.slice(0, 8)}` : ''}${rec ? `  ${rec}` : ''}`;
+    return t.recording?.status === 'ready' && t.runId ? [line, `      ${recordingUrl(t.runId, opts.webUrl)}`] : [line];
   });
 }
 
@@ -243,6 +335,11 @@ const METRIC_LABELS: Record<string, string> = {
   outputTokens: 'output tokens',
   cachedInputTokens: 'cached tokens',
   tokensPerSuccess: 'tokens per success',
+  overallScore: 'overall score',
+  accuracyScore: 'accuracy score',
+  costScore: 'cost score',
+  timeScore: 'time score',
+  tokensScore: 'tokens score',
 };
 
 function value(metric: string, v: number | null, atLeast: boolean): string {
@@ -250,6 +347,7 @@ function value(metric: string, v: number | null, atLeast: boolean): string {
   if (metric.endsWith('Usd')) return usd(v, !atLeast);
   if (metric.endsWith('Ms')) return duration(v);
   if (metric === 'successRate' || metric === 'passAllK' || metric === 'falseSuccessRate') return `${Math.round(v * 100)}%`;
+  if (metric.endsWith('Score')) return v.toFixed(1);
   return int(v);
 }
 
@@ -329,6 +427,15 @@ export function parsePolicyFlag(raw: string): { ref: string; label?: string } {
 }
 
 /** A positive number flag. */
+/** A budget flag (#844): `none`, `0` or an empty value is no budget (`null`); otherwise an amount above 0. */
+export function budget(flag: string, raw: string): number | null {
+  const t = raw.trim().toLowerCase();
+  if (t === '' || t === 'none') return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${flag} takes an amount in USD, or 0 or "none" for no budget (got "${raw}").`);
+  return n === 0 ? null : n;
+}
+
 export function positive(flag: string, raw: string, integer = false): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0 || (integer && !Number.isInteger(n))) throw new Error(`${flag} takes a ${integer ? 'whole ' : ''}number above 0 (got "${raw}").`);
@@ -386,10 +493,11 @@ export function exportFilename(id: string, disposition: string | null, format: E
 export async function exportBenchmark(
   target: ExportTarget,
   id: string,
-  opts: { format: ExportFormat; paper?: 'a4' | 'letter'; baseline?: string; output?: string; dir?: string; stdout?: (b: Buffer) => void },
+  opts: { format: ExportFormat; paper?: 'a4' | 'letter'; preset?: string; baseline?: string; output?: string; dir?: string; stdout?: (b: Buffer) => void },
 ): Promise<{ path: string; bytes: number }> {
   const query: Record<string, string> = { format: opts.format };
   if (opts.format === 'pdf') query.paper = opts.paper ?? 'a4';
+  if (opts.format === 'pdf' && opts.preset) query.preset = opts.preset;
   if (opts.baseline) query.baseline = opts.baseline;
   const url = buildUrl(target.apiBaseUrl, `/benchmarks/${encodeURIComponent(id)}/export`, query);
   const fetchImpl = target.fetch ?? globalThis.fetch;

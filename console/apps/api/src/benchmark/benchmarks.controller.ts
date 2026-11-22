@@ -26,7 +26,11 @@ import { ScorecardService } from './scorecard.service';
 interface Principal {
   id: string;
   activeOrgId?: string | null;
+  permissions?: string[];
 }
+
+/** A trial's recording status is shown only to a viewer who may open the run (`runs:read`, the run page's rule; #846). */
+export const canSeeRecordings = (user: Pick<Principal, 'permissions'>): boolean => (user.permissions ?? []).includes('runs:read');
 
 const NOT_FOUND = "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's.";
 
@@ -68,7 +72,7 @@ export class BenchmarksController {
   @ApiOperation({
     summary: 'Start a benchmark',
     description:
-      'Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent.',
+      'Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null` or `0`: no budget, stored as `null`; absent: the deployment default).',
   })
   start(@CurrentUser() user: Principal, @Body() body: CreateBenchmarkDto) {
     return this.benchmarks.start(user, body);
@@ -89,10 +93,11 @@ export class BenchmarksController {
   @Auth({ permissions: ['benchmarks:read'] })
   @ApiOperation({
     summary: "List a benchmark's trials",
-    description: "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.",
+    description:
+      "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run, the run's id and, for a caller with `runs:read`, the status of the run's recording (`recording`; the video plays only on the run page). Never the seed, the site's state or an expected answer.",
   })
-  trials(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: ListTrialsQueryDto) {
-    return this.benchmarks.trials(userId, id, q);
+  trials(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Query() q: ListTrialsQueryDto) {
+    return this.benchmarks.trials(user.id, id, q, { recordings: canSeeRecordings(user) });
   }
 
   @Get(':id/scorecard')
@@ -102,7 +107,7 @@ export class BenchmarksController {
   @ApiOperation({
     summary: "A benchmark's scorecard",
     description:
-      'Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the ranking (success rate, then cost per success, then median active time; no composite score); and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.',
+      'Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the Benchmark Score of each policy (accuracy, cost, time and tokens sub-scores from 0 to 100, the Overall score with its band, rank and grade under each weighting preset, and badges; #871) and the ranking by it under the default preset; and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.',
   })
   scorecard(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.scorecards.scorecard(userId, id);
@@ -141,10 +146,10 @@ export class BenchmarksController {
   @ApiOperation({
     summary: 'Export a benchmark report as JSON, CSV or PDF',
     description:
-      'A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run\'s goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `\'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial\'s site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.',
+      'A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run\'s goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `\'`). `format=pdf` (`paper=a4` or `letter`, `preset=accuracy|balanced|budget|speed`): the leaderboard first (the Benchmark Score of each policy under the preset, its grade, band, four sub-scores and badges), then summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, the rankings per dimension and under every preset, and the method. Every string is masked (`masking.hits` counts what was) and a trial\'s site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.',
   })
   async export(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Query() q: BenchmarkExportQueryDto, @Res() reply: FastifyReply): Promise<void> {
-    const file = await this.reports.export(user.id, id, { format: q.format, paper: q.paper, baseline: q.baseline, orgId: user.activeOrgId ?? null });
+    const file = await this.reports.export(user.id, id, { format: q.format, paper: q.paper, preset: q.preset, baseline: q.baseline, orgId: user.activeOrgId ?? null, recordings: canSeeRecordings(user) });
     await reply.header('content-disposition', `attachment; filename="${file.filename}"`).header('cache-control', 'no-store').type(file.contentType).send(file.body);
   }
 

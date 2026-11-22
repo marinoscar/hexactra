@@ -17,6 +17,10 @@ const challengeIdSchema = z.string().trim().min(1).max(64);
 const policyChoiceSchema = z.object({
   ref: policyRefSchema.describe('An agent policy: `builtin:<key>` or the id of one of your own.'),
   label: z.string().trim().min(1).max(200).optional().describe("The column's name in the scorecard. Absent: the policy's name."),
+  recordVideo: z
+    .boolean()
+    .optional()
+    .describe("Record a video of the browser tab of this policy's trial runs (run recordings, epic #755; #845). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false."),
 });
 
 /** `POST /api/benchmarks`. */
@@ -28,8 +32,18 @@ export const createBenchmarkSchema = z
     trials: z.number().int().min(1).max(BENCHMARK_LIMITS.maxTrials).optional().describe('Attempts per challenge and policy. Absent: the deployment default (`benchmark.defaultTrials`).'),
     hostId: z.uuid().nullable().optional().describe('The node every trial runs on. Absent: the fabric picks an available one for each trial.'),
     profile: profileNameSchema.default('default').describe('The browser profile on the node.'),
-    capUsd: z.number().positive().max(BENCHMARK_LIMITS.maxCapUsd).optional().describe('No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`.'),
+    capUsd: z
+      .number()
+      .min(0)
+      .max(BENCHMARK_LIMITS.maxCapUsd)
+      .nullable()
+      .optional()
+      .describe('The budget: no new trial starts once the benchmark has spent this much on model calls. `null` or `0`: no budget (stored as `null`; each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.'),
     trialTimeoutMinutes: z.number().int().min(1).max(BENCHMARK_LIMITS.maxTrialTimeoutMinutes).optional().describe('How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.'),
+    recordVideo: z
+      .boolean()
+      .optional()
+      .describe("`true`: record a video of every trial's browser tab, for every policy, whatever each policy's own `recordVideo` says (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false: only the policies that set `recordVideo` are recorded (#845)."),
   })
   .strict();
 export class CreateBenchmarkDto extends createZodDto(createBenchmarkSchema) {}
@@ -38,12 +52,21 @@ export type CreateBenchmarkInput = z.infer<typeof createBenchmarkSchema>;
 /** What was asked for, as stored in `Benchmark.config`: every value resolved. */
 export const benchmarkConfigSchema = z.object({
   challengeIds: z.array(z.string()),
-  policies: z.array(z.object({ ref: z.string(), label: z.string() })),
+  policies: z.array(
+    z.object({
+      ref: z.string(),
+      label: z.string(),
+      /** This policy's trial runs record a video (#845). A benchmark stored before it reads the benchmark-wide flag. */
+      recordVideo: z.boolean().default(false).describe("This policy's trial runs record a video of their browser tab (not masked, owner-only)."),
+    }),
+  ),
   trials: z.number().int(),
   hostId: z.string().nullable(),
   profile: z.string(),
-  capUsd: z.number(),
+  capUsd: z.number().nullable().describe('The spend cap in USD; `null`: no cap.'),
   trialTimeoutMinutes: z.number().int(),
+  /** Every policy's trial runs record a video (#841): true when every policy's `recordVideo` is. A benchmark stored before it has none: false. */
+  recordVideo: z.boolean().default(false).describe("Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845)."),
 });
 export type BenchmarkConfig = z.infer<typeof benchmarkConfigSchema>;
 
@@ -112,6 +135,17 @@ export class BenchmarkListResponseDto extends createZodDto(benchmarkListSchema) 
 
 export const trialCheckSchema = z.object({ name: z.string(), pass: z.boolean(), detail: z.string().optional() });
 
+/** The statuses of a run's recording (`RunRecording.status`, epic #755). */
+export const TRIAL_RECORDING_STATUSES = ['recording', 'processing', 'ready', 'failed'] as const;
+
+export const trialRecordingSchema = z
+  .object({
+    status: z.enum(TRIAL_RECORDING_STATUSES).describe('`ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video.'),
+    durationMs: z.number().int().nullable().describe('The length of the video once it is `ready`; null before.'),
+  })
+  .describe("The trial run's video (epic #755), never the video itself: it is not masked and plays only on the run page.");
+export type TrialRecordingView = z.infer<typeof trialRecordingSchema>;
+
 export const benchmarkTrialSchema = z.object({
   id: z.string(),
   challengeId: z.string(),
@@ -142,6 +176,7 @@ export const benchmarkTrialSchema = z.object({
   escalations: z.number().int().nullable(),
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
+  recording: trialRecordingSchema.nullable().describe("The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`."),
 });
 export type BenchmarkTrialView = z.infer<typeof benchmarkTrialSchema>;
 

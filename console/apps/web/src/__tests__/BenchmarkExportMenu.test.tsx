@@ -43,6 +43,9 @@ describe('benchmarkExportPath', () => {
     expect(benchmarkExportPath(ID, { format: 'csv' })).toBe(`/benchmarks/${ID}/export?format=csv`);
     expect(benchmarkExportPath(ID, { format: 'json', baseline: BASE })).toBe(`/benchmarks/${ID}/export?format=json&baseline=${BASE}`);
     expect(benchmarkExportPath(ID, { format: 'pdf', paper: 'letter' })).toBe(`/benchmarks/${ID}/export?format=pdf&paper=letter`);
+    // The PDF leaderboard's weighting (#872); never on CSV or JSON.
+    expect(benchmarkExportPath(ID, { format: 'pdf', paper: 'a4', preset: 'budget' })).toBe(`/benchmarks/${ID}/export?format=pdf&paper=a4&preset=budget`);
+    expect(benchmarkExportPath(ID, { format: 'csv', preset: 'budget' })).toBe(`/benchmarks/${ID}/export?format=csv`);
   });
 });
 

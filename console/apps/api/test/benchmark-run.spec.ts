@@ -5,7 +5,8 @@ import { join, relative, sep } from 'node:path';
 
 import { NO_SITE, domainAllowed, fabricAllowedSites } from '@marinoscar/hexactra-browser-agent/policy';
 
-import { inRunOrder, publicConfig, readBenchmarkConfig } from '../src/benchmark/benchmark-config';
+import { inRunOrder, publicConfig, readBenchmarkConfig, recordsVideo, withRecordings } from '../src/benchmark/benchmark-config';
+import { recordedPolicies } from '../src/benchmark/benchmark-report.pdf';
 import { siteAddress } from '../src/benchmark/benchmark-site-address';
 import { createBenchmarkSchema } from '../src/benchmark/benchmarks.schemas';
 import { BENCHMARK_ANSWER_CHANNEL, askedQuestions, brokerAnswer, scriptRules, type ScriptQuestion } from '../src/benchmark/owner-script';
@@ -85,6 +86,10 @@ describe("a run's limits (runner/host/run-limits.ts)", () => {
     expect(createBenchmarkSchema.safeParse({ policies: Array.from({ length: 9 }, () => ({ ref: 'builtin:balanced' })) }).success).toBe(false);
     expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], trials: 11 }).success).toBe(false);
     expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'not-a-policy' }] }).success).toBe(false);
+    // The budget (#844): 0 and null are no budget, a negative amount is refused.
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], capUsd: 0 }).success).toBe(true);
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], capUsd: null }).success).toBe(true);
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], capUsd: -1 }).success).toBe(false);
   });
 });
 
@@ -214,7 +219,7 @@ describe('the verdict of a finished trial (benchmark/trial-verdict.ts)', () => {
 });
 
 describe('the stored config and the order of trials', () => {
-  const config = { challengeIds: ['nav-lookup', 'nav-spa'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 2, hostId: null, profile: 'default', capUsd: 5, trialTimeoutMinutes: 15 };
+  const config = { challengeIds: ['nav-lookup', 'nav-spa'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 2, hostId: null, profile: 'default', capUsd: 5, trialTimeoutMinutes: 15, recordVideo: false };
 
   it('alternates the policies: attempt by attempt, challenge by challenge, one policy after the other', () => {
     const trials = [1, 0].flatMap((trialIndex) => ['builtin:thorough', 'builtin:economy'].flatMap((policyRef) => ['nav-spa', 'nav-lookup'].map((challengeId) => ({ challengeId, policyRef, trialIndex }))));
@@ -227,8 +232,41 @@ describe('the stored config and the order of trials', () => {
   it('keeps the organization out of what the API returns, and reads an unreadable row as a benchmark with no budget', () => {
     const stored = readBenchmarkConfig({ ...config, orgId: 'org-1' });
     expect(stored.orgId).toBe('org-1');
-    expect(publicConfig(stored)).toEqual(config);
+    expect(publicConfig(stored)).toEqual({ ...config, policies: config.policies.map((p) => ({ ...p, recordVideo: false })) });
     expect(readBenchmarkConfig({})).toMatchObject({ challengeIds: [], policies: [], capUsd: 0 });
+    // A benchmark stored before recordings (#841) reads as not recorded.
+    const { recordVideo: _r, ...older } = config;
+    expect(readBenchmarkConfig({ ...older, orgId: null }).recordVideo).toBe(false);
+    // No cap (#840) is kept as the owner's choice.
+    expect(readBenchmarkConfig({ ...config, capUsd: null, orgId: null }).capUsd).toBeNull();
+  });
+
+  it('records the policies the owner ticked (#845), and reads a #841 config with `recordVideo: true` as every policy recorded', () => {
+    const [economy, thorough] = config.policies;
+    const one = readBenchmarkConfig({ ...config, policies: [{ ...economy, recordVideo: true }, thorough], orgId: null });
+    expect(one.policies.map((p) => p.recordVideo)).toEqual([true, false]);
+    expect(one.recordVideo).toBe(false);
+    expect([recordsVideo(one, 'builtin:economy'), recordsVideo(one, 'builtin:thorough')]).toEqual([true, false]);
+    const both = readBenchmarkConfig({ ...config, policies: config.policies.map((p) => ({ ...p, recordVideo: true })), orgId: null });
+    expect(both.recordVideo).toBe(true);
+    // Stored by #841: one benchmark-wide flag, policies without their own.
+    const older = readBenchmarkConfig({ ...config, recordVideo: true, orgId: null });
+    expect(older.policies.map((p) => p.recordVideo)).toEqual([true, true]);
+    expect([recordsVideo(older, 'builtin:economy'), recordsVideo(older, 'builtin:thorough')]).toEqual([true, true]);
+    const none = readBenchmarkConfig({ ...config, orgId: null });
+    expect([none.recordVideo, recordsVideo(none, 'builtin:economy')]).toEqual([false, false]);
+    // The request's benchmark-wide flag wins over the policies' own.
+    expect(withRecordings({ policies: [{ ref: 'a', label: 'A', recordVideo: false }], recordVideo: true }).policies[0]!.recordVideo).toBe(true);
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced', recordVideo: true }] }).success).toBe(true);
+  });
+
+  it("names the recorded policies in the PDF's Recordings row (#845)", () => {
+    const policies = [{ label: 'Economy', recordVideo: true }, { label: 'Thorough', recordVideo: false }];
+    expect(recordedPolicies({ policies })).toBe('policy Economy');
+    expect(recordedPolicies({ policies: [...policies, { label: 'Fast', recordVideo: true }] })).toBe('policies Economy, Fast');
+    expect(recordedPolicies({ policies: policies.map((p) => ({ ...p, recordVideo: true })) })).toBe('all policies');
+    expect(recordedPolicies({ recordVideo: true, policies: [{ label: 'Economy' }] })).toBe('all policies');
+    expect(recordedPolicies({ policies: [{ label: 'Economy', recordVideo: false }] })).toBeNull();
   });
 });
 

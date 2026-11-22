@@ -10,7 +10,7 @@ import { CATEGORIES } from './suite/types';
 
 /** The format of a scorecard. A change to a formula or a field bumps `SCORECARD_VERSION`: a cached summary of another version is recomputed. */
 export const SCORECARD_FORMAT = 'hexactra.benchmark-scorecard' as const;
-export const SCORECARD_VERSION = 1 as const;
+export const SCORECARD_VERSION = 2 as const;
 
 /** A share with its Wilson 95% interval. All three are null when nothing was counted (`n = 0`). */
 export const rateSchema = z.object({
@@ -85,13 +85,68 @@ export const scoreMetricsSchema = z.object({
 });
 export type ScoreMetrics = z.infer<typeof scoreMetricsSchema>;
 
+// ---- The Benchmark Score (#871) ----
+
+/** The weighting presets of the Overall score. `accuracy` is the default; the order is the order a page lists them in. */
+export const SCORE_PRESETS = ['accuracy', 'balanced', 'budget', 'speed'] as const;
+export type ScorePreset = (typeof SCORE_PRESETS)[number];
+export const DEFAULT_SCORE_PRESET: ScorePreset = 'accuracy';
+/** The four dimensions a policy is scored on. */
+export const SCORE_DIMENSIONS = ['accuracy', 'cost', 'time', 'tokens'] as const;
+export type ScoreDimension = (typeof SCORE_DIMENSIONS)[number];
+export const SCORE_GRADES = ['S', 'A', 'B', 'C', 'D'] as const;
+export type ScoreGrade = (typeof SCORE_GRADES)[number];
+export const SCORE_BADGES = ['most_accurate', 'cheapest', 'fastest', 'most_token_efficient'] as const;
+export type ScoreBadge = (typeof SCORE_BADGES)[number];
+/** The method's identifier, printed with every score: a change to a formula, a weight or a threshold bumps it (and `SCORECARD_VERSION`). */
+export const SCORE_METHOD = 'hexactra.benchmark-score/1' as const;
+
+const weightsSchema = z.object({ accuracy: z.number(), cost: z.number(), time: z.number(), tokens: z.number() }).describe('Percentages; they add up to 100.');
+
+export const overallScoreSchema = z.object({
+  value: z.number().nullable().describe('The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.'),
+  low: z.number().nullable().describe('The Overall score with accuracy at the low end of its 95% band.'),
+  high: z.number().nullable().describe('The Overall score with accuracy at the high end of its 95% band.'),
+  rank: z.number().int().describe('1 is best under this preset; a policy that is not rated ranks last.'),
+  grade: z.enum(SCORE_GRADES).nullable().describe('S 90 and over, A 80, B 70, C 60, D below; null when not rated.'),
+  tied: z.boolean().describe('Not first, but its band overlaps the leader\'s: the difference is not shown to be real.'),
+});
+export type OverallScore = z.infer<typeof overallScoreSchema>;
+
+export const benchmarkScoreSchema = z
+  .object({
+    rated: z.boolean().describe('False when the policy has no judged trial: every score is then null.'),
+    provisional: z.boolean().describe('Fewer than 10 judged trials: the score can move a lot with more trials.'),
+    judged: z.number().int(),
+    accuracy: z.number().nullable().describe('100 x (0.7 x success rate + 0.3 x pass^k) x (1 - false-success rate).'),
+    accuracyLow: z.number().nullable().describe('Accuracy from the low ends of the Wilson intervals (and the high end of false success).'),
+    accuracyHigh: z.number().nullable(),
+    cost: z.number().nullable().describe('Cost per success against the best policy of the benchmark, on a log scale: the best is 100, 10 times its cost 50, 100 times or more 0. 0 without a pass.'),
+    costKnown: z.boolean().describe('False: some cost is unknown, so the cost per success is "at least" and the cost score is at most this.'),
+    time: z.number().nullable().describe('Median active time against the best policy with a pass, on the same log scale. 0 without a pass.'),
+    tokens: z.number().nullable().describe('Tokens per success against the best policy, on the same log scale. 0 without a pass.'),
+    overall: z.object({ accuracy: overallScoreSchema, balanced: overallScoreSchema, budget: overallScoreSchema, speed: overallScoreSchema }),
+    badges: z.array(z.enum(SCORE_BADGES)).describe('The dimensions this policy is best at in the benchmark (ties share a badge).'),
+  })
+  .describe('The Benchmark Score: four sub-scores from 0 to 100 and the Overall score under each preset (docs/benchmark.md, "The Benchmark Score").');
+export type BenchmarkScore = z.infer<typeof benchmarkScoreSchema>;
+
+export const scoringSchema = z.object({
+  method: z.literal(SCORE_METHOD),
+  defaultPreset: z.enum(SCORE_PRESETS),
+  presets: z.array(z.object({ id: z.enum(SCORE_PRESETS), label: z.string(), weights: weightsSchema })),
+  provisionalBelow: z.number().int().describe('A policy with fewer judged trials than this is provisional.'),
+});
+export type Scoring = z.infer<typeof scoringSchema>;
+
 export const policyCategorySchema = z.object({ category: z.enum(CATEGORIES), label: z.string(), metrics: scoreMetricsSchema });
 
 export const policyScoreSchema = z.object({
   ref: z.string(),
   label: z.string(),
-  rank: z.number().int().describe('1 is best: success rate, then cost per success, then median active time.'),
+  rank: z.number().int().describe('1 is best: the Overall score under the default preset, then success rate, cost per success and median active time.'),
   metrics: scoreMetricsSchema,
+  score: benchmarkScoreSchema,
   categories: z.array(policyCategorySchema).describe('Only the categories the benchmark has, in the suite\'s order.'),
 });
 export type PolicyScore = z.infer<typeof policyScoreSchema>;
@@ -106,6 +161,8 @@ export const rankingEntrySchema = z.object({
   medianActiveMs: z.number().nullable(),
   totalCostUsd: z.number(),
   totalTokens: z.number().int(),
+  score: z.number().nullable().describe('The Overall score under the default preset.'),
+  grade: z.enum(SCORE_GRADES).nullable(),
 });
 
 /** One cell of the challenge x policy matrix. */
@@ -155,7 +212,8 @@ export const scorecardSchema = z.object({
   k: z.number().int().describe('Trials per challenge and policy.'),
   computedAt: z.string(),
   totals: scorecardTotalsSchema,
-  ranking: z.array(rankingEntrySchema).describe('Best first. No composite score.'),
+  ranking: z.array(rankingEntrySchema).describe('Best first by the Overall score under the default preset; `policies[].score.overall` has the order under each preset.'),
+  scoring: scoringSchema,
   policies: z.array(policyScoreSchema).describe('In the benchmark\'s policy order (columns).'),
   categories: z.array(z.object({ id: z.enum(CATEGORIES), label: z.string() })).describe('The categories the benchmark has, in the suite\'s order.'),
   matrix: z.array(matrixRowSchema).describe('One row per challenge, in the benchmark\'s order.'),
@@ -165,7 +223,7 @@ export type Scorecard = z.infer<typeof scorecardSchema>;
 
 // ---- Compare ----
 
-export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'tokensPerSuccess'] as const;
+export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'tokensPerSuccess', 'overallScore', 'accuracyScore', 'costScore', 'timeScore', 'tokensScore'] as const;
 export type ComparedMetric = (typeof COMPARED_METRICS)[number];
 
 export const metricDeltaSchema = z.object({
