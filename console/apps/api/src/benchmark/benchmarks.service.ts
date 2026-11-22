@@ -10,6 +10,7 @@ import type { Benchmark, Prisma } from '@prisma/client';
 import { FabricClient } from '../fabric/fabric.client';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RunDeleteService } from '../tasks/run-delete.service';
 import { TasksService } from '../tasks/tasks.service';
 import { inRunOrder, publicConfig, readBenchmarkConfig, withRecordings, type StoredBenchmarkConfig } from './benchmark-config';
 import { BENCHMARK_STATUSES, LIVE_BENCHMARK_STATUSES, TRIAL_STATUSES, type BenchmarkStatus } from './benchmark.constants';
@@ -19,12 +20,18 @@ import { BenchmarkRunner, STOP_GRACE_MS } from './benchmark-runner.service';
 import { BenchmarkSiteAddress } from './benchmark-site-address';
 import { ScorecardService } from './scorecard.service';
 import { BENCHMARK_LIMITS } from './benchmark.settings';
-import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTotals, type BenchmarkTrialView, type BenchmarkView, type CreateBenchmarkInput } from './benchmarks.schemas';
+import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTotals, type BenchmarkTrialView, type BenchmarkView, type BenchmarksDeleted, type CreateBenchmarkInput } from './benchmarks.schemas';
 import { SUITE, challengeById, missingCapabilities, seedFrom } from './suite/registry';
 import { CATEGORIES, CATEGORY_LABELS } from './suite/types';
 import { TRIAL_RECORDING_SELECT, TRIAL_VIEW_OMIT, iso, oneOf, trialRecording, trialView } from './trial-view';
 
 /** Who is asking. */
+/** What `remove` deleted. */
+export interface BenchmarkDeleted {
+  id: string;
+  runsDeleted: number;
+}
+
 export interface BenchmarkActor {
   id: string;
   activeOrgId?: string | null;
@@ -53,6 +60,7 @@ export class BenchmarksService {
     private readonly runner: BenchmarkRunner,
     private readonly metrics: BenchmarkMetrics,
     private readonly scorecard: ScorecardService,
+    private readonly runDeletes: RunDeleteService,
   ) {}
 
   private db(userId: string) {
@@ -253,12 +261,45 @@ export class BenchmarksService {
     return this.get(actor.id, id);
   }
 
-  /** Deletes a benchmark that has ended, with its trials. Its runs stay: they are the owner's runs, under their own retention. */
-  async remove(actor: BenchmarkActor, id: string): Promise<void> {
+  /**
+   * Deletes a benchmark that has ended, with its trials. With `deleteRuns` (#873) the runs its trials started are deleted first, through
+   * the run delete service (steps, screenshots, recordings; never a live run), so a failure never leaves a benchmark whose runs are half
+   * gone without the benchmark. Without it the runs stay: they are the owner's runs, under their own retention.
+   */
+  async remove(actor: BenchmarkActor, id: string, opts: { deleteRuns?: boolean } = {}): Promise<BenchmarkDeleted> {
     const b = await this.find(actor.id, id);
+    if ((LIVE_BENCHMARK_STATUSES as readonly string[]).includes(b.status)) throw new ConflictException({ code: 'BENCHMARK_RUNNING', message: 'Cancel the benchmark before deleting it' });
+    let runsDeleted = 0;
+    if (opts.deleteRuns) {
+      const rows = await this.prisma.benchmarkTrial.findMany({ where: { benchmarkId: id, runId: { not: null } }, select: { runId: true } });
+      const runIds = rows.map((r) => r.runId).filter((x): x is string => !!x);
+      if (runIds.length) runsDeleted = (await this.runDeletes.deleteByIds(actor.id, runIds, { mode: 'ids', orgId: actor.activeOrgId ?? null })).deleted;
+    }
     const { count } = await this.prisma.benchmark.deleteMany({ where: { id, userId: actor.id, status: { notIn: [...LIVE_BENCHMARK_STATUSES] } } });
     if (count !== 1) throw new ConflictException({ code: 'BENCHMARK_RUNNING', message: 'Cancel the benchmark before deleting it' });
-    await this.audit(actor.id, actor.activeOrgId ?? null, BENCHMARK_AUDIT.deleted, id, { status: b.status });
+    await this.audit(actor.id, actor.activeOrgId ?? null, BENCHMARK_AUDIT.deleted, id, { status: b.status, deleteRuns: !!opts.deleteRuns, runsDeleted });
+    this.log.log(`benchmark ${id}: deleted${opts.deleteRuns ? ` with ${runsDeleted} runs` : ''}`);
+    return { id, runsDeleted };
+  }
+
+  /**
+   * Deletes several of the user's benchmarks (#873), each as `remove` does. A live one is skipped and listed, one that is not theirs (or
+   * not there) is listed as not found; neither fails the call.
+   */
+  async removeMany(actor: BenchmarkActor, ids: readonly string[], opts: { deleteRuns?: boolean } = {}): Promise<BenchmarksDeleted> {
+    const out: BenchmarksDeleted = { deleted: [], skippedRunning: [], notFound: [], runsDeleted: 0 };
+    for (const id of [...new Set(ids.map((x) => x.toLowerCase()))]) {
+      try {
+        const r = await this.remove(actor, id, opts);
+        out.deleted.push(id);
+        out.runsDeleted += r.runsDeleted;
+      } catch (e) {
+        if (e instanceof ConflictException) out.skippedRunning.push(id);
+        else if (e instanceof NotFoundException) out.notFound.push(id);
+        else throw e;
+      }
+    }
+    return out;
   }
 
   // ---- Views ----

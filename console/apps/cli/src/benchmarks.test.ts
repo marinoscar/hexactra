@@ -534,6 +534,30 @@ describe('hexactra benchmarks', () => {
     expect(urls[1]).toBe(`/api/benchmarks/${ID}/export?format=csv`);
   });
 
+  it('delete removes benchmarks with their runs, or keeps the runs with --keep-runs, and says what it skipped (#873)', async () => {
+    const { seen } = fakeConsole((url, init) =>
+      init?.method === 'POST' && url.pathname === '/api/benchmarks/delete' ? { body: { deleted: [ID], skippedRunning: [BASE], notFound: [], runsDeleted: 12 } } : undefined,
+    );
+    const { out } = await run('benchmarks', 'delete', ID, BASE, '--yes');
+    expect(seen.find((r) => r.method === 'POST')?.body).toEqual({ ids: [ID, BASE], deleteRuns: true });
+    expect(out).toContain('deleted 1 benchmark and 12 runs');
+    expect(out).toContain(`skipped ${BASE.slice(0, 8)}: still running (cancel it first)`);
+    await run('benchmarks', 'delete', ID, '--keep-runs', '--yes');
+    expect(seen.filter((r) => r.method === 'POST').at(-1)?.body).toEqual({ ids: [ID], deleteRuns: false });
+  });
+
+  it('delete asks first, and refuses without a terminal unless --yes', async () => {
+    const { seen } = fakeConsole(() => undefined);
+    const tty = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    try {
+      await expect(run('benchmarks', 'delete', ID)).rejects.toThrow(/pass --yes/);
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: tty, configurable: true });
+    }
+    expect(seen.some((r) => r.method === 'POST')).toBe(false);
+  });
+
   it('export refuses a bad format, a non-PDF body, and prints a refusal with its code', async () => {
     fakeConsole(() => undefined);
     await expect(run('benchmarks', 'export', ID, '--format', 'xlsx')).rejects.toThrow(/--format is one of json, csv, pdf/);

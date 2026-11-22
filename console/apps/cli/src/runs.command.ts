@@ -74,7 +74,7 @@ const label = (s: string) => (s === 'waiting_human' ? 'needs you' : s);
  * Ask before something that cannot be undone. `--yes` answers for a script; without it the question
  * needs a terminal, so a pipe or a CI job fails instead of deleting unasked.
  */
-async function confirmed(question: string, yes: boolean | undefined): Promise<boolean> {
+export async function confirmed(question: string, yes: boolean | undefined): Promise<boolean> {
   if (yes) return true;
   if (!process.stdin.isTTY) throw new Error(`${question} This cannot be undone: pass --yes.`);
   const { createInterface } = await import('node:readline/promises');

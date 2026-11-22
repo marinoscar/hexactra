@@ -6,8 +6,9 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { cancelBenchmark, deleteBenchmark, getBenchmark, getScorecard, listBenchmarks, listTrials } from '../benchmarks/api';
+import { cancelBenchmark, getBenchmark, getScorecard, listBenchmarks, listTrials } from '../benchmarks/api';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
+import { confirmAndDeleteBenchmarks } from '../benchmarks/DeleteBenchmarks';
 import { BenchmarkExportButton } from '../components/BenchmarkExportMenu';
 import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, recordedPoliciesText, tokens } from '../benchmarks/format';
 import { Leaderboard, storePreset, storedPreset } from '../benchmarks/Leaderboard';
@@ -144,11 +145,15 @@ export function BenchmarkPage() {
 
   const doDelete = async () => {
     if (!b) return;
-    const ok = await confirm({ title: `Delete “${b.name}”?`, body: 'Its trials and scorecard are deleted. The runs it started stay in the run history. This cannot be undone.', confirmLabel: 'Delete', destructive: true });
-    if (!ok) return;
     setBusy(true);
     try {
-      await deleteBenchmark(api, b.id);
+      // The runs its trials started (#873): ticked by default for a viewer who may delete runs.
+      const runs = new Set(trials.map((t) => t.runId).filter(Boolean)).size;
+      const done = await confirmAndDeleteBenchmarks({ api, confirm, items: [{ id: b.id, name: b.name }], runs, canDeleteRuns: viewer.hasPermission('runs:delete') });
+      if (!done) {
+        setBusy(false);
+        return;
+      }
       navigate(BENCHMARKS_PATH);
     } catch (e) {
       setError(errorText(e, 'Could not delete the benchmark'));

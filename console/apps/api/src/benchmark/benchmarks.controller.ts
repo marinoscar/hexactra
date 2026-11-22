@@ -1,7 +1,7 @@
 // `/api/benchmarks` (E44.3, #741): start a benchmark, watch it, read its trials, cancel and delete it; its scorecard and the comparison
 // with a baseline (E44.4, #742); its report as JSON, CSV or PDF (E44.6, #744). An organization administrator's feature: reading needs
 // `benchmarks:read`, anything that starts, stops or deletes needs `benchmarks:run`. Not offered over MCP.
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiExtraModels, ApiOkResponse, ApiOperation, ApiProduces, ApiResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
@@ -10,6 +10,9 @@ import type { FastifyReply } from 'fastify';
 import { BenchmarkExportQueryDto, BenchmarkReportDto } from './benchmark-report.schemas';
 import { BenchmarkReportService } from './benchmark-report.service';
 import {
+  BenchmarksDeletedResponseDto,
+  DeleteBenchmarkQueryDto,
+  DeleteBenchmarksDto,
   BenchmarkListResponseDto,
   BenchmarkResponseDto,
   BenchmarkSuiteResponseDto,
@@ -31,6 +34,13 @@ interface Principal {
 
 /** A trial's recording status is shown only to a viewer who may open the run (`runs:read`, the run page's rule; #846). */
 export const canSeeRecordings = (user: Pick<Principal, 'permissions'>): boolean => (user.permissions ?? []).includes('runs:read');
+
+/** Deleting runs with a benchmark (#873) needs the run delete permission too. */
+export function assertMayDeleteRuns(user: Pick<Principal, 'permissions'>, deleteRuns: boolean): void {
+  if (deleteRuns && !(user.permissions ?? []).includes('runs:delete')) {
+    throw new ForbiddenException({ code: 'RUNS_DELETE_FORBIDDEN', message: 'Deleting the runs needs the runs:delete permission; delete the benchmark alone, or ask an administrator' });
+  }
+}
 
 const NOT_FOUND = "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's.";
 
@@ -163,14 +173,35 @@ export class BenchmarksController {
     return this.benchmarks.cancel(user, id);
   }
 
+  @Post('delete')
+  @HttpCode(200)
+  @ApiDataResponse(BenchmarksDeletedResponseDto)
+  @ApiResponse({ status: 403, description: '`RUNS_DELETE_FORBIDDEN`: `deleteRuns` without `runs:delete`. Nothing was deleted.' })
+  @Auth({ permissions: ['benchmarks:run'] })
+  @ApiOperation({
+    summary: 'Delete several benchmarks',
+    description:
+      'Permanent (#873). Each benchmark that has ended is deleted with its trials and, with `deleteRuns: true`, the runs its trials started (their steps, screenshots and recordings). One still queued or running is skipped (`skippedRunning`), one that is not yours is listed in `notFound`; neither fails the call.',
+  })
+  removeMany(@CurrentUser() user: Principal, @Body() body: DeleteBenchmarksDto) {
+    assertMayDeleteRuns(user, body.deleteRuns);
+    return this.benchmarks.removeMany(user, body.ids, { deleteRuns: body.deleteRuns });
+  }
+
   @Delete(':id')
   @HttpCode(204)
-  @ApiResponse({ status: 204, description: 'Deleted, with its trials. The runs it started stay in the run history.' })
+  @ApiResponse({ status: 204, description: 'Deleted, with its trials, and with `deleteRuns=true` the runs its trials started. The audit event `benchmarks.deleted` counts the runs deleted.' })
+  @ApiResponse({ status: 403, description: '`RUNS_DELETE_FORBIDDEN`: `deleteRuns=true` without `runs:delete`. Nothing was deleted.' })
   @ApiResponse({ status: 404, description: NOT_FOUND })
   @ApiResponse({ status: 409, description: '`BENCHMARK_RUNNING`: cancel it first.' })
   @Auth({ permissions: ['benchmarks:run'] })
-  @ApiOperation({ summary: 'Delete a benchmark', description: 'Permanent. Only a benchmark that has ended.' })
-  async remove(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.benchmarks.remove(user, id);
+  @ApiOperation({
+    summary: 'Delete a benchmark',
+    description:
+      'Permanent. Only a benchmark that has ended. Deleted with its trials; `deleteRuns=true` (#873) also deletes the runs its trials started, first (their steps, screenshots and recordings; a live run is never deleted). Without it the runs stay in the run history. Answers `runsDeleted`.',
+  })
+  async remove(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Query() q: DeleteBenchmarkQueryDto): Promise<void> {
+    assertMayDeleteRuns(user, q.deleteRuns);
+    await this.benchmarks.remove(user, id, { deleteRuns: q.deleteRuns });
   }
 }
