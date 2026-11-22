@@ -22,6 +22,7 @@
     "scenarios": "ts-node --transpile-only scripts/scenarios.ts",
     "scenarios:schema": "ts-node --transpile-only scripts/scenarios.ts --write-schema",
     "scenarios:live": "ts-node --transpile-only scripts/scenarios-live.ts",
+    "kgraph:loadtest": "node scripts/kgraph-loadtest.mjs",
     "db:compose": "platform db compose",
     "db:compose:check": "platform db compose --check",
     "db:sync": "platform db sync",
