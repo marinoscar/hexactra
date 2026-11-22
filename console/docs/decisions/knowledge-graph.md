@@ -16,7 +16,7 @@ The model's job changes from *interpreter* (decides every step of every run) to 
 |---|---|
 | Name | Feature: **Knowledge Graph**. Package: `@marinoscar/hexactra-kgraph` in `console/packages/hexactra-kgraph`. One learned, runnable unit: a **procedure**. |
 | Optional | Off by default at four levels: deployment (admin), user, task, run. The agent loop stays the default and the fallback. |
-| Admin kill switch | An admin can turn the feature off for the whole deployment. Off means no capture, no replay, no tools, no pages. |
+| Admin kill switch | An admin can turn the feature off for the whole deployment. Off means no capture, no replay and no tools; the pages are hidden from the navigation and say the feature is off. |
 | User opt-out | A user can opt out completely. The user switch is **opt-in** (default off) even after the admin enables the feature. |
 | Turning off | Learned data is **kept and unused**. A separate, explicit "Delete everything learned" action removes it. |
 | Must not affect what exists | The no-impact contract below. It is an acceptance criterion of every E46 child. |

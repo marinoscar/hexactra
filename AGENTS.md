@@ -149,7 +149,7 @@ Design invariants to preserve when writing docs or code:
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).
-- The Knowledge Graph (epic E46) switched off at any level is byte-identical to `main`: `console/apps/api/test/runner-characterisation.db.spec.ts` passes unchanged.
+- The Knowledge Graph (epic E46) switched off at any level leaves runs byte-identical to how they ran before the epic: `console/apps/api/test/runner-characterisation.db.spec.ts` passes unchanged.
 - The Knowledge Graph adds only new `kg_` tables and new routes; no existing table, API response or MCP tool changes shape for it.
 - A Knowledge Graph failure (capture, compile, replay, check, repair) is logged and counted and never fails a run: the run continues with the agent loop.
 - Every tool a replayed procedure runs goes through `executeTool`, with Stop, Pause, the gates, the span and intent recording exactly as for a model-chosen call.
