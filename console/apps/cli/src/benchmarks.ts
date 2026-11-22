@@ -28,7 +28,7 @@ export interface BenchmarkView {
   status: string;
   suiteKey: string;
   suiteVersion: number;
-  config: { challengeIds: string[]; policies: { ref: string; label: string }[]; trials: number; hostId: string | null; profile: string; capUsd: number | null; trialTimeoutMinutes: number };
+  config: { challengeIds: string[]; policies: { ref: string; label: string }[]; trials: number; hostId: string | null; profile: string; capUsd: number | null; trialTimeoutMinutes: number; recordVideo?: boolean };
   appVersion: string;
   commit: string | null;
   spentUsd: number;

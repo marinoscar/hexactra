@@ -105838,6 +105838,11 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "recordVideo": {
+                      "default": false,
+                      "description": "Every trial's run records a video of its browser tab (not masked, owner-only).",
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -106101,6 +106106,11 @@
                 "type": "integer",
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991
+              },
+              "recordVideo": {
+                "default": false,
+                "description": "Every trial's run records a video of its browser tab (not masked, owner-only).",
+                "type": "boolean"
               }
             },
             "required": [
@@ -106361,6 +106371,10 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 120
+          },
+          "recordVideo": {
+            "description": "Record a video of each trial's browser tab (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -108866,6 +108880,11 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991
+                  },
+                  "recordVideo": {
+                    "default": false,
+                    "description": "Every trial's run records a video of its browser tab (not masked, owner-only).",
+                    "type": "boolean"
                   }
                 },
                 "required": [

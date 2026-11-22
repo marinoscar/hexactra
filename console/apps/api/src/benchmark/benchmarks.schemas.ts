@@ -36,6 +36,7 @@ export const createBenchmarkSchema = z
       .optional()
       .describe('No new trial starts once the benchmark has spent this much on model calls. `null`: no cap (each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.'),
     trialTimeoutMinutes: z.number().int().min(1).max(BENCHMARK_LIMITS.maxTrialTimeoutMinutes).optional().describe('How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.'),
+    recordVideo: z.boolean().optional().describe("Record a video of each trial's browser tab (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false."),
   })
   .strict();
 export class CreateBenchmarkDto extends createZodDto(createBenchmarkSchema) {}
@@ -50,6 +51,8 @@ export const benchmarkConfigSchema = z.object({
   profile: z.string(),
   capUsd: z.number().nullable().describe('The spend cap in USD; `null`: no cap.'),
   trialTimeoutMinutes: z.number().int(),
+  /** Every trial's run records a video (#841). A benchmark stored before it has none: false. */
+  recordVideo: z.boolean().default(false).describe('Every trial\'s run records a video of its browser tab (not masked, owner-only).'),
 });
 export type BenchmarkConfig = z.infer<typeof benchmarkConfigSchema>;
 

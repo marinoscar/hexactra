@@ -79,6 +79,7 @@ interface RunOpts {
   trials?: string;
   capUsd?: string;
   timeoutMinutes?: string;
+  record?: boolean;
   host?: string;
   profile?: string;
   name?: string;
@@ -101,6 +102,8 @@ export async function benchmarkRequest(o: RunOpts): Promise<Record<string, unkno
   // `--cap-usd none`: no spend cap (#840).
   if (o.capUsd !== undefined) body.capUsd = o.capUsd.trim().toLowerCase() === 'none' ? null : positive('--cap-usd', o.capUsd);
   if (o.timeoutMinutes !== undefined) body.trialTimeoutMinutes = positive('--timeout-minutes', o.timeoutMinutes, true);
+  // `--record` (#841): every trial's run records a video (not masked, owner-only).
+  if (o.record) body.recordVideo = true;
   if (o.host && o.host !== 'any') body.hostId = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), o.host).id;
   if (o.profile) body.profile = o.profile;
   return body;
@@ -142,6 +145,7 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--trials <n>', 'attempts per challenge and policy (default: the deployment setting, usually 3)')
     .option('--cap-usd <usd|none>', 'no new trial starts once this much is spent; "none": no cap (default: the deployment setting)')
     .option('--timeout-minutes <n>', 'how long one trial may take (default: the deployment setting)')
+    .option('--record', 'record a video of each trial run (not masked; watch it on the run page)')
     .option('--host <name|id>', 'the node every trial runs on ("any": the fabric picks one per trial)')
     .option('--profile <name>', 'the browser profile on the node', 'default')
     .option('--name <name>', 'the benchmark\'s name (default: "Benchmark" and the date)')

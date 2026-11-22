@@ -60,6 +60,7 @@ export async function createGradedBenchmark(prisma: PrismaService, userId: strin
     profile: 'default',
     capUsd: 5,
     trialTimeoutMinutes: 15,
+    recordVideo: false,
     orgId: null,
   };
   const started = new Date(Date.now() - 3_600_000);

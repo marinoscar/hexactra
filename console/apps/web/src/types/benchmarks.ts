@@ -22,6 +22,8 @@ export interface BenchmarkConfig {
   profile: string;
   /** The spend cap in USD; null: no cap (#840). */
   capUsd: number | null;
+  /** Every trial's run records a video (#841). */
+  recordVideo: boolean;
   trialTimeoutMinutes: number;
 }
 
@@ -141,6 +143,8 @@ export interface CreateBenchmarkInput {
   profile?: string;
   /** Absent: the deployment default; null: no cap (#840). */
   capUsd?: number | null;
+  /** Record a video of each trial run (#841). */
+  recordVideo?: boolean;
   trialTimeoutMinutes?: number;
 }
 

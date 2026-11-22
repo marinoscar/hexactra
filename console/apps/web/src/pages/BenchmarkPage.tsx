@@ -58,6 +58,7 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
         </Typography>
         <Typography variant="h6" component="div" sx={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
           {b.config.capUsd === null ? <>{money(b.spentUsd, b.totals.costKnown)} (no cap)</> : <>{money(b.spentUsd, b.totals.costKnown)} of {money(b.config.capUsd)}</>}
+          {b.config.recordVideo ? ' · runs recorded' : ''}
         </Typography>
         <LinearProgress variant="determinate" value={share * 100} aria-label={`${Math.round(share * 100)}% of the spend cap`} sx={{ mt: 0.75 }} />
       </Paper>

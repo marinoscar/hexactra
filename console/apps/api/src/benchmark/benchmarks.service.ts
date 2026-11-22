@@ -124,6 +124,8 @@ export class BenchmarksService {
       // `null` is the owner's choice of no cap (#840); only an absent cap takes the deployment default.
       capUsd: dto.capUsd === undefined ? settings.defaultCapUsd : dto.capUsd,
       trialTimeoutMinutes: dto.trialTimeoutMinutes ?? settings.trialTimeoutMinutes,
+      // The owner's opt-in (#841), copied onto every trial's run when it is created, as a task's choice is.
+      recordVideo: dto.recordVideo ?? false,
       orgId,
     };
     const id = randomUUID();
@@ -173,7 +175,7 @@ export class BenchmarksService {
 
     this.metrics.started();
     this.metrics.trials('unsupported', rows.filter((r) => r.verdict === 'unsupported').length);
-    await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd });
+    await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd, recordVideo: config.recordVideo });
     await enqueueBenchmarkAdvance(this.jobs, id, orgId, 'benchmark_started');
     this.log.log(`benchmark ${id}: started (${rows.length} trials)`);
     return this.view(created, await this.factsOf([id]));

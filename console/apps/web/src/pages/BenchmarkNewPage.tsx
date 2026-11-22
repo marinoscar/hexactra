@@ -64,7 +64,7 @@ export function BenchmarkNewPage() {
       (s) => {
         setSuite(s);
         // Every challenge the agent can attempt is chosen by default.
-        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd), noCap: false });
+        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd), noCap: false, recordVideo: false });
       },
       (e) => setError(errorText(e, 'Could not load the benchmark suite')),
     );
@@ -102,6 +102,7 @@ export function BenchmarkNewPage() {
         <>
           {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {form.trials} trials, one at a time on {host ? host.name : 'any available node'}. They spend on model calls;{' '}
           {form.noCap ? <strong>there is no spend cap: each run stops only at its own policy budget</strong> : <>no new trial starts once {money(Number(form.capUsd))} is spent</>}.
+          {form.recordVideo ? ' Every run records a video of its browser tab (not masked).' : ''}
         </>
       ),
       confirmLabel: 'Start benchmark',
@@ -115,6 +116,7 @@ export function BenchmarkNewPage() {
       hostId: form.hostId,
       profile: form.profile,
       capUsd: form.noCap ? null : Number(form.capUsd),
+      ...(form.recordVideo ? { recordVideo: true } : {}),
     };
     setBusy(true);
     setError(null);
@@ -315,6 +317,18 @@ export function BenchmarkNewPage() {
               slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> }, htmlInput: { inputMode: 'decimal' } }}
             />
           </Stack>
+        </Section>
+
+        <Section title="Recordings">
+          <FormControlLabel
+            control={<Switch checked={form.recordVideo} onChange={(e) => update({ recordVideo: e.target.checked })} />}
+            label="Record a video of each run"
+            data-testid="benchmark-record"
+          />
+          <FormHelperText sx={{ mt: 0 }}>
+            Each trial's run records its browser tab, to watch on the run page. The video is not masked: whatever the page shows is visible. Only you can play it; it is kept for the
+            recordings retention set in Administration and uses storage.
+          </FormHelperText>
         </Section>
 
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 } }} data-testid="benchmark-plan">

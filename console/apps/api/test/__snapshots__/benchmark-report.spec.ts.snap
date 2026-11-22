@@ -2130,6 +2130,16 @@ Forms",
               "text": "$5.00: no new trial starts once it is spent. Trial timeout 15 min.",
             },
           ],
+          [
+            {
+              "style": "factKey",
+              "text": "Recordings",
+            },
+            {
+              "style": "factValue",
+              "text": "Off.",
+            },
+          ],
         ],
         "widths": [
           130,

@@ -447,6 +447,23 @@ describe('the spend cap, the timeout, cancel and a node that is down', () => {
     expect(defaulted.config.capUsd).toBe(5);
   }, 120_000);
 
+  it("records a video of every trial's run when the owner opted in, and of none otherwise (#841)", async () => {
+    const admin = await login('bench-record');
+    const recorded = await start(admin, { trials: 2, recordVideo: true });
+    expect(recorded.config.recordVideo).toBe(true);
+    await drive(recorded.id, admin.id);
+    const runIds = (await trialsOf(recorded.id)).map((t) => t.runId).filter((id): id is string => id !== null);
+    expect(runIds).toHaveLength(2);
+    expect((await prisma.run.findMany({ where: { id: { in: runIds } }, select: { recordVideo: true } })).map((r) => r.recordVideo)).toEqual([true, true]);
+    expect(await prisma.auditEvent.findFirst({ where: { action: 'benchmarks.started', targetId: recorded.id } })).toMatchObject({ meta: { recordVideo: true } });
+
+    const plain = await start(admin, { trials: 1 });
+    expect(plain.config.recordVideo).toBe(false);
+    await drive(plain.id, admin.id);
+    const [t] = await trialsOf(plain.id);
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: t!.runId! }, select: { recordVideo: true } })).recordVideo).toBe(false);
+  }, 120_000);
+
   it('stops a trial that runs past its timeout, fails it as `timeout`, and carries on with the next', async () => {
     const admin = await login('bench-timeout');
     const b = await start(admin, { trials: 2, trialTimeoutMinutes: 5 });

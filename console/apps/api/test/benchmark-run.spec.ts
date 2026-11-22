@@ -214,7 +214,7 @@ describe('the verdict of a finished trial (benchmark/trial-verdict.ts)', () => {
 });
 
 describe('the stored config and the order of trials', () => {
-  const config = { challengeIds: ['nav-lookup', 'nav-spa'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 2, hostId: null, profile: 'default', capUsd: 5, trialTimeoutMinutes: 15 };
+  const config = { challengeIds: ['nav-lookup', 'nav-spa'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 2, hostId: null, profile: 'default', capUsd: 5, trialTimeoutMinutes: 15, recordVideo: false };
 
   it('alternates the policies: attempt by attempt, challenge by challenge, one policy after the other', () => {
     const trials = [1, 0].flatMap((trialIndex) => ['builtin:thorough', 'builtin:economy'].flatMap((policyRef) => ['nav-spa', 'nav-lookup'].map((challengeId) => ({ challengeId, policyRef, trialIndex }))));
@@ -229,6 +229,9 @@ describe('the stored config and the order of trials', () => {
     expect(stored.orgId).toBe('org-1');
     expect(publicConfig(stored)).toEqual(config);
     expect(readBenchmarkConfig({})).toMatchObject({ challengeIds: [], policies: [], capUsd: 0 });
+    // A benchmark stored before recordings (#841) reads as not recorded.
+    const { recordVideo: _r, ...older } = config;
+    expect(readBenchmarkConfig({ ...older, orgId: null }).recordVideo).toBe(false);
     // No cap (#840) is kept as the owner's choice.
     expect(readBenchmarkConfig({ ...config, capUsd: null, orgId: null }).capUsd).toBeNull();
   });

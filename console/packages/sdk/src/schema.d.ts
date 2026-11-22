@@ -23011,6 +23011,11 @@ export interface components {
                     /** @description The spend cap in USD; `null`: no cap. */
                     capUsd: number | null;
                     trialTimeoutMinutes: number;
+                    /**
+                     * @description Every trial's run records a video of its browser tab (not masked, owner-only).
+                     * @default false
+                     */
+                    recordVideo?: boolean;
                 };
                 /** @description The console version when the benchmark started. */
                 appVersion: string;
@@ -23068,6 +23073,11 @@ export interface components {
                 /** @description The spend cap in USD; `null`: no cap. */
                 capUsd: number | null;
                 trialTimeoutMinutes: number;
+                /**
+                 * @description Every trial's run records a video of its browser tab (not masked, owner-only).
+                 * @default false
+                 */
+                recordVideo?: boolean;
             };
             /** @description The console version when the benchmark started. */
             appVersion: string;
@@ -23129,6 +23139,8 @@ export interface components {
             capUsd?: number | null;
             /** @description How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`. */
             trialTimeoutMinutes?: number;
+            /** @description Record a video of each trial's browser tab (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false. */
+            recordVideo?: boolean;
         };
         BenchmarkTrialListResponseDto: {
             /** @description In the order the trials run. */
@@ -23709,6 +23721,11 @@ export interface components {
                     /** @description The spend cap in USD; `null`: no cap. */
                     capUsd: number | null;
                     trialTimeoutMinutes: number;
+                    /**
+                     * @description Every trial's run records a video of its browser tab (not masked, owner-only).
+                     * @default false
+                     */
+                    recordVideo?: boolean;
                 };
                 /** @description The console version when the benchmark started. */
                 appVersion: string;
