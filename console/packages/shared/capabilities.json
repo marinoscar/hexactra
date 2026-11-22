@@ -1630,7 +1630,7 @@
       ],
       "cli": "kgraph status",
       "mcp": {
-        "none": "Deliberate for now: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); procedures as MCP tools arrive in E46.22"
+        "none": "Deliberate: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); the procedure tools (procedures_list, procedure_get, procedure_run) are offered only while both are on"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
@@ -1696,7 +1696,7 @@
         "none": "Arrives with the Knowledge Graph surfaces (E46.19-E46.20); until then the REST API"
       },
       "mcp": {
-        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+        "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
@@ -1721,14 +1721,32 @@
         "kgraph show",
         "kgraph versions"
       ],
-      "mcp": {
-        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
-      },
+      "mcp": [
+        "procedures_list",
+        "procedure_get"
+      ],
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
       },
       "web": {
         "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
+    },
+    {
+      "id": "kgraph.procedure_run",
+      "description": "Run a learned procedure: start a run of an active procedure's task with its parameters, through the run start path every run uses (its policy, limits, gates and Inbox questions)",
+      "rest": [
+        "GET /api/kgraph/procedures/{id}",
+        "GET /api/tasks/{id}/kgraph",
+        "POST /api/tasks/{id}/runs"
+      ],
+      "cli": "tasks run",
+      "mcp": "procedure_run",
+      "tui": {
+        "none": "The TUI is for watching and answering; a run started this way is watched there like any run"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph pages (E46.20, #794); until then running the procedure's task replays it"
       }
     },
     {
@@ -1741,7 +1759,7 @@
         "none": "Deliberate: the map is a picture, drawn in the web app; `kgraph list` and `kgraph show` read the same procedures as text"
       },
       "mcp": {
-        "none": "Deliberate for now: the Knowledge Graph's MCP tools arrive in E46.22 (docs/decisions/knowledge-graph.md)"
+        "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the map is drawn in the web app"
