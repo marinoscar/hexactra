@@ -38,6 +38,7 @@ const { values: args } = parseArgs({
     prefix: { type: 'string', default: 'kgload' },
     chunk: { type: 'string', default: '10' },
     queries: { type: 'string', default: '1,2,3,4,5' },
+    'q4-variants': { type: 'string', default: 'all' },
     seed: { type: 'string', default: '778' },
     out: { type: 'string' },
     'skip-load': { type: 'boolean', default: false },
@@ -431,11 +432,16 @@ for (const q of ['1', '2', '3', '4', '5']) {
   if (!QUERIES.has(q)) continue;
   log(`query ${q}...`);
   if (q === '4') {
-    q4fn = lib.q4OwnerGraph;
-    results[q] = { name: 'Load the whole graph of one owner for the Map (nodes and edges, every column)', ...(await measureQ4()) };
+    const variants = args['q4-variants'];
+    if (variants === 'all' || variants === 'full') {
+      q4fn = lib.q4OwnerGraph;
+      results[q] = { name: 'Load the whole graph of one owner for the Map (nodes and edges, every column)', ...(await measureQ4()) };
+    }
     // The same rows with only the columns the Map draws: a second shape of the same query, reported beside it (it does not replace it).
-    q4fn = lib.q4OwnerGraphMap;
-    results['4m'] = { name: 'Load the whole graph of one owner, Map columns only (node id, type, key, label; edge id, type, from, to)', ...(await measureQ4()) };
+    if (variants === 'all' || variants === 'map') {
+      q4fn = lib.q4OwnerGraphMap;
+      results['4m'] = { name: 'Load the whole graph of one owner, Map columns only (node id, type, key, label; edge id, type, from, to)', ...(await measureQ4()) };
+    }
     q4fn = lib.q4OwnerGraph;
   }
   else {

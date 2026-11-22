@@ -154,6 +154,159 @@ The Map tab of `/kgraph` (`/kgraph?tab=map`) draws `GET /api/kgraph/graph`. It s
 
 Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database.
 
-## Load test results (E46.4)
+## Load test, 2026-11-22
 
-Recorded by #778. The load test met its pass bars except one: the heavy owner's Map query (query 4, heavy owner) had a **warm p95 of 2,083 ms against a bar of 2,000 ms**, with about 130 ms of it in the database. **Whether to accept this miss is pending the owner's decision**; it is not accepted. The live AI-only vs reuse comparison ([runbooks/kgraph-measurement.md](../runbooks/kgraph-measurement.md)) was **not measured**: there was no AI provider key in the session that prepared E46.25.
+E46.4 (#778) is a gate: does the table-backed graph meet the pass bar at 10x and 100x the data it is expected to hold? **Result: q1, q2, q3 and q5 meet their bar with a wide margin. q4, one owner's whole graph for the Map, misses. The read of all columns misses for both owners. The read of only the Map's columns meets the bar for a normal owner and misses it for the heavy owner, by 104 ms at p95.** Run 2 added covering indexes on `kg_` tables. They cut the database time of the heavy owner's Map read by about 9x, but its client p95 is still 2,083 ms, so the bar is still **missed**. In both runs the time goes to the client turning rows into objects, not to the database. The raw numbers, every query plan and the cold method are in [knowledge-graph-loadtest.json](knowledge-graph-loadtest.json) (run 1) and [knowledge-graph-loadtest-index.json](knowledge-graph-loadtest-index.json) (run 2).
+
+### How it was run
+
+```bash
+# throwaway database, kg_ migrations applied (npm run prisma:migrate), pg_prewarm created by the superuser
+npm run kgraph:loadtest --workspace=api -- --database hexactra_kgraph_load --owners 200 --heavy 1
+```
+
+- **Script:** `apps/api/scripts/kgraph-loadtest.mjs`. The dataset and the five queries are in `apps/api/scripts/kgraph-loadtest-lib.js`, which the db-tier smoke `apps/api/test/kgraph-loadtest.db.spec.ts` also uses. The smoke runs the same queries on two small owners, including the Map-columns q4, and checks that the graph queries can reach every table through an owner index.
+- **PostgreSQL:** 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) with default settings: shared_buffers 128 MB, work_mem 4 MB, effective_cache_size 4 GB, random_page_cost 4, jit on. It runs on the same machine as the client.
+- **Machine:** 4 vCPU Intel Xeon @ 2.10 GHz, 16,473,744 kB RAM (`/proc/meminfo`), local disk. Node v22.23.5, and Prisma 7 with the `@prisma/adapter-pg` driver adapter, as in the API.
+- **Iterations:** 1,000 cold and 1,000 warm per query, with two exceptions where there is not enough distinct data for more cold samples. q4 cold on a normal owner has 199 samples, one per normal owner. q4 cold on the heavy owner has 5 samples, with a cache flush before each.
+- **Cold:** at the start of the phase, shared_buffers is overwritten with a 256 MB scratch table (`pg_prewarm`) and the OS page cache is dropped (`echo 3 > /proc/sys/vm/drop_caches`). Each iteration then reads a key (task, step, site or owner) that no earlier iteration of the phase read. **Warm:** 20 keys (5 owners for q4), each read twice unmeasured, then read in turn.
+- **Timing:** client wall time of the Prisma calls (what the host sees), in ms. Percentiles are nearest-rank. The bar is on the **warm p95**, compared unrounded. Cold numbers are shown beside it.
+- **Queries, as the store issues them:**
+  1. `PrismaProcedureStore.findProcedureForTask` then `getVersion`: `kgProcedure.findFirst`, then `kgProcedureVersion.findFirst({ include: { evidence: true } })`. Both go through the scoped client (`forUser`), built afresh per call as the store does. That is three statements.
+  2. One interactive transaction: a `run_steps` insert the size the runner writes (args JSON, a summary of about 120 characters, reasoning of about 150), then `recordEvidence` (the version check and the upserts of the version row and the step row). The scoped client refuses the unscoped `run_steps` model, so the transaction runs on the base client, with the owner condition written exactly as `forUser` writes it. The script checks that these evidence statements are byte-identical to the ones the scoped client issues (`q2Fidelity.same: true`).
+  3. One SQL join: `kg_edges` (`Task -uses-> Site`) to `kg_nodes` (type `Task`), with every table filtered by `user_id`. This is raw SQL, because the scoped client refuses raw SQL.
+  4. `kgNode.findMany` and `kgEdge.findMany` for one owner, in parallel, through the scoped client. Two shapes: **all columns**, and **Map columns** (node `id, type, key, label`; edge `id, type, from_id, to_id`).
+  5. Site impact in one SQL statement: site <- screens <- elements <- steps <- tasks. That is four edge hops, one more than the issue's three, because elements hang off screens (`Screen -on-> Site`, `Element -on-> Screen`, `Step -on-> Element`, `Task -uses-> Step`).
+
+### Dataset
+
+Dataset A is 200 owners, and dataset B sits inside it: owner 0 has 10 times the tasks and the sites. A normal owner has 100 tasks × 10 versions × 30 steps, plus 50 sites × 30 screens × 20 elements. In rows, a normal owner has 100 procedures, 1,000 versions (graph JSON of 30 steps), 31,000 evidence rows, 34,650 nodes and 37,800 edges: about 104,550 rows. That is more than the issue's estimate of 60,000, because the surface graph and the steps are also stored as nodes and edges. The load took 672 s.
+
+| Table | Rows | Size (with indexes) | Heavy owner's rows |
+|---|---:|---:|---:|
+| `kg_procedures` | 20,900 | 5.4 MB | 1,000 |
+| `kg_procedure_versions` | 209,000 | 480 MB | 10,000 |
+| `kg_evidence` | 6,479,000 | 1.37 GB | 310,000 |
+| `kg_nodes` | 7,241,850 | 2.94 GB | 346,500 |
+| `kg_edges` | 7,900,200 | 2.42 GB | 378,000 |
+| `tasks` / `runs` / `users` | 20,900 / 200 / 200 | | |
+| **Total kg_ rows** | **21,850,950** | **7.2 GB** | **1,045,500** |
+
+### Run 1: the migration's indexes
+
+| Query | Cold p50 | Cold p95 | Cold p99 | Warm p50 | Warm p95 | Warm p99 | n cold / warm | Bar | Verdict |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 1. Active version of one task | 4.49 | 6.79 | 9.84 | 2.60 | 4.07 | 6.17 | 1000 / 1000 | warm p95 ≤ 50 ms | **met** |
+| 2. Evidence write + run_steps insert | 7.12 | 9.68 | 12.70 | 4.96 | 7.13 | 9.11 | 1000 / 1000 | warm p95 ≤ 50 ms | **met** |
+| 3. Tasks that use a site | 1.00 | 1.45 | 2.03 | 0.67 | 0.87 | 1.47 | 1000 / 1000 | warm p95 ≤ 50 ms | **met** |
+| 4. Owner graph, all columns, normal owner | 400.53 | 587.70 | 698.52 | 399.29 | 540.92 | 614.64 | 199 / 1000 | warm p95 ≤ 500 ms | **missed** |
+| 4. Owner graph, all columns, heavy owner | 4423.42 | 4773.76 | 4773.76 | 4208.63 | 5287.87 | 5709.47 | 5 / 1000 | warm p95 ≤ 2000 ms | **missed** |
+| 4. Owner graph, Map columns, normal owner | 362.03 | 981.12 | 1218.20 | 157.42 | 224.97 | 254.96 | 199 / 1000 | warm p95 ≤ 500 ms | **met** (cold p95 is above 500) |
+| 4. Owner graph, Map columns, heavy owner | 1848.59 | 1866.71 | 1866.71 | 1703.07 | 2104.45 | 2372.14 | 5 / 1000 | warm p95 ≤ 2000 ms | **missed** |
+| 5. Site impact (4 hops) | 13.38 | 31.08 | 41.97 | 3.19 | 4.50 | 6.98 | 1000 / 1000 | warm p95 ≤ 50 ms | **met** |
+
+All times are in ms.
+
+**Why q4 misses: the client materialises the rows; the database is not the bottleneck.** EXPLAIN (ANALYZE) of the same statements:
+
+| q4 | Database time, warm (nodes + edges) | Database time, cold | Client time, warm p50 |
+|---|---:|---:|---:|
+| All columns, normal owner | 11.6 + 10.4 ms (bitmap scans on the owner indexes) | 258 + 186 ms | 399 ms |
+| All columns, heavy owner | 266 ms (parallel seq scan of `kg_nodes`) + 64 ms | 1,013 + 211 ms | 4,209 ms |
+| Map columns, heavy owner | 656 ms (parallel seq scan, 197,872 pages read from the OS cache) + 89 ms | 828 + 214 ms | 1,703 ms |
+
+The heavy owner's graph is 724,500 rows. As a diagnostic (100 iterations, in the JSON), the same SQL was read through node-postgres, without Prisma, one statement after the other. That took 2,680 ms warm p50 (3,182 ms p95) for all columns, and 1,102 ms (1,435 ms p95) for the Map columns. The rest of the time is JavaScript turning rows into objects. Through Prisma that is about 5.8 µs a row for all columns, including the `props` JSON and the timestamps, and about 2.4 µs a row for the Map columns. An index cannot remove that cost.
+
+### Run 2: covering indexes for the Map read (an index change, tried and not kept)
+
+The one q4 cost an index can cut is the heavy owner's sequential scan of `kg_nodes`. A plain `kg_nodes (user_id)` index did not change the plan: the planner kept the parallel seq scan. Covering indexes give an index-only scan of just the owner's entries:
+
+```sql
+CREATE INDEX kg_nodes_user_id_map_idx ON kg_nodes (user_id) INCLUDE (id, type, key, label);   -- 843 MB
+CREATE INDEX kg_edges_user_id_map_idx ON kg_edges (user_id) INCLUDE (id, type, from_id, to_id); -- 883 MB
+```
+
+They were created in the throwaway database only, followed by `VACUUM (ANALYZE)`. The Map-columns q4 was then measured again with the same method (`--queries 4 --q4-variants map`). The all-columns q4 cannot use these indexes; its numbers are in run 1.
+
+| Query (run 2, covering indexes) | Cold p50 | Cold p95 | Cold p99 | Warm p50 | Warm p95 | Warm p99 | n cold / warm | Bar | Verdict |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 4. Owner graph, Map columns, normal owner | 177.74 | 269.84 | 298.25 | 168.77 | 254.16 | 310.11 | 199 / 1000 | warm p95 ≤ 500 ms | **met** |
+| 4. Owner graph, Map columns, heavy owner | 1594.44 | 1807.40 | 1807.40 | 1511.25 | 2083.41 | 2472.92 | 5 / 1000 | warm p95 ≤ 2000 ms | **missed** |
+
+Run 2 plans: both statements are an `Index Only Scan` on the new indexes, with `Heap Fetches: 0`.
+
+```
+Map columns, normal owner  warm: Index Only Scan kg_nodes_user_id_map_idx  shared hit=554    8.1 ms
+                                 Index Only Scan kg_edges_user_id_map_idx  shared hit=519    8.5 ms
+                           cold: shared read=518 / 514, 12.7 / 16.9 ms
+Map columns, heavy owner   warm: Index Only Scan kg_nodes_user_id_map_idx  shared hit=5132  59.7 ms   (run 1: Parallel Seq Scan, 656.4 ms)
+                                 Index Only Scan kg_edges_user_id_map_idx  shared hit=5281  71.1 ms   (run 1: 88.8 ms)
+                           cold: shared read=5131 / 5280, 116.8 / 111.2 ms                            (run 1: 827.5 / 214.3 ms)
+```
+
+The node-postgres diagnostic for the heavy owner fell from 1,102 to 746 ms warm p50 (954 ms p95). Through Prisma, the warm p50 fell from 1,703 to 1,511 ms, and the warm p95 only from 2,104 to 2,083 ms.
+
+**Verdict of run 2: still missed for the heavy owner (2,083.41 ms against 2,000 ms).** The database part is now about 130 ms of a 1.5 to 2.1 s request. The indexes cost 1.7 GB, and an index-only scan needs the visibility map kept current by autovacuum. They were therefore **not added** as a migration: no `kg_` index change is in this branch. The decision is the owner's (see "What this means").
+
+### What this means
+
+- **q1, q2, q3 and q5 have a wide margin.** Each warm p95 is under 8 ms against a bar of 50 ms, and each cold p95 is under 32 ms. Every statement is an index scan on an owner-scoped index, and the plan shapes are the same at 200 owners as in the smoke at 2. The run-time path (load one procedure, write evidence) is not a concern at 100x.
+- **Loading one owner's whole graph in one request is the limit.** Its cost grows with the owner's row count and sits in the client, not in PostgreSQL. A graph database would not change this, because the Map would still receive 724,500 objects.
+- **Design requirement for E46.19: the graph view reads only the columns the Map draws, and pages or clusters an owner above the node limit.**
+
+**Owner's decision (2026-11-22): the miss is accepted.** The run-time queries have a wide margin. The Map read is bounded by E46.19's 2,000-node fold-and-page view, and no index change is kept. The live AI-only vs reuse comparison ([runbooks/kgraph-measurement.md](../runbooks/kgraph-measurement.md)) is still **not measured**.
+
+### Query plans (run 1, condensed)
+
+The plans are `EXPLAIN (ANALYZE, BUFFERS)` of the exact statements and parameters Prisma sent, run inside a transaction that is rolled back. Cold means after a cache flush. The full text of every plan is in the JSON.
+
+**q1 (three statements):**
+```
+cold: Index Scan using kg_procedures_user_id_task_id_key              shared read=3    0.241 ms
+      Index Scan using kg_procedure_versions_pkey (Filter user_id)    shared read=4    0.341 ms
+      Index Scan using kg_evidence_version_id_step_id_key (31 rows)   shared read=35   1.494 ms
+warm: the same plans, shared hit=3 / 4 / 35, 0.031 / 0.035 / 0.063 ms
+```
+
+**q2 (the run_steps INSERT; the version check; per evidence row: SELECT id, UPDATE ... WHERE id IN, SELECT the row):**
+```
+cold: Insert on run_steps  shared read=4 dirtied=4                                         2.679 ms (FK triggers 0.8 + 1.2 ms)
+      Index Scan using kg_procedure_versions_pkey                                         0.291 ms
+      Index Scan using kg_evidence_user_id_version_id_idx (Filter step_id, 30 rows removed) 0.058 ms
+      Update on kg_evidence <- Index Scan using kg_evidence_user_id_version_id_idx        0.992 ms
+      Index Scan using kg_evidence_pkey                                                   0.015 ms
+      (the same three for the step row: 0.062 / 0.371 / 0.040 ms)
+warm: Insert 0.338 ms; every other statement 0.03-0.4 ms, the same plans, all shared hit
+```
+Prisma does not use `INSERT ... ON CONFLICT` for these upserts, because the scoped where adds `user_id`. It does a SELECT, then an UPDATE (or an INSERT), then reads the row back.
+
+**q3:**
+```
+cold: Nested Loop (6 rows)                                                         0.706 ms, shared hit=26 read=11
+        -> Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges e (user_id, to_id, type = 'uses')
+        -> Index Scan using kg_nodes_pkey on kg_nodes t (Filter user_id, type = 'Task'), loops=6
+warm: the same plan, 0.064 ms
+```
+
+**q5:**
+```
+cold: Unique <- Sort <- Nested Loop x4 (60 rows before DISTINCT, 6 tasks)     8.844 ms, shared hit=3176 read=54
+        -> Index Scan kg_edges_user_id_to_id_type_idx sc (30 screens)
+        -> Index Scan kg_edges_user_id_to_id_type_idx el (20 elements per screen, loops=30)
+        -> Index Scan kg_edges_user_id_to_id_type_idx st (loops=600)
+        -> Index Scan kg_edges_user_id_to_id_type_idx tk (loops=60)
+        -> Index Scan kg_nodes_pkey t (Filter user_id, type = 'Task', loops=60)
+warm: the same plan, 1.718 ms
+```
+
+**q4 (nodes, then edges):**
+```
+all columns, normal owner  warm: Bitmap Heap Scan kg_nodes <- Bitmap Index Scan kg_nodes_user_id_type_key_key (34,650 rows)   11.6 ms
+                                 Bitmap Heap Scan kg_edges <- Bitmap Index Scan kg_edges_user_id_to_id_type_idx (37,800 rows) 10.4 ms
+                           cold: the same plans, 258.1 / 186.1 ms
+all columns, heavy owner   warm: Gather <- Parallel Seq Scan on kg_nodes (346,500 rows)                                       265.9 ms
+                                 Gather <- Parallel Bitmap Heap Scan kg_edges <- Bitmap Index Scan kg_edges_user_id_to_id_type_idx (378,000 rows) 64.2 ms
+                           cold: the same plans, 1,013.2 / 211.1 ms
+Map columns, normal owner  warm: the same plan shapes as all columns, 11.7 / 11.3 ms; cold 246.0 / 172.1 ms
+Map columns, heavy owner   warm: Parallel Seq Scan kg_nodes 656.4 ms; Parallel Bitmap Heap Scan kg_edges 88.8 ms; cold 827.5 / 214.3 ms
+```

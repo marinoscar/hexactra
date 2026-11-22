@@ -70,6 +70,18 @@ describe('the Knowledge Graph load-test queries (#778)', () => {
     expect(new Set([...g.nodes, ...g.edges].map((r: { userId: string }) => r.userId))).toEqual(new Set([owner(B)]));
   });
 
+  it('query 4 as the Map reads it (the columns it draws, the shape E46.19 must use) loads the same rows of one owner', async () => {
+    const want = lib.rowsPerOwner(SHAPE);
+    const g = await lib.q4OwnerGraphMap(db, owner(A));
+    expect(g.nodes).toHaveLength(want.kg_nodes);
+    expect(g.edges).toHaveLength(want.kg_edges);
+    expect(Object.keys(g.nodes[0]).sort()).toEqual(['id', 'key', 'label', 'type']);
+    expect(Object.keys(g.edges[0]).sort()).toEqual(['fromId', 'id', 'toId', 'type']);
+    const full = await lib.q4OwnerGraph(db, owner(A));
+    expect(g.nodes.map((n: { id: string }) => n.id).sort()).toEqual(full.nodes.map((n: { id: string }) => n.id).sort());
+    expect(g.edges.map((e: { id: string }) => e.id).sort()).toEqual(full.edges.map((e: { id: string }) => e.id).sort());
+  });
+
   it('query 5 walks site <- screens <- elements <- steps <- tasks, inside one owner', async () => {
     for (let s = 0; s < SHAPE.sites; s += 1) {
       const rows = await lib.q5SiteImpact(prisma, owner(B), lib.keys.siteNode(PREFIX, B, s));
