@@ -375,6 +375,15 @@ export function parsePolicyFlag(raw: string): { ref: string; label?: string } {
 }
 
 /** A positive number flag. */
+/** A budget flag (#844): `none`, `0` or an empty value is no budget (`null`); otherwise an amount above 0. */
+export function budget(flag: string, raw: string): number | null {
+  const t = raw.trim().toLowerCase();
+  if (t === '' || t === 'none') return null;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${flag} takes an amount in USD, or 0 or "none" for no budget (got "${raw}").`);
+  return n === 0 ? null : n;
+}
+
 export function positive(flag: string, raw: string, integer = false): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0 || (integer && !Number.isInteger(n))) throw new Error(`${flag} takes a ${integer ? 'whole ' : ''}number above 0 (got "${raw}").`);

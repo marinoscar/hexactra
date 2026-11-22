@@ -72,7 +72,7 @@ export class BenchmarksController {
   @ApiOperation({
     summary: 'Start a benchmark',
     description:
-      'Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null`: no cap; absent: the deployment default).',
+      'Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null` or `0`: no budget, stored as `null`; absent: the deployment default).',
   })
   start(@CurrentUser() user: Principal, @Body() body: CreateBenchmarkDto) {
     return this.benchmarks.start(user, body);

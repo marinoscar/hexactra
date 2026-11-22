@@ -316,7 +316,13 @@ describe('hexactra benchmarks', () => {
   it('run refuses bad flags before any request', async () => {
     await expect(benchmarkRequest({})).rejects.toThrow(/at least one policy/);
     await expect(benchmarkRequest({ policy: ['builtin:economy'], trials: '1.5' })).rejects.toThrow(/--trials takes a whole number/);
-    await expect(benchmarkRequest({ policy: ['builtin:economy'], capUsd: '0' })).rejects.toThrow(/--cap-usd/);
+    // `0` (#844) or `none` (#840): no budget, with either spelling of the flag; a negative amount is refused.
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], capUsd: '0' })).capUsd).toBeNull();
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], cap: '0' })).capUsd).toBeNull();
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], cap: '12.5' })).capUsd).toBe(12.5);
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], cap: '-1' })).rejects.toThrow(/--cap takes an amount/);
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], capUsd: 'lots' })).rejects.toThrow(/--cap-usd/);
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], cap: '1', capUsd: '2' })).rejects.toThrow(/once/);
     // `--cap-usd none`: no spend cap (#840).
     expect((await benchmarkRequest({ policy: ['builtin:economy'], capUsd: 'none' })).capUsd).toBeNull();
     // `--record` (#841).

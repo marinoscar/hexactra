@@ -30,11 +30,11 @@ export const createBenchmarkSchema = z
     profile: profileNameSchema.default('default').describe('The browser profile on the node.'),
     capUsd: z
       .number()
-      .positive()
+      .min(0)
       .max(BENCHMARK_LIMITS.maxCapUsd)
       .nullable()
       .optional()
-      .describe('No new trial starts once the benchmark has spent this much on model calls. `null`: no cap (each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.'),
+      .describe('The budget: no new trial starts once the benchmark has spent this much on model calls. `null` or `0`: no budget (stored as `null`; each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.'),
     trialTimeoutMinutes: z.number().int().min(1).max(BENCHMARK_LIMITS.maxTrialTimeoutMinutes).optional().describe('How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.'),
     recordVideo: z.boolean().optional().describe("Record a video of each trial's browser tab (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false."),
   })
