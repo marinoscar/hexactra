@@ -7,13 +7,14 @@ import { z } from 'zod';
 
 export const kgraphSystemSettingsSchema = z.object({
   enabled: z.boolean().describe('Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned.'),
-  auditEvery: z.number().int().min(2).max(1000).describe('Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10.'),
+  auditEvery: z.number().int().min(0).max(1000).describe('Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10.'),
   suspendAfterFailures: z.number().int().min(1).max(100).describe('Consecutive failed replays that suspend a procedure (E46.12). Default 3.'),
   retentionDays: z.number().int().min(1).max(3650).nullable().describe('Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null.'),
+  pacing: z.enum(['human', 'fast']).describe('How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human.'),
 });
 export type KgraphSystemSettings = z.infer<typeof kgraphSystemSettingsSchema>;
 export const kgraphSystemSettingsPatchSchema = kgraphSystemSettingsSchema.partial();
-export const KGRAPH_SYSTEM_DEFAULTS: KgraphSystemSettings = { enabled: false, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null };
+export const KGRAPH_SYSTEM_DEFAULTS: KgraphSystemSettings = { enabled: false, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' };
 
 export const KGRAPH_SYSTEM_SETTINGS = {
   key: 'kgraph',

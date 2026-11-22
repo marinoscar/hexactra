@@ -27,6 +27,8 @@ export interface PostState {
   viewDigest?: string;
   /** Click and type: the target's role and accessible label, when the host knows them. */
   target?: { role?: string; label?: string };
+  /** Click, type and select (E46.13): the fingerprint of the element acted on, from the page. Never a typed value. */
+  element?: { role: string | null; name: string | null; tag: string | null; inputType: string | null; selectors: string[]; anchor: string | null };
   /** Account and MCP calls: a digest of the result's shape (keys and types, not values). */
   resultShape?: string;
 }

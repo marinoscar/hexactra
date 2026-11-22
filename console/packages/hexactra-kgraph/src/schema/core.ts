@@ -65,12 +65,18 @@ export type Output = z.infer<typeof outputSchema>;
 export const screenSchema = z.object({ id: idSchema, site: idSchema, label: labelSchema, pathPattern: z.string().max(500).optional() });
 export type Screen = z.infer<typeof screenSchema>;
 
-/** An element on a screen: its role, accessible label and selector candidates in preference order. */
+/**
+ * An element on a screen (its fingerprint, E46.13): role, accessible label, tag, input type, selector candidates in preference order and an
+ * anchor (the nearest labelled ancestor). Never a value typed into it; a label passed the host's masking before it was stored.
+ */
 export const elementSchema = z.object({
   id: idSchema,
   screen: idSchema,
   role: z.string().max(64).optional(),
   label: z.string().max(200).optional(),
+  tag: z.string().max(40).optional(),
+  inputType: z.string().max(40).optional(),
+  anchor: z.string().max(200).optional(),
   selectors: z.array(z.string().min(1).max(500)).max(10).default([]),
 });
 export type Element = z.infer<typeof elementSchema>;

@@ -20,3 +20,14 @@ export class TaskKgraphResponseDto extends createZodDto(taskKgraphSchema) {}
 export class PutTaskKgraphDto extends createZodDto(putTaskKgraphSchema) {}
 export class KgraphStatusResponseDto extends createZodDto(kgraphStatusSchema) {}
 export class KgraphPurgeResponseDto extends createZodDto(kgraphPurgeSchema) {}
+
+export const restoreVersionSchema = z.object({ versionId: z.string().min(1).max(200) }).strict();
+export const restoredSchema = z.object({
+  procedureId: z.string(),
+  restoredFrom: z.string().describe('The retired or suspended version chosen.'),
+  versionId: z.string().describe('The new candidate copy: its first run is a verification run (it asks before every commit-class step), then it is active.'),
+});
+export const forgottenSchema = z.object({ procedureId: z.string(), retired: z.number().describe('Versions retired: the task learns again.') });
+export class RestoreVersionDto extends createZodDto(restoreVersionSchema) {}
+export class RestoredResponseDto extends createZodDto(restoredSchema) {}
+export class ForgottenResponseDto extends createZodDto(forgottenSchema) {}

@@ -13,6 +13,7 @@ export type EvidenceOutcome = 'success' | 'failure' | 'repair';
  * - **Versions are immutable.** `putVersion` refuses an id that exists; only `setVersionState` and `recordEvidence` change a stored version.
  * - **State moves are atomic and checked.** `setVersionState` applies only when the stored state equals `expected` (compare-and-set) and
  *   returns false otherwise; it never applies a move `canTransition` refuses.
+ * - **One active version.** `activate` leaves exactly one `active` version per procedure, in one transaction.
  * - **Deleting is complete.** `deleteAll` removes every procedure, version and evidence row of the owner.
  */
 export interface ProcedureStorePort {
@@ -28,6 +29,12 @@ export interface ProcedureStorePort {
   putVersion(owner: string, version: ProcedureVersion): Promise<void>;
   /** Compare-and-set the state. True when it moved. */
   setVersionState(owner: string, version: string, expected: VersionState, next: VersionState): Promise<boolean>;
+  /**
+   * Make a version the procedure's one active version, atomically: its state moves `from` → (`verified` →) `active` by compare-and-set,
+   * the procedure's earlier active version becomes `retired`, and the procedure's `activeVersion` is set. From `candidate` it passes through
+   * `verified`. True when it moved; false when the state was not `from` (another job won) or the move is not allowed.
+   */
+  activate(owner: string, version: string, from: 'candidate' | 'verified' | 'suspended'): Promise<boolean>;
   /** Add one outcome to the version's evidence, and to the step's when `step` is given. Returns the version's evidence after it. */
   recordEvidence(owner: string, version: string, step: string | null, outcome: EvidenceOutcome, at: string): Promise<Evidence>;
   /** Delete everything learned for the owner. Returns the number of procedures removed. */
@@ -114,8 +121,23 @@ export interface JudgeResult {
  * goes through the host's model routing and budgets (in the console, `tierRequest(snapshot, 'fast')`); a result that does not match the schema
  * is `ok: false`, never a partial value.
  */
+export interface LocateRequest {
+  /** The step in the procedure's own terms: never an instruction from a run. */
+  tool: string;
+  role: string | null;
+  label: string | null;
+  anchor: string | null;
+  /** The page's controls, numbered (page text is data). */
+  elements: readonly { n: number; role: string | null; name: string | null; tag: string | null }[];
+}
+
 export interface JudgePort {
   judge(request: JudgeRequest): Promise<JudgeResult>;
+  /**
+   * Rung 4 of the recovery ladder (E46.16): one narrow model call that names the numbered control the step means, or null ("not here").
+   * Optional: a host without it skips the rung. The caller checks the answer (the number exists; the role fits) before using it.
+   */
+  locate?(request: LocateRequest): Promise<{ mark: number | null }>;
 }
 
 /** Time. A correct binding guarantees `sleep` resolves early (without throwing) when the run is stopped. */

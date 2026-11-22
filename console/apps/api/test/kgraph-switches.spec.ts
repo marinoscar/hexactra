@@ -39,10 +39,10 @@ describe('KgraphEnabledService.modeFor', () => {
 
 describe('the kgraph settings', () => {
   it('are off by default at the deployment and the user level', () => {
-    expect(KGRAPH_SYSTEM_DEFAULTS).toEqual({ enabled: false, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null });
+    expect(KGRAPH_SYSTEM_DEFAULTS).toEqual({ enabled: false, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' });
     expect(KGRAPH_USER_DEFAULTS).toEqual({ enabled: false });
     expect(readKgraphSystemSettings(undefined).enabled).toBe(false);
-    expect(readKgraphSystemSettings({ enabled: 'yes', auditEvery: 0 })).toEqual(KGRAPH_SYSTEM_DEFAULTS);
+    expect(readKgraphSystemSettings({ enabled: 'yes', auditEvery: -1 })).toEqual(KGRAPH_SYSTEM_DEFAULTS);
     expect(readKgraphUserSettings(null)).toEqual({ enabled: false });
     expect(readKgraphUserSettings({ kgraph: { enabled: true } })).toEqual({ enabled: true });
   });

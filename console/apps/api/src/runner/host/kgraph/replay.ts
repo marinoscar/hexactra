@@ -1,0 +1,225 @@
+// The Knowledge Graph's replay (E46.9, #783): binds the executor's ports to this run and runs a usable procedure between `beforeLoop` and
+// `loop.run`. Entered ONLY when `modeFor` is `reuse` and the task has an active, verified or candidate version; otherwise this returns null
+// before doing anything. Every call goes through `executeTool` (the harness bridge); the steps are ordinary step rows. Anything that does not
+// match hands the run to the loop with one note in the model's log. Any error is caught, counted and handed over: it never fails the run.
+import type { RunOutcome } from '@marinoscar/hexactra-agent';
+import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
+import { abortableSleep, resolveFingerprint, type ElementFingerprint } from '@marinoscar/hexactra-browser-agent/surface';
+import { breaker, checkOutcome, isAuditRun, noopTelemetry, RecoveryLadder, registrableDomain, type ProcedureVersion, type RunVerdict } from '@marinoscar/hexactra-kgraph';
+import { interruptStrategy, type SiteMemory } from './interrupts';
+import { hostRungs } from './recovery';
+import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls, type ReplayMemory, type ReplayResult } from '@marinoscar/hexactra-kgraph/harness';
+
+import { declaredOutputs, learnShapes, readShapes } from '../../../kgraph/output-shapes';
+import { readRunInputs } from '../../../tasks/task-params.schemas';
+import type { BuiltRun } from '../build-context';
+import { fingerprintOf, surfaceInvoker } from './surface';
+import type { HostDeps } from '../deps';
+import type { RunStart } from '../start';
+
+type KgMemory = { kgraphReplay?: ReplayMemory };
+
+/**
+ * The version a reuse run replays (newest first in `versions`): a repair candidate of the active version (its verification run), else the
+ * active one, else a verified one, else the newest candidate. A sensitive candidate (E46.17) is never chosen until the owner approved its
+ * review; even then it is verified first and passes every gate on every run.
+ */
+export function usableVersion(versions: readonly ProcedureVersion[], approved: ReadonlySet<string> = new Set()): ProcedureVersion | null {
+  const allowed = (v: ProcedureVersion) => v.state === 'candidate' && (v.changeClass !== 'sensitive' || approved.has(v.id));
+  const active = versions.find((v) => v.state === 'active');
+  const repair = active ? versions.find((v) => allowed(v) && v.parent === active.id) : undefined;
+  return repair ?? active ?? versions.find((v) => v.state === 'verified') ?? versions.find(allowed) ?? null;
+}
+
+export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Promise<RunOutcome | null> {
+  if (!d.kgraph || !d.kgraphStore) return null;
+  const { ctx, profile } = built;
+  const { run, userId } = s;
+  const memory = ctx.memory as typeof ctx.memory & KgMemory;
+  let version: ProcedureVersion | null = null;
+  try {
+    const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
+    if ((await d.kgraph.modeFor({ userId, taskId: run.taskId, run: { isTaskRun } })) !== 'reuse' || !run.taskId) return null;
+    const procedure = await d.kgraphStore.findProcedureForTask(userId, run.taskId);
+    if (!procedure) return null;
+    const versions = await d.kgraphStore.listVersions(userId, procedure.id);
+    const pinned = memory.kgraphReplay?.version;
+    const approved = new Set((await d.prisma.forUser({ userId }).kgReview.findMany({ where: { userId, status: 'approved' }, select: { versionId: true } })).map((r) => r.versionId));
+    version = (pinned ? versions.find((v) => v.id === pinned) : null) ?? usableVersion(versions, approved);
+    if (!version) {
+      // A suspended procedure (E46.12): the run skips replay and is recorded as AI only; its success compiles a fresh candidate.
+      const suspended = versions.find((v) => v.state === 'suspended');
+      if (suspended) await recordKgRun(d, userId, run.id, suspended.id, 'ai_only', true);
+      return null;
+    }
+    // An audit run (E46.11): every Nth run of the task runs with AI only, chosen here from the task's run count, never by a model or a page.
+    if (!pinned && version.state !== 'candidate') {
+      const { auditEvery } = await d.kgraph.systemSettingsOf();
+      const n = await d.prisma.run.count({ where: { userId, taskId: run.taskId, createdAt: { lte: run.createdAt } } });
+      if (isAuditRun(n, auditEvery)) {
+        await recordKgRun(d, userId, run.id, version.id, 'ai_only', true);
+        return null;
+      }
+    }
+  } catch (err) {
+    d.log.warn(`run ${run.id}: kgraph replay not started: ${err instanceof Error ? err.name : 'error'}`);
+    return null;
+  }
+
+  const state: ReplayMemory = memory.kgraphReplay?.version === version.id ? memory.kgraphReplay : { version: version.id, done: [], intent: null, handedOver: false };
+  memory.kgraphReplay = state;
+  const v = version;
+  const declared = declaredOutputs(run.outputsSpec);
+  const pacing = (await d.kgraph.systemSettingsOf().catch(() => null))?.pacing ?? 'human';
+  const shapes = declared.length ? await readShapes(d.prisma, userId, v.id).catch(() => ({})) : {};
+  const inputs: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(readRunInputs(run.inputs)?.values ?? {})) inputs[`p:${key}`] = val.value;
+  const sharedElement = async (id: string) => ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Element', key: id } }))?.props ?? null) as Partial<ElementFingerprint> | null;
+  const siteOf = async (url: string | null): Promise<SiteMemory | null> => {
+    const host = url ? new URL(url).hostname : null;
+    if (!host) return null;
+    return ((await d.prisma.forUser({ userId }).kgNode.findFirst({ where: { userId, type: 'Site', key: registrableDomain(host) } }))?.props ?? null) as SiteMemory | null;
+  };
+  const judge = harnessJudge(ctx, ctx.ports.policy.routing.route('fast'));
+  const propose = async (p: { step: string; element: string; rung: string; selector: string }) => {
+    await d.prisma.forUser({ userId }).kgNode.create({ data: { id: `kgn-${ctx.ports.ids.uuid()}`, userId, type: 'FingerprintProposal', key: `${v.id}:${p.step}:${run.id}`.slice(0, 500), label: p.rung, props: { ...p, versionId: v.id, runId: run.id } } });
+  };
+
+  /** One walk of the procedure (from its start, a restart point, or a later segment), with every port bound to this run. */
+  const replayOnce = async (fromStep?: string): Promise<ReplayResult | null> => {
+    const original = ctx.ports.observer;
+    const { observer, watch } = watchCalls(original);
+    (ctx.ports as { observer?: typeof observer }).observer = observer;
+    try {
+      const base = harnessToolInvoker(ctx, profile, watch);
+      const overrides = new Map<string, string>();
+      const result = await replayPhase({
+        recovery: new RecoveryLadder([interruptStrategy({ browser: ctx.ext.browser, invoke: base, site: siteOf }), ...hostRungs({ browser: ctx.ext.browser, version: v, overrides, judge, signal: ctx.ports.control.haltSignal, propose })]),
+        ctx,
+        version: v,
+        inputs,
+        ...(fromStep ? { fromStep } : {}),
+        ports: {
+          store: d.kgraphStore!,
+          tools: surfaceInvoker(base, v, ctx.ext.browser, sharedElement, {
+            familyOf: (tool) => profile.registry.list(ctx).find((t) => t.name === tool)?.family ?? 'browser',
+            pacing,
+            signal: ctx.ports.control.haltSignal,
+            location: () => currentUrl(ctx as never),
+            overrides,
+          }),
+          probe: harnessProbe(() => currentUrl(ctx as never), watch),
+          judge,
+          clock: { now: () => new Date(ctx.ports.clock.now()), sleep: async (ms) => void (await abortableSleep(ms, ctx.ports.control.haltSignal)) },
+          ids: { next: (p) => `${p}${ctx.ports.ids.uuid()}` },
+          telemetry: noopTelemetry,
+        },
+        memory: state,
+        save: () => ctx.checkpoint(),
+        // A candidate's first replay is its verification run (E46.10): every commit-class step asks the owner first.
+        verify: v.state === 'candidate',
+        outputs: declared.map((o) => o.key),
+        // Outcome checks (E46.11): a replay that finishes with a missing, mistyped or implausible output hands over instead of succeeding.
+        ...(declared.length ? { checkOutcome: (outputs: Record<string, unknown>) => checkOutcome(declared, outputs, shapes) } : {}),
+      });
+      if (result.kind === 'finished' && declared.length) await learnShapes(d.prisma, userId, v.id, declared, result.report.outputs).catch(() => undefined);
+      const outcomeFailed = result.kind === 'handover' && result.note.startsWith('The saved procedure finished but');
+      if (outcomeFailed) await d.kgraphStore!.recordEvidence(userId, v.id, null, 'failure', new Date().toISOString()).catch(() => undefined);
+      await recordKgRun(d, userId, run.id, v.id, result.kind === 'finished' ? 'replayed' : outcomeFailed ? 'outcome_failed' : result.kind === 'handover' ? 'fell_back' : null);
+      if (result.kind !== 'outcome' && !fromStep) await protect(d, userId, run.taskId!, v);
+      if (v.state === 'candidate' && result.kind !== 'outcome') await settleVerification(d, userId, v.id, result.kind === 'finished');
+      return result;
+    } catch (err) {
+      d.log.warn(`run ${run.id}: kgraph replay error, handing over: ${err instanceof Error ? err.name : 'error'}`);
+      state.handedOver = true;
+      await ctx.checkpoint().catch(() => undefined);
+      return null;
+    } finally {
+      (ctx.ports as { observer?: typeof observer }).observer = original;
+    }
+  };
+
+  if (!state.handedOver) {
+    const result = await replayOnce();
+    if (result && result.kind !== 'handover') return result.outcome;
+  }
+  // Per-segment reuse (E46.18): while the agent works, each chunk boundary checks whether the next segment's precondition holds; then the walk
+  // resumes there, in the same run. At most 3 hand-backs per run, then the agent finishes it.
+  if (state.resumeAt && v.state !== 'candidate') {
+    (profile as { betweenChunks?: (c: unknown) => Promise<RunOutcome | null> }).betweenChunks = async () => {
+      if (!state.resumeAt || (state.handBacks ?? 0) >= MAX_HAND_BACKS) return null;
+      // The agent finishes the broken segment's part first: nothing resumes before it has acted since the handover.
+      if (ctx.state.stepCount <= (state.handedOverAt ?? ctx.state.stepCount)) return null;
+      if (!(await segmentReady(ctx.ext.browser, v, state.resumeAt, sharedElement, () => currentUrl(ctx as never)))) return null;
+      const from = state.resumeAt;
+      state.handedOver = false;
+      state.handBacks = (state.handBacks ?? 0) + 1;
+      const result = await replayOnce(from);
+      return result && result.kind !== 'handover' ? result.outcome : null;
+    };
+  }
+  return null;
+}
+
+/** At most this many hand-backs from the agent to a later segment in one run. */
+export const MAX_HAND_BACKS = 3;
+
+/** Whether a segment's first step can run now: its element resolves to exactly one match, or the page is where its location check says. */
+async function segmentReady(browser: Parameters<typeof resolveFingerprint>[0], v: ProcedureVersion, stepId: string, shared: (id: string) => Promise<Partial<ElementFingerprint> | null>, location: () => Promise<string | null>): Promise<boolean> {
+  const step = v.steps.find((s) => s.id === stepId);
+  if (!step) return false;
+  const el = step.element ? v.elements.find((e) => e.id === step.element) : undefined;
+  if (el) return (await resolveFingerprint(browser, fingerprintOf(el, await shared(el.id).catch(() => null)))).kind === 'found';
+  const loc = step.checks.find((c) => c.kind === 'location');
+  if (!loc || loc.kind !== 'location') return false;
+  try {
+    const u = new URL((await location()) ?? '');
+    return u.hostname === loc.host || u.hostname.endsWith(`.${loc.host}`);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The end of a verification run (E46.10): a clean finish promotes the candidate to the procedure's one active version (compare-and-set: of two
+ * racing jobs one wins); a handover retires it, and the run the agent finishes is compiled into a new candidate. Best effort.
+ */
+async function settleVerification(d: HostDeps, userId: string, versionId: string, clean: boolean): Promise<void> {
+  try {
+    const moved = clean ? await d.kgraphStore!.activate(userId, versionId, 'candidate') : await d.kgraphStore!.setVersionState(userId, versionId, 'candidate', 'retired');
+    if (moved) await d.prisma.auditEvent.create({ data: { actorUserId: userId, action: clean ? 'kgraph.version.verified' : 'kgraph.version.retired', targetType: 'kgraph_version', targetId: versionId, meta: { versionId } } });
+  } catch (err) {
+    d.log.warn(`kgraph version ${versionId}: verification not settled: ${err instanceof Error ? err.name : 'error'}`);
+  }
+}
+
+/**
+ * The circuit breaker (E46.12): over the outcomes of this version's own runs, oldest first. A suspension is a compare-and-set on `active`, so
+ * of two jobs only one suspends and only one notification is sent. Best effort: never changes the run.
+ */
+async function protect(d: HostDeps, userId: string, taskId: string, version: ProcedureVersion): Promise<void> {
+  try {
+    if (version.state !== 'active' || !d.kgraph) return;
+    const rows = await d.prisma.forUser({ userId }).kgRun.findMany({ where: { userId, procedureVersionId: version.id, outcome: { in: ['replayed', 'fell_back', 'outcome_failed'] } }, orderBy: { createdAt: 'asc' }, select: { outcome: true } });
+    const history: RunVerdict[] = rows.map((r) => (r.outcome === 'replayed' ? 'clean' : r.outcome === 'outcome_failed' ? 'outcome_failed' : 'agent'));
+    const { suspendAfterFailures } = await d.kgraph.systemSettingsOf();
+    const verdict = breaker(history, suspendAfterFailures);
+    if (!verdict.suspend) return;
+    if (!(await d.kgraphStore!.setVersionState(userId, version.id, 'active', 'suspended'))) return;
+    await d.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'kgraph.version.suspended', targetType: 'kgraph_version', targetId: version.id, meta: { versionId: version.id, reason: verdict.reason } } });
+    const task = await d.prisma.forUser({ userId }).task.findFirst({ where: { id: taskId, userId }, select: { name: true } });
+    await d.notifier?.kgraphSuspended?.(userId, taskId, task?.name ?? 'a task', version.id);
+  } catch (err) {
+    d.log.warn(`kgraph version ${version.id}: breaker not applied: ${err instanceof Error ? err.name : 'error'}`);
+  }
+}
+
+/** The run's Knowledge Graph facts (best effort). */
+async function recordKgRun(d: HostDeps, userId: string, runId: string, versionId: string, outcome: string | null, aiOnly = false): Promise<void> {
+  try {
+    const data = { mode: 'reuse', procedureVersionId: versionId, aiOnly, ...(outcome ? { outcome } : {}) };
+    await d.prisma.kgRun.upsert({ where: { runId }, create: { runId, userId, ...data }, update: data });
+  } catch (err) {
+    d.log.warn(`run ${runId}: kg_runs not written: ${err instanceof Error ? err.name : 'error'}`);
+  }
+}

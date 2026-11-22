@@ -29643,6 +29643,460 @@
         }
       }
     },
+    "/api/kgraph/procedures/{id}/restore": {
+      "post": {
+        "description": "A retired or suspended version comes back as a new candidate copy; the other usable versions retire. Its next run is a verification run (it asks before every step that sends or pays), then it is active. `409 KGRAPH_VERSION_NOT_RESTORABLE` otherwise.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraph_restore",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreVersionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RestoredResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Restore an earlier version of a procedure",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/procedures/{id}/forget": {
+      "post": {
+        "description": "Every version retires (kept for history); the task learns again from its next successful run.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraph_forget",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ForgottenResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Forget a procedure",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/reviews": {
+      "get": {
+        "description": "Repairs that would add or change a send, a payment, a recipient, a site, an account or a saved login. They never pause a run.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphReviews_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "declined",
+                "expired"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReviewResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Changes waiting for your review",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/reviews/{id}": {
+      "get": {
+        "operationId": "kgraphReviews_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReviewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One review",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `kgraph:read`."
+      }
+    },
+    "/api/kgraph/reviews/{id}/answer": {
+      "post": {
+        "description": "`403 KGRAPH_REVIEW_CONSOLE_ONLY` for a personal access token, an OAuth app or any credential but a browser session. Declined: the version retires and the same change is not proposed again for 30 days. Approved: its next run verifies it, asking before every step that sends or pays; it still passes every gate on every run.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphReviews_answer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReviewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Approve or decline a change (signed-in console only)",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
     "/api/kgraph/ledger": {
       "get": {
         "description": "One row per run of the task with the Knowledge Graph on (newest first): steps by how they ran, model calls, tokens, cost and active time, and the task's AI-only baseline. A cost with `costKnown: false` is a lower bound.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
@@ -48364,6 +48818,11 @@
               "SECRETS_VAULT_CONNECT_FAILED",
               "KGRAPH_TASK_NOT_FOUND",
               "KGRAPH_OFF",
+              "KGRAPH_PROCEDURE_NOT_FOUND",
+              "KGRAPH_VERSION_NOT_RESTORABLE",
+              "KGRAPH_REVIEW_NOT_FOUND",
+              "KGRAPH_REVIEW_ANSWERED",
+              "KGRAPH_REVIEW_CONSOLE_ONLY",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -53333,9 +53792,9 @@
               },
               "auditEvery": {
                 "type": "integer",
-                "minimum": 2,
+                "minimum": 0,
                 "maximum": 1000,
-                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
               },
               "suspendAfterFailures": {
                 "type": "integer",
@@ -53355,13 +53814,22 @@
                   }
                 ],
                 "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              },
+              "pacing": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "fast"
+                ],
+                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
               }
             },
             "required": [
               "enabled",
               "auditEvery",
               "suspendAfterFailures",
-              "retentionDays"
+              "retentionDays",
+              "pacing"
             ]
           },
           "connections": {
@@ -54756,9 +55224,9 @@
               },
               "auditEvery": {
                 "type": "integer",
-                "minimum": 2,
+                "minimum": 0,
                 "maximum": 1000,
-                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
               },
               "suspendAfterFailures": {
                 "type": "integer",
@@ -54778,13 +55246,22 @@
                   }
                 ],
                 "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              },
+              "pacing": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "fast"
+                ],
+                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
               }
             },
             "required": [
               "enabled",
               "auditEvery",
               "suspendAfterFailures",
-              "retentionDays"
+              "retentionDays",
+              "pacing"
             ]
           },
           "connections": {
@@ -56188,9 +56665,9 @@
               },
               "auditEvery": {
                 "type": "integer",
-                "minimum": 2,
+                "minimum": 0,
                 "maximum": 1000,
-                "description": "Every Nth replayed run of a task runs with AI only and is compared (E46.11). Default 10."
+                "description": "Every Nth run of a reuse-mode task runs with AI only and is compared with the procedure (E46.11). 0 never. Default 10."
               },
               "suspendAfterFailures": {
                 "type": "integer",
@@ -56210,6 +56687,14 @@
                   }
                 ],
                 "description": "Days an unused procedure and its traces are kept (E46.24). null keeps them. Default null."
+              },
+              "pacing": {
+                "type": "string",
+                "enum": [
+                  "human",
+                  "fast"
+                ],
+                "description": "How replayed browser actions are paced (E46.14): human (a bounded random gap between actions) or fast (only waits for the page to be ready; for account-only procedures and tests). Default human."
               }
             }
           },
@@ -79496,6 +79981,131 @@
         },
         "required": [
           "mode"
+        ],
+        "additionalProperties": false
+      },
+      "RestoredResponseDto": {
+        "type": "object",
+        "properties": {
+          "procedureId": {
+            "type": "string"
+          },
+          "restoredFrom": {
+            "type": "string",
+            "description": "The retired or suspended version chosen."
+          },
+          "versionId": {
+            "type": "string",
+            "description": "The new candidate copy: its first run is a verification run (it asks before every commit-class step), then it is active."
+          }
+        },
+        "required": [
+          "procedureId",
+          "restoredFrom",
+          "versionId"
+        ]
+      },
+      "RestoreVersionDto": {
+        "type": "object",
+        "properties": {
+          "versionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "additionalProperties": false
+      },
+      "ForgottenResponseDto": {
+        "type": "object",
+        "properties": {
+          "procedureId": {
+            "type": "string"
+          },
+          "retired": {
+            "type": "number",
+            "description": "Versions retired: the task learns again."
+          }
+        },
+        "required": [
+          "procedureId",
+          "retired"
+        ]
+      },
+      "ReviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "versionId": {
+            "type": "string"
+          },
+          "procedureId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "declined",
+              "expired"
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "What changes, in plain words, masked: never a typed value."
+                }
+              },
+              "required": [
+                "reason",
+                "text"
+              ]
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "versionId",
+          "procedureId",
+          "status",
+          "changes",
+          "createdAt",
+          "expiresAt"
+        ]
+      },
+      "AnswerReviewDto": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "approve"
         ],
         "additionalProperties": false
       },

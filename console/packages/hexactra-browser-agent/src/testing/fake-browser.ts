@@ -17,6 +17,10 @@ export class FakeBrowser implements BrowserPort {
   /** What the page says about a click target: by selector, or by point as "x,y". */
   targets = new Map<string, Record<string, unknown> | null>();
   url = 'https://shop.example.test/checkout';
+  /** What the surface queries list (E46.13): the page's controls, with their selector candidates. */
+  surface: Record<string, unknown>[] = [];
+  /** What the snapshot query answers (E46.15): title, visible text, frames. */
+  snapshot: { title?: string; text?: string; frames?: string[] } = {};
   /** The next `act` fails with this state instead of succeeding. */
   failNext: { state: ActionOp['state']; error: string } | null = null;
 
@@ -24,6 +28,13 @@ export class FakeBrowser implements BrowserPort {
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:describe-target */')) {
       const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
       return { id: 'op', state: 'succeeded', result: { type: 'object', value: this.targets.get(where.selector ?? `${where.x},${where.y}`) ?? null } };
+    }
+    if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-elements */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: this.surface } };
+    if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-snapshot */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: { url: this.url, title: this.snapshot.title ?? '', text: this.snapshot.text ?? '', frames: this.snapshot.frames ?? [] } } };
+    if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-describe */')) {
+      const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
+      const hit = this.surface.find((e) => (where.selector ? e.selector === where.selector || (e.selectors as string[] | undefined)?.includes(where.selector) : e.at === `${where.x},${where.y}`));
+      return { id: 'op', state: 'succeeded', result: { type: 'object', value: hit ?? null } };
     }
     this.actions.push(action);
     if (this.failNext) {

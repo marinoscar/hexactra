@@ -22,6 +22,21 @@ A host embeds the package by binding its ports. The package reaches the outside 
 4. Decide the mode with `effectiveMode` from your switches. Every level defaults to off.
 5. Treat any error from the package as "use the agent": a Knowledge Graph failure must never fail a run.
 
+## Running a procedure
+
+`executeProcedure(version, inputs, ports, options)` (`./execute`) walks a version and returns an `ExecutionReport`: one entry per step (`done`, `skipped`, `failed_check`, `refused`, `stopped`, `paused`, `error`, `needs_owner`, `agent`), the outputs, and the **resume point** (the first step not done, with what was expected and observed). It never retries: a failed check, a refusal, a Stop or a Pause ends the walk.
+
+- `call`, `extract` and `check` steps never call a model; a `judge` step calls `JudgePort` once.
+- `ask` ends the walk with `needs_owner`: ask through your own question flow, then call again with `fromStep`.
+- `agent` ends the walk with `agent`: run your agent until the step's `until` checks hold, then call again from the next step.
+- `options.before(step)` may return `stop` (budgets, a deadline, a lease).
+
+### Crash safety contract
+
+1. Before a commit-class step is invoked, the executor calls `options.onCommitIntent(step)`. Record the intent durably **before** returning.
+2. The executor is restartable from a resume point: call it again with `fromStep`, `done` (the steps already done and their results) and `unknown` (commit-class steps whose intent was recorded but whose outcome you do not know).
+3. A commit-class step in `unknown` is **never invoked again**: the report says `needs_owner` and the owner decides.
+
 ## The Hexactra Console
 
 The console binds the store to PostgreSQL (`kg_` tables), the tool invoker to `executeTool`, and the judge to `tierRequest(snapshot, 'fast')`. See `console/docs/decisions/knowledge-graph.md`.

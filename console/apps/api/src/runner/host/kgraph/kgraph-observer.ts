@@ -5,7 +5,7 @@ import type { ObserverPort } from '@marinoscar/hexactra-agent';
 
 import type { KgraphEnabledService } from '../../../kgraph/kgraph-enabled.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
-import { KgraphObserver } from './observer-port';
+import { KgraphObserver, type KgraphObserverInput } from './observer-port';
 
 export interface ObserverRun {
   id: string;
@@ -16,7 +16,7 @@ export interface ObserverRun {
   conversationId: string | null;
 }
 
-export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService, 'modeFor'>; prisma: PrismaService; log: Logger }, userId: string, run: ObserverRun, aiOnly = false): Promise<ObserverPort | undefined> {
+export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'>; prisma: PrismaService; log: Logger }, userId: string, run: ObserverRun, aiOnly = false, capture?: KgraphObserverInput['capture']): Promise<ObserverPort | undefined> {
   if (!d.kgraph) return undefined;
   const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
   const mode = await d.kgraph.modeFor({ userId, taskId: run.taskId, run: { isTaskRun, aiOnly } }).catch(() => 'off' as const);
@@ -27,5 +27,5 @@ export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService,
   } catch (err) {
     d.log.warn(`run ${run.id}: kgraph run facts not written: ${err instanceof Error ? err.name : 'error'}`);
   }
-  return new KgraphObserver({ prisma: d.prisma, log: d.log, userId, runId: run.id, goal: run.goal, inputs: run.inputs });
+  return new KgraphObserver({ prisma: d.prisma, log: d.log, userId, runId: run.id, goal: run.goal, inputs: run.inputs, ...(capture ? { capture } : {}) });
 }

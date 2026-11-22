@@ -3,23 +3,8 @@ import { z } from 'zod';
 import { accountSchema, edgeSchema, elementSchema, idSchema, outputSchema, parameterSchema, screenSchema, secretRefSchema, siteSchema, timestampSchema } from './core';
 import { stepSchema } from './step';
 
-/** `candidate` (compiled, never replayed) → `verified` (one clean replay) → `active` → `suspended` (circuit breaker) → `retired`. */
-export const VERSION_STATES = ['candidate', 'verified', 'active', 'suspended', 'retired'] as const;
-export const versionStateSchema = z.enum(VERSION_STATES);
-export type VersionState = z.infer<typeof versionStateSchema>;
-
-/** The state moves a host may make. Anything else is refused by `canTransition`. */
-export const VERSION_TRANSITIONS: Readonly<Record<VersionState, readonly VersionState[]>> = Object.freeze({
-  candidate: ['verified', 'retired'],
-  verified: ['active', 'suspended', 'retired'],
-  active: ['suspended', 'retired'],
-  suspended: ['active', 'retired'],
-  retired: [],
-});
-
-export function canTransition(from: VersionState, to: VersionState): boolean {
-  return VERSION_TRANSITIONS[from].includes(to);
-}
+export { VERSION_STATES, versionStateSchema, VERSION_TRANSITIONS, canTransition, assertTransition, IllegalTransition, type VersionState } from './version-state';
+import { versionStateSchema } from './version-state';
 
 /** Why a version differs from its parent. `initial`: the first compile. `structural`: promotes after a clean run. `sensitive`: waits for the owner. */
 export const changeClassSchema = z.enum(['initial', 'structural', 'sensitive']);

@@ -3,6 +3,7 @@
 import type { GatePipeline } from './gate-pipeline';
 import type { AnyContext } from './run-context';
 import type { ToolRegistry } from './registry';
+import type { RunOutcome } from './types';
 import type { PageState } from './stall';
 import type { VisionNotes } from './tiers';
 
@@ -21,6 +22,11 @@ export const NO_OBSERVATION: Observation = { images: [], page: null, url: null }
 export interface LoopProfile<C extends AnyContext = AnyContext> {
   /** The system instructions, identical in every round of a run (the provider caches them). */
   instructions: string;
+  /**
+   * Called at each chunk boundary, after Stop, Pause, the budgets and the hop are checked (E46.18): a host may finish the run's remaining work
+   * another way (the Knowledge Graph resumes a saved procedure's next segment). An outcome ends the loop; null goes on. Absent: nothing changes.
+   */
+  betweenChunks?(ctx: C): Promise<RunOutcome | null>;
   registry: ToolRegistry<C>;
   pipeline: GatePipeline<C>;
   visionNotes: VisionNotes;

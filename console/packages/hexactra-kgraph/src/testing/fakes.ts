@@ -53,6 +53,16 @@ export class InMemoryProcedureStore implements ProcedureStorePort {
     v.version.state = next;
     return true;
   }
+  async activate(owner: string, id: string, from: 'candidate' | 'verified' | 'suspended') {
+    const v = this.versions.get(id);
+    if (!v || v.owner !== owner || v.version.state !== from) return false;
+    if (from === 'candidate' ? false : !canTransition(from, 'active')) return false;
+    for (const other of this.versions.values()) if (other.owner === owner && other.version.procedure === v.version.procedure && other.version.state === 'active' && other.version.id !== id) other.version.state = 'retired';
+    v.version.state = 'active';
+    const p = this.procedures.get(v.version.procedure);
+    if (p) this.procedures.set(p.id, { ...p, activeVersion: id });
+    return true;
+  }
   async recordEvidence(owner: string, id: string, step: string | null, outcome: EvidenceOutcome, at: string) {
     const v = this.versions.get(id);
     if (!v || v.owner !== owner) throw new Error('version not found for this owner');
@@ -96,9 +106,27 @@ export class ScriptedToolInvoker implements ToolInvokerPort {
   }
 }
 
+/** Replies for the scripted invoker: a gate refusal, the owner's Stop or Pause, a failed call, a crash (the call throws). */
+export const replies = {
+  ok: (text = '', value?: unknown): Partial<ToolInvocation> => ({ ok: true, text, ...(value !== undefined ? { value } : {}) }),
+  refused: (): Partial<ToolInvocation> => ({ ok: false, text: 'refused by a gate', refused: true }),
+  stopped: (): Partial<ToolInvocation> => ({ ok: false, text: 'stopped', stopped: true }),
+  paused: (): Partial<ToolInvocation> => ({ ok: false, text: 'paused', paused: true }),
+  failed: (text = 'failed'): Partial<ToolInvocation> => ({ ok: false, text }),
+  /** A crash between the intent and the result: the call never returns. */
+  crash: (): ScriptedReply => () => {
+    throw new Error('crashed between intent and result');
+  },
+};
+
 /** A `StateProbePort` over a mutable state a test sets. */
 export class FakeStateProbe implements StateProbePort {
   location_: ProbedLocation | null = null;
+  /** Set the page the probe reports (a test moves it as the scripted tools would). */
+  at(url: string | null): this {
+    this.location_ = url === null ? null : { url };
+    return this;
+  }
   digest: string | null = null;
   present = new Set<string>();
   async location() {
