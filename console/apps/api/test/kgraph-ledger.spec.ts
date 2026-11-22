@@ -82,10 +82,12 @@ describe('modelCallsSaved and the metrics', () => {
     const add = jest.fn();
     const m = new KgraphMetrics({ add } as never);
     m.run('learn', 'ai_only');
+    m.run('everyday', 'replayed_clean');
     m.modelCallsSaved(0);
     m.modelCallsSaved(4);
     expect(add.mock.calls).toEqual([
       ['kgraphRuns', 1, { mode: 'learn', outcome: 'ai_only' }],
+      ['kgraphRuns', 1, { mode: 'everyday', outcome: 'replayed_clean' }],
       ['kgraphModelCallsSaved', 4],
     ]);
   });
