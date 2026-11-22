@@ -14,6 +14,7 @@ import { JobsService, registerJobReason } from '@marinoscar/platform-api/jobs';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { recordingKeys } from '../recordings/recording-keys';
 import { RunMetrics, type RunDeleteMode } from './run-metrics';
 import { TERMINAL_RUN_STATUSES } from './run-status';
 import { RUNS_DELETE_BATCH, RUNS_DELETE_SYNC_MAX, countChanged } from './run-delete.schemas';
@@ -261,6 +262,8 @@ export class RunDeleteService {
       if (rows.length === 0) return { ...none, keys: [] as string[] };
       const found = rows.map((r) => r.id);
       const steps = await tx.runStep.findMany({ where: { runId: { in: found }, run: { userId }, screenshotKey: { not: null } }, select: { runId: true, screenshotKey: true } });
+      // A run's video (epic #755) goes with it: the row cascades, its objects are removed after the commit.
+      const recordings = await tx.runRecording.findMany({ where: { runId: { in: found }, userId }, select: { runId: true, userId: true, partCount: true, objectKey: true } });
       // The status again: a run that is live by now survives.
       const { count } = await tx.run.deleteMany({ where: { id: { in: found }, userId, status: { in: TERMINAL } } });
       let gone = rows;
@@ -292,7 +295,10 @@ export class RunDeleteService {
         ids: goneIds,
         costUsd: gone.reduce((sum, r) => sum.plus(r.costUsd), new Prisma.Decimal(0)),
         modelCalls: gone.reduce((n, r) => n + r.modelCalls, 0),
-        keys: steps.flatMap((s) => (s.screenshotKey && goneSet.has(s.runId) ? [s.screenshotKey] : [])),
+        keys: [
+          ...steps.flatMap((s) => (s.screenshotKey && goneSet.has(s.runId) ? [s.screenshotKey] : [])),
+          ...recordings.flatMap((r) => (goneSet.has(r.runId) ? recordingKeys(r) : [])),
+        ],
       };
     });
     await this.removeObjects(result.keys);
