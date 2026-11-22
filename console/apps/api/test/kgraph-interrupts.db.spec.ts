@@ -135,9 +135,10 @@ describe('interrupt handlers (#789)', () => {
     const f3 = fabricWith([accept, { ...go, visible: false }]);
     f3.snapshot.title = 'Security check';
     f3.snapshot.text = 'Please verify you are human';
-    const s3 = scriptedAi([[['finish', { success: false, result: 'Blocked.' }]]]);
+    // Rung 4 may ask the model once which control is meant; then the agent takes over. Nothing is clicked on a CAPTCHA page.
+    const s3 = scriptedAi([[], [['finish', { success: false, result: 'Blocked.' }]]]);
     await runnerOf(f3, s3.ai).advance(third, owner.userId, null);
     expect(f3.actions.filter((a) => a.type === 'click')).toHaveLength(0);
-    expect(s3.runTools).toHaveBeenCalledTimes(1);
-  });
+    expect(JSON.stringify(s3.inputs)).toContain('did not match');
+  }, 120_000);
 });
