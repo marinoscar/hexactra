@@ -219,3 +219,35 @@ model KgLedger {
   @@index([userId, taskId, finishedAt])
   @@map("kg_ledger")
 }
+
+/// A site fact (phase 5, E46.31): a short note about one site (registrable domain) that a later run reads as data, never as an instruction
+/// or a permission. Only the owner's own act makes one `active`; derived and agent proposals start `proposed` and wait in Reviews. One fact
+/// per owner and identity (site, kind and normalised text). No Secret Material: the text passed the memories secret check and the
+/// sensitive patterns before it was stored.
+model KgSiteFact {
+  id         String    @id @db.VarChar(200)
+  userId     String    @map("user_id") @db.Uuid
+  site       String    @db.VarChar(253)
+  /// navigation | sign_in | quirk | timing | other
+  kind       String    @db.VarChar(16)
+  text       String    @db.VarChar(300)
+  /// The package's `siteFactKey`: site, kind and normalised text.
+  identity   String
+  /// owner | derived | agent_proposed
+  source     String    @db.VarChar(16)
+  /// proposed | active | archived
+  status     String    @default("proposed") @db.VarChar(12)
+  /// For a proposal: the run, its calls and screens (ids only, never page text).
+  evidence   Json      @default("{}")
+  /// Set when the owner declined the proposal in Reviews: the same identity is not proposed again for 30 days.
+  declinedAt DateTime? @map("declined_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  createdAt  DateTime  @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, identity])
+  @@index([userId, site, status])
+  @@map("kg_site_facts")
+}

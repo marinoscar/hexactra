@@ -25,6 +25,11 @@ export interface RunToolsOptions<C extends AnyContext> {
    * so a run with the feature off is offered exactly the tools, in the order, it was before.
    */
   procedures?: { tools: readonly RunnerTool<C>[]; family: ToolFamily<C> } | null;
+  /**
+   * The agent's site fact proposals (E46.31): given ONLY when the run's Knowledge Graph mode is `learn` or `reuse` (or `everyday`, #850),
+   * and registered after every other tool, the procedures included, so a run with the feature off is offered exactly what it was before.
+   */
+  siteFacts?: { tools: readonly RunnerTool<C>[]; family: ToolFamily<C> } | null;
 }
 
 /**
@@ -48,6 +53,8 @@ export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): T
   registry.registerAll(o.mcp);
   registry.register(browserTools.finish as unknown as RunnerTool<C>);
   if (o.procedures) registry.registerAll(o.procedures.tools);
-  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : [])]);
+  const siteFacts = o.siteFacts && !noBrowser ? o.siteFacts : null;
+  if (siteFacts) registry.registerAll(siteFacts.tools);
+  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : []), ...(siteFacts ? [siteFacts.family] : [])]);
   return registry;
 }

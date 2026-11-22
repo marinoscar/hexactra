@@ -13,7 +13,7 @@ export const kgraphStatusSchema = z.object({
   available: z.boolean().describe('Both are on.'),
 });
 export const kgraphPurgeSchema = z.object({
-  deleted: z.object({ procedures: z.number(), versions: z.number(), nodes: z.number(), edges: z.number(), tasks: z.number(), runs: z.number(), reviews: z.number(), evidence: z.number(), traces: z.number(), ledger: z.number() }),
+  deleted: z.object({ procedures: z.number(), versions: z.number(), nodes: z.number(), edges: z.number(), tasks: z.number(), runs: z.number(), reviews: z.number(), evidence: z.number(), traces: z.number(), ledger: z.number(), siteFacts: z.number() }),
 });
 
 export class TaskKgraphResponseDto extends createZodDto(taskKgraphSchema) {}

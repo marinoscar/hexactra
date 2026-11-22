@@ -31,7 +31,7 @@ export class KgraphController {
   @Delete('kgraph')
   @ApiDataResponse(KgraphPurgeResponseDto)
   @Auth({ permissions: ['kgraph:write'] })
-  @ApiOperation({ summary: 'Delete everything learned', description: 'Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes and run records. Nobody else\'s. Turning a switch off deletes nothing; this does.' })
+  @ApiOperation({ summary: 'Delete everything learned', description: 'Removes every Knowledge Graph record of yours: procedures, versions, evidence, reviews, task modes, run records and site facts. Nobody else\'s. Turning a switch off deletes nothing; this does.' })
   purge(@CurrentUser('id') userId: string) {
     return this.kgraph.purge(userId);
   }

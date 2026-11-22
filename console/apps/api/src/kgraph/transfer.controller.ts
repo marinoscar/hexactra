@@ -19,6 +19,7 @@ class ImportBodyDto extends createZodDto(
 const importResultSchema = z.object({
   imported: z.array(z.object({ index: z.number(), taskId: z.string(), procedureId: z.string(), versionId: z.string(), reviewId: z.string() })),
   skipped: z.array(z.object({ index: z.number(), reason: z.string() })),
+  siteFacts: z.object({ proposed: z.number().int(), skipped: z.number().int() }).describe('Site facts in the file: each one stored as a proposal for your review, or skipped (refused, already known or declined lately).'),
 });
 class ImportResultDto extends createZodDto(importResultSchema) {}
 
@@ -29,7 +30,7 @@ export class KgraphTransferController {
   constructor(private readonly transfer: KgraphTransferService) {}
 
   @Get('export')
-  @ApiOkResponse({ description: 'A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence.' })
+  @ApiOkResponse({ description: 'A `hexactra.kgraph` JSON file (not wrapped in the `data` envelope), sent as an attachment. No ids, tokens, secret values or evidence. Your active site facts travel in `siteFacts` (site, kind, text, source).' })
   @ApiProduces('application/json')
   @Auth({ permissions: ['kgraph:read'] })
   @ApiOperation({ summary: 'Export your procedures as a file' })

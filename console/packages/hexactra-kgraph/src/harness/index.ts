@@ -343,3 +343,4 @@ export function harnessProbe(location: () => Promise<string | null>, watch: Call
 }
 
 export { bindParameters, insideSubProcedure, runSubProcedure, type BoundInputs, type SubProcedureInput, type SubProcedureResult } from './sub-procedure';
+export { MAX_RUN_SITE_FACT_PROPOSALS, proposeSiteFactTool, siteFactsFamily, type SiteFactProposalOutcome, type SiteFactProposalPort } from './site-facts';
