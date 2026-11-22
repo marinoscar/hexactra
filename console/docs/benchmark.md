@@ -1,6 +1,6 @@
 # Benchmarks
 
-A benchmark runs the same challenges under several agent policies on a real node and grades each trial from the challenge site's own state. The design and the reasons are in the [decision record](decisions/benchmark.md). This page is the working reference. It grows with the epic (E44, #738): the challenge site and its challenges (suite version 2), and starting and running a benchmark through the API are here; the scorecard, the pages, the exports and the CLI arrive with the issues that build them.
+A benchmark runs the same challenges under several agent policies on a real node and grades each trial from the challenge site's own state. The design and the reasons are in the [decision record](decisions/benchmark.md). This page is the working reference. It grows with the epic (E44, #738): the challenge site and its challenges (suite version 2), starting and running a benchmark through the API, and its scorecard are here; the pages, the exports and the CLI arrive with the issues that build them.
 
 ## How a benchmark runs
 
@@ -72,6 +72,8 @@ Every route is under `/api/benchmarks`. Reading needs `benchmarks:read`; startin
 | `POST /` | Start one |
 | `GET /{id}` | One benchmark: settings, status, `spentUsd`, `progress` (trial counts by status and verdict), `totals` (input, output and cached tokens, model calls and cost of the trials that ended; `costKnown: false` when any call had no price), `appVersion` and `commit` |
 | `GET /{id}/trials` | Its trials in run order: verdict, failure reason, checks, `claimedSuccess`, the metrics copied from the run (`durationMs`, `activeMs`, `steps`, `modelCalls`, `inputTokens`, `outputTokens`, `cachedInputTokens`, `costUsd`, `costKnown`, `stopReason`, `questions`, `escalations`), `model` and `models` (the models its policy resolved to: each tier from start to max, and the tier it ended on), `runId`. Filters: `status`, `verdict`, `policyRef`, `challengeId` |
+| `GET /{id}/scorecard` | Its [scorecard](#reading-the-scorecard): live while it runs, cached once it has ended |
+| `GET /{id}/compare?baseline={id}` | Its [comparison](#comparing-with-a-baseline) with an earlier benchmark on the same suite key and version (`409 BENCHMARK_SUITE_MISMATCH` otherwise) |
 | `POST /{id}/cancel` | Cancel it |
 | `DELETE /{id}` | Delete one that has ended, with its trials. Its runs stay in the run history |
 
@@ -117,6 +119,84 @@ A trial never returns its seed, its token, the site's state or an expected answe
 | `benchmark-owner.ts`, `owner-script.ts` | The scripted owner, and its rules as pure functions |
 | `benchmark-grader.ts`, `trial-verdict.ts` | The run-end hook, and the verdict as a pure function |
 | `benchmark-site-address.ts` | The site's address and the reachability check |
+
+## Reading the scorecard
+
+`GET /api/benchmarks/{id}/scorecard` (`benchmarks:read`) turns the trials into a comparison of the policies. Every number is computed by the pure functions of `scorecard.ts` from the metrics copied onto the trials, so a deleted run, or a run past its retention, changes nothing. The shapes are in `scorecard.schemas.ts` (`scorecardSchema`, `benchmarkComparisonSchema`); the pages and the report files render them as they are.
+
+### Which trials count
+
+| Trials | In the rates | In the cost and tokens |
+|---|---|---|
+| `pass` and `fail` (**judged**) | Yes: they are the denominator of every rate | Yes |
+| `error` | No: the trial says nothing about the agent; counted in `counts.error` | Yes, it spent |
+| `skipped` (cancelled, the cap) | No; `counts.skipped` | Yes, when it ran part way before it was stopped |
+| `unsupported` | No; `counts.unsupported` | No, it never ran |
+| `pending`, `running` | No; `counts.unfinished` (only while the benchmark is live) | Not yet |
+
+A trial "ran" when its run's metrics are on it: those trials are the ones whose cost makes up the benchmark's spend.
+
+### The metrics
+
+Each policy has them, and each policy within each category (`policies[].categories[]`, only the categories the benchmark has, in the suite's order).
+
+| Metric | Field | Definition |
+|---|---|---|
+| Success rate | `successRate` | Passes / judged trials, with a Wilson 95% interval (`low`, `high`). Null when nothing was judged |
+| Reliability (pass^k) | `passAllK` | The share of challenges, among those with at least one judged trial, whose k trials were all judged and all passed. A challenge with a trial that errored or was skipped is not "all passed". It has its own Wilson interval |
+| False success | `falseSuccess` | Claimed success and graded `fail`, over judged trials |
+| False failure | `falseFailure` | Graded `pass` without claiming success, over judged trials |
+| Speed | `speed` | Median and p90 `activeMs`, median steps and median model calls, of the judged trials |
+| Total cost | `cost.totalUsd` | The sum of the cost of every trial that ran |
+| Cost per trial | `cost.medianPerTrialUsd` | The median cost of a judged trial |
+| Cost per success | `cost.perSuccessUsd` | Total cost / passes. No value when there is no pass |
+| "At least" | `cost.known` | False when any trial that ran had a model call with no price (`costKnown: false`): every cost figure of the group is then a lower bound, shown as "at least" |
+| Tokens | `tokens` | Total input, output and cached input tokens of every trial that ran (`cached` is part of `input`), `total` = input + output; the median input, output and cached tokens of a judged trial; `perSuccess` = total / passes, no value when there is no pass |
+| Failure reasons | `failureReasons` | Trials by `failureReason` (every trial that has one, the excluded ones too), most first |
+| Stop reasons | `stopReasons` | Trials that ran by their run's `stopReason`, most first |
+| Safety | `safety` | Trials with at least one failed check named `safety:…`, and each such check with how many trials failed it. A flag, never averaged into the success rate |
+| Models | `models` | The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier up to the tier it ended on, in the order first seen |
+
+How the statistics are computed:
+
+- **Wilson interval** at 95% (z = 1.959963984540054): with p = k / n, centre = (p + z²/2n) / (1 + z²/n) and half-width = z·√(p(1−p)/n + z²/4n²) / (1 + z²/n), clamped to [0, 1]. Unlike p ± 1.96·√(p(1−p)/n), it stays meaningful at 0 of 3 or 3 of 3. Examples: 0 of 1 is [0, 0.793]; 2 of 3 is [0.208, 0.939]; 7 of 10 is [0.397, 0.892].
+- **Median**: the middle value, or the mean of the two middle values for an even count.
+- **p90**: by nearest rank, the smallest value with at least 90% of the values at or below it (the 9th of 10, the 10th of 11).
+- Money is rounded to a millionth of a dollar.
+
+### The matrix, the ranking and the totals
+
+| Part | Field | What it holds |
+|---|---|---|
+| Matrix | `matrix[]` | One row per challenge (the benchmark's order), one cell per policy: passes out of the judged trials and of k, each attempt's verdict by `trialIndex` (null while it has not ended), the median active time and cost of a judged trial, total tokens, whether a safety check failed, whether the cost is known |
+| Ranking | `ranking[]`, `policies[].rank` | Best first: the higher success rate, then the lower cost per success, then the lower median active time, then the benchmark's policy order; a missing value ranks last. There is no composite score |
+| Totals | `totals` | The whole benchmark: its cost (`spentUsd`), `costKnown`, total input, output, cached and input + output tokens, model calls, and the trial counts |
+
+`policies[]` keeps the benchmark's policy order (the columns); `ranking[]` is the order to read them in.
+
+### Live and cached
+
+- While a benchmark is `queued` or `running`, the scorecard is computed on every read and says `live: true`.
+- When it ends (the pass that finds nothing more to run, the cap, three errors in a row, or Cancel), the scorecard is written to `Benchmark.summary` once no trial is running; a cancelled benchmark whose last trial was still being stopped gets it from the pass that grades that trial. Until then a read computes it (`live: true`).
+- A cached scorecard is final: later passes leave it. It carries `format: "hexactra.benchmark-scorecard"` and `version`; a summary of another version (a formula changed) is recomputed from the trials on the next read.
+- A benchmark with no judged trial has an empty scorecard (null rates), not an error.
+
+### Comparing with a baseline
+
+`GET /api/benchmarks/{id}/compare?baseline={id}` (`benchmarks:read`) compares two of the administrator's benchmarks.
+
+- **Same suite only.** A different suite key or version is refused with `409 BENCHMARK_SUITE_MISMATCH`; the message and `details` (`benchmark`, `baseline`) name both. A challenge's meaning may change between versions, so a comparison across them would mislead.
+- **Policies** are matched by ref, then by label among those left. The rest are listed in `unmatched`.
+- **Deltas** (`current − baseline`) per matched policy: success rate, pass^k, false-success rate, median active time, median cost per trial, total cost, cost per success, total tokens and tokens per success; and for the whole benchmark, total cost and total tokens. Each says which way is better (`better`) and whether it went that way (`improved`). A rate's delta is `withinNoise` when the two Wilson intervals overlap: the change is not shown to be real, and `improved` is then null. A cost's delta is `atLeast` when either side has an unknown cost.
+- **Flipped challenges**: for a matched policy, a challenge whose outcome changed between "all judged trials passed", "none passed" and "mixed", with the passes of each side and whether it got better or worse.
+- Both sides carry their `appVersion` and `commit`, so a regression can be traced to a change.
+
+| Code (`apps/api/src/benchmark/`) | |
+|---|---|
+| `scorecard.ts` | The formulas, pure: `wilson`, `median`, `percentile`, `metricsOf`, `rankPolicies`, `computeScorecard`, `compareScorecards` |
+| `scorecard.schemas.ts` | The shapes, for the pages and the report |
+| `scorecard.service.ts` | `ScorecardService`: `scorecard(userId, id)`, `compare(userId, id, baselineId)`, `cacheIfEnded(id)` |
+| Tests (`apps/api/test/`) | `benchmark-scorecard.spec.ts` (every formula with hand-computed numbers; the Wilson bounds against reference values to three decimals), `benchmark-scorecard.db.spec.ts` (the routes, the cache, a deleted run, the refusal and the flipped challenges) |
 
 ## The challenge site
 
