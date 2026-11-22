@@ -22,15 +22,11 @@ In short:
 
 The recorder's fabric calls are read-only and made by the runner host, like trace screenshots; they are not agent tools, take no budget and are not seen by the stall detector.
 
-### What is kept out of a recording
+### Nothing is kept out of a recording
 
-These reduce exposure; they are not masking.
+A recording withholds nothing (the owner's decision, #882). Every frame of the tab is kept, also while the fabric types a secret or a saved value, while a password or card field has focus, and while a secret or sign-in request is open. What is typed into the page can be seen: a one-time code, a username, a card number. A password field shows dots, as on screen. Everything else on the page is in it too: names, addresses, balances, a document the agent opened.
 
-- No frame while the fabric types a secret (`type_secret`).
-- No frame while a field that matches the sensitive-pattern table has focus (cards, IBANs, SSNs, one-time codes, passwords).
-- Recording pauses while a secret or credentials request is open, and resumes when it is answered.
-
-Anything else on the page is in the video: names, addresses, balances, a document the agent opened.
+The recording is held (no frame kept) only while the owner has paused the run; it goes on while the run waits for the owner's answer.
 
 **Limits.** The recording follows the tab that was active when it started; a page the agent opens in a new tab is not in the video. A run whose browser restarted (a new session) continues in a new recording, and the video skips the time in between (`note: restarted`).
 
