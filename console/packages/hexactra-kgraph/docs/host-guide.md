@@ -127,6 +127,7 @@ The package runs the kit against its own in-memory store (`test/store-conformanc
 - `harnessProbe`, and `watchCalls` (an observer that keeps the last call for the invoker and the probe).
 - `replayPhase`: runs a procedure before the loop. It checks the loop's own boundaries before every step, keeps the commit intent in the run's memory (checkpointed), asks the owner before each commit-class step in a verification run, and hands over to the loop with a note on any mismatch. It never throws.
 - `runSubProcedure` and `bindParameters`: a procedure called as a tool inside a run, depth 1. A sensitive parameter is filled only from the run's own inputs.
+- `proposeSiteFactTool` and `siteFactsTool` (family `siteFactsFamily`): the site fact tools. The host binds `location` (the page's URL from the browser, never from the model or the page), `propose` (store a `proposed` fact) or `read` and `used`, and optionally its own `secretCheck`. Register them after every other tool so the stable prefix of a run without them is unchanged.
 
 ## The Hexactra Console
 
@@ -135,6 +136,8 @@ The console binds:
 - the store to PostgreSQL (`kg_` tables, `apps/api/src/kgraph/prisma-procedure-store.ts`);
 - the tool invoker to `executeTool`;
 - the judge to `harnessJudge` on the run's `fast` model route from its policy snapshot;
-- the sensitive predicate to its own sensitive-pattern table.
+- the sensitive predicate to its own sensitive-pattern table;
+- the site fact store to PostgreSQL (`kg_site_facts`, `apps/api/src/kgraph/prisma-site-fact-store.ts`), the secret check to its memories rules and sensitive patterns, and the site fact tools in `learn`, `reuse` and `everyday` runs (`apps/api/src/runner/host/kgraph/site-facts.ts`);
+- matching for chats and one-off runs (`everyday`, `apps/api/src/runner/host/kgraph/everyday.ts`).
 
 See `console/docs/decisions/knowledge-graph.md` and `console/docs/knowledge-graph.md`.
