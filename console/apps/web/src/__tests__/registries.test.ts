@@ -147,6 +147,8 @@ describe('browser agent cards', () => {
       ['Request history', '/admin/settings/request-history', 'system_settings:read', undefined],
       // E43.4 (#734), appended: what GET /api/usage/report?scope=all enforces.
       ['AI usage & cost', '/admin/settings/usage', 'ai_config:read', undefined],
+      // E44.5 (#743), appended: what GET /api/benchmarks enforces.
+      ['Benchmarks', '/admin/settings/benchmarks', 'benchmarks:read', undefined],
     ]);
     expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');

@@ -11,6 +11,7 @@ import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui'
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
+import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
@@ -145,6 +146,15 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: InsightsOutlinedIcon,
         path: '/admin/settings/usage',
         permission: 'ai_config:read',
+      },
+      // Benchmarks (E44.5, #743): `benchmarks:read` is what GET /api/benchmarks enforces; starting, cancelling and
+      // deleting need `benchmarks:run`, checked in the pages.
+      {
+        title: 'Benchmarks',
+        description: 'Run the built-in challenges under several agent policies on a node and compare success, reliability, speed, tokens and cost.',
+        Icon: LeaderboardOutlinedIcon,
+        path: '/admin/settings/benchmarks',
+        permission: 'benchmarks:read',
       },
     ],
   },
