@@ -61,7 +61,7 @@ const collect = (v: string, prev: string[] = []): string[] => [...prev, v];
 
 function webLink(id: string): string | null {
   try {
-    return `${consoleWebUrl()}/admin/benchmarks/${id}`;
+    return `${consoleWebUrl()}/admin/settings/benchmarks/${id}`;
   } catch {
     return null;
   }

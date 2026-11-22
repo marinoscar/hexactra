@@ -73,6 +73,10 @@ import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
 import { AdminUsagePage, MyUsagePage } from './pages/UsagePage';
+import { BenchmarkComparePage } from './pages/BenchmarkComparePage';
+import { BenchmarkNewPage } from './pages/BenchmarkNewPage';
+import { BenchmarkPage } from './pages/BenchmarkPage';
+import { BenchmarksPage } from './pages/BenchmarksPage';
 import { SavedApprovalsPage } from './pages/SavedApprovalsPage';
 import { AdminSecretsPage } from './pages/AdminSecretsPage';
 import { SecretsSettingsPage } from './pages/SecretsSettingsPage';
@@ -306,6 +310,11 @@ export function AppRoutes() {
           {/* My model prices (#735): the user's own `agentPricing` in /user-settings. */}
           <Route path="settings/model-prices" element={<Gate permission="user_settings:read"><AgentPricingPage scope="user" /></Gate>} />
           <Route path="admin/settings/usage" element={<Gate permission="ai_config:read"><AdminUsagePage /></Gate>} />
+          {/* Benchmarks (E44.5, #743): `benchmarks:read` is what every GET /api/benchmarks route enforces; starting needs `benchmarks:run`, and so does the new page. */}
+          <Route path="admin/settings/benchmarks" element={<Gate permission="benchmarks:read"><BenchmarksPage /></Gate>} />
+          <Route path="admin/settings/benchmarks/new" element={<Gate permission="benchmarks:run"><BenchmarkNewPage /></Gate>} />
+          <Route path="admin/settings/benchmarks/:id" element={<Gate permission="benchmarks:read"><BenchmarkPage /></Gate>} />
+          <Route path="admin/settings/benchmarks/:id/compare/:baseline" element={<Gate permission="benchmarks:read"><BenchmarkComparePage /></Gate>} />
           {/* Memories (#551): `memories:read` is what /api/memories enforces; writes are gated in the page. */}
           <Route path="settings/memories" element={<Gate permission="memories:read"><MemoriesPage /></Gate>} />
           <Route path="settings/run-history" element={<Gate permission="runs:delete"><RunHistorySettingsPage /></Gate>} />

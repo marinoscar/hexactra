@@ -1603,9 +1603,11 @@
       "tui": {
         "none": "The TUI is for watching and answering; a benchmark is an administrator's report, read in the web app or the CLI"
       },
-      "web": {
-        "none": "Arrives with the Benchmarks admin pages (E44.5, #743)"
-      }
+      "web": [
+        "/admin/settings/benchmarks",
+        "/admin/settings/benchmarks/:id",
+        "/admin/settings/benchmarks/:id/compare/:baseline"
+      ]
     },
     {
       "id": "benchmarks.run",
@@ -1625,9 +1627,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; a benchmark is an administrator's report, read in the web app or the CLI"
       },
-      "web": {
-        "none": "Arrives with the Benchmarks admin pages (E44.5, #743)"
-      }
+      "web": [
+        "/admin/settings/benchmarks/new",
+        "/admin/settings/benchmarks/:id"
+      ]
     }
   ]
 }
