@@ -327,3 +327,5 @@ export function harnessProbe(location: () => Promise<string | null>, watch: Call
     elementPresent: async () => null,
   };
 }
+
+export { bindParameters, insideSubProcedure, runSubProcedure, type BoundInputs, type SubProcedureInput, type SubProcedureResult } from './sub-procedure';
