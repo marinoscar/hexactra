@@ -9,8 +9,11 @@ import type { HostContext } from '../context';
 
 /** What the tools reach: the owner's active procedures and the walk of one, as bound by the host for this run. */
 export interface ProceduresPort {
-  /** The owner's active procedures other than this task's own, one line each (masked names, parameter names, outputs). */
-  list(ctx: HostContext): Promise<{ text: string; count: number }>;
+  /**
+   * The owner's active procedures other than this task's own, one line each (masked names, parameter names, outputs). With a `query` (an
+   * everyday run, E46.28), only those that fit it, best first.
+   */
+  list(ctx: HostContext, query?: string | null): Promise<{ text: string; count: number }>;
   /** Runs one as a sub-procedure: whether it finished and what the model reads. */
   run(ctx: HostContext, procedureId: string, parameters: Record<string, string>): Promise<{ ok: boolean; text: string }>;
 }
@@ -23,20 +26,42 @@ export const proceduresFamily: ToolFamily<HostContext> = {
   rank: 40,
 };
 
-export function procedureTools(port: ProceduresPort): RunnerTool<HostContext>[] {
-  const list = defineRunnerTool({
-    name: 'procedures_list',
-    group: 'procedures',
-    family: 'procedures',
-    description: "List the owner's saved procedures you can run with run_procedure: each one's id, what it does, the parameters it takes and what it returns.",
-    parameters: z.object({}),
-    execute: async (ctx: HostContext) => {
-      const started = Date.now();
-      const out = await port.list(ctx);
-      await ctx.record('action', 'procedures_list', {}, true, `listed ${out.count} saved procedure${out.count === 1 ? '' : 's'}`, started);
-      return out.text;
-    },
-  });
+const LIST_DESCRIPTION = "List the owner's saved procedures you can run with run_procedure: each one's id, what it does, the parameters it takes and what it returns.";
+
+/**
+ * The two tools. `opts.query` (an everyday run, E46.28) gives `procedures_list` an optional `query`; a `reuse` run is offered the tool
+ * exactly as before, without it.
+ */
+export function procedureTools(port: ProceduresPort, opts: { query?: boolean } = {}): RunnerTool<HostContext>[] {
+  const recordList = async (ctx: HostContext, out: { count: number }, started: number) =>
+    ctx.record('action', 'procedures_list', {}, true, `listed ${out.count} saved procedure${out.count === 1 ? '' : 's'}`, started);
+  const list = opts.query
+    ? defineRunnerTool({
+        name: 'procedures_list',
+        group: 'procedures',
+        family: 'procedures',
+        description: `${LIST_DESCRIPTION} With a query (a few words of what you need, or a site), only those that fit it, best first.`,
+        parameters: z.object({ query: z.string().max(200).nullable() }),
+        execute: async (ctx: HostContext, { query }) => {
+          const started = Date.now();
+          const out = await port.list(ctx, query);
+          await recordList(ctx, out, started);
+          return out.text;
+        },
+      })
+    : defineRunnerTool({
+        name: 'procedures_list',
+        group: 'procedures',
+        family: 'procedures',
+        description: LIST_DESCRIPTION,
+        parameters: z.object({}),
+        execute: async (ctx: HostContext) => {
+          const started = Date.now();
+          const out = await port.list(ctx);
+          await recordList(ctx, out, started);
+          return out.text;
+        },
+      });
   const run = defineRunnerTool({
     name: 'run_procedure',
     group: 'procedures',

@@ -56,6 +56,7 @@ import { kgraphObserverFor } from './kgraph/kgraph-observer';
 import { surfaceCapture } from './kgraph/surface';
 import { subProcedures } from './kgraph/sub-procedure';
 import { procedureTools, proceduresFamily } from './tools/procedures';
+import { everydayBinding } from './kgraph/everyday';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -208,7 +209,12 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   // The owner's learned procedures as tools (E46.22): only when the run's Knowledge Graph mode is reuse; otherwise not even constructed.
   const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
   const reuse = Boolean(d.kgraph && d.kgraphStore) && (await d.kgraph!.modeFor({ userId, taskId: run.taskId ?? null, run: { isTaskRun } })) === 'reuse';
-  const procedures = reuse ? { tools: procedureTools(subProcedures(d, userId, run.taskId ?? null, run.inputs, () => profile)), family: proceduresFamily } : null;
+  // The everyday switch (E46.28): a chat or one-off run is offered the owner's procedures that fit its goal, and a block naming them. Off: null,
+  // and nothing below changes.
+  const everyday = reuse
+    ? null
+    : await everydayBinding(d, userId, isTaskRun, { run: { id: run.id, goal: run.goal, taskId: run.taskId ?? null, inputs: run.inputs }, allowedDomains: [...allowedDomains, ...appDomains], connections: s.connections.list, profile: () => profile });
+  const procedures = reuse ? { tools: procedureTools(subProcedures(d, userId, run.taskId ?? null, run.inputs, () => profile)), family: proceduresFamily } : (everyday?.procedures ?? null);
   // The tools, in the order the model has always been offered them (one function, shared with the scenario kit).
   const registry = registerRunTools<HostContext>({
     needsBrowser: s.connections.needsBrowser,
@@ -243,7 +249,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
       return line ? [line] : [];
     },
     summarizeGuidance: guidanceSummary,
-    aboutOwner: await aboutOwner(d, userId, run, memory.context),
+    // The memories, then (everyday, E46.28) the saved procedures that may fit: both in the stable prefix, both data.
+    aboutOwner: [await aboutOwner(d, userId, run, memory.context), everyday?.block ?? ''].filter(Boolean).join('\n\n'),
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),
     wrapUpNote: (c) => outputsWrapUpNote(c.ext.outputs),
   };
