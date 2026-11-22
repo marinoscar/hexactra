@@ -31,6 +31,10 @@ model KgRun {
   procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
   /// null while running; then `replayed` | `fell_back` | `learned` | `ai_only` | `failed` (a short code, never page text).
   outcome            String?  @db.VarChar(32)
+  /// The site facts the run was given in its "About these sites" block (E46.32): ids only.
+  offeredFactIds     String[] @default([]) @map("offered_fact_ids") @db.VarChar(200)
+  /// The site facts the run used (E46.32): read through `site_facts`, or given in the block and named by its steps. Ids only.
+  factIds            String[] @default([]) @map("fact_ids") @db.VarChar(200)
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

@@ -53,8 +53,8 @@ export interface HostDeps {
   kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'>;
   /** The Knowledge Graph's store (E46.9): absent, and no run replays a procedure. */
   kgraphStore?: PrismaProcedureStore;
-  /** The owner's site facts (E46.31): absent, and no run is offered `propose_site_fact`. */
-  kgraphSiteFacts?: Pick<KgraphSiteFactsService, 'propose'>;
+  /** The owner's site facts (E46.31, E46.32): absent, and no run is given site facts or offered `propose_site_fact` and `site_facts`. */
+  kgraphSiteFacts?: Pick<KgraphSiteFactsService, 'propose' | 'activeFor' | 'offeredTo' | 'recordOffered' | 'markUsed' | 'afterRun'>;
   /** After a run's final transition (E46.7): enqueues the compile job when the run was captured. Best effort. */
   kgraphAfterRun?: Pick<KgraphAfterRun, 'finished'>;
   /** The wall clock; tests replace it to pass time without waiting. */
