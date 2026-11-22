@@ -20,6 +20,11 @@ export interface RunToolsOptions<C extends AnyContext> {
   /** The tools of the owner's MCP servers the run lists (E39.9), already built, and one family per server (E41.2). */
   mcp: readonly RunnerTool<C>[];
   mcpFamilies?: readonly ToolFamily<C>[];
+  /**
+   * The owner's learned procedures (E46.22): given ONLY when the run's Knowledge Graph mode is `reuse`, and registered after every other tool,
+   * so a run with the feature off is offered exactly the tools, in the order, it was before.
+   */
+  procedures?: { tools: readonly RunnerTool<C>[]; family: ToolFamily<C> } | null;
 }
 
 /**
@@ -42,6 +47,7 @@ export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): T
   // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.
   registry.registerAll(o.mcp);
   registry.register(browserTools.finish as unknown as RunnerTool<C>);
-  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[])]);
+  if (o.procedures) registry.registerAll(o.procedures.tools);
+  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : [])]);
   return registry;
 }
