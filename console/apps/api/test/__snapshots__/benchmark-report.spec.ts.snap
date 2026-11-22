@@ -1227,6 +1227,126 @@ Forms",
       },
     },
     {
+      "id": "recordings",
+      "outline": true,
+      "outlineText": "Trial recordings",
+      "style": "h2",
+      "text": "Trial recordings",
+    },
+    {
+      "style": "small",
+      "text": "Each recorded trial run and where its video plays: the run page, signed in as the owner. The video is not masked and is never in this report.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Challenge",
+            },
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Trial",
+            },
+            {
+              "style": "th",
+              "text": "Recording",
+            },
+            {
+              "style": "th",
+              "text": "Length",
+            },
+            {
+              "style": "th",
+              "text": "Run page",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Look up a record",
+            },
+            {
+              "style": "td",
+              "text": "Economy",
+            },
+            {
+              "style": "td",
+              "text": "1",
+            },
+            {
+              "style": "td",
+              "text": "ready",
+            },
+            {
+              "style": "td",
+              "text": "1 min 1 s",
+            },
+            {
+              "style": "td",
+              "text": "/runs/00000000-0000-4000-8000-000000000001#recording",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "Look up a record",
+            },
+            {
+              "style": "td",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "1",
+            },
+            {
+              "style": "td",
+              "text": "still processing",
+            },
+            {
+              "style": "td",
+              "text": "—",
+            },
+            {
+              "style": "td",
+              "text": "/runs/00000000-0000-4000-8000-000000000002#recording",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          110,
+          80,
+          26,
+          70,
+          46,
+          "*",
+        ],
+      },
+    },
+    {
       "id": "baseline",
       "outline": true,
       "outlineText": "Compared with the baseline",
@@ -2137,7 +2257,7 @@ Forms",
             },
             {
               "style": "factValue",
-              "text": "Off.",
+              "text": "2 of 12 trials recorded a video of the browser tab: listed under "Trial recordings", each played on its run page (not in this report).",
             },
           ],
         ],
@@ -2311,6 +2431,11 @@ Forms",
       "color": "#5a5e72",
       "fontSize": 10,
     },
+    "link": {
+      "color": "#4b4be8",
+      "decoration": "underline",
+      "fontSize": 8,
+    },
     "muted": {
       "color": "#5a5e72",
     },
@@ -2350,4 +2475,131 @@ Forms",
   "tagged": true,
   "version": "1.7",
 }
+`;
+
+exports[`buildBenchmarkReportDefinition matches the snapshot of the Trial recordings section with the console origin in its links (#863) 1`] = `
+[
+  {
+    "id": "recordings",
+    "outline": true,
+    "outlineText": "Trial recordings",
+    "style": "h2",
+    "text": "Trial recordings",
+  },
+  {
+    "style": "small",
+    "text": "Each recorded trial run and where its video plays: the run page, signed in as the owner. The video is not masked and is never in this report.",
+  },
+  {
+    "layout": {
+      "hLineColor": "[function hLineColor]",
+      "hLineWidth": "[function hLineWidth]",
+      "paddingBottom": "[function paddingBottom]",
+      "paddingLeft": "[function paddingLeft]",
+      "paddingRight": "[function paddingRight]",
+      "paddingTop": "[function paddingTop]",
+      "vLineWidth": "[function vLineWidth]",
+    },
+    "margin": [
+      0,
+      4,
+      0,
+      8,
+    ],
+    "table": {
+      "body": [
+        [
+          {
+            "style": "th",
+            "text": "Challenge",
+          },
+          {
+            "style": "th",
+            "text": "Policy",
+          },
+          {
+            "style": "th",
+            "text": "Trial",
+          },
+          {
+            "style": "th",
+            "text": "Recording",
+          },
+          {
+            "style": "th",
+            "text": "Length",
+          },
+          {
+            "style": "th",
+            "text": "Run page",
+          },
+        ],
+        [
+          {
+            "style": "td",
+            "text": "Look up a record",
+          },
+          {
+            "style": "td",
+            "text": "Economy",
+          },
+          {
+            "style": "td",
+            "text": "1",
+          },
+          {
+            "style": "td",
+            "text": "ready",
+          },
+          {
+            "style": "td",
+            "text": "1 min 1 s",
+          },
+          {
+            "link": "https://console.example.test/runs/00000000-0000-4000-8000-000000000001#recording",
+            "style": "link",
+            "text": "https://console.example.test/runs/00000000-0000-4000-8000-000000000001#recording",
+          },
+        ],
+        [
+          {
+            "style": "td",
+            "text": "Look up a record",
+          },
+          {
+            "style": "td",
+            "text": "=HYPERLINK("x")",
+          },
+          {
+            "style": "td",
+            "text": "1",
+          },
+          {
+            "style": "td",
+            "text": "still processing",
+          },
+          {
+            "style": "td",
+            "text": "—",
+          },
+          {
+            "link": "https://console.example.test/runs/00000000-0000-4000-8000-000000000002#recording",
+            "style": "link",
+            "text": "https://console.example.test/runs/00000000-0000-4000-8000-000000000002#recording",
+          },
+        ],
+      ],
+      "dontBreakRows": true,
+      "headerRows": 1,
+      "widths": [
+        110,
+        80,
+        26,
+        70,
+        46,
+        "*",
+      ],
+    },
+  },
+]
 `;

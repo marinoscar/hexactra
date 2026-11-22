@@ -57,6 +57,11 @@ export interface BenchmarkTrialView {
   model: string | null;
   costUsd: number | null;
   costKnown: boolean | null;
+  /**
+   * The trial run's recording (#846): `ready` plays on the run page (`/runs/<runId>#recording`), `recording`/`processing` not yet,
+   * `failed` never. Null when not recorded or for a viewer without `runs:read`; absent from an older console.
+   */
+  recording?: { status: string; durationMs: number | null } | null;
 }
 
 export interface SuiteView {
@@ -193,7 +198,6 @@ function metricLines(m: ScoreMetricsView, indent: string): string[] {
   ];
 }
 
-/** `show`: the benchmark, the whole benchmark's tokens and cost, then every policy (ranked) with its categories. */
 /** The policies whose trial runs record a video (#841, #845): `null` for none, "all policies", or their labels. */
 export function recordedText(config: Pick<BenchmarkView['config'], 'policies' | 'recordVideo'>): string | null {
   const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
@@ -201,7 +205,11 @@ export function recordedText(config: Pick<BenchmarkView['config'], 'policies' | 
   return recorded.length === config.policies.length ? 'all policies' : recorded.map((p) => p.label).join(', ');
 }
 
-export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
+/**
+ * `show`: the benchmark, the whole benchmark's tokens and cost (and its trial recordings when `trials` carry any, #863), then every
+ * policy (ranked) with its categories.
+ */
+export function scorecardText(b: BenchmarkView, s: ScorecardView, trials?: readonly BenchmarkTrialView[]): string[] {
   const t = s.totals;
   const c = t.counts;
   const lines = [
@@ -214,6 +222,8 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
   ];
   const recorded = recordedText(b.config);
   if (recorded) lines.push(`  Recorded   ${recorded} (videos on each run page)`);
+  const recordings = recordingSummary(trials);
+  if (recordings) lines.push(recordings);
   const byRef = new Map(s.policies.map((p) => [p.ref, p]));
   const ordered = s.ranking.map((r) => byRef.get(r.ref)).filter((p): p is ScorecardView['policies'][number] => !!p);
   for (const p of ordered.length === s.policies.length ? ordered : s.policies) {
@@ -229,13 +239,49 @@ export function scorecardText(b: BenchmarkView, s: ScorecardView): string[] {
   return lines;
 }
 
-/** `show --trials`: one line per trial with its verdict, tokens and cost. */
-export function trialLines(trials: BenchmarkTrialView[]): string[] {
-  return trials.map((t) => {
+/** A recording's length: `45s`, `1m12s`, `1h02m05s`. */
+export function recordingLength(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  if (h) return `${h}h${String(m).padStart(2, '0')}m${sec}s`;
+  return m ? `${m}m${sec}s` : `${s % 60}s`;
+}
+
+/** The run page's player of a trial (#863): `<console>/runs/<id>#recording`, or the path when the console URL is not known. */
+export const recordingUrl = (runId: string, webUrl?: string | null): string => `${(webUrl ?? '').replace(/\/+$/, '')}/runs/${encodeURIComponent(runId)}#recording`;
+
+/** A trial's recording state for `show --trials`: `rec ready 1m12s`, `rec processing`, `rec recording`, `rec failed`, or nothing. */
+export function recordingText(t: BenchmarkTrialView): string {
+  const r = t.recording;
+  if (!r) return '';
+  return r.status === 'ready' ? `rec ready${r.durationMs === null ? '' : ` ${recordingLength(r.durationMs)}`}` : `rec ${r.status}`;
+}
+
+/**
+ * `Recordings N ready, M processing, K failed` for the `show` summary (#863), or null when no trial carries a recording (none recorded,
+ * no `runs:read`, or an older console without the field). Processing counts a run still recording too.
+ */
+export function recordingSummary(trials: readonly BenchmarkTrialView[] | undefined): string | null {
+  const recorded = (trials ?? []).filter((t) => t.recording);
+  if (!recorded.length) return null;
+  const n = (pred: (status: string) => boolean) => recorded.filter((t) => pred(t.recording!.status)).length;
+  return `  Recordings ${n((s) => s === 'ready')} ready, ${n((s) => s === 'processing' || s === 'recording')} processing, ${n((s) => s === 'failed')} failed`;
+}
+
+/**
+ * `show --trials`: one line per trial with its verdict, tokens, cost, run and recording state; a ready recording adds a line with the
+ * run page's player (`webUrl` is the CLI's console URL; without it, the path).
+ */
+export function trialLines(trials: BenchmarkTrialView[], opts: { webUrl?: string | null } = {}): string[] {
+  return trials.flatMap((t) => {
     const verdict = t.verdict ?? t.status;
     const why = t.failureReason ? ` (${t.failureReason}${t.claimedSuccess && t.verdict === 'fail' ? ', claimed success' : ''})` : '';
     const tokens = t.inputTokens === null ? '' : `  ${tokenSplit(t.inputTokens, t.outputTokens ?? 0, t.cachedInputTokens ?? 0)}  ${usd(t.costUsd, t.costKnown !== false)}`;
-    return `  ${t.challengeId.padEnd(26)} ${t.policyLabel.slice(0, 20).padEnd(20)} #${t.trialIndex + 1}  ${`${verdict}${why}`.padEnd(30)} ${duration(t.activeMs).padStart(9)}${tokens}${t.runId ? `  run ${t.runId.slice(0, 8)}` : ''}`;
+    const rec = recordingText(t);
+    const line = `  ${t.challengeId.padEnd(26)} ${t.policyLabel.slice(0, 20).padEnd(20)} #${t.trialIndex + 1}  ${`${verdict}${why}`.padEnd(30)} ${duration(t.activeMs).padStart(9)}${tokens}${t.runId ? `  run ${t.runId.slice(0, 8)}` : ''}${rec ? `  ${rec}` : ''}`;
+    return t.recording?.status === 'ready' && t.runId ? [line, `      ${recordingUrl(t.runId, opts.webUrl)}`] : [line];
   });
 }
 

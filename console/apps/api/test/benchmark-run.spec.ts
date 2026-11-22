@@ -6,7 +6,7 @@ import { join, relative, sep } from 'node:path';
 import { NO_SITE, domainAllowed, fabricAllowedSites } from '@marinoscar/hexactra-browser-agent/policy';
 
 import { inRunOrder, publicConfig, readBenchmarkConfig, recordsVideo, withRecordings } from '../src/benchmark/benchmark-config';
-import { recordingsText } from '../src/benchmark/benchmark-report.pdf';
+import { recordedPolicies } from '../src/benchmark/benchmark-report.pdf';
 import { siteAddress } from '../src/benchmark/benchmark-site-address';
 import { createBenchmarkSchema } from '../src/benchmark/benchmarks.schemas';
 import { BENCHMARK_ANSWER_CHANNEL, askedQuestions, brokerAnswer, scriptRules, type ScriptQuestion } from '../src/benchmark/owner-script';
@@ -262,10 +262,11 @@ describe('the stored config and the order of trials', () => {
 
   it("names the recorded policies in the PDF's Recordings row (#845)", () => {
     const policies = [{ label: 'Economy', recordVideo: true }, { label: 'Thorough', recordVideo: false }];
-    expect(recordingsText({ policies })).toMatch(/^Economy: these policies' trial runs recorded a video/);
-    expect(recordingsText({ policies: policies.map((p) => ({ ...p, recordVideo: true })) })).toMatch(/^All policies:/);
-    expect(recordingsText({ recordVideo: true, policies: [{ label: 'Economy' }] })).toMatch(/^All policies:/);
-    expect(recordingsText({ policies: [{ label: 'Economy', recordVideo: false }] })).toBe('Off.');
+    expect(recordedPolicies({ policies })).toBe('policy Economy');
+    expect(recordedPolicies({ policies: [...policies, { label: 'Fast', recordVideo: true }] })).toBe('policies Economy, Fast');
+    expect(recordedPolicies({ policies: policies.map((p) => ({ ...p, recordVideo: true })) })).toBe('all policies');
+    expect(recordedPolicies({ recordVideo: true, policies: [{ label: 'Economy' }] })).toBe('all policies');
+    expect(recordedPolicies({ policies: [{ label: 'Economy', recordVideo: false }] })).toBeNull();
   });
 });
 

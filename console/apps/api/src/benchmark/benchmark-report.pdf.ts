@@ -1,5 +1,5 @@
 // The PDF report of a benchmark (E44.6, #744): the summary and ranking, the scorecard, the categories, the challenge x policy matrix, the
-// failure reasons, the comparison with a baseline when asked, and how it was measured. Tokens and cost sit next to every result.
+// failure reasons, the trial recordings (#863), the comparison with a baseline when asked, and how it was measured. Tokens and cost sit next to every result.
 //
 // One source: the `BenchmarkReport` of `BenchmarkReportService.build`, already masked. Nothing here reads the database or masks again.
 // `buildBenchmarkReportDefinition(report, opts)` is pure (snapshot-tested); the run report's `renderPdf` lays it out with the bundled
@@ -15,6 +15,11 @@ import { CATEGORY_LABELS } from './suite/types';
 export interface BenchmarkReportOptions {
   /** A4 (the default) or US letter. */
   paper?: BenchmarkReportPaper;
+  /**
+   * The console's public origin (`APP_URL`), for the links to each recorded trial's run page (#863). Without it the report prints the
+   * path `/runs/<id>#recording`.
+   */
+  consoleUrl?: string | null;
 }
 
 /** The banner of a benchmark that was still running when it was exported. */
@@ -28,6 +33,7 @@ export const BENCHMARK_REPORT_SECTIONS = {
   categories: 'By category',
   matrix: 'Challenge x policy',
   failures: 'Failure reasons',
+  recordings: 'Trial recordings',
   baseline: 'Compared with the baseline',
   method: 'Method',
 } as const;
@@ -309,6 +315,47 @@ function failuresSection(r: BenchmarkReport): Content[] {
   return out;
 }
 
+/** The trials whose run has a recording the viewer may see (`recording` is null without `runs:read`, #846). */
+const recordedTrials = (r: BenchmarkReport) => r.trials.filter((t) => t.recording && t.runId);
+
+const RECORDING_STATUS: Record<string, string> = { ready: 'ready', processing: 'still processing', recording: 'still recording', failed: 'failed' };
+
+/** The run page's player of a trial: `<origin>/runs/<id>#recording`, or the path alone when the origin is not known. */
+export function trialRecordingLink(runId: string, consoleUrl?: string | null): string {
+  return `${(consoleUrl ?? '').replace(/\/+$/, '')}/runs/${encodeURIComponent(runId)}#recording`;
+}
+
+/**
+ * Trial recordings (#863): one row per recorded trial with its status, its length once ready and a link to the run page's player. The
+ * video and its storage key are never here (the video is not masked). No section when nothing was recorded or the viewer lacks
+ * `runs:read` (then every `recording` is null).
+ */
+function recordingsSection(r: BenchmarkReport, consoleUrl?: string | null): Content[] {
+  const recorded = recordedTrials(r);
+  if (!recorded.length) return [];
+  return [
+    heading(BENCHMARK_REPORT_SECTIONS.recordings, 'recordings'),
+    { text: 'Each recorded trial run and where its video plays: the run page, signed in as the owner. The video is not masked and is never in this report.', style: 'small' },
+    grid(
+      ['Challenge', 'Policy', 'Trial', 'Recording', 'Length', 'Run page'],
+      recorded.map((t) => {
+        const href = trialRecordingLink(t.runId!, consoleUrl);
+        const status = t.recording!.status;
+        return [
+          t.challengeTitle,
+          t.policyLabel,
+          String(t.trialIndex + 1),
+          { text: RECORDING_STATUS[status] ?? status, style: status === 'failed' ? 'failed' : 'td' },
+          status === 'ready' ? ms(t.recording!.durationMs) : DASH,
+          // Only a full URL is a link: a bare path has nowhere to go from a PDF reader.
+          /^https?:\/\//.test(href) ? { text: href, link: href, style: 'link' } : href,
+        ];
+      }),
+      [110, 80, 26, 70, 46, '*'],
+    ),
+  ];
+}
+
 function baselineSection(r: BenchmarkReport): Content[] {
   const cmp = r.baseline;
   if (!cmp) return [];
@@ -342,14 +389,19 @@ function baselineSection(r: BenchmarkReport): Content[] {
   return out;
 }
 
-/** The Recordings row (#841, #845): all the policies, the ones recorded by name, or off. */
-export function recordingsText(config: { recordVideo?: boolean; policies: { label: string; recordVideo?: boolean }[] }): string {
+/** Which policies' trial runs record a video (#841, #845): "all policies", their labels, or `null` for none. */
+export function recordedPolicies(config: { recordVideo?: boolean; policies: { label: string; recordVideo?: boolean }[] }): string | null {
   const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
-  if (recorded.length === 0) return 'Off.';
-  const where = '(on each run page; not in this report)';
-  return recorded.length === config.policies.length
-    ? `All policies: every trial run recorded a video of its browser tab ${where}.`
-    : `${recorded.map((p) => p.label).join(', ')}: these policies' trial runs recorded a video of their browser tab ${where}; the others did not.`;
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : `${recorded.length === 1 ? 'policy' : 'policies'} ${recorded.map((p) => p.label).join(', ')}`;
+}
+
+/** The Method row: which policies were recorded (#845) and how many trials, pointing to the section that lists them (#863). */
+function recordingsRow(r: BenchmarkReport): string {
+  const n = recordedTrials(r).length;
+  const who = recordedPolicies(r.benchmark.config);
+  if (n) return `${n} of ${r.trials.length} trial${r.trials.length === 1 ? '' : 's'} recorded a video of the browser tab${who ? ` (${who})` : ''}: listed under "${BENCHMARK_REPORT_SECTIONS.recordings}", each played on its run page (not in this report).`;
+  return who ? `On for ${who}: each of their trial runs records a video of its browser tab, played on its run page (not in this report). No recording is listed here.` : 'Off.';
 }
 
 function methodSection(r: BenchmarkReport): Content[] {
@@ -360,7 +412,7 @@ function methodSection(r: BenchmarkReport): Content[] {
       ['Suite', `${b.suiteKey} version ${b.suiteVersion}: benchmarks compare only within one suite version.`],
       ['Trials', `${b.config.trials} per challenge and policy, one at a time, the policies alternating, on ${b.config.hostId ? 'one node' : 'a node the fabric picks'} (browser profile ${b.config.profile}).`],
       ['Spend cap', `${b.config.capUsd === null ? 'No cap: each run kept its own policy budget' : `${money(b.config.capUsd)}: no new trial starts once it is spent`}. Trial timeout ${b.config.trialTimeoutMinutes} min.`],
-      ['Recordings', recordingsText(b.config)],
+      ['Recordings', recordingsRow(r)],
     ]),
     { text: 'How a trial is graded', style: 'boxTitle', margin: [0, 8, 0, 2] },
     {
@@ -396,7 +448,7 @@ export function buildBenchmarkReportDefinition(report: BenchmarkReport, options:
   const paper = options.paper ?? 'a4';
   const id8 = report.benchmark.id.slice(0, 8);
   const exported = reportDate(report.exportedAt);
-  const content: Content[] = [...summary(report), ...scorecardSection(report), ...categoriesSection(report), ...matrixSection(report), ...failuresSection(report), ...baselineSection(report), ...methodSection(report)];
+  const content: Content[] = [...summary(report), ...scorecardSection(report), ...categoriesSection(report), ...matrixSection(report), ...failuresSection(report), ...recordingsSection(report, options.consoleUrl), ...baselineSection(report), ...methodSection(report)];
   return {
     pageSize: PAGE[paper].size,
     pageOrientation: 'landscape',
@@ -451,6 +503,7 @@ export function buildBenchmarkReportDefinition(report: BenchmarkReport, options:
       failed: { fontSize: 8, color: FAIL },
       failedStrong: { fontSize: 8, bold: true, color: FAIL },
       footer: { fontSize: 7.5, color: MUTED },
+      link: { fontSize: 8, color: ACCENT, decoration: 'underline' },
     },
   } as ReportDefinition;
 }

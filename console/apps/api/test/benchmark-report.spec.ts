@@ -2,12 +2,12 @@
 // (RFC 4180, parsed back, formula cells neutralised, its sums equal to the scorecard's totals) and the PDF (the definition as a snapshot,
 // then the rendered file read back by pdf.js).
 import { HIDDEN_TRIAL_TOKEN, CSV_COLUMNS, benchmarkExportFilename, benchmarkReportCsv, buildBenchmarkReport, csvCell, hideTrialTokens } from '../src/benchmark/benchmark-report';
-import { BENCHMARK_REPORT_PARTIAL_BANNER, BENCHMARK_REPORT_SECTIONS, buildBenchmarkReportDefinition, count, money } from '../src/benchmark/benchmark-report.pdf';
+import { BENCHMARK_REPORT_PARTIAL_BANNER, BENCHMARK_REPORT_SECTIONS, buildBenchmarkReportDefinition, count, money, trialRecordingLink } from '../src/benchmark/benchmark-report.pdf';
 import { BENCHMARK_REPORT_TYPE, benchmarkReportSchema, type BenchmarkReport } from '../src/benchmark/benchmark-report.schemas';
 import { renderPdfBuffer, type ReportDefinition } from '../src/tasks/run-report.pdf';
 import { POLICY_A, POLICY_B, SEEDED, reportInput } from './helpers/benchmark-report-fixture';
 import { parseCsv } from './helpers/csv-parse';
-import { readPdf } from './helpers/pdf-read';
+import { linkUris, readPdf } from './helpers/pdf-read';
 
 function normalized(def: ReportDefinition): unknown {
   const footer = typeof def.footer === 'function' ? def.footer(2, 5, { width: 841.89, height: 595.28, orientation: 'landscape' }) : def.footer;
@@ -151,6 +151,19 @@ describe('buildBenchmarkReportDefinition', () => {
     expect(normalized(buildBenchmarkReportDefinition(report))).toMatchSnapshot();
   });
 
+  it('matches the snapshot of the Trial recordings section with the console origin in its links (#863)', () => {
+    const { content } = normalized(buildBenchmarkReportDefinition(report, { consoleUrl: 'https://console.example.test' })) as { content: { id?: string }[] };
+    const start = content.findIndex((c) => c.id === 'recordings');
+    expect(start).toBeGreaterThan(0);
+    expect(content.slice(start, start + 3)).toMatchSnapshot();
+  });
+
+  it("links a trial's recording to its run page's player, or prints the path without an origin", () => {
+    expect(trialRecordingLink('r-1', 'https://console.example.test/')).toBe('https://console.example.test/runs/r-1#recording');
+    expect(trialRecordingLink('r-1', null)).toBe('/runs/r-1#recording');
+    expect(trialRecordingLink('r-1')).toBe('/runs/r-1#recording');
+  });
+
   it('is pure: the same report gives the same definition, and the report is not changed', () => {
     const before = JSON.stringify(report);
     expect(normalized(buildBenchmarkReportDefinition(report))).toEqual(normalized(buildBenchmarkReportDefinition(report)));
@@ -191,6 +204,40 @@ describe('the rendered PDF', () => {
     }
     expect(all).not.toContain(BENCHMARK_REPORT_PARTIAL_BANNER);
     expectMasked(all);
+  });
+
+  it('lists every recorded trial with its status, length and run-page link, and counts them in the Method row (#863)', async () => {
+    const report = buildBenchmarkReport(reportInput());
+    const pdf = await renderPdfBuffer(buildBenchmarkReportDefinition(report, { consoleUrl: 'https://console.example.test' }));
+    const all = text(readPdf(pdf).text);
+    expect(all).toContain(BENCHMARK_REPORT_SECTIONS.recordings);
+    // Trial 1 (ready, 61 s) and trial 2 (still processing), in the fixture's run order.
+    expect(all).toMatch(/Look up a record Economy 1 ready 1(\.0)? ?min .*https:\/\/console\.example\.test\/runs\/00000000-0000-4000-8000-000000000001#recording/);
+    expect(all).toContain('still processing');
+    expect(all).toContain(`2 of 12 trials recorded a video of the browser tab: listed under "${BENCHMARK_REPORT_SECTIONS.recordings}"`);
+    // A link the layout wraps is one annotation per line: the same URI each time.
+    expect([...new Set(linkUris(pdf))]).toEqual(['https://console.example.test/runs/00000000-0000-4000-8000-000000000001#recording', 'https://console.example.test/runs/00000000-0000-4000-8000-000000000002#recording']);
+    // Never the video or its storage key.
+    expect(pdf.toString('latin1')).not.toMatch(/run-recordings\/|recording\.webm/);
+  });
+
+  it('prints the run-page path when the origin is not known, as text and not as a link', async () => {
+    const pdf = await renderPdfBuffer(buildBenchmarkReportDefinition(buildBenchmarkReport(reportInput())));
+    expect(text(readPdf(pdf).text)).toContain('/runs/00000000-0000-4000-8000-000000000002#recording');
+    expect(linkUris(pdf)).toEqual([]);
+  });
+
+  it('has no Trial recordings section when nothing was recorded or the viewer may not read runs (every recording null)', async () => {
+    const input = reportInput();
+    const report = buildBenchmarkReport({ ...input, trials: input.trials.map((t) => ({ ...t, recording: null })) });
+    const pdf = await renderPdfBuffer(buildBenchmarkReportDefinition(report, { consoleUrl: 'https://console.example.test' }));
+    const all = text(readPdf(pdf).text);
+    expect(all).not.toContain(BENCHMARK_REPORT_SECTIONS.recordings);
+    expect(all).not.toContain('#recording');
+    expect(all).toMatch(/Recordings Off\./);
+    expect(linkUris(pdf)).toEqual([]);
+    const on = buildBenchmarkReport({ ...input, benchmark: { ...input.benchmark, config: { ...input.benchmark.config, recordVideo: true } }, trials: input.trials.map((t) => ({ ...t, recording: null })) });
+    expect(text(readPdf(await renderPdfBuffer(buildBenchmarkReportDefinition(on))).text)).toContain('No recording is listed here.');
   });
 
   it('prints the in-progress banner for a running benchmark', async () => {
