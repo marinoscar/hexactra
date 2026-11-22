@@ -259,6 +259,9 @@ export const ROUTES = [
   // (`task-detail`), a finished run (`run-finished`) and the Inbox (`inbox`) show its control, panel and review card in the mock.
   ['kgraph', '/kgraph'],
   ['kgraph-reviews', '/kgraph?tab=reviews'],
+  ['kgraph-sites', '/kgraph?tab=sites'],
+  ['kgraph-site-facts', '/kgraph?tab=sites&site=example.test'],
+  ['kgraph-site-add', '/kgraph?tab=sites&site=example.test', { action: pressButton('Add a fact') }],
   // The Map (E46.21): the canvas from 768 px up, the short note and link below; then a task opened in the side panel and expanded, and
   // "what uses this site" (run these two at 768, 1024 and 1440: below 768 there is no map to press).
   ['kgraph-map', '/kgraph?tab=map', { action: settleMap }],
