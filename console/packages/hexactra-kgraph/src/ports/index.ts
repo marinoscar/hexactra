@@ -1,6 +1,6 @@
 // The ports of the Knowledge Graph: the only way the package reaches the outside world. A host implements them; `./testing` has an in-memory
 // fake of each. Each port's doc comment says what a correct binding guarantees.
-import type { Evidence, Mode, Procedure, ProcedureVersion, VersionState } from '../schema';
+import type { Evidence, Mode, NewSiteFact, Procedure, ProcedureVersion, SiteFact, SiteFactStatus, VersionState } from '../schema';
 
 /** The outcome a store records against a version or one of its steps. */
 export type EvidenceOutcome = 'success' | 'failure' | 'repair';
@@ -47,6 +47,31 @@ export interface ProcedureStorePort {
   listActiveProceduresForSites(owner: string, sites: readonly string[]): Promise<{ procedure: Procedure; version: ProcedureVersion }[]>;
   /** Delete everything learned for the owner. Returns the number of procedures removed. */
   deleteAll(owner: string): Promise<number>;
+}
+
+/**
+ * Where site facts live (phase 5, E46.30). A separate, optional port: a host that keeps no site facts does not bind it, and
+ * `ProcedureStorePort` is unchanged.
+ *
+ * A correct binding guarantees:
+ * - **Owner isolation.** Every call is scoped to `owner`; no call returns or changes another owner's fact, even given its id.
+ * - **One fact per identity.** The identity is site, kind and normalised text (`siteFactKey`). `proposeSiteFact` of an identity the owner
+ *   already has stores nothing and returns the stored fact (`created: false`), whatever its status: an archived fact is not proposed again.
+ * - **A proposal is only a proposal.** `proposeSiteFact` always stores the fact `proposed`, whatever its source. Only `setSiteFactStatus`,
+ *   called for the owner's own act, makes one `active`.
+ * - **Status moves are checked.** `setSiteFactStatus` applies only when the stored status equals `expected` (compare-and-set) and the move is
+ *   one `SITE_FACT_TRANSITIONS` allows; it returns false otherwise.
+ * - **The caller validated it.** A store keeps what `validateSiteFact` accepted; it never rewrites a fact's text.
+ */
+export interface SiteFactStorePort {
+  /** Store a new `proposed` fact, or return the owner's fact of the same identity. */
+  proposeSiteFact(owner: string, fact: NewSiteFact): Promise<{ fact: SiteFact; created: boolean }>;
+  /** The owner's facts on exactly these sites (registrable domains) with one of these statuses, by site, then `createdAt`, then id. */
+  listSiteFacts(owner: string, sites: readonly string[], status: SiteFactStatus | readonly SiteFactStatus[]): Promise<SiteFact[]>;
+  /** Compare-and-set the status. True when it moved. */
+  setSiteFactStatus(owner: string, id: string, expected: SiteFactStatus, next: SiteFactStatus): Promise<boolean>;
+  /** Set `lastUsedAt` of the owner's facts among `ids`. Returns how many changed. */
+  touchSiteFacts(owner: string, ids: readonly string[], at: string): Promise<number>;
 }
 
 /** What a host's tool call returned. */

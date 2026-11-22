@@ -60,11 +60,13 @@ const epicChildren = new Map([
   [738, [739, 740, 741, 742, 743, 744, 745, 746, 809, 829]],
   // E45 run recordings: opt-in video of a run, playback, and an admin retention policy (E45.1 to E45.6, in order).
   [755, [756, 757, 758, 759, 760, 761]],
-  [770, [771, 772, 773, 774]],
+  [770, [771, 772, 773, 774, 847]],
   [771, [775, 776, 777, 778, 779, 780]],
   [772, [781, 782, 783, 784, 785, 786]],
   [773, [787, 788, 789, 790, 791, 792]],
   [774, [793, 794, 795, 796, 797, 798, 799]],
+  // E46 phase 5 (owner's decision, 2026-11-22): reuse across goals and site knowledge, before the final merge (E46.25).
+  [847, [848, 849, 850, 851, 852, 853, 854, 855, 856]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

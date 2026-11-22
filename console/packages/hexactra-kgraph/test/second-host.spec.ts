@@ -1,6 +1,7 @@
 // A second, minimal host (E46.8): no harness, no browser, no database — a key-value "app" with three tools. It binds the ports by hand and
 // runs a procedure. Proof the core embeds anywhere.
-import { executeProcedure, type KgraphPorts, matchProcedures, noopTelemetry, procedureVersionSchema, validateVersion, type Tool } from '../src';
+import { canMoveSiteFact, executeProcedure, type KgraphPorts, matchProcedures, noopTelemetry, procedureVersionSchema, type SiteFact, siteFactKey, siteFactSchema, type SiteFactStorePort, validateVersion, type Tool } from '../src';
+import { runSiteFactStoreConformance } from '../src/testing';
 
 const TOOLS: Tool[] = [
   { name: 'kv_get', family: 'kv', commits: false },
@@ -59,6 +60,49 @@ it('a host with no harness and no browser runs a procedure', async () => {
   expect(intents).toEqual(['p']);
   expect(report.judgeCalls).toBe(0);
 });
+
+// The second host's site facts (E46.30): a key-value table keyed by owner and identity, written by hand against the port, not the fake.
+function kvSiteFacts(): SiteFactStorePort {
+  const rows = new Map<string, { owner: string; fact: SiteFact }>();
+  const byKey = new Map<string, string>(); // `${owner}\n${identity}` -> id
+  return {
+    proposeSiteFact: async (owner, input) => {
+      const key = `${owner}\n${siteFactKey(input)}`;
+      const existing = byKey.get(key);
+      if (existing) return { fact: { ...rows.get(existing)!.fact }, created: false };
+      const fact = siteFactSchema.parse({ ...input, status: 'proposed', lastUsedAt: null });
+      rows.set(fact.id, { owner, fact });
+      byKey.set(key, fact.id);
+      return { fact: { ...fact }, created: true };
+    },
+    listSiteFacts: async (owner, sites, status) => {
+      const want = new Set(typeof status === 'string' ? [status] : status);
+      return [...rows.values()]
+        .filter((r) => r.owner === owner && sites.includes(r.fact.site) && want.has(r.fact.status))
+        .map((r) => ({ ...r.fact }))
+        .sort((a, b) => `${a.site}\n${a.createdAt}\n${a.id}`.localeCompare(`${b.site}\n${b.createdAt}\n${b.id}`));
+    },
+    setSiteFactStatus: async (owner, id, expected, next) => {
+      const r = rows.get(id);
+      if (!r || r.owner !== owner || r.fact.status !== expected || !canMoveSiteFact(expected, next)) return false;
+      r.fact = { ...r.fact, status: next };
+      return true;
+    },
+    touchSiteFacts: async (owner, ids, at) => {
+      let n = 0;
+      for (const id of new Set(ids)) {
+        const r = rows.get(id);
+        if (r && r.owner === owner) {
+          r.fact = { ...r.fact, lastUsedAt: at };
+          n++;
+        }
+      }
+      return n;
+    },
+  };
+}
+
+runSiteFactStoreConformance({ name: 'second host (key-value)', open: async () => ({ store: kvSiteFacts(), owners: ['kv-owner-1', 'kv-owner-2'], close: async () => undefined }) });
 
 it('the same host matches its procedure to a goal by words, with no site, no store call and no model', () => {
   const version = procedureVersionSchema.parse({
