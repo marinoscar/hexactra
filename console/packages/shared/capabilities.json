@@ -1788,6 +1788,26 @@
       "web": {
         "none": "Arrives with the Knowledge Graph admin card (E46.20, #794)"
       }
+    },
+    {
+      "id": "kgraph.transfer",
+      "description": "Export your Knowledge Graph procedures as a file, and import a file (it waits for your review and a verification run)",
+      "rest": [
+        "GET /api/kgraph/export",
+        "POST /api/kgraph/import"
+      ],
+      "cli": {
+        "none": "Arrives with the Knowledge Graph CLI commands (E46.19)"
+      },
+      "mcp": {
+        "none": "Deliberate: procedures are not exported to or imported from hosted AI apps (docs/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "Done in the web app or the REST API"
+      },
+      "web": {
+        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
+      }
     }
   ]
 }
