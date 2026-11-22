@@ -74,6 +74,7 @@ Every route is under `/api/benchmarks`. Reading needs `benchmarks:read`; startin
 | `GET /{id}/trials` | Its trials in run order: verdict, failure reason, checks, `claimedSuccess`, the metrics copied from the run (`durationMs`, `activeMs`, `steps`, `modelCalls`, `inputTokens`, `outputTokens`, `cachedInputTokens`, `costUsd`, `costKnown`, `stopReason`, `questions`, `escalations`), `model` and `models` (the models its policy resolved to: each tier from start to max, and the tier it ended on), `runId`. Filters: `status`, `verdict`, `policyRef`, `challengeId` |
 | `GET /{id}/scorecard` | Its [scorecard](#reading-the-scorecard): live while it runs, cached once it has ended |
 | `GET /{id}/compare?baseline={id}` | Its [comparison](#comparing-with-a-baseline) with an earlier benchmark on the same suite key and version (`409 BENCHMARK_SUITE_MISMATCH` otherwise) |
+| `GET /{id}/export?format=json\|csv\|pdf` | Its [report as a file](#exporting-a-report), masked: JSON, a CSV of trials or a PDF (`paper`, `baseline`) |
 | `POST /{id}/cancel` | Cancel it |
 | `DELETE /{id}` | Delete one that has ended, with its trials. Its runs stay in the run history |
 
@@ -106,7 +107,7 @@ A trial never returns its seed, its token, the site's state or an expected answe
 | Telemetry | |
 |---|---|
 | Counters | `app.benchmarks.started`; `app.benchmarks.trials` by `verdict` |
-| Audit events | `benchmarks.started`, `benchmarks.cancelled`, `benchmarks.deleted` (ids and counts only) |
+| Audit events | `benchmarks.started`, `benchmarks.cancelled`, `benchmarks.deleted`, `benchmarks.exported` (ids, the format and counts only) |
 | Job | `benchmark.advance`, in Administration, Background jobs |
 
 ### Code map
@@ -197,6 +198,41 @@ How the statistics are computed:
 | `scorecard.schemas.ts` | The shapes, for the pages and the report |
 | `scorecard.service.ts` | `ScorecardService`: `scorecard(userId, id)`, `compare(userId, id, baselineId)`, `cacheIfEnded(id)` |
 | Tests (`apps/api/test/`) | `benchmark-scorecard.spec.ts` (every formula with hand-computed numbers; the Wilson bounds against reference values to three decimals), `benchmark-scorecard.db.spec.ts` (the routes, the cache, a deleted run, the refusal and the flipped challenges) |
+
+## Exporting a report
+
+`GET /api/benchmarks/{id}/export` (`benchmarks:read`) takes a benchmark out of the console as a file. In the web app it is the **Export** menu (`apps/web/src/components/BenchmarkExportMenu.tsx`: PDF report, CSV of trials, JSON report).
+
+| Query | Values |
+|---|---|
+| `format` | `json` (the default), `csv` or `pdf` |
+| `paper` | `a4` (the default) or `letter`; the PDF only |
+| `baseline` | An earlier benchmark of the same administrator on the same suite key and version: the report adds the [comparison](#comparing-with-a-baseline). Another suite version: `409 BENCHMARK_SUITE_MISMATCH` |
+
+The answer is the file itself, never in the `{ data }` envelope: `content-disposition: attachment; filename="hexactra-benchmark-<first 8 of id>-<yyyymmdd>.<json|csv|pdf>"` (UTC date) and `cache-control: no-store`.
+
+| Format | What it holds |
+|---|---|
+| JSON | `type: "hexactra.benchmark-report"`, `formatVersion: 1` (`benchmark-report.schemas.ts`, in the OpenAPI document as `BenchmarkReportDto`): `exportedAt`, `partial`, the console version, `masking` (`applied: true`, the pattern table's version and the hits per pattern), the `benchmark` (config, suite key and version, `appVersion`, `commit`, spend and totals), the `scorecard` (ranking, metrics per policy and per category, the matrix, the totals), every trial (verdict, checks, metrics, tokens, cost, models, `runId`, and its run's `goal` and `result`) and `baseline` (the comparison, or null) |
+| CSV | One row per trial, with a header: `benchmark`, `benchmark_status`, `challenge`, `category`, `policy_label`, `policy_ref`, `trial` (1-based), `verdict`, `failure_reason`, `claimed_success`, `active_ms`, `steps`, `model_calls`, `models` (space-separated), `input_tokens`, `output_tokens`, `cached_tokens`, `cost_usd`, `cost_known`, `stop_reason`, `run_id`. RFC 4180: a field with a comma, a quote or a line break is quoted, quotes doubled, lines end with CRLF. A text cell that starts with `=`, `+`, `-` or `@` (or a tab or carriage return) is prefixed with `'`, so a spreadsheet does not run it as a formula. The totals per policy and for the benchmark are the sums of the rows (the scorecard's totals are the same sums) |
+| PDF | Landscape, the bundled Inter fonts, no screenshots: summary (status, suite, console version and commit, trial counts, total cost, total tokens with input, output and cached) and the ranking with each policy's total cost, tokens and models; the scorecard; tokens and cost per policy and for the whole benchmark; the categories; the challenge x policy matrix; failure reasons, stop reasons, failed safety checks and the failed checks' notes; the baseline deltas when asked; the method (suite version, trials, how grading works, the definitions). A bookmark per section, a footer on every page |
+
+Every format carries the input, output and cached tokens and the cost of each trial, of each policy and of the whole benchmark, and the models used.
+
+- **Masked, always.** The report is built once (`buildBenchmarkReport`) and every string in it goes through `maskValue` (`tasks/mask.ts`, the run export's table): the benchmark's name, the policy labels, each run's goal and result, and each check's name and note. The CSV and the PDF are drawn from that masked report. There is no unmasked export. A trial's goal holds the address of its challenge site, `<site>/t/<token>/`; the token opens the trial's site while it runs, so the report replaces it with `[trial token]`.
+- **In progress.** A benchmark that is `queued` or `running` can be exported: the JSON says `partial: true` (and the scorecard `live: true`), every CSV row says `in progress` in `benchmark_status`, and the PDF prints a "Benchmark in progress: partial report" banner and "(in progress)" in its footer.
+- **A run that is gone** (deleted, or past retention) leaves its trial's metrics in the report; only its `goal` and `result` are then null.
+- **Limits.** 10 exports a minute per user, every format together (`429 EXPORT_RATE_LIMITED`, `details.retryAfterS`). Another administrator's benchmark: `404 BENCHMARK_NOT_FOUND`.
+- **Recorded.** The audit event `benchmarks.exported` (`benchmarkId`, `format`, `paper` for a PDF, `baselineId` when asked, `partial`, `trials`) and one log line `benchmarks.export user=… benchmark=… format=… trials=… ms=…`. None carries a goal, a result or a check note.
+- **Rendering.** The PDF is laid out by pdfmake on the API's event loop, like the run report; moving both off it is #570. A benchmark report is tables only, a few pages.
+
+| Code (`apps/api/src/benchmark/`) | |
+|---|---|
+| `benchmark-report.schemas.ts` | The file's shape and the route's query |
+| `benchmark-report.ts` | Pure: `buildBenchmarkReport` (assembles and masks), `benchmarkReportCsv`, `csvCell`, `hideTrialTokens`, `benchmarkExportFilename` |
+| `benchmark-report.pdf.ts` | Pure: `buildBenchmarkReportDefinition(report, { paper })`, rendered with the run report's `renderPdf` |
+| `benchmark-report.service.ts` | `BenchmarkReportService`: `build(userId, id, { baseline })`, `export(userId, id, { format, paper, baseline })` with the rate limit and the audit event |
+| Tests (`apps/api/test/`) | `benchmark-report.spec.ts` (masking, the CSV parsed back and its sums, formula cells, the PDF definition snapshot and the PDF read back with `unpdf`), `benchmark-export.db.spec.ts` (the three formats' headers and names, masking in each, in progress, the baseline and the 409, 404/403/400, the audit event, the rate limit, the OpenAPI entry); `apps/web/src/__tests__/BenchmarkExportMenu.test.tsx` |
 
 ## The challenge site
 
