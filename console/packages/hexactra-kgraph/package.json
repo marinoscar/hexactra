@@ -47,6 +47,10 @@
       "types": "./dist/transfer/index.d.ts",
       "default": "./dist/transfer/index.js"
     },
+    "./match": {
+      "types": "./dist/match/index.d.ts",
+      "default": "./dist/match/index.js"
+    },
     "./ports": {
       "types": "./dist/ports/index.d.ts",
       "default": "./dist/ports/index.js"
