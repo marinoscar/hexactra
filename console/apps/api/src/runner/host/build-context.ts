@@ -57,7 +57,7 @@ import { surfaceCapture } from './kgraph/surface';
 import { subProcedures } from './kgraph/sub-procedure';
 import { procedureTools, proceduresFamily } from './tools/procedures';
 import { everydayBinding } from './kgraph/everyday';
-import { SITE_FACT_MODES, siteFactTools } from './kgraph/site-facts';
+import { runCandidateSites, SITE_FACT_MODES, siteFactsBinding } from './kgraph/site-facts';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -217,9 +217,11 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     ? null
     : await everydayBinding(d, userId, isTaskRun, { run: { id: run.id, goal: run.goal, taskId: run.taskId ?? null, inputs: run.inputs }, allowedDomains: [...allowedDomains, ...appDomains], connections: s.connections.list, profile: () => profile });
   const procedures = reuse ? { tools: procedureTools(subProcedures(d, userId, run.taskId ?? null, run.inputs, () => profile)), family: proceduresFamily } : (everyday?.procedures ?? null);
-  // The agent's site fact proposals (E46.31): only in a learn, reuse or everyday run (E46.28's binding is non-null exactly then); otherwise not
-  // even constructed.
-  const siteFacts = d.kgraphSiteFacts && (SITE_FACT_MODES.has(kgMode) || everyday) ? siteFactTools(d.kgraphSiteFacts, userId) : null;
+  // Site facts (E46.31, E46.32): the "About these sites" block and the tools, only in a learn, reuse or everyday run (E46.28's binding is
+  // non-null exactly then); otherwise not even constructed.
+  const factMode = SITE_FACT_MODES.has(kgMode) ? kgMode : everyday ? 'everyday' : null;
+  const facts = factMode ? await siteFactsBinding(d, userId, run, factMode, await runCandidateSites(d, userId, run, [...allowedDomains, ...appDomains])) : null;
+  const siteFacts = facts?.tools ?? null;
   // The tools, in the order the model has always been offered them (one function, shared with the scenario kit).
   const registry = registerRunTools<HostContext>({
     needsBrowser: s.connections.needsBrowser,
@@ -255,8 +257,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
       return line ? [line] : [];
     },
     summarizeGuidance: guidanceSummary,
-    // The memories, then (everyday, E46.28) the saved procedures that may fit: both in the stable prefix, both data.
-    aboutOwner: [await aboutOwner(d, userId, run, memory.context), everyday?.block ?? ''].filter(Boolean).join('\n\n'),
+    // The memories, then "About these sites" (E46.32), then (everyday, E46.28) the saved procedures that may fit: all data, in the stable prefix.
+    aboutOwner: [await aboutOwner(d, userId, run, memory.context), facts?.block ?? '', everyday?.block ?? ''].filter(Boolean).join('\n\n'),
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),
     wrapUpNote: (c) => outputsWrapUpNote(c.ext.outputs),
   };

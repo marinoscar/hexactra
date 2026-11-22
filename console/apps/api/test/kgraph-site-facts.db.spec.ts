@@ -136,7 +136,8 @@ describe('site facts (E46.31)', () => {
 
     const names = (r: typeof off) => r.rounds[0]!.tools.map((t) => t.name);
     expect(names(off)).not.toContain('propose_site_fact');
-    expect(names(learn)).toEqual([...names(off), 'propose_site_fact']);
+    // E46.32 adds `site_facts` after it, in the same modes.
+    expect(names(learn)).toEqual([...names(off), 'propose_site_fact', 'site_facts']);
     expect(learn.rounds[0]!.outputs.slice(0, 4).map((o) => o.split(':')[0])).toEqual(['Proposed', 'Proposed', 'Proposed', 'Not proposed']);
     const stored = await facts(owner.userId, 'example.test');
     const agent = stored.filter((f) => f.source === 'agent_proposed');
