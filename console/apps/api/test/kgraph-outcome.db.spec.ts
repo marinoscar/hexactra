@@ -78,7 +78,7 @@ describe('outcome checks and audit runs (#785)', () => {
   beforeAll(async () => {
     admin = await login(`kgout-admin-${stamp}@example.test`, 'admin');
     owner = await login(`kgout-owner-${stamp}@example.test`);
-    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, auditEvery: 0 } });
+    await patch(admin.token, '/system-settings', { kgraph: { enabled: true, auditEvery: 0, pacing: 'fast' } });
     await patch(owner.token, '/user-settings', { kgraph: { enabled: true } });
   });
   afterAll(async () => {
