@@ -44,7 +44,7 @@ export type CheckKind = Check['kind'];
 
 // ---------------------------------------------------------------- steps
 
-export const STEP_KINDS = ['call', 'extract', 'judge', 'ask', 'check', 'branch', 'foreach'] as const;
+export const STEP_KINDS = ['call', 'extract', 'judge', 'ask', 'check', 'branch', 'foreach', 'agent'] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
 const stepBase = {
@@ -87,7 +87,13 @@ export const branchStepSchema = z.object({ ...stepBase, kind: z.literal('branch'
 /** Repeat `body` (step ids, in order) once per item of a list output; `as` names the item for the body's `output` bindings. */
 export const foreachStepSchema = z.object({ ...stepBase, kind: z.literal('foreach'), over: bindingSchema, as: z.string().min(1).max(64), body: z.array(idSchema).min(1).max(100), maxItems: z.number().int().min(1).max(1000).default(100) }).strict();
 
-export const stepSchema = z.discriminatedUnion('kind', [callStepSchema, extractStepSchema, judgeStepSchema, askStepSchema, checkStepSchema, branchStepSchema, foreachStepSchema]);
+/**
+ * A stretch the compiler could not express safely (a withheld value, raw coordinates, model-written code, a desktop action): the agent runs
+ * it. It holds no instruction from a run: the executor's host gives the agent the task's goal and "continue from here until `until` holds".
+ */
+export const agentStepSchema = z.object({ ...stepBase, kind: z.literal('agent'), until: z.array(checkSchema).max(10).default([]), tools: z.array(z.string().min(1).max(64)).max(50).default([]) }).strict();
+
+export const stepSchema = z.discriminatedUnion('kind', [callStepSchema, extractStepSchema, judgeStepSchema, askStepSchema, checkStepSchema, branchStepSchema, foreachStepSchema, agentStepSchema]);
 export type Step = z.infer<typeof stepSchema>;
 export type CallStep = z.infer<typeof callStepSchema>;
 export type ExtractStep = z.infer<typeof extractStepSchema>;
@@ -96,3 +102,4 @@ export type AskStep = z.infer<typeof askStepSchema>;
 export type CheckStep = z.infer<typeof checkStepSchema>;
 export type BranchStep = z.infer<typeof branchStepSchema>;
 export type ForeachStep = z.infer<typeof foreachStepSchema>;
+export type AgentStep = z.infer<typeof agentStepSchema>;

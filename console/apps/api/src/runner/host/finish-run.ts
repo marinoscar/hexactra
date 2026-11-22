@@ -95,6 +95,8 @@ export async function finishRun(d: HostDeps, userId: string, runId: string, sess
   } catch (e) {
     d.log.warn(`run ${runId}: could not tell the owner about the saved login: ${e instanceof Error ? e.message : String(e)}`);
   }
+  // The Knowledge Graph (E46.7): a captured run that succeeded is compiled by a queue job. Never fails the run.
+  await d.kgraphAfterRun?.finished(userId, runId, to).catch(() => undefined);
   // Steps that went ahead on saved approvals (#555): one notification at the end of the run. Ask rules do not notify.
   try {
     const line = savedApprovalsLine((await d.approvals?.gateUsesOfRun(userId, runId)) ?? []);

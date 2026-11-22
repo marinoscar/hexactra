@@ -28,6 +28,7 @@ import { RunStopSignal } from './stop-signal';
 import { AGENT, ATTR } from './trace-attributes';
 import { beforeLoop } from './host/before-loop';
 import { buildRun } from './host/build-context';
+import { KgraphAfterRun } from '../kgraph/kgraph-compile.job';
 import { KgraphEnabledService } from '../kgraph/kgraph-enabled.service';
 import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
@@ -81,6 +82,7 @@ export class GoalRunnerService {
     @Optional() public mcp?: McpRunService,
     // The Knowledge Graph's gate (E46.5): absent, or off for a run, and no observer is bound.
     @Optional() public kgraph?: KgraphEnabledService,
+    @Optional() public kgraphAfterRun?: KgraphAfterRun,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -108,6 +110,7 @@ export class GoalRunnerService {
       traces: this.traces,
       mcp: this.mcp,
       kgraph: this.kgraph,
+      kgraphAfterRun: this.kgraphAfterRun,
       clock: () => this.clock(),
       log: this.log,
     };

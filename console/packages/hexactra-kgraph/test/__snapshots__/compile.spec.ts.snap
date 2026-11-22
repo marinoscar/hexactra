@@ -1,0 +1,342 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`compileTrace compiles the daily-summary trace to the expected candidate (snapshot), and twice to the same bytes 1`] = `
+{
+  "accounts": [],
+  "changeClass": "initial",
+  "createdAt": "2026-11-21T06:00:00.000Z",
+  "edges": [
+    {
+      "from": "s1",
+      "to": "s4",
+      "type": "then",
+    },
+    {
+      "from": "s4",
+      "to": "s7",
+      "type": "then",
+    },
+    {
+      "from": "s7",
+      "to": "x7-s8-values.0",
+      "type": "then",
+    },
+    {
+      "from": "x7-s8-values.0",
+      "to": "s8",
+      "type": "then",
+    },
+    {
+      "from": "s8",
+      "to": "j1",
+      "type": "then",
+    },
+    {
+      "from": "j1",
+      "to": "s9",
+      "type": "then",
+    },
+    {
+      "from": "s9",
+      "to": "x7-out-total-total",
+      "type": "then",
+    },
+    {
+      "arg": "url",
+      "from": "s1",
+      "to": "s4",
+      "type": "feeds",
+    },
+    {
+      "arg": "source",
+      "from": "s7",
+      "to": "x7-s8-values.0",
+      "type": "feeds",
+    },
+    {
+      "arg": "values.0",
+      "from": "x7-s8-values.0",
+      "to": "s8",
+      "type": "feeds",
+    },
+    {
+      "arg": "s1",
+      "from": "s1",
+      "to": "j1",
+      "type": "feeds",
+    },
+    {
+      "arg": "s7",
+      "from": "s7",
+      "to": "j1",
+      "type": "feeds",
+    },
+    {
+      "arg": "x7-s8-values.0",
+      "from": "x7-s8-values.0",
+      "to": "j1",
+      "type": "feeds",
+    },
+    {
+      "arg": "body",
+      "from": "j1",
+      "to": "s9",
+      "type": "feeds",
+    },
+    {
+      "arg": "source",
+      "from": "s7",
+      "to": "x7-out-total-total",
+      "type": "feeds",
+    },
+  ],
+  "elements": [],
+  "entry": "s1",
+  "evidence": {
+    "failures": 0,
+    "lastFailureAt": null,
+    "lastSuccessAt": null,
+    "repairs": 0,
+    "successes": 0,
+  },
+  "id": "v1",
+  "number": 1,
+  "outputs": [
+    {
+      "id": "o:total",
+      "name": "total",
+      "sensitive": false,
+      "step": "x7-out-total-total",
+    },
+  ],
+  "parameters": [
+    {
+      "id": "p:sheet",
+      "name": "Sheet",
+      "required": true,
+      "sensitive": false,
+      "type": "string",
+    },
+  ],
+  "parent": null,
+  "procedure": "proc1",
+  "screens": [],
+  "secretRefs": [],
+  "sites": [
+    {
+      "domain": "example.com",
+      "id": "site:example.com",
+    },
+  ],
+  "sourceRun": "run1",
+  "state": "candidate",
+  "stepEvidence": {},
+  "steps": [
+    {
+      "args": {
+        "q": {
+          "kind": "literal",
+          "value": "daily numbers",
+        },
+      },
+      "checks": [
+        {
+          "fields": [
+            "items",
+          ],
+          "kind": "result_shape",
+          "ok": true,
+          "step": "s1",
+          "tolerance": 0,
+        },
+      ],
+      "commitClass": false,
+      "id": "s1",
+      "kind": "call",
+      "label": "mail_search",
+      "segment": "seg1",
+      "sites": [],
+      "tool": "mail_search",
+    },
+    {
+      "args": {
+        "url": {
+          "kind": "output",
+          "path": "items.0.link",
+          "step": "s1",
+        },
+      },
+      "checks": [
+        {
+          "host": "reports.example.com",
+          "kind": "location",
+          "pathPattern": "/daily/*",
+          "tolerance": 0,
+        },
+        {
+          "digest": "v:4f2a",
+          "kind": "view_digest",
+          "tolerance": 0.3,
+        },
+      ],
+      "commitClass": false,
+      "id": "s4",
+      "kind": "call",
+      "label": "navigate",
+      "segment": "seg1",
+      "sites": [
+        "site:example.com",
+      ],
+      "tool": "navigate",
+    },
+    {
+      "args": {
+        "selector": {
+          "kind": "literal",
+          "value": "#total",
+        },
+      },
+      "checks": [
+        {
+          "host": "reports.example.com",
+          "kind": "location",
+          "pathPattern": "/daily/*",
+          "tolerance": 0,
+        },
+        {
+          "digest": "v:4f2a",
+          "kind": "view_digest",
+          "tolerance": 0.3,
+        },
+      ],
+      "commitClass": false,
+      "id": "s7",
+      "kind": "call",
+      "label": "read_text",
+      "segment": "seg1",
+      "sites": [
+        "site:example.com",
+      ],
+      "tool": "read_text",
+    },
+    {
+      "checks": [],
+      "commitClass": false,
+      "from": "s7",
+      "id": "x7-s8-values.0",
+      "kind": "extract",
+      "label": "read a value for values.0",
+      "pattern": "\\d\\,\\d{3}\\.\\d{2}",
+      "segment": "seg1",
+      "sensitive": false,
+      "sites": [],
+    },
+    {
+      "args": {
+        "sheet": {
+          "kind": "parameter",
+          "parameter": "p:sheet",
+        },
+        "values.0": {
+          "kind": "output",
+          "step": "x7-s8-values.0",
+        },
+      },
+      "checks": [
+        {
+          "fields": [
+            "appended",
+          ],
+          "kind": "result_shape",
+          "ok": true,
+          "step": "s8",
+          "tolerance": 0,
+        },
+      ],
+      "commitClass": false,
+      "id": "s8",
+      "kind": "call",
+      "label": "sheet_append",
+      "segment": "seg1",
+      "sites": [],
+      "tool": "sheet_append",
+    },
+    {
+      "checks": [],
+      "commitClass": false,
+      "id": "j1",
+      "inputs": {
+        "s1": {
+          "kind": "output",
+          "step": "s1",
+        },
+        "s7": {
+          "kind": "output",
+          "step": "s7",
+        },
+        "x7-s8-values.0": {
+          "kind": "output",
+          "step": "x7-s8-values.0",
+        },
+      },
+      "kind": "judge",
+      "label": "decide body for mail_send",
+      "output": [
+        {
+          "name": "body",
+          "type": "string",
+        },
+      ],
+      "segment": "seg1",
+      "sites": [],
+    },
+    {
+      "args": {
+        "body": {
+          "field": "body",
+          "kind": "judge",
+          "step": "j1",
+        },
+        "subject": {
+          "kind": "literal",
+          "value": "daily numbers",
+        },
+        "to.0": {
+          "kind": "literal",
+          "value": "finance@example.com",
+        },
+      },
+      "checks": [
+        {
+          "fields": [
+            "id",
+          ],
+          "kind": "result_shape",
+          "ok": true,
+          "step": "s9",
+          "tolerance": 0,
+        },
+      ],
+      "commitClass": true,
+      "id": "s9",
+      "kind": "call",
+      "label": "mail_send",
+      "segment": "seg1",
+      "sites": [],
+      "tool": "mail_send",
+    },
+    {
+      "checks": [],
+      "commitClass": false,
+      "from": "s7",
+      "id": "x7-out-total-total",
+      "kind": "extract",
+      "label": "read a value for total",
+      "pattern": "\\d\\,\\d{3}\\.\\d{2}",
+      "segment": "seg1",
+      "sensitive": false,
+      "sites": [],
+    },
+  ],
+}
+`;
