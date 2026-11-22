@@ -9227,7 +9227,7 @@ export interface paths {
         put?: never;
         /**
          * Start a benchmark
-         * @description Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null`: no cap; absent: the deployment default).
+         * @description Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null` or `0`: no budget, stored as `null`; absent: the deployment default).
          *
          *     **Requires:** authentication, plus permission `benchmarks:run`.
          */
@@ -23135,7 +23135,7 @@ export interface components {
              * @default default
              */
             profile?: string;
-            /** @description No new trial starts once the benchmark has spent this much on model calls. `null`: no cap (each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`. */
+            /** @description The budget: no new trial starts once the benchmark has spent this much on model calls. `null` or `0`: no budget (stored as `null`; each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`. */
             capUsd?: number | null;
             /** @description How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`. */
             trialTimeoutMinutes?: number;

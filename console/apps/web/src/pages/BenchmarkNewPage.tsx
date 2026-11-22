@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
 import { getSuite, startBenchmark } from '../benchmarks/api';
-import { BENCHMARKS_PATH, CAPABILITY_LABEL, benchmarkPath, money, newFormProblems, plannedRuns, type NewBenchmarkForm } from '../benchmarks/format';
+import { BENCHMARKS_PATH, CAPABILITY_LABEL, benchmarkPath, budgetOf, money, newFormProblems, plannedRuns, type NewBenchmarkForm } from '../benchmarks/format';
 import { useFleetHosts } from '../components/MachinePicker';
 import { errorText, usePolicyCatalog } from '../policies/usePolicyCatalog';
 import { machineState } from '../types/fleet';
@@ -64,7 +64,7 @@ export function BenchmarkNewPage() {
       (s) => {
         setSuite(s);
         // Every challenge the agent can attempt is chosen by default.
-        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd), noCap: false, recordVideo: false });
+        setForm({ name: '', challengeIds: s.challenges.filter((c) => c.supported).map((c) => c.id), policies: [], trials: String(s.defaults.trials), hostId: null, profile: 'default', capUsd: String(s.defaults.capUsd), recordVideo: false });
       },
       (e) => setError(errorText(e, 'Could not load the benchmark suite')),
     );
@@ -74,6 +74,8 @@ export function BenchmarkNewPage() {
   const supportedChosen = suite && form ? form.challengeIds.filter((id) => suite.challenges.some((c) => c.id === id && c.supported)).length : 0;
   const runs = form ? plannedRuns(supportedChosen, form.policies.length, Number(form.trials) || 0) : 0;
   const host = form?.hostId ? hosts.find((h) => h.id === form.hostId) : undefined;
+  // Empty or 0: no budget (#844).
+  const budget = form ? budgetOf(form.capUsd) : undefined;
 
   if (!suite || !form) {
     return (
@@ -101,7 +103,7 @@ export function BenchmarkNewPage() {
       body: (
         <>
           {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {form.trials} trials, one at a time on {host ? host.name : 'any available node'}. They spend on model calls;{' '}
-          {form.noCap ? <strong>there is no spend cap: each run stops only at its own policy budget</strong> : <>no new trial starts once {money(Number(form.capUsd))} is spent</>}.
+          {budget ? <>no new trial starts once {money(budget)} is spent</> : <><strong>No budget</strong>: every trial runs, and each run stops only at its own policy budget</>}.
           {form.recordVideo ? ' Every run records a video of its browser tab (not masked).' : ''}
         </>
       ),
@@ -115,7 +117,7 @@ export function BenchmarkNewPage() {
       trials: Number(form.trials),
       hostId: form.hostId,
       profile: form.profile,
-      capUsd: form.noCap ? null : Number(form.capUsd),
+      capUsd: budget ?? null,
       ...(form.recordVideo ? { recordVideo: true } : {}),
     };
     setBusy(true);
@@ -263,7 +265,7 @@ export function BenchmarkNewPage() {
           {show('policies') && <FormHelperText error>{show('policies')}</FormHelperText>}
         </Section>
 
-        <Section title="Trials, node and cap">
+        <Section title="Trials, node and budget">
           <Stack spacing={2}>
             <TextField
               label="Trials per challenge and policy"
@@ -302,18 +304,17 @@ export function BenchmarkNewPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <FormControlLabel
-              control={<Switch checked={form.noCap} onChange={(e) => update({ noCap: e.target.checked })} />}
-              label="No spend cap"
-              data-testid="benchmark-no-cap"
-            />
             <TextField
-              label="Spend cap"
-              disabled={form.noCap}
+              label="Budget (USD)"
               value={form.capUsd}
               onChange={(e) => update({ capUsd: e.target.value })}
               error={Boolean(show('capUsd'))}
-              helperText={show('capUsd') ?? (form.noCap ? 'No cap: the benchmark runs every trial; each run stops only at its own agent policy budget.' : 'No new trial starts once the benchmark has spent this much on model calls.')}
+              helperText={
+                show('capUsd') ??
+                (budget
+                  ? `Leave empty or 0 to run without a budget. No new trial starts once the benchmark has spent ${money(budget)} on model calls.`
+                  : 'Leave empty or 0 to run without a budget. No budget: every trial runs, and each run stops only at its own agent policy budget.')
+              }
               slotProps={{ input: { startAdornment: <InputAdornment position="start">$</InputAdornment> }, htmlInput: { inputMode: 'decimal' } }}
             />
           </Stack>
@@ -333,7 +334,8 @@ export function BenchmarkNewPage() {
 
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 } }} data-testid="benchmark-plan">
           <Typography variant="body1">
-            This starts <strong>{runs.toLocaleString('en-US')}</strong> {runs === 1 ? 'run' : 'runs'}: {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {Number(form.trials) || 0} trials.
+            This starts <strong>{runs.toLocaleString('en-US')}</strong> {runs === 1 ? 'run' : 'runs'}: {supportedChosen} challenges × {form.policies.length} {form.policies.length === 1 ? 'policy' : 'policies'} × {Number(form.trials) || 0} trials
+            {budget ? `, with a budget of ${money(budget)}` : budget === null ? ', with no budget' : ''}.
           </Typography>
           <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 1.5 }}>
             <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => void submit()} disabled={busy || !suite.site.reachable} sx={{ minHeight: 44 }}>

@@ -8,7 +8,7 @@ import type { ReactElement } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { deltaText, deltaVerdict, newFormProblems, plannedRuns, rateText, type NewBenchmarkForm } from '../benchmarks/format';
+import { budgetOf, deltaText, deltaVerdict, newFormProblems, plannedRuns, rateText, type NewBenchmarkForm } from '../benchmarks/format';
 import { BenchmarkComparePage } from '../pages/BenchmarkComparePage';
 import { BenchmarkNewPage } from '../pages/BenchmarkNewPage';
 import { BenchmarkPage } from '../pages/BenchmarkPage';
@@ -187,7 +187,7 @@ function mount(element: ReactElement, path: string, routePath: string, permissio
 }
 
 describe('the benchmark helpers', () => {
-  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25', noCap: false, recordVideo: false };
+  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25', recordVideo: false };
 
   it('accepts a complete form and names each problem', () => {
     expect(newFormProblems(form, suite)).toEqual({});
@@ -199,10 +199,13 @@ describe('the benchmark helpers', () => {
     expect(newFormProblems({ ...form, trials: '11' }, suite).trials).toMatch(/1 to 10/);
     expect(newFormProblems({ ...form, trials: '2.5' }, suite).trials).toBeDefined();
     expect(newFormProblems({ ...form, profile: 'Bad Name' }, suite).profile).toBeDefined();
-    expect(newFormProblems({ ...form, capUsd: '0' }, suite).capUsd).toBeDefined();
     expect(newFormProblems({ ...form, capUsd: '1001' }, suite).capUsd).toBeDefined();
-    // No cap (#840): the amount is not checked.
-    expect(newFormProblems({ ...form, noCap: true, capUsd: '' }, suite).capUsd).toBeUndefined();
+    expect(newFormProblems({ ...form, capUsd: '-1' }, suite).capUsd).toBeDefined();
+    expect(newFormProblems({ ...form, capUsd: 'ten' }, suite).capUsd).toBeDefined();
+    // The budget (#844): empty or 0 is no budget.
+    expect(newFormProblems({ ...form, capUsd: '' }, suite).capUsd).toBeUndefined();
+    expect(newFormProblems({ ...form, capUsd: '0' }, suite).capUsd).toBeUndefined();
+    expect([budgetOf(''), budgetOf(' 0 '), budgetOf('0.00'), budgetOf('12.5'), budgetOf('.5'), budgetOf('-3'), budgetOf('1e3')]).toEqual([null, null, null, 12.5, 0.5, undefined, undefined]);
     expect(plannedRuns(9, 3, 3)).toBe(81);
   });
 
@@ -283,18 +286,42 @@ describe('a new benchmark', () => {
     expect(post.body).toEqual({ challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25 });
   });
 
-  it('starts with no spend cap when the owner chooses so, and says so before it starts (#840)', async () => {
+  it.each([
+    ['empty', ''],
+    ['0', '0'],
+  ])('starts with no budget when the budget is %s, and says so before it starts (#844)', async (_name, value) => {
     const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
     fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
-    expect(screen.getByRole('textbox', { name: 'Spend cap' })).toHaveValue('25');
-    fireEvent.click(screen.getByRole('switch', { name: 'No spend cap' }));
-    expect(screen.getByRole('textbox', { name: 'Spend cap' })).toBeDisabled();
+    const field = screen.getByRole('textbox', { name: 'Budget (USD)' });
+    expect(field).toHaveValue('25');
+    expect(screen.queryByRole('switch', { name: /spend cap/i })).toBeNull();
+    fireEvent.change(field, { target: { value } });
+    expect(screen.getByText(/Leave empty or 0 to run without a budget/)).toBeInTheDocument();
+    expect(screen.getByTestId('benchmark-plan')).toHaveTextContent('with no budget');
     fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('there is no spend cap');
+    expect(dialog).toHaveTextContent('No budget');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
     await screen.findByTestId('elsewhere');
     expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: null });
+  });
+
+  it('sends a positive budget as the cap and names it before it starts; a negative one is refused (#844)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
+    const field = screen.getByRole('textbox', { name: 'Budget (USD)' });
+    fireEvent.change(field, { target: { value: '-2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    expect(await screen.findByText(/Leave empty or 0 for no budget, or an amount up to/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.change(field, { target: { value: '7.5' } });
+    expect(screen.getByTestId('benchmark-plan')).toHaveTextContent('with a budget of $7.50');
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('no new trial starts once $7.50 is spent');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: 7.5 });
   });
 
   it('records a video of each run when the owner switches it on, with the not-masked warning (#841)', async () => {

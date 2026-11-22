@@ -85,6 +85,10 @@ describe("a run's limits (runner/host/run-limits.ts)", () => {
     expect(createBenchmarkSchema.safeParse({ policies: Array.from({ length: 9 }, () => ({ ref: 'builtin:balanced' })) }).success).toBe(false);
     expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], trials: 11 }).success).toBe(false);
     expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'not-a-policy' }] }).success).toBe(false);
+    // The budget (#844): 0 and null are no budget, a negative amount is refused.
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], capUsd: 0 }).success).toBe(true);
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], capUsd: null }).success).toBe(true);
+    expect(createBenchmarkSchema.safeParse({ policies: [{ ref: 'builtin:balanced' }], capUsd: -1 }).success).toBe(false);
   });
 });
 

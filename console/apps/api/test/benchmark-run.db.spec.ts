@@ -443,6 +443,16 @@ describe('the spend cap, the timeout, cancel and a node that is down', () => {
     const viaRest = res.json<{ data: BenchmarkView }>().data;
     created.push(viaRest.id);
     expect(viaRest.config.capUsd).toBeNull();
+    // A budget of 0 (#844) is no budget, stored as `null`; a negative one is refused.
+    const zero = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: (await login('bench-zero-rest')).headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy' }], trials: 1, capUsd: 0, profile: `z0-${stamp.slice(-6)}` } });
+    expect(zero.statusCode).toBe(201);
+    const zeroView = zero.json<{ data: BenchmarkView }>().data;
+    created.push(zeroView.id);
+    expect(zeroView.config.capUsd).toBeNull();
+    const stored = await prisma.benchmark.findUniqueOrThrow({ where: { id: zeroView.id }, select: { config: true } });
+    expect((stored.config as { capUsd: unknown }).capUsd).toBeNull();
+    const negative = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: (await login('bench-neg-rest')).headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy' }], trials: 1, capUsd: -1, profile: `ng-${stamp.slice(-6)}` } });
+    expect(negative.statusCode).toBe(400);
     const defaulted = await start(admin, { trials: 1 });
     expect(defaulted.config.capUsd).toBe(5);
   }, 120_000);

@@ -12,6 +12,7 @@ import {
   comparisonText,
   exportBenchmark,
   parsePolicyFlag,
+  budget,
   positive,
   resolveBenchmarkId,
   scorecardText,
@@ -78,6 +79,8 @@ interface RunOpts {
   challenge?: string[];
   trials?: string;
   capUsd?: string;
+  /** `--cap`, the short spelling of `--cap-usd` (#844). */
+  cap?: string;
   timeoutMinutes?: string;
   record?: boolean;
   host?: string;
@@ -99,8 +102,10 @@ export async function benchmarkRequest(o: RunOpts): Promise<Record<string, unkno
   if (o.name) body.name = o.name;
   if (o.challenge?.length) body.challengeIds = o.challenge;
   if (o.trials !== undefined) body.trials = positive('--trials', o.trials, true);
-  // `--cap-usd none`: no spend cap (#840).
-  if (o.capUsd !== undefined) body.capUsd = o.capUsd.trim().toLowerCase() === 'none' ? null : positive('--cap-usd', o.capUsd);
+  // `none`, `0` or an empty value: no budget (#840, #844).
+  if (o.cap !== undefined && o.capUsd !== undefined) throw new Error('Give the budget once: --cap or --cap-usd.');
+  const cap = o.cap ?? o.capUsd;
+  if (cap !== undefined) body.capUsd = budget(o.cap !== undefined ? '--cap' : '--cap-usd', cap);
   if (o.timeoutMinutes !== undefined) body.trialTimeoutMinutes = positive('--timeout-minutes', o.timeoutMinutes, true);
   // `--record` (#841): every trial's run records a video (not masked, owner-only).
   if (o.record) body.recordVideo = true;
@@ -143,7 +148,8 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .option('--policy <ref>', 'an agent policy, repeatable (1 to 8): builtin:<key>, an id, or a name; `<ref>=<label>` names its column', collect)
     .option('--challenge <id>', 'a challenge, repeatable (default: the whole suite; `benchmarks suite` lists them)', collect)
     .option('--trials <n>', 'attempts per challenge and policy (default: the deployment setting, usually 3)')
-    .option('--cap-usd <usd|none>', 'no new trial starts once this much is spent; "none": no cap (default: the deployment setting)')
+    .option('--cap-usd <usd|none>', 'the budget: no new trial starts once this much is spent; 0 or "none": no budget (default: the deployment setting)')
+    .option('--cap <usd|none>', 'the same as --cap-usd')
     .option('--timeout-minutes <n>', 'how long one trial may take (default: the deployment setting)')
     .option('--record', 'record a video of each trial run (not masked; watch it on the run page)')
     .option('--host <name|id>', 'the node every trial runs on ("any": the fabric picks one per trial)')

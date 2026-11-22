@@ -84,9 +84,8 @@ export interface NewBenchmarkForm {
   trials: string;
   hostId: string | null;
   profile: string;
+  /** The budget in USD (#844): empty or 0 is no budget, the benchmark runs every trial, each run within its own policy budget. */
   capUsd: string;
-  /** No spend cap (#840): the benchmark runs until its trials are done, each run within its own policy budget. */
-  noCap: boolean;
   /** Record a video of each trial run (#841). */
   recordVideo: boolean;
 }
@@ -111,9 +110,21 @@ export function newFormProblems(form: NewBenchmarkForm, suite: Pick<BenchmarkSui
   const trials = Number(form.trials);
   if (!/^\d+$/.test(form.trials.trim()) || trials < 1 || trials > suite.limits.maxTrials) out.trials = `A whole number from 1 to ${suite.limits.maxTrials}.`;
   if (!PROFILE_NAME.test(form.profile)) out.profile = 'Use 1-32 lowercase letters, digits, - and _.';
-  const cap = Number(form.capUsd);
-  if (!form.noCap && (!form.capUsd.trim() || !Number.isFinite(cap) || cap <= 0 || cap > suite.limits.maxCapUsd)) out.capUsd = `More than $0 and at most $${suite.limits.maxCapUsd.toLocaleString('en-US')}.`;
+  const cap = budgetOf(form.capUsd);
+  if (cap === undefined || (cap !== null && cap > suite.limits.maxCapUsd)) out.capUsd = `Leave empty or 0 for no budget, or an amount up to $${suite.limits.maxCapUsd.toLocaleString('en-US')}.`;
   return out;
+}
+
+/**
+ * The budget field (#844) as the start request sends it: `null` (no budget) when it is empty or 0, the amount when it is a positive
+ * number, and `undefined` when it is not a number or is negative.
+ */
+export function budgetOf(text: string): number | null | undefined {
+  const t = text.trim();
+  if (!t) return null;
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(t)) return undefined;
+  const n = Number(t);
+  return n === 0 ? null : n;
 }
 
 /** The best policy's success, for the list: the highest success rate among the scorecard-free progress is not known, so the list shows passes over judged. */
