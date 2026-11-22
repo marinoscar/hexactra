@@ -4,20 +4,22 @@ import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { getKgRun, listKgSites, listSiteFacts, sitesTabPath, type KgRun, type KgSiteFact } from './api';
-import { HowChip, kindLabel, MODE_LABEL } from './labels';
+import { HowChip, kindLabel, RUN_MODE_LABEL } from './labels';
 import { factKindLabel } from './siteFacts';
 
 /**
- * "Used site facts" (E46.33): the facts the run used, by the ids the run view lists (`kgFactIds`, #854), each with a link to its site in
- * the Sites tab. Nothing when the run view has no such field or it is empty. A fact deleted since is counted, not shown.
+ * "Used site facts" (E46.33): the facts the run used, by the ids the run view lists (`kgFactIds`, E46.32), each with a link to its site
+ * in the Sites tab. The run view also carries those facts (`siteFacts`): they are used as they are, and only a run view without them makes
+ * the page look them up. Nothing when the run view has no ids. A fact deleted since is counted, not shown.
  */
-export function UsedSiteFacts({ ids }: { ids: readonly string[] | null | undefined }) {
+export function UsedSiteFacts({ ids, known }: { ids: readonly string[] | null | undefined; known?: readonly { id: string; site: string; kind: string; text: string }[] | null }) {
   const { api } = usePlatformHost();
-  const [facts, setFacts] = useState<KgSiteFact[] | null>(null);
+  const [fetched, setFacts] = useState<KgSiteFact[] | null>(null);
+  const facts: readonly { id: string; site: string; kind: string; text: string }[] | null = known ?? fetched;
   const key = (ids ?? []).join(',');
   useEffect(() => {
     const wanted = new Set(key ? key.split(',') : []);
-    if (wanted.size === 0) return;
+    if (wanted.size === 0 || known) return;
     let live = true;
     (async () => {
       const sites = await listKgSites(api);
@@ -31,7 +33,7 @@ export function UsedSiteFacts({ ids }: { ids: readonly string[] | null | undefin
     return () => {
       live = false;
     };
-  }, [api, key]);
+  }, [api, key, known]);
   if (!ids || ids.length === 0) return null;
   const gone = facts ? ids.length - facts.length : 0;
   return (
@@ -74,6 +76,7 @@ export function UsedSiteFacts({ ids }: { ids: readonly string[] | null | undefin
 export function runSummary(run: KgRun): string {
   if (run.aiOnly) return 'This run used AI only: the learned procedure was not used.';
   if (run.mode === 'learn') return 'The agent did this run; its steps were saved for the procedure.';
+  if (run.mode === 'everyday' && !run.ledger) return 'The agent ran a saved procedure in this run.';
   const counts = run.ledger ?? {
     replayed: run.steps.filter((s) => s.how === 'replayed').length,
     recovered: run.steps.filter((s) => s.how === 'recovered').length,
@@ -126,10 +129,18 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
       <Typography variant="body2" sx={{ mb: 0.5 }} data-testid="run-kgraph-summary">
         {runSummary(run)}
       </Typography>
+      {run.mode === 'everyday' && run.procedureId && (
+        <Typography variant="body2" sx={{ mb: 0.5, overflowWrap: 'anywhere' }} data-testid="run-kgraph-everyday">
+          {'Used saved procedure: '}
+          <Link component={RouterLink} to={`/kgraph/procedures/${encodeURIComponent(run.procedureId)}`}>
+            {run.procedureName ?? 'the procedure'}
+          </Link>
+        </Typography>
+      )}
       <Typography variant="caption" color="text.secondary" component="p">
-        {MODE_LABEL[run.mode]}
+        {RUN_MODE_LABEL[run.mode]}
         {run.versionNumber !== null && ` · version ${run.versionNumber}`}
-        {run.procedureId && (
+        {run.procedureId && run.mode !== 'everyday' && (
           <>
             {' · '}
             <Link component={RouterLink} to={`/kgraph/procedures/${encodeURIComponent(run.procedureId)}`}>
@@ -138,7 +149,7 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
           </>
         )}
       </Typography>
-      {run.steps.length > 0 && (
+      {run.steps.length > 0 && run.mode !== 'everyday' && (
         <List dense disablePadding aria-label="Procedure steps in this run">
           {run.steps.map((s, i) => (
             <ListItem key={s.id} divider disableGutters sx={{ alignItems: 'flex-start' }}>
@@ -162,7 +173,7 @@ export function RunKgraphPanel({ runId, refreshKey }: { runId: string; refreshKe
           ))}
         </List>
       )}
-      <UsedSiteFacts ids={run.kgFactIds} />
+      <UsedSiteFacts ids={run.kgFactIds} known={run.siteFacts} />
     </Paper>
   );
 }

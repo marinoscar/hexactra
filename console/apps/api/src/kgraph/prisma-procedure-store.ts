@@ -132,6 +132,30 @@ export class PrismaProcedureStore implements ProcedureStorePort {
     return toEvidence(versionEvidence);
   }
 
+  async listActiveProceduresForSites(owner: string, sites: readonly string[]): Promise<{ procedure: Procedure; version: ProcedureVersion }[]> {
+    const wanted = new Set(sites);
+    if (wanted.size === 0) return [];
+    const db = this.db(owner);
+    // The owner's procedures with an active version; the sites are in the version's graph column, so they are compared here, exactly.
+    const procedures = await db.kgProcedure.findMany({ where: { userId: owner, activeVersionId: { not: null } }, orderBy: { id: 'asc' } });
+    if (procedures.length === 0) return [];
+    const rows = await db.kgProcedureVersion.findMany({
+      where: { userId: owner, state: 'active', id: { in: procedures.map((p) => p.activeVersionId!) } },
+      include: { evidence: true },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const out: { procedure: Procedure; version: ProcedureVersion }[] = [];
+    for (const p of procedures) {
+      const r = byId.get(p.activeVersionId!);
+      if (!r || r.procedureId !== p.id) continue;
+      const sitesOf = ((r.graph as { sites?: { domain?: unknown }[] } | null)?.sites ?? []).map((s) => s?.domain);
+      if (!sitesOf.some((d) => typeof d === 'string' && wanted.has(d))) continue;
+      out.push({ procedure: toProcedure(p), version: toVersion(r) });
+    }
+    // By id in code-unit order, as the port says (the database's collation may order differently).
+    return out.sort((a, b) => (a.procedure.id < b.procedure.id ? -1 : a.procedure.id > b.procedure.id ? 1 : 0));
+  }
+
   async deleteAll(owner: string): Promise<number> {
     return (await purgeKgraph(this.prisma, owner)).procedures;
   }

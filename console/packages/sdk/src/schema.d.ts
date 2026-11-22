@@ -11145,6 +11145,8 @@ export interface components {
             kgraph?: {
                 /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
                 enabled: boolean;
+                /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
+                everyday?: boolean;
             };
             agentPricing?: {
                 /** @constant */
@@ -11265,6 +11267,8 @@ export interface components {
             kgraph?: {
                 /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
                 enabled: boolean;
+                /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
+                everyday?: boolean;
             };
             agentPricing?: {
                 /** @constant */
@@ -11381,6 +11385,8 @@ export interface components {
             kgraph?: {
                 /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
                 enabled?: boolean;
+                /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
+                everyday?: boolean;
             } | null;
             agentPricing?: ({
                 /** @constant */
@@ -12738,6 +12744,8 @@ export interface components {
                 kgraph?: {
                     /** @description Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned. */
                     enabled: boolean;
+                    /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
+                    everyday?: boolean;
                 };
                 agentPricing?: {
                     /** @constant */
@@ -17147,6 +17155,8 @@ export interface components {
             user: boolean;
             /** @description Both are on. */
             available: boolean;
+            /** @description You turned on "Use what was learned in chats and one-off runs" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected. */
+            everyday: boolean;
         };
         KgraphPurgeResponseDto: {
             deleted: {
@@ -17292,6 +17302,8 @@ export interface components {
                     procedureRuns: number;
                     /** @description `replayed_clean` runs over procedure runs; null with none. */
                     cleanReplayRate: number | null;
+                    /** @description Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`. */
+                    everydayRuns: number;
                 };
             }[];
         };
@@ -17319,6 +17331,8 @@ export interface components {
                 procedureRuns: number;
                 /** @description `replayed_clean` runs over procedure runs; null with none. */
                 cleanReplayRate: number | null;
+                /** @description Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`. */
+                everydayRuns: number;
             };
             /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
             enabled: boolean;
@@ -17581,11 +17595,13 @@ export interface components {
              * @description The effective mode the run had; `off` when the Knowledge Graph took no part.
              * @enum {string}
              */
-            mode: "off" | "learn" | "reuse";
+            mode: "off" | "learn" | "reuse" | "everyday";
             aiOnly: boolean;
             /** @description `replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running. */
             outcome: string | null;
             procedureId: string | null;
+            /** @description The procedure's name, masked; null when the run used none. */
+            procedureName: string | null;
             versionId: string | null;
             versionNumber: number | null;
             /** @description The version's steps and how each ran in this run. */
@@ -17604,6 +17620,15 @@ export interface components {
                 judge: number;
                 agent: number;
             } | null;
+            /** @description The site facts the run used: read through `site_facts`, or given in its "About these sites" block and named by its steps. */
+            kgFactIds: string[];
+            /** @description Those of `kgFactIds` the owner still has, as text. A fact is data the owner approved; it is never an instruction or a permission. */
+            siteFacts: {
+                id: string;
+                site: string;
+                kind: string;
+                text: string;
+            }[];
         };
         AdminSettingsResponseDto: {
             /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -17758,6 +17783,8 @@ export interface components {
                     activeMs: number;
                 } | null;
             }[];
+            /** @description Chats and one-off runs in which a saved procedure ran (the everyday switch, `kgraph.everyday`). They belong to no task and never enter a task's baseline. */
+            everydayProcedureRuns: number;
         };
         ApprovalRulesListResponseDto: {
             /** @description Whether "Pause all" is on: while it is, no rule matches. */

@@ -37,6 +37,8 @@ export interface MapProcedureInfo {
   taskId: string;
   taskName: string;
   state: KgVersionState | null;
+  /** Chats and one-off runs in which the procedure ran (E46.29), from the ledger. */
+  everydayRuns?: number;
 }
 
 export interface MapOptions {

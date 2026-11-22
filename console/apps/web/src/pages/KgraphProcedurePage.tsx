@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 
 import { forgetProcedure, getKgStatus, getProcedure, putTaskKgraph, restoreVersion, type KgProcedureDetail, type KgStatus, type KgStep, type KgStepArg, type KgVersionItem } from '../kgraph/api';
-import { AiChip, HealthChip, KgraphOffNotice, StateChip, kindLabel } from '../kgraph/labels';
+import { AiChip, HealthChip, KgraphOffNotice, StateChip, everydayUsesText, kindLabel } from '../kgraph/labels';
 import { VersionHistory } from '../kgraph/VersionHistory';
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, toast, useApiAction, useConfirm } from '../ui';
 
@@ -124,6 +124,11 @@ export function KgraphProcedurePage() {
             <StateChip state={procedure.state} />
             <HealthChip health={procedure.health} />
           </Stack>
+        )}
+        {procedure && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }} data-testid="kg-everyday-uses">
+            {everydayUsesText(procedure.ledger.everydayRuns)}
+          </Typography>
         )}
       </PageHeader>
       {status && <KgraphOffNotice status={status} />}

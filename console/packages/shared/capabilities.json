@@ -1634,7 +1634,7 @@
     },
     {
       "id": "kgraph.status",
-      "description": "See whether the Knowledge Graph is available to you (the deployment and your own switch) and a task's Knowledge Graph mode",
+      "description": "See whether the Knowledge Graph is available to you (the deployment and your own switch), whether your everyday switch is on, and a task's Knowledge Graph mode",
       "rest": [
         "GET /api/kgraph/status",
         "GET /api/tasks/{id}/kgraph"
@@ -1676,6 +1676,31 @@
         "/settings/kgraph",
         "/tasks/:id",
         "/kgraph/procedures/:id"
+      ]
+    },
+    {
+      "id": "kgraph.everyday",
+      "description": "Use what was learned in chats and one-off runs: turn your own everyday switch on or off (your user setting kgraph.everyday; it works while the Knowledge Graph is on for you), and see where saved procedures were used (the run page's \"Used saved procedure\" line and each procedure's count of chats and one-off runs)",
+      "rest": [
+        "GET /api/kgraph/status",
+        "PATCH /api/user-settings",
+        "GET /api/kgraph/runs/{runId}",
+        "GET /api/kgraph/procedures/{id}"
+      ],
+      "cli": [
+        "kgraph everyday"
+      ],
+      "mcp": {
+        "none": "Deliberate: the switch is the owner's, set in the console or the CLI; no hosted AI app turns it on (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": [
+        "/settings/kgraph",
+        "/runs/:id",
+        "/kgraph/procedures/:id",
+        "/kgraph"
       ]
     },
     {

@@ -29,8 +29,15 @@ model KgRun {
   mode               String   @default("off") @db.VarChar(8)
   aiOnly             Boolean  @default(false) @map("ai_only")
   procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
-  /// null while running; then `replayed` | `fell_back` | `learned` | `ai_only` | `failed` (a short code, never page text).
+  /// null while running; then `replayed` | `fell_back` | `learned` | `ai_only` | `failed` (a short code, never page text). An `everyday`
+  /// run (E46.28): `procedure_done` while every procedure it ran finished, `procedure_stopped` once one stopped.
   outcome            String?  @db.VarChar(32)
+  /// `everyday` runs (E46.28): the procedure steps that ran without the model, across every `run_procedure` call of the run.
+  stepsReplayed      Int      @default(0) @map("steps_replayed")
+  /// The site facts the run was given in its "About these sites" block (E46.32): ids only.
+  offeredFactIds     String[] @default([]) @map("offered_fact_ids") @db.VarChar(200)
+  /// The site facts the run used (E46.32): read through `site_facts`, or given in the block and named by its steps. Ids only.
+  factIds            String[] @default([]) @map("fact_ids") @db.VarChar(200)
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -189,7 +196,9 @@ model KgTrace {
 model KgLedger {
   runId              String   @id @map("run_id") @db.Uuid
   userId             String   @map("user_id") @db.Uuid
-  taskId             String   @map("task_id") @db.Uuid
+  /// null for an `everyday` row (E46.28): a chat or one-off run has no task, and its row never enters a task's baseline.
+  taskId             String?  @map("task_id") @db.Uuid
+  /// learn | reuse | everyday
   mode               String   @db.VarChar(8)
   procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
   /// The run's terminal status (`succeeded` | `failed` | `cancelled`): the baseline reads succeeded runs only.
@@ -214,7 +223,7 @@ model KgLedger {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([userId, taskId, finishedAt])
   @@map("kg_ledger")

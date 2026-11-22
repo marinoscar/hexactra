@@ -4,6 +4,8 @@
 import type { PlatformApiClient } from '@marinoscar/platform-web/core';
 
 export type KgMode = 'off' | 'learn' | 'reuse';
+/** A run's effective mode: a task's mode, or `everyday` for a chat or one-off run that ran a saved procedure (E46.28). */
+export type KgRunMode = KgMode | 'everyday';
 export type KgHealth = 'healthy' | 'degraded' | 'failing' | 'unknown';
 export type KgVersionState = 'candidate' | 'verified' | 'active' | 'suspended' | 'retired' | 'rejected';
 export type KgChangeClass = 'initial' | 'structural' | 'sensitive';
@@ -14,6 +16,8 @@ export interface KgStatus {
   deployment: boolean;
   user: boolean;
   available: boolean;
+  /** The owner's "Use in chats and one-off runs" setting (`kgraph.everyday`); effective only while `available`. */
+  everyday: boolean;
 }
 
 /** `GET|PUT /api/tasks/{id}/kgraph`. */
@@ -40,7 +44,8 @@ export interface KgProcedureItem {
   health: KgHealth;
   steps: number;
   updatedAt: string;
-  ledger: { runs: number; procedureRuns: number; cleanReplayRate: number | null };
+  /** `everydayRuns`: chats and one-off runs in which this procedure ran (its `everyday` ledger rows, outside `runs`). */
+  ledger: { runs: number; procedureRuns: number; cleanReplayRate: number | null; everydayRuns: number };
 }
 
 export interface KgStepArg {
@@ -119,16 +124,19 @@ export interface KgRun {
   enabled: boolean;
   runId: string;
   taskId: string | null;
-  mode: KgMode;
+  mode: KgRunMode;
   aiOnly: boolean;
   outcome: string | null;
   procedureId: string | null;
+  /** The procedure's name (masked by the API); null when the run used none. */
+  procedureName: string | null;
   versionId: string | null;
   versionNumber: number | null;
   steps: { id: string; kind: string; label: string; tool: string | null; how: KgStepHow }[];
   ledger: { replayed: number; recovered: number; judge: number; agent: number } | null;
-  /** The site facts the run used (#854). Absent from a console without it: the run page then shows no list. */
-  kgFactIds?: readonly string[] | null;
+  /** The site facts the run used (E46.32); absent from an older API. */
+  kgFactIds?: string[];
+  siteFacts?: { id: string; site: string; kind: string; text: string }[];
 }
 
 export type KgReviewStatus = 'pending' | 'approved' | 'declined' | 'expired';
@@ -224,6 +232,8 @@ export const getKgAdminSettings = (api: PlatformApiClient) => api.get<KgAdminSet
 export const putKgAdminSettings = (api: PlatformApiClient, body: Partial<KgAdminSettings>) => api.put<KgAdminSettings>('/admin/kgraph/settings', body);
 /** The owner's own switch: `kgraph.enabled` of the user settings (the CLI's `kgraph on` and `off` do the same). */
 export const setKgUserSwitch = (api: PlatformApiClient, enabled: boolean) => api.patch<unknown>('/user-settings', { kgraph: { enabled } });
+/** "Use in chats and one-off runs": `kgraph.everyday` of the user settings (the CLI's `kgraph everyday on|off` does the same). */
+export const setKgEverydaySwitch = (api: PlatformApiClient, everyday: boolean) => api.patch<unknown>('/user-settings', { kgraph: { everyday } });
 
 // ---------------------------------------------------------------- site facts (phase 5, E46.31 and E46.33)
 

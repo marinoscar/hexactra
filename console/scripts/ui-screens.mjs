@@ -269,6 +269,8 @@ export const ROUTES = [
   ['kgraph-map-site', '/kgraph?tab=map', { action: mapPress('Site: portal.example.test', 'What uses this site') }],
   ['kgraph-history', '/kgraph?tab=history', { action: pressButton('What changed') }],
   ['kgraph-procedure', '/kgraph/procedures/kgp-ui-1'],
+  // E46.29: a chat run that used a saved procedure (the everyday switch): "Used saved procedure: <name>" in the run's Knowledge Graph panel.
+  ['run-everyday', '/runs/{chatRun}'],
   ['settings-kgraph', '/settings/kgraph'],
   ['settings-kgraph-delete', '/settings/kgraph', { viewport: true, action: pressButton('Delete everything learned') }],
   ['admin-kgraph', '/admin/settings/kgraph'],

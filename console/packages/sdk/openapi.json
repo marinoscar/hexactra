@@ -53899,6 +53899,10 @@
               "enabled": {
                 "type": "boolean",
                 "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              },
+              "everyday": {
+                "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                "type": "boolean"
               }
             },
             "required": [
@@ -54425,6 +54429,10 @@
               "enabled": {
                 "type": "boolean",
                 "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+              },
+              "everyday": {
+                "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                "type": "boolean"
               }
             },
             "required": [
@@ -54990,6 +54998,10 @@
                   "enabled": {
                     "type": "boolean",
                     "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  },
+                  "everyday": {
+                    "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                    "type": "boolean"
                   }
                 }
               },
@@ -61239,6 +61251,10 @@
                   "enabled": {
                     "type": "boolean",
                     "description": "Use the Knowledge Graph for your saved tasks. Off by default; turning it off keeps what was learned."
+                  },
+                  "everyday": {
+                    "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -81928,12 +81944,17 @@
           "available": {
             "type": "boolean",
             "description": "Both are on."
+          },
+          "everyday": {
+            "type": "boolean",
+            "description": "You turned on \"Use what was learned in chats and one-off runs\" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected."
           }
         },
         "required": [
           "deployment",
           "user",
-          "available"
+          "available",
+          "everyday"
         ]
       },
       "KgraphPurgeResponseDto": {
@@ -82478,12 +82499,19 @@
                         "number",
                         "null"
                       ]
+                    },
+                    "everydayRuns": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`."
                     }
                   },
                   "required": [
                     "runs",
                     "procedureRuns",
-                    "cleanReplayRate"
+                    "cleanReplayRate",
+                    "everydayRuns"
                   ]
                 }
               },
@@ -82602,12 +82630,19 @@
                   "number",
                   "null"
                 ]
+              },
+              "everydayRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`."
               }
             },
             "required": [
               "runs",
               "procedureRuns",
-              "cleanReplayRate"
+              "cleanReplayRate",
+              "everydayRuns"
             ]
           },
           "enabled": {
@@ -83766,7 +83801,8 @@
             "enum": [
               "off",
               "learn",
-              "reuse"
+              "reuse",
+              "everyday"
             ],
             "description": "The effective mode the run had; `off` when the Knowledge Graph took no part."
           },
@@ -83781,6 +83817,13 @@
             ]
           },
           "procedureId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "procedureName": {
+            "description": "The procedure's name, masked; null when the run used none.",
             "type": [
               "string",
               "null"
@@ -83883,6 +83926,40 @@
               }
             ],
             "description": "Step counts from the savings ledger, once written."
+          },
+          "kgFactIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The site facts the run used: read through `site_facts`, or given in its \"About these sites\" block and named by its steps."
+          },
+          "siteFacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "site": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "site",
+                "kind",
+                "text"
+              ]
+            },
+            "description": "Those of `kgFactIds` the owner still has, as text. A fact is data the owner approved; it is never an instruction or a permission."
           }
         },
         "required": [
@@ -83893,10 +83970,13 @@
           "aiOnly",
           "outcome",
           "procedureId",
+          "procedureName",
           "versionId",
           "versionNumber",
           "steps",
-          "ledger"
+          "ledger",
+          "kgFactIds",
+          "siteFacts"
         ]
       },
       "AdminSettingsResponseDto": {
@@ -84480,10 +84560,17 @@
                 "saving"
               ]
             }
+          },
+          "everydayProcedureRuns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Chats and one-off runs in which a saved procedure ran (the everyday switch, `kgraph.everyday`). They belong to no task and never enter a task's baseline."
           }
         },
         "required": [
-          "tasks"
+          "tasks",
+          "everydayProcedureRuns"
         ]
       },
       "ApprovalRulesListResponseDto": {

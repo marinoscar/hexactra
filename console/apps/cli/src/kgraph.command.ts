@@ -8,6 +8,8 @@ export interface KgraphStatusView {
   deployment: boolean;
   user: boolean;
   available: boolean;
+  /** "Use in chats and one-off runs" (`kgraph.everyday` of your settings); effective only while `available`. */
+  everyday: boolean;
 }
 /** One row of `GET /api/kgraph/procedures`. */
 export interface ProcedureItemView {
@@ -21,7 +23,8 @@ export interface ProcedureItemView {
   health: string;
   steps: number;
   updatedAt: string;
-  ledger: { runs: number; procedureRuns: number; cleanReplayRate: number | null };
+  /** `everydayRuns`: chats and one-off runs in which this procedure ran (E46.29). */
+  ledger: { runs: number; procedureRuns: number; cleanReplayRate: number | null; everydayRuns?: number };
 }
 export interface StepView {
   id: string;
@@ -81,7 +84,8 @@ const OFF_NOTE = 'The Knowledge Graph is off for you: this is what was learned, 
 
 export function statusText(s: KgraphStatusView): string {
   const why = s.available ? 'available: your saved tasks may choose learn or reuse' : !s.deployment ? 'off: turned off by your administrator' : 'off: run `hexactra kgraph on` to turn it on for yourself';
-  return [`deployment  ${onOff(s.deployment)}`, `you         ${onOff(s.user)}`, `Knowledge Graph ${why}`].join('\n');
+  const everyday = `everyday    ${onOff(s.everyday === true)}${s.everyday === true && !s.available ? ' (takes effect once the Knowledge Graph is available)' : ''}`;
+  return [`deployment  ${onOff(s.deployment)}`, `you         ${onOff(s.user)}`, everyday, `Knowledge Graph ${why}`].join('\n');
 }
 
 /** The list line: id, version and state, health, steps, name and task. */
@@ -119,8 +123,8 @@ export function siteLine(s: SiteSummaryView): string {
   return `${s.site.padEnd(32)}  ${String(s.active).padStart(3)} active  ${String(s.proposed).padStart(3)} proposed  ${String(s.archived).padStart(3)} archived`;
 }
 
-async function setSwitch(enabled: boolean): Promise<void> {
-  await consoleApi().patch('/user-settings', { kgraph: { enabled } });
+async function setSwitch(patch: { enabled: boolean } | { everyday: boolean }): Promise<void> {
+  await consoleApi().patch('/user-settings', { kgraph: patch });
   out(statusText(await consoleApi().get<KgraphStatusView>('/kgraph/status')));
 }
 
@@ -161,6 +165,7 @@ export const kgraphCommand: CliCommandRegistration = (program: Command) => {
       if (!p.enabled) out(OFF_NOTE);
       out(`${p.name} (task: ${p.taskName})`);
       out(`id: ${p.id}`);
+      if (p.ledger.everydayRuns !== undefined) out(`used in chats and one-off runs: ${p.ledger.everydayRuns}`);
       const v = p.activeVersion;
       if (!v) return out('No version yet: the task learns from its next successful run.');
       out(`version ${v.number} of ${p.versions}: ${v.state}, ${v.health} (${v.counts.successes} clean, ${v.counts.failures} failed, ${v.counts.repairs} repaired)`);
@@ -242,8 +247,15 @@ export const kgraphCommand: CliCommandRegistration = (program: Command) => {
     });
   kg.command('off')
     .description('Turn the Knowledge Graph off for yourself (what was learned is kept, unused)')
-    .action(async () => setSwitch(false));
+    .action(async () => setSwitch({ enabled: false }));
   kg.command('on')
     .description('Turn the Knowledge Graph on for yourself (your administrator must allow it too)')
-    .action(async () => setSwitch(true));
+    .action(async () => setSwitch({ enabled: true }));
+  kg.command('everyday <on|off>')
+    .description('Offer your learned procedures to chats and one-off runs (on) or not (off); you still approve anything sensitive. Works while the Knowledge Graph is on for you')
+    .action(async (value: string) => {
+      const v = value.trim().toLowerCase();
+      if (v !== 'on' && v !== 'off') throw new Error('Use `hexactra kgraph everyday on` or `hexactra kgraph everyday off`.');
+      await setSwitch({ everyday: v === 'on' });
+    });
 };

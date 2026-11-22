@@ -341,7 +341,7 @@ describe("the Map's side panel on a site", () => {
 });
 
 describe("the run page's Used site facts", () => {
-  const ROW: KgRun = { enabled: true, runId: RUN, taskId: null, mode: 'reuse', aiOnly: false, outcome: null, procedureId: null, versionId: null, versionNumber: null, steps: [], ledger: null };
+  const ROW: KgRun = { enabled: true, runId: RUN, taskId: null, mode: 'reuse', aiOnly: false, outcome: null, procedureId: null, procedureName: null, versionId: null, versionNumber: null, steps: [], ledger: null };
   const panel = (row: KgRun) =>
     renderAt('/', <RunKgraphPanel runId={RUN} />, {
       [`GET /kgraph/runs/${RUN}`]: row,

@@ -856,8 +856,8 @@ RESPONSES[`POST /task-builder`] = { id: IDS.builder };
 const KG_PROC = 'kgp-ui-1';
 const kgCounts = (s, f, r) => ({ successes: s, failures: f, repairs: r });
 const kgProcedures = [
-  { id: KG_PROC, taskId: IDS.task, taskName: 'Export the open orders from the supplier portal and count the ones due this week', name: 'orders', versionId: 'kgv-ui-3', versionNumber: 3, state: 'active', health: 'healthy', steps: 6, updatedAt: iso(-3_600_000), ledger: { runs: 14, procedureRuns: 11, cleanReplayRate: 0.82 } },
-  { id: 'kgp-ui-2', taskId: SECOND_TASK, taskName: 'Weekly report', name: 'report', versionId: 'kgv-ui-9', versionNumber: 1, state: 'candidate', health: 'unknown', steps: 4, updatedAt: iso(-86_400_000), ledger: { runs: 0, procedureRuns: 0, cleanReplayRate: null } },
+  { id: KG_PROC, taskId: IDS.task, taskName: 'Export the open orders from the supplier portal and count the ones due this week', name: 'orders', versionId: 'kgv-ui-3', versionNumber: 3, state: 'active', health: 'healthy', steps: 6, updatedAt: iso(-3_600_000), ledger: { runs: 14, procedureRuns: 11, cleanReplayRate: 0.82, everydayRuns: 5 } },
+  { id: 'kgp-ui-2', taskId: SECOND_TASK, taskName: 'Weekly report', name: 'report', versionId: 'kgv-ui-9', versionNumber: 1, state: 'candidate', health: 'unknown', steps: 4, updatedAt: iso(-86_400_000), ledger: { runs: 0, procedureRuns: 0, cleanReplayRate: null, everydayRuns: 0 } },
 ];
 const kgSteps = [
   { id: 's1', kind: 'call', label: 'open the orders page', tool: 'browser_navigate', target: 'portal.example.test', usesAi: false, commitClass: false, health: 'healthy', counts: kgCounts(11, 0, 0), args: [{ name: 'url', source: 'literal', detail: 'https://portal.example.test/orders/2026/11/overview?tab=open&sort=due' }] },
@@ -870,7 +870,7 @@ const kgSteps = [
 const kgVersion = (number, state, changeClass, parentId, ageMs) => ({ id: `kgv-ui-${number}`, number, state, changeClass, parentId, sourceRunId: IDS.finishedRun, createdAt: iso(-ageMs), health: state === 'active' ? 'healthy' : 'unknown', counts: kgCounts(number * 3, 1, number - 1), steps: 6 });
 const kgVersions = [kgVersion(3, 'active', 'structural', 'kgv-ui-2', 3_600_000), kgVersion(2, 'retired', 'structural', 'kgv-ui-1', 5 * 86_400_000), kgVersion(1, 'retired', 'initial', null, 12 * 86_400_000)];
 const kgReview = { id: '7e000000-0000-4000-8000-000000000001', versionId: 'kgv-ui-4', procedureId: KG_PROC, status: 'pending', changes: [{ reason: 'recipient', text: 'Step 5 would send the spreadsheet to a new recipient: p***@example.test' }, { reason: 'new_site', text: 'Step 2 would open a site it did not use before: billing.example.test' }], createdAt: iso(-7_200_000), expiresAt: iso(28 * 86_400_000) };
-RESPONSES['GET /kgraph/status'] = { deployment: true, user: true, available: true };
+RESPONSES['GET /kgraph/status'] = { deployment: true, user: true, available: true, everyday: true };
 RESPONSES['GET /kgraph/procedures'] = { enabled: true, procedures: kgProcedures };
 RESPONSES[`GET /kgraph/procedures/${KG_PROC}`] = { ...kgProcedures[0], enabled: true, versions: 3, activeVersion: { ...kgVersion(3, 'active', 'structural', 'kgv-ui-2', 3_600_000), steps: kgSteps, parameters: [{ name: 'week', type: 'string', sensitive: false, required: true }], outputs: [{ name: 'due', sensitive: false }], sites: ['portal.example.test'], accounts: [], savedLogins: [{ kind: 'login', label: 'Supplier portal' }] } };
 RESPONSES[`GET /kgraph/procedures/${KG_PROC}/versions`] = { enabled: true, procedureId: KG_PROC, versions: kgVersions };
@@ -879,10 +879,12 @@ RESPONSES[`GET /kgraph/procedures/${KG_PROC}/versions/3/diff`] = { enabled: true
 RESPONSES['GET /kgraph/summary'] = { tasks: [{ taskId: IDS.task, taskName: kgProcedures[0].taskName, runs: 14, procedureRuns: 11, cleanReplayRate: 0.82, baseline: { runs: 3, modelCalls: 22, costUsd: 0.91, costKnown: true, activeMs: 240_000 }, note: null, procedureFigures: { runs: 11, modelCalls: 3, costUsd: 0.12, costKnown: true, activeMs: 70_000 }, saving: { modelCalls: 19, costUsd: 0.79, costKnown: true, activeMs: 170_000 } }] };
 RESPONSES['GET /kgraph/reviews'] = (url) => (url.searchParams.get('status') && url.searchParams.get('status') !== 'pending' ? [] : [kgReview]);
 RESPONSES[`GET /tasks/${IDS.task}/kgraph`] = { taskId: IDS.task, mode: 'reuse', available: true };
-RESPONSES[`GET /kgraph/runs/${IDS.finishedRun}`] = { enabled: true, runId: IDS.finishedRun, taskId: IDS.task, mode: 'reuse', aiOnly: false, outcome: 'replayed', procedureId: KG_PROC, versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st, i) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: ['replayed', 'replayed', 'replayed', 'recovered', 'judged', 'not_reached'][i] })), ledger: null, kgFactIds: ['kgsf-ui-1', 'kgsf-ui-3'] };
+RESPONSES[`GET /kgraph/runs/${IDS.finishedRun}`] = { enabled: true, runId: IDS.finishedRun, taskId: IDS.task, mode: 'reuse', aiOnly: false, outcome: 'replayed', procedureId: KG_PROC, procedureName: kgProcedures[0].name, versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st, i) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: ['replayed', 'replayed', 'replayed', 'recovered', 'judged', 'not_reached'][i] })), ledger: null, kgFactIds: ['kgsf-ui-1', 'kgsf-ui-3'] };
 // The Map (E46.21, #795): the two procedures above with their steps, two sites, a work account with one used and one unused tool, a saved
 // login, and an unused account and saved login (drawn faint).
 const kgNode = (id, type, label, over = {}) => ({ id, type, label, health: 'unknown', counts: { successes: 0, failures: 0, repairs: 0, uses: 0 }, unused: false, cluster: null, procedure: null, ...over });
+// E46.29 (#851): the chat run used a saved procedure (the everyday switch): the run page's panel names it and links to it.
+RESPONSES[`GET /kgraph/runs/${IDS.chatRun}`] = { enabled: true, runId: IDS.chatRun, taskId: null, mode: 'everyday', aiOnly: false, outcome: 'procedure_done', procedureId: KG_PROC, procedureName: 'Export the open orders from the supplier portal', versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: 'not_reached' })), ledger: { replayed: 5, recovered: 0, judge: 0, agent: 4 } };
 const kgP1 = `procedure:${KG_PROC}`;
 const kgP2 = 'procedure:kgp-ui-2';
 const kgMapSteps = kgSteps.map((st) => kgNode(`step:${KG_PROC}:${st.id}`, 'Step', st.label, { health: st.health, counts: { ...st.counts, uses: 1 }, cluster: 'site:portal.example.test', procedure: kgP1 }));

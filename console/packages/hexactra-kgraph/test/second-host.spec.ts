@@ -1,6 +1,6 @@
 // A second, minimal host (E46.8): no harness, no browser, no database — a key-value "app" with three tools. It binds the ports by hand and
 // runs a procedure. Proof the core embeds anywhere.
-import { canMoveSiteFact, executeProcedure, type KgraphPorts, noopTelemetry, procedureVersionSchema, type SiteFact, siteFactKey, siteFactSchema, type SiteFactStorePort, validateVersion, type Tool } from '../src';
+import { canMoveSiteFact, executeProcedure, type KgraphPorts, matchProcedures, noopTelemetry, procedureVersionSchema, type SiteFact, siteFactKey, siteFactSchema, type SiteFactStorePort, validateVersion, type Tool } from '../src';
 import { runSiteFactStoreConformance } from '../src/testing';
 
 const TOOLS: Tool[] = [
@@ -12,7 +12,7 @@ const TOOLS: Tool[] = [
 function kvHost() {
   const data = new Map<string, string>([['greeting', 'hello'], ['name', 'Ada']]);
   const ports: KgraphPorts = {
-    store: { getProcedure: async () => null, findProcedureForTask: async () => null, listProcedures: async () => [], putProcedure: async () => undefined, getVersion: async () => null, listVersions: async () => [], putVersion: async () => undefined, setVersionState: async () => false, activate: async () => false, recordEvidence: async () => ({ successes: 0, failures: 0, repairs: 0, lastSuccessAt: null, lastFailureAt: null }), deleteAll: async () => 0 },
+    store: { getProcedure: async () => null, findProcedureForTask: async () => null, listProcedures: async () => [], putProcedure: async () => undefined, getVersion: async () => null, listVersions: async () => [], putVersion: async () => undefined, setVersionState: async () => false, activate: async () => false, recordEvidence: async () => ({ successes: 0, failures: 0, repairs: 0, lastSuccessAt: null, lastFailureAt: null }), listActiveProceduresForSites: async () => [], deleteAll: async () => 0 },
     tools: {
       invoke: async ({ tool, args }) => {
         const a = args as Record<string, string>;
@@ -103,3 +103,23 @@ function kvSiteFacts(): SiteFactStorePort {
 }
 
 runSiteFactStoreConformance({ name: 'second host (key-value)', open: async () => ({ store: kvSiteFacts(), owners: ['kv-owner-1', 'kv-owner-2'], close: async () => undefined }) });
+
+it('the same host matches its procedure to a goal by words, with no site, no store call and no model', () => {
+  const version = procedureVersionSchema.parse({
+    id: 'v1',
+    procedure: 'p1',
+    number: 1,
+    state: 'active',
+    changeClass: 'initial',
+    sourceRun: null,
+    parent: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    entry: 'g',
+    steps: [{ id: 'g', kind: 'call', label: 'read the name', tool: 'kv_get', args: { key: { kind: 'literal', value: 'name' } } }],
+    sites: [],
+    parameters: [{ id: 'target', name: 'Target key' }],
+  });
+  const procedure = { id: 'p1', owner: 'o', task: 't', name: 'Copy the stored name', activeVersion: 'v1', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+  expect(matchProcedures({ goal: 'Copy the name into the target key' }, [{ procedure, version }])).toEqual([{ procedureId: 'p1', score: expect.any(Number), reasons: ['words'] }]);
+  expect(matchProcedures({ goal: 'Delete the greeting' }, [{ procedure, version }])).toEqual([]);
+});

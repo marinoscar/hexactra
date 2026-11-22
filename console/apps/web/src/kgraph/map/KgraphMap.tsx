@@ -155,7 +155,7 @@ export default function KgraphMap({ procedures, reviews }: KgraphMapProps) {
     void load();
   }, [load]);
 
-  const info = useMemo(() => new Map<string, MapProcedureInfo>(procedures.map((p) => [p.id, { procedureId: p.id, taskId: p.taskId, taskName: p.taskName, state: p.state }])), [procedures]);
+  const info = useMemo(() => new Map<string, MapProcedureInfo>(procedures.map((p) => [p.id, { procedureId: p.id, taskId: p.taskId, taskName: p.taskName, state: p.state, everydayRuns: p.ledger.everydayRuns }])), [procedures]);
   const kindSet = useMemo(() => new Set(kinds), [kinds]);
   const result = useMemo(() => (graph ? buildMap(graph, info, { expanded, kinds: kindSet, search, focus, impactSite }) : null), [graph, info, expanded, kindSet, search, focus, impactSite]);
   const selectedNode = result?.nodes.find((n) => n.id === selected) ?? null;

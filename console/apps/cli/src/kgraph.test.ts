@@ -12,7 +12,7 @@ resetCliForTests();
 createCli(APP_CLI_OPTIONS);
 
 const TASK = '44444444-4444-4444-8444-444444444444';
-const ITEM: ProcedureItemView = { id: 'kgp-1', taskId: TASK, taskName: 'Pay the bill', name: 'Pay the bill', versionId: 'kgv-2', versionNumber: 2, state: 'active', health: 'healthy', steps: 3, updatedAt: '2026-06-01T00:00:00.000Z', ledger: { runs: 4, procedureRuns: 4, cleanReplayRate: 0.75 } };
+const ITEM: ProcedureItemView = { id: 'kgp-1', taskId: TASK, taskName: 'Pay the bill', name: 'Pay the bill', versionId: 'kgv-2', versionNumber: 2, state: 'active', health: 'healthy', steps: 3, updatedAt: '2026-06-01T00:00:00.000Z', ledger: { runs: 4, procedureRuns: 4, cleanReplayRate: 0.75, everydayRuns: 2 } };
 const DETAIL: ProcedureDetailView = {
   ...ITEM,
   enabled: true,
@@ -76,9 +76,15 @@ afterEach(() => setConsoleApiFactory(null));
 
 describe('kgraph helpers', () => {
   it('says why it is off', () => {
-    expect(statusText({ deployment: false, user: true, available: false })).toContain('turned off by your administrator');
-    expect(statusText({ deployment: true, user: false, available: false })).toContain('hexactra kgraph on');
-    expect(statusText({ deployment: true, user: true, available: true })).toContain('available');
+    expect(statusText({ deployment: false, user: true, available: false, everyday: false })).toContain('turned off by your administrator');
+    expect(statusText({ deployment: true, user: false, available: false, everyday: false })).toContain('hexactra kgraph on');
+    expect(statusText({ deployment: true, user: true, available: true, everyday: false })).toContain('available');
+  });
+
+  it('shows the everyday switch, and that it waits for the Knowledge Graph while that is off', () => {
+    expect(statusText({ deployment: true, user: true, available: true, everyday: true })).toContain('everyday    on\n');
+    expect(statusText({ deployment: true, user: true, available: true, everyday: false })).toContain('everyday    off\n');
+    expect(statusText({ deployment: true, user: false, available: false, everyday: true })).toContain('everyday    on (takes effect once the Knowledge Graph is available)');
   });
 
   it('prints a procedure and a step on one line each', () => {
@@ -91,9 +97,11 @@ describe('kgraph helpers', () => {
 
 describe('hexactra kgraph', () => {
   it('status, as text and JSON', async () => {
-    fakeApi({ 'GET /kgraph/status': { deployment: true, user: false, available: false } });
-    expect(await run('kgraph', 'status')).toContain('you         off');
-    expect(JSON.parse(await run('kgraph', 'status', '--json'))).toEqual({ deployment: true, user: false, available: false });
+    fakeApi({ 'GET /kgraph/status': { deployment: true, user: false, available: false, everyday: false } });
+    const text = await run('kgraph', 'status');
+    expect(text).toContain('you         off');
+    expect(text).toContain('everyday    off');
+    expect(JSON.parse(await run('kgraph', 'status', '--json'))).toEqual({ deployment: true, user: false, available: false, everyday: false });
   });
 
   it('lists with filters, and says when the feature is off', async () => {
@@ -112,6 +120,7 @@ describe('hexactra kgraph', () => {
     const text = await run('kgraph', 'show', 'pay the bill');
     expect(text).toContain('version 2 of 2: active, healthy (3 clean, 1 failed, 0 repaired)');
     expect(text).toContain('parameters: PIN (sensitive)');
+    expect(text).toContain('used in chats and one-off runs: 2');
     expect(text).toMatch(/1\. call +navigate +Open the shop -> shop.example.test/);
     expect(text).toMatch(/3\. judge .*Is it paid\? {2}\[uses AI\]/);
     expect(JSON.parse(await run('kgraph', 'show', 'kgp', '--json')).activeVersion.number).toBe(2);
@@ -134,10 +143,22 @@ describe('hexactra kgraph', () => {
   });
 
   it('off and on change your own switch through the user settings', async () => {
-    const calls = fakeApi({ 'PATCH /user-settings': {}, 'GET /kgraph/status': { deployment: true, user: true, available: true } });
+    const calls = fakeApi({ 'PATCH /user-settings': {}, 'GET /kgraph/status': { deployment: true, user: true, available: true, everyday: false } });
     expect(await run('kgraph', 'on')).toContain('available');
     await run('kgraph', 'off');
     expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.body)).toEqual([{ kgraph: { enabled: true } }, { kgraph: { enabled: false } }]);
+  });
+
+  it('everyday on and off write kgraph.everyday only, and print the status', async () => {
+    const calls = fakeApi({ 'PATCH /user-settings': {}, 'GET /kgraph/status': { deployment: true, user: true, available: true, everyday: true } });
+    expect(await run('kgraph', 'everyday', 'on')).toContain('everyday    on');
+    await run('kgraph', 'everyday', 'OFF');
+    expect(calls.filter((c) => c.method === 'PATCH').map((c) => ({ path: c.path, body: c.body }))).toEqual([
+      { path: '/user-settings', body: { kgraph: { everyday: true } } },
+      { path: '/user-settings', body: { kgraph: { everyday: false } } },
+    ]);
+    await expect(run('kgraph', 'everyday', 'maybe')).rejects.toThrow(/kgraph everyday on/);
+    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2);
   });
 
   const FACT: SiteFactView = { id: 'kgsf-1', site: 'example.com', kind: 'navigation', text: 'Invoices: Billing, then History', source: 'owner', status: 'active', evidence: { runId: null, steps: 0, screens: 0 }, lastUsedAt: '2026-11-20T10:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z' };

@@ -23,6 +23,7 @@ const ledgerSummary = z.object({
   runs: z.number().int().describe('Ledger rows of the task.'),
   procedureRuns: z.number().int().describe('Runs that executed a procedure version.'),
   cleanReplayRate: z.number().nullable().describe('`replayed_clean` runs over procedure runs; null with none.'),
+  everydayRuns: z.number().int().describe('Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`.'),
 });
 export const procedureItemSchema = z.object({
   id: z.string(),
@@ -131,14 +132,19 @@ export const kgRunSchema = z.object({
   enabled,
   runId: z.string().uuid(),
   taskId: z.string().uuid().nullable(),
-  mode: z.enum(['off', 'learn', 'reuse']).describe('The effective mode the run had; `off` when the Knowledge Graph took no part.'),
+  mode: z.enum(['off', 'learn', 'reuse', 'everyday']).describe('The effective mode the run had; `off` when the Knowledge Graph took no part.'),
   aiOnly: z.boolean(),
   outcome: z.string().nullable().describe('`replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running.'),
   procedureId: z.string().nullable(),
+  procedureName: z.string().nullable().describe("The procedure's name, masked; null when the run used none."),
   versionId: z.string().nullable(),
   versionNumber: z.number().int().nullable(),
   steps: z.array(z.object({ id: z.string(), kind: z.string(), label: z.string(), tool: z.string().nullable(), how })).describe("The version's steps and how each ran in this run."),
   ledger: z.object({ replayed: z.number().int(), recovered: z.number().int(), judge: z.number().int(), agent: z.number().int() }).nullable().describe('Step counts from the savings ledger, once written.'),
+  kgFactIds: z.array(z.string()).describe('The site facts the run used: read through `site_facts`, or given in its "About these sites" block and named by its steps.'),
+  siteFacts: z
+    .array(z.object({ id: z.string(), site: z.string(), kind: z.string(), text: z.string() }))
+    .describe('Those of `kgFactIds` the owner still has, as text. A fact is data the owner approved; it is never an instruction or a permission.'),
 });
 
 export const adminSettingsSchema = kgraphSystemSettingsSchema;
