@@ -47245,7 +47245,7 @@
         }
       },
       "delete": {
-        "description": "Permanent. Only a benchmark that has ended.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "description": "Permanent. Only a benchmark that has ended. Deleted with its trials; `deleteRuns=true` (#873) also deletes the runs its trials started, first (their steps, screenshots and recordings; a live run is never deleted). Without it the runs stay in the run history. Answers `runsDeleted`.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
         "operationId": "benchmarks_remove",
         "parameters": [
           {
@@ -47255,11 +47255,25 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "deleteRuns",
+            "required": false,
+            "in": "query",
+            "description": "`true`: also delete the runs its trials started (their steps, screenshots and recordings; needs `runs:delete`). `false` (the default): the runs stay in the run history.",
+            "schema": {
+              "default": "false",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           }
         ],
         "responses": {
           "204": {
-            "description": "Deleted, with its trials. The runs it started stay in the run history."
+            "description": "Deleted, with its trials, and with `deleteRuns=true` the runs its trials started. The audit event `benchmarks.deleted` counts the runs deleted."
           },
           "401": {
             "description": "Unauthorized - Invalid or missing token",
@@ -47272,14 +47286,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
+            "description": "Forbidden - Insufficient permissions\n\n`RUNS_DELETE_FORBIDDEN`: `deleteRuns=true` without `runs:delete`. Nothing was deleted."
           },
           "404": {
             "description": "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's."
@@ -47907,6 +47914,85 @@
           }
         ],
         "summary": "Cancel a benchmark",
+        "tags": [
+          "Benchmarks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "benchmarks:run"
+          ]
+        }
+      }
+    },
+    "/api/benchmarks/delete": {
+      "post": {
+        "description": "Permanent (#873). Each benchmark that has ended is deleted with its trials and, with `deleteRuns: true`, the runs its trials started (their steps, screenshots and recordings). One still queued or running is skipped (`skippedRunning`), one that is not yours is listed in `notFound`; neither fails the call.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "operationId": "benchmarks_removeMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteBenchmarksDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BenchmarksDeletedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions\n\n`RUNS_DELETE_FORBIDDEN`: `deleteRuns` without `runs:delete`. Nothing was deleted."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete several benchmarks",
         "tags": [
           "Benchmarks"
         ],
@@ -112484,6 +112570,68 @@
           "scorecard",
           "trials",
           "baseline"
+        ]
+      },
+      "BenchmarksDeletedResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The benchmarks deleted."
+          },
+          "skippedRunning": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Still queued or running: cancel them first."
+          },
+          "notFound": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Not one of your benchmarks, or not there."
+          },
+          "runsDeleted": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs deleted with them."
+          }
+        },
+        "required": [
+          "deleted",
+          "skippedRunning",
+          "notFound",
+          "runsDeleted"
+        ]
+      },
+      "DeleteBenchmarksDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The benchmarks to delete, 1 to 100."
+          },
+          "deleteRuns": {
+            "default": false,
+            "description": "Also delete the runs their trials started (needs `runs:delete`).",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ids"
         ]
       }
     }

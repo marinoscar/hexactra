@@ -1,15 +1,16 @@
 import AddIcon from '@mui/icons-material/Add';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
-import { Box, Card, CardActionArea, CardContent, Chip, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardActionArea, CardContent, Chip, Paper, Stack, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getScorecard, listBenchmarks } from '../benchmarks/api';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
-import { BENCHMARKS_PATH, benchmarkPath, gradeColor, money, pct, scoreText } from '../benchmarks/format';
+import { confirmAndDeleteBenchmarks } from '../benchmarks/DeleteBenchmarks';
+import { BENCHMARKS_PATH, benchmarkPath, gradeColor, isLiveBenchmark, money, pct, scoreText } from '../benchmarks/format';
 import type { Benchmark, RankingEntry } from '../types/benchmarks';
-import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, formatDateTime, useProfileTimeZone, type Column } from '../ui';
+import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, aboveBottomBar, formatDateTime, useConfirm, useProfileTimeZone, type Column, type ListSelection } from '../ui';
 import { errorText } from '../policies/usePolicyCatalog';
 
 /** The best policy of each listed benchmark (its scorecard's first ranking entry); absent while loading or when none was judged. */
@@ -26,12 +27,12 @@ function TopScore({ best }: { best: RankingEntry | null | undefined }) {
   if (best === undefined) return <>…</>;
   if (!best || best.score === null || best.score === undefined || !best.grade) return <>n/a</>;
   return (
-    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="top-score">
+    <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', whiteSpace: 'normal', minWidth: 0 }} data-testid="top-score">
       <Box component="span" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
         {scoreText(best.score)}
       </Box>
       <Chip size="small" label={best.grade} color={gradeColor(best.grade)} sx={{ fontWeight: 700, minWidth: 32 }} />
-      <Box component="span" sx={{ overflowWrap: 'anywhere', color: 'text.secondary' }}>
+      <Box component="span" sx={{ overflowWrap: 'anywhere', color: 'text.secondary', minWidth: 0, flexBasis: { xs: 'auto', md: '100%' } }}>
         {best.label}
       </Box>
     </Stack>
@@ -47,6 +48,11 @@ export function BenchmarksPage() {
   const [items, setItems] = useState<Benchmark[] | null>(null);
   const [best, setBest] = useState<Best>({});
   const [error, setError] = useState<string | null>(null);
+  // Several benchmarks deleted at once, with or without their runs (#873).
+  const confirm = useConfirm();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -65,6 +71,42 @@ export function BenchmarksPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const ended = useMemo(() => (items ?? []).filter((b) => !isLiveBenchmark(b.status)), [items]);
+  const selected = useMemo(() => new Set(ended.filter((b) => selectedIds.has(b.id)).map((b) => b.id)), [ended, selectedIds]);
+  const selection: ListSelection | undefined = canRun
+    ? {
+        selected,
+        onToggle: (id) => setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        }),
+        onToggleAll: () => setSelectedIds(ended.length > 0 && ended.every((b) => selected.has(b.id)) ? new Set() : new Set(ended.map((b) => b.id))),
+        disabledReason: (id) => (items?.find((b) => b.id === id && isLiveBenchmark(b.status)) ? 'Still running: cancel it first' : null),
+      }
+    : undefined;
+
+  const deleteSelected = async () => {
+    const chosen = ended.filter((b) => selected.has(b.id)).map((b) => ({ id: b.id, name: b.name }));
+    if (!chosen.length) return;
+    setDeleting(true);
+    try {
+      const res = await confirmAndDeleteBenchmarks({ api, confirm, items: chosen, canDeleteRuns: viewer.hasPermission('runs:delete') });
+      if (!res) return;
+      const n = res.deleted.length;
+      const runs = res.runsDeleted > 0 ? ` and ${res.runsDeleted.toLocaleString('en-US')} run${res.runsDeleted === 1 ? '' : 's'}` : '';
+      const skipped = res.skippedRunning.length ? `. ${res.skippedRunning.length} still running ${res.skippedRunning.length === 1 ? 'was' : 'were'} skipped` : '';
+      setNotice(`Deleted ${n} benchmark${n === 1 ? '' : 's'}${runs}${skipped}.`);
+      setSelectedIds(new Set());
+      await load();
+    } catch (e) {
+      setError(errorText(e, 'Could not delete the benchmarks'));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const policiesText = (b: Benchmark) => b.config.policies.map((p) => p.label).join(', ');
   const spend = (b: Benchmark) => (b.config.capUsd === null ? `${money(b.spentUsd, b.totals.costKnown)} (no cap)` : `${money(b.spentUsd, b.totals.costKnown)} of ${money(b.config.capUsd)}`);
@@ -90,6 +132,11 @@ export function BenchmarksPage() {
         primary={{ key: 'new', label: 'New benchmark', Icon: AddIcon, to: `${BENCHMARKS_PATH}/new`, hidden: !canRun }}
       />
       <ErrorBanner error={error} onRetry={() => void load()} />
+      {notice && (
+        <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 2 }} data-testid="delete-notice">
+          {notice}
+        </Alert>
+      )}
       {items === null ? (
         <ListSkeleton />
       ) : items.length === 0 ? (
@@ -106,6 +153,7 @@ export function BenchmarksPage() {
           columns={columns}
           getKey={(b) => b.id}
           getLabel={(b) => b.name}
+          selection={selection}
           onRowClick={(b) => navigate(benchmarkPath(b.id))}
           renderCard={(b) => (
             <Card variant="outlined">
@@ -133,6 +181,22 @@ export function BenchmarksPage() {
             </Card>
           )}
         />
+      )}
+      {canRun && selected.size > 0 && (
+        <Paper
+          elevation={6}
+          role="region"
+          aria-label="Selection"
+          sx={{ position: 'sticky', bottom: aboveBottomBar(16), zIndex: 3, mt: 2, px: 2, py: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+        >
+          <Typography sx={{ flexGrow: 1, fontVariantNumeric: 'tabular-nums' }}>{selected.size} selected</Typography>
+          <Button color="error" variant="contained" disabled={deleting} onClick={() => void deleteSelected()} sx={{ minHeight: 44 }}>
+            Delete
+          </Button>
+          <Button onClick={() => setSelectedIds(new Set())} sx={{ minHeight: 44 }}>
+            Cancel selection
+          </Button>
+        </Paper>
       )}
     </PageContainer>
   );
