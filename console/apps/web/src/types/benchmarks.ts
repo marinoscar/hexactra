@@ -193,11 +193,51 @@ export interface ScoreMetrics {
   models: string[];
 }
 
+// ---- The Benchmark Score (#871) ----
+
+export const SCORE_PRESETS = ['accuracy', 'balanced', 'budget', 'speed'] as const;
+export type ScorePreset = (typeof SCORE_PRESETS)[number];
+export type ScoreDimension = 'accuracy' | 'cost' | 'time' | 'tokens';
+export type ScoreGrade = 'S' | 'A' | 'B' | 'C' | 'D';
+export type ScoreBadge = 'most_accurate' | 'cheapest' | 'fastest' | 'most_token_efficient';
+
+export interface OverallScore {
+  value: number | null;
+  low: number | null;
+  high: number | null;
+  rank: number;
+  grade: ScoreGrade | null;
+  tied: boolean;
+}
+
+export interface BenchmarkScore {
+  rated: boolean;
+  provisional: boolean;
+  judged: number;
+  accuracy: number | null;
+  accuracyLow: number | null;
+  accuracyHigh: number | null;
+  cost: number | null;
+  costKnown: boolean;
+  time: number | null;
+  tokens: number | null;
+  overall: Record<ScorePreset, OverallScore>;
+  badges: ScoreBadge[];
+}
+
+export interface Scoring {
+  method: string;
+  defaultPreset: ScorePreset;
+  presets: { id: ScorePreset; label: string; weights: Record<ScoreDimension, number> }[];
+  provisionalBelow: number;
+}
+
 export interface PolicyScore {
   ref: string;
   label: string;
   rank: number;
   metrics: ScoreMetrics;
+  score: BenchmarkScore;
   categories: { category: Category; label: string; metrics: ScoreMetrics }[];
 }
 
@@ -242,6 +282,8 @@ export interface RankingEntry {
   medianActiveMs: number | null;
   totalCostUsd: number;
   totalTokens: number;
+  score: number | null;
+  grade: ScoreGrade | null;
 }
 
 /** `GET /api/benchmarks/{id}/scorecard`. */
@@ -260,6 +302,7 @@ export interface Scorecard {
   computedAt: string;
   totals: ScorecardTotals;
   ranking: RankingEntry[];
+  scoring: Scoring;
   policies: PolicyScore[];
   categories: { id: Category; label: string }[];
   matrix: MatrixRow[];
@@ -267,7 +310,7 @@ export interface Scorecard {
 
 // ---- Compare (#742) ----
 
-export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'tokensPerSuccess'] as const;
+export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'tokensPerSuccess', 'overallScore', 'accuracyScore', 'costScore', 'timeScore', 'tokensScore'] as const;
 export type ComparedMetric = (typeof COMPARED_METRICS)[number];
 
 export interface MetricDelta {

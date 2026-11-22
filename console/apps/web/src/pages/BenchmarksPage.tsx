@@ -1,13 +1,13 @@
 import AddIcon from '@mui/icons-material/Add';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
-import { Box, Card, CardActionArea, CardContent, Stack, Typography } from '@mui/material';
+import { Box, Card, CardActionArea, CardContent, Chip, Stack, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { getScorecard, listBenchmarks } from '../benchmarks/api';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
-import { BENCHMARKS_PATH, benchmarkPath, money, pct } from '../benchmarks/format';
+import { BENCHMARKS_PATH, benchmarkPath, gradeColor, money, pct, scoreText } from '../benchmarks/format';
 import type { Benchmark, RankingEntry } from '../types/benchmarks';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, formatDateTime, useProfileTimeZone, type Column } from '../ui';
 import { errorText } from '../policies/usePolicyCatalog';
@@ -19,6 +19,23 @@ function bestText(best: RankingEntry | null | undefined): string {
   if (best === undefined) return '…';
   if (!best || best.successRate === null) return 'n/a';
   return `${pct(best.successRate)} · ${best.label}`;
+}
+
+/** The leader's Benchmark Score and grade (#871), or a dash while loading, when none was rated, or from a console without scores. */
+function TopScore({ best }: { best: RankingEntry | null | undefined }) {
+  if (best === undefined) return <>…</>;
+  if (!best || best.score === null || best.score === undefined || !best.grade) return <>n/a</>;
+  return (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="top-score">
+      <Box component="span" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        {scoreText(best.score)}
+      </Box>
+      <Chip size="small" label={best.grade} color={gradeColor(best.grade)} sx={{ fontWeight: 700, minWidth: 32 }} />
+      <Box component="span" sx={{ overflowWrap: 'anywhere', color: 'text.secondary' }}>
+        {best.label}
+      </Box>
+    </Stack>
+  );
 }
 
 /** `/admin/settings/benchmarks` (#743): every benchmark of the administrator, newest first. */
@@ -57,7 +74,8 @@ export function BenchmarksPage() {
     { key: 'name', header: 'Name', grow: true, render: (b) => <Box sx={{ overflowWrap: 'anywhere', fontWeight: 500, minWidth: 160 }}>{b.name}</Box> },
     { key: 'status', header: 'Status', render: (b) => <BenchmarkStatusChip status={b.status} /> },
     { key: 'policies', header: 'Policies', render: (b) => <Box sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere', minWidth: 160, maxWidth: 280 }}>{policiesText(b)}</Box> },
-    { key: 'best', header: 'Best success', render: (b) => <Box sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere', minWidth: 120, maxWidth: 220 }}>{bestText(best[b.id])}</Box> },
+    { key: 'score', header: 'Top score', render: (b) => <Box sx={{ minWidth: 140, maxWidth: 260 }}><TopScore best={best[b.id]} /></Box> },
+    { key: 'best', header: 'Best success', hideBelow: 'lg', render: (b) => <Box sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere', minWidth: 120, maxWidth: 220 }}>{bestText(best[b.id])}</Box> },
     { key: 'spend', header: 'Spend', align: 'right', render: (b) => spend(b) },
     { key: 'version', header: 'Version', hideBelow: 'lg', render: (b) => `${b.appVersion} · suite ${b.suiteVersion}` },
     { key: 'date', header: 'Started', render: (b) => date(b) },
@@ -102,6 +120,9 @@ export function BenchmarksPage() {
                   <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                     {policiesText(b)}
                   </Typography>
+                  <Box sx={{ my: 0.5 }}>
+                    <TopScore best={best[b.id]} />
+                  </Box>
                   <Typography variant="body2">Best success: {bestText(best[b.id])}</Typography>
                   <Typography variant="body2">Spend: {spend(b)}</Typography>
                   <Typography variant="caption" color="text.secondary">

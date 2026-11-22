@@ -95,13 +95,23 @@ const METRIC_LABEL: Record<MetricDelta['metric'], string> = {
   outputTokens: 'Output tokens',
   cachedInputTokens: 'Cached input tokens',
   tokensPerSuccess: 'Tokens per success',
+  overallScore: 'Overall score',
+  accuracyScore: 'Accuracy score',
+  costScore: 'Cost score',
+  timeScore: 'Time score',
+  tokensScore: 'Tokens score',
 };
+
+const isScoreMetric = (m: MetricDelta['metric']): boolean => m.endsWith('Score');
+/** A score to one decimal. */
+const scoreText = (v: number | null | undefined): string => (v === null || v === undefined ? DASH : v.toFixed(1));
 
 function deltaValue(d: MetricDelta, v: number | null): string {
   if (v === null) return DASH;
   if (d.metric === 'successRate' || d.metric === 'passAllK' || d.metric === 'falseSuccessRate') return pct(v);
   if (d.metric === 'medianActiveMs') return ms(v);
   if (d.metric.endsWith('Usd')) return money(v, !d.atLeast);
+  if (isScoreMetric(d.metric)) return scoreText(v);
   return count(v);
 }
 
@@ -116,7 +126,9 @@ function deltaText(d: MetricDelta): string {
         ? ms(abs)
         : d.metric.endsWith('Usd')
           ? money(abs, !d.atLeast)
-          : count(abs);
+          : isScoreMetric(d.metric)
+            ? `${scoreText(abs)} pts`
+            : count(abs);
   const verdict = d.withinNoise ? 'within noise' : d.improved === true ? 'better' : d.improved === false ? 'worse' : 'no change';
   return `${sign}${v} (${verdict})`;
 }
@@ -184,15 +196,16 @@ function summary(r: BenchmarkReport): Content[] {
       ['Model calls', count(t.modelCalls)],
     ]),
     heading(BENCHMARK_REPORT_SECTIONS.ranking, 'ranking'),
-    { text: 'Best first: the higher success rate, then the lower cost per success, then the lower median active time. There is no composite score.', style: 'small' },
+    { text: 'Best first by the Benchmark Score (0 to 100, accuracy first weighting); equal scores by the higher success rate, then the lower cost per success, then the lower median active time.', style: 'small' },
   );
   const byRef = new Map(sc.policies.map((p) => [p.ref, p]));
   out.push(
     grid(
-      ['#', 'Policy', 'Success rate', 'Cost per success', 'Median active', 'Total cost', 'Total tokens', 'Models'],
+      ['#', 'Policy', 'Score', 'Success rate', 'Cost per success', 'Median active', 'Total cost', 'Total tokens', 'Models'],
       sc.ranking.map((e) => [
         String(e.rank),
         { text: e.label, style: 'tdStrong' },
+        e.score === null || e.score === undefined ? DASH : `${scoreText(e.score)} ${e.grade ?? ''}`.trim(),
         pct(e.successRate),
         money(e.costPerSuccessUsd, e.costKnown),
         ms(e.medianActiveMs),
@@ -200,7 +213,7 @@ function summary(r: BenchmarkReport): Content[] {
         count(e.totalTokens),
         (byRef.get(e.ref)?.metrics.models ?? []).join(', ') || DASH,
       ]),
-      [14, '*', 52, 56, 50, 50, 54, 90],
+      [14, '*', 40, 52, 56, 50, 50, 54, 80],
     ),
   );
   if (!sc.ranking.length) out.push({ text: 'No policy has a judged trial yet.', style: 'muted' });

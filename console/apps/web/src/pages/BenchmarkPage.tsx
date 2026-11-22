@@ -10,10 +10,11 @@ import { cancelBenchmark, deleteBenchmark, getBenchmark, getScorecard, listBench
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
 import { BenchmarkExportButton } from '../components/BenchmarkExportMenu';
 import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, recordedPoliciesText, tokens } from '../benchmarks/format';
+import { Leaderboard, storePreset, storedPreset } from '../benchmarks/Leaderboard';
 import { ScorecardView } from '../benchmarks/ScorecardView';
 import { TrialList } from '../benchmarks/TrialList';
 import { errorText } from '../policies/usePolicyCatalog';
-import type { Benchmark, BenchmarkTrial, Scorecard } from '../types/benchmarks';
+import { SCORE_PRESETS, type Benchmark, type BenchmarkTrial, type Scorecard, type ScorePreset } from '../types/benchmarks';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, formatDateTime, useConfirm, type PageAction } from '../ui';
 
 /** How often a live benchmark is read again. */
@@ -85,6 +86,8 @@ export function BenchmarkPage() {
   const [baseline, setBaseline] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The Benchmark Score's weighting (#871): this viewer's last choice, else the scorecard's default.
+  const [preset, setPreset] = useState<ScorePreset | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -165,6 +168,11 @@ export function BenchmarkPage() {
 
   const live = isLiveBenchmark(b.status);
   const p = b.progress;
+  const shownPreset: ScorePreset = preset ?? storedPreset(SCORE_PRESETS, scorecard?.scoring?.defaultPreset ?? 'accuracy');
+  const choosePreset = (next: ScorePreset) => {
+    setPreset(next);
+    storePreset(next);
+  };
   const ended = p.total - p.pending - p.running;
   const actions: PageAction[] = [
     { key: 'cancel', label: 'Cancel', Icon: StopCircleOutlinedIcon, onClick: () => void doCancel(), color: 'error', hidden: !canRun || !live, disabled: busy },
@@ -199,6 +207,8 @@ export function BenchmarkPage() {
           </Typography>
           <LinearProgress variant="determinate" value={p.total ? (ended / p.total) * 100 : 0} aria-label={`${ofText(ended, p.total)} trials ended`} sx={{ mt: 1 }} />
         </Paper>
+
+        {scorecard && <Leaderboard scorecard={scorecard} preset={shownPreset} onPresetChange={choosePreset} />}
 
         <TotalsStrip b={b} scorecard={scorecard} />
 

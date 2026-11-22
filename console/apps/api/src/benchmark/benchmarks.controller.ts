@@ -107,7 +107,7 @@ export class BenchmarksController {
   @ApiOperation({
     summary: "A benchmark's scorecard",
     description:
-      'Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the ranking (success rate, then cost per success, then median active time; no composite score); and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.',
+      'Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the Benchmark Score of each policy (accuracy, cost, time and tokens sub-scores from 0 to 100, the Overall score with its band, rank and grade under each weighting preset, and badges; #871) and the ranking by it under the default preset; and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.',
   })
   scorecard(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return this.scorecards.scorecard(userId, id);

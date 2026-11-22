@@ -7,6 +7,7 @@ import { resolvePolicyId } from './policies.js';
 import { sizeText } from './runs.js';
 import {
   ENDED,
+  SCORE_PRESETS,
   EXPORT_FORMATS,
   benchmarkLine,
   comparisonText,
@@ -217,8 +218,10 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
     .description("A benchmark and its scorecard: success, reliability, speed, tokens (input, output, cached) and cost per policy, per category and for the benchmark")
     .option('--trials', 'also list every trial with its verdict, tokens, cost, run and recording (with the run page URL of a ready one)')
     .option('--json', 'print JSON (the benchmark, its scorecard and, with --trials, its trials)')
+    .option('--preset <preset>', `the Benchmark Score's weighting: ${SCORE_PRESETS.join(', ')} (default: accuracy)`)
     .action(
-      coded(async (ref: string, o: { trials?: boolean; json?: boolean }) => {
+      coded(async (ref: string, o: { trials?: boolean; json?: boolean; preset?: string }) => {
+        if (o.preset !== undefined && !(SCORE_PRESETS as readonly string[]).includes(o.preset)) throw new Error(`--preset must be one of ${SCORE_PRESETS.join(', ')}`);
         const id = await resolveBenchmarkId(consoleApi(), ref);
         const { benchmark, scorecard } = await showBenchmark(id);
         const trials = o.trials ? (await consoleApi().get<{ items: BenchmarkTrialView[] }>(`/benchmarks/${id}/trials`)).items : undefined;
@@ -226,7 +229,7 @@ export const benchmarksCommand: CliCommandRegistration = (program: Command) => {
         // The summary counts the trial recordings (#863): without --trials the trials are read for that line alone, and a failure to read
         // them only leaves the line out.
         const counted = trials ?? (await consoleApi().get<{ items: BenchmarkTrialView[] }>(`/benchmarks/${id}/trials`).then((r) => r.items, () => undefined));
-        scorecardText(benchmark, scorecard, counted).forEach(out);
+        scorecardText(benchmark, scorecard, counted, o.preset).forEach(out);
         if (trials) {
           out('');
           out('Trials');
