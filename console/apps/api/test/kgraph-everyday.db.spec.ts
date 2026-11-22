@@ -205,6 +205,15 @@ describe('the everyday switch: procedures in chats and one-off runs (E46.28)', (
     expect([row.modelCalls, row.stepsAgent]).toEqual([run.modelCalls, Math.max(0, run.stepCount - 2)]);
     // A run without a procedure (the everyday-off run) writes nothing.
     expect(await ledger.write(owner.userId, other.runId)).toBe('skipped');
+
+    // E46.29 (#851): the run view names the procedure that ran, and the procedure's reads count the run (its everyday ledger rows).
+    const view = (await get(owner.token, `/kgraph/runs/${runId}`)).json<{ data: Record<string, unknown> }>().data;
+    expect(view).toMatchObject({ mode: 'everyday', taskId: null, procedureId: pid, procedureName: 'Export monthly invoices', versionId: vid });
+    const detail = (await get(owner.token, `/kgraph/procedures/${pid}`)).json<{ data: { ledger: Record<string, unknown> } }>().data;
+    expect(detail.ledger).toEqual({ runs: 0, procedureRuns: 0, cleanReplayRate: null, everydayRuns: 1 });
+    const list = (await get(owner.token, '/kgraph/procedures')).json<{ data: { procedures: { id: string; ledger: { everydayRuns: number } }[] } }>().data;
+    expect(list.procedures.find((p) => p.id === pid)?.ledger.everydayRuns).toBe(1);
+    expect((await get(owner.token, `/kgraph/runs/${other.runId}`)).json<{ data: Record<string, unknown> }>().data).toMatchObject({ procedureId: null, procedureName: null });
   });
 
   it('the ledger: an everyday row is counted in the summary and never enters a task baseline or a task ledger', async () => {
