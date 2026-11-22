@@ -24,7 +24,7 @@ describe('relations to Run', () => {
   it('every foreign key to Run is ON DELETE CASCADE, or SET NULL where the row is meant to outlive the run', () => {
     const toRun = foreignKeys.filter((fk) => fk.field.type === 'Run');
     // The ones known today; a new one appears here and must cascade too.
-    expect(toRun.map((fk) => `${fk.model}.${fk.field.name}`).sort()).toEqual(['BenchmarkTrial.run', 'ChatMessage.run', 'KgRun.run', 'Question.run', 'RunDelivery.run', 'RunGuidance.run', 'RunRecording.run', 'RunStep.run']);
+    expect(toRun.map((fk) => `${fk.model}.${fk.field.name}`).sort()).toEqual(['BenchmarkTrial.run', 'ChatMessage.run', 'KgRun.run', 'KgTrace.run', 'Question.run', 'RunDelivery.run', 'RunGuidance.run', 'RunRecording.run', 'RunStep.run']);
     for (const fk of toRun) {
       const field = `${fk.model}.${fk.field.name}`;
       expect({ field, onDelete: effectiveOnDelete(fk.field) }).toEqual({ field, onDelete: SET_NULL_RUN_KEYS.includes(field) ? 'SetNull' : 'Cascade' });

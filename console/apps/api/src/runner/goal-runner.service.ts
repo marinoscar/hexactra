@@ -28,6 +28,7 @@ import { RunStopSignal } from './stop-signal';
 import { AGENT, ATTR } from './trace-attributes';
 import { beforeLoop } from './host/before-loop';
 import { buildRun } from './host/build-context';
+import { KgraphEnabledService } from '../kgraph/kgraph-enabled.service';
 import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
 import { RunRecorder, fabricRecorderCalls } from './host/run-recorder';
@@ -78,6 +79,8 @@ export class GoalRunnerService {
     @Optional() public traces?: RunTraceService,
     /** The owner's MCP servers (E39.9): absent without the connections module, and then no MCP tool is offered. */
     @Optional() public mcp?: McpRunService,
+    // The Knowledge Graph's gate (E46.5): absent, or off for a run, and no observer is bound.
+    @Optional() public kgraph?: KgraphEnabledService,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -104,6 +107,7 @@ export class GoalRunnerService {
       connections: this.connections,
       traces: this.traces,
       mcp: this.mcp,
+      kgraph: this.kgraph,
       clock: () => this.clock(),
       log: this.log,
     };

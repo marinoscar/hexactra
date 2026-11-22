@@ -156,7 +156,33 @@ model KgReview {
   @@map("kg_reviews")
 }
 
+/// One tool call of a learn- or reuse-mode run (E46.5): each argument's provenance (never its value unless a safe literal), the state after
+/// it (host and path, a view digest, a result shape) and whether it worked. Written outside the step transaction, best effort. Deleted with
+/// its run, and after the procedure compiled from it is verified (E46.24).
+model KgTrace {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  runId     String   @map("run_id") @db.Uuid
+  seq       Int
+  tool      String   @db.VarChar(64)
+  family    String   @db.VarChar(200)
+  commits   Boolean  @default(false)
+  bindings  Json     @default("{}")
+  post      Json     @default("{}")
+  ok        Boolean
+  /// ran | refused | asked
+  outcome   String   @db.VarChar(12)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([userId, runId, seq])
+  @@map("kg_traces")
+}
+
 extend model User {
+  kgTraces           KgTrace[]
   kgTaskSettings     KgTaskSettings[]
   kgRuns             KgRun[]
   kgNodes            KgNode[]
@@ -173,5 +199,6 @@ extend model Task {
 }
 
 extend model Run {
-  kg KgRun?
+  kg       KgRun?
+  kgTraces KgTrace[]
 }

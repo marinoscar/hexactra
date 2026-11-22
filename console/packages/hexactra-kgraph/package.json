@@ -31,6 +31,10 @@
       "types": "./dist/validate/index.d.ts",
       "default": "./dist/validate/index.js"
     },
+    "./compile": {
+      "types": "./dist/compile/index.d.ts",
+      "default": "./dist/compile/index.js"
+    },
     "./ports": {
       "types": "./dist/ports/index.d.ts",
       "default": "./dist/ports/index.js"
