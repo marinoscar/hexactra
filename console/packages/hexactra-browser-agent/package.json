@@ -71,6 +71,10 @@
       "types": "./dist/vision.d.ts",
       "default": "./dist/vision.js"
     },
+    "./recording": {
+      "types": "./dist/recording.d.ts",
+      "default": "./dist/recording.js"
+    },
     "./tools": {
       "types": "./dist/tools/index.d.ts",
       "default": "./dist/tools/index.js"

@@ -30,6 +30,7 @@ import { beforeLoop } from './host/before-loop';
 import { buildRun } from './host/build-context';
 import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
+import { RunRecorder, fabricRecorderCalls } from './host/run-recorder';
 import { startRun } from './host/start';
 
 export { GUIDANCE_PREFIX } from '@marinoscar/hexactra-agent/engine';
@@ -144,6 +145,9 @@ export class GoalRunnerService {
       isPauseRequested: async () => (await owned.run.findFirst({ where: { id: runId }, select: { pauseRequested: true } }))?.pauseRequested === true,
       ...(events ? { subscribe: (h) => events.subscribe(h) } : {}),
     });
+    // The run's video, when its owner switched Record video on (#755): beside the job, never part of it.
+    const deps = this.deps();
+    const recorder = await RunRecorder.start(deps, fabricRecorderCalls(deps), runId, userId);
     try {
       return await this.advanceRun(runId, userId, orgId, lease, tr, stop);
     } catch (e) {
@@ -152,6 +156,7 @@ export class GoalRunnerService {
       this.log.warn(`run ${runId}: stopped, another job took over the run`);
       return 'superseded';
     } finally {
+      await recorder?.endJob();
       await stop.dispose();
       await lease.release().catch(() => undefined);
     }
