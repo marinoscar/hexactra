@@ -2,7 +2,7 @@
 // Pure: the pages and their tests share them.
 import { formatCost } from '../ui';
 import { formatTokens } from '../usage/api';
-import type { Benchmark, BenchmarkStatus, BenchmarkSuite, ComparedMetric, MetricDelta, Rate, ScoreMetrics, TrialVerdict } from '../types/benchmarks';
+import type { Benchmark, BenchmarkConfig, BenchmarkStatus, BenchmarkSuite, ComparedMetric, MetricDelta, Rate, ScoreBadge, ScoreDimension, ScoreGrade, ScoreMetrics, TrialVerdict } from '../types/benchmarks';
 
 export { formatTokens };
 
@@ -80,10 +80,12 @@ export function plannedRuns(supportedChallenges: number, policies: number, trial
 export interface NewBenchmarkForm {
   name: string;
   challengeIds: string[];
-  policies: { ref: string; label: string }[];
+  /** `recordVideo`: the policy's "Record video" tick (#845). */
+  policies: { ref: string; label: string; recordVideo: boolean }[];
   trials: string;
   hostId: string | null;
   profile: string;
+  /** The budget in USD (#844): empty or 0 is no budget, the benchmark runs every trial, each run within its own policy budget. */
   capUsd: string;
 }
 
@@ -107,9 +109,21 @@ export function newFormProblems(form: NewBenchmarkForm, suite: Pick<BenchmarkSui
   const trials = Number(form.trials);
   if (!/^\d+$/.test(form.trials.trim()) || trials < 1 || trials > suite.limits.maxTrials) out.trials = `A whole number from 1 to ${suite.limits.maxTrials}.`;
   if (!PROFILE_NAME.test(form.profile)) out.profile = 'Use 1-32 lowercase letters, digits, - and _.';
-  const cap = Number(form.capUsd);
-  if (!form.capUsd.trim() || !Number.isFinite(cap) || cap <= 0 || cap > suite.limits.maxCapUsd) out.capUsd = `More than $0 and at most $${suite.limits.maxCapUsd.toLocaleString('en-US')}.`;
+  const cap = budgetOf(form.capUsd);
+  if (cap === undefined || (cap !== null && cap > suite.limits.maxCapUsd)) out.capUsd = `Leave empty or 0 for no budget, or an amount up to $${suite.limits.maxCapUsd.toLocaleString('en-US')}.`;
   return out;
+}
+
+/**
+ * The budget field (#844) as the start request sends it: `null` (no budget) when it is empty or 0, the amount when it is a positive
+ * number, and `undefined` when it is not a number or is negative.
+ */
+export function budgetOf(text: string): number | null | undefined {
+  const t = text.trim();
+  if (!t) return null;
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(t)) return undefined;
+  const n = Number(t);
+  return n === 0 ? null : n;
 }
 
 /** The best policy's success, for the list: the highest success rate among the scorecard-free progress is not known, so the list shows passes over judged. */
@@ -133,7 +147,14 @@ export const METRIC_LABEL: Record<ComparedMetric, string> = {
   outputTokens: 'Output tokens',
   cachedInputTokens: 'Cached input tokens',
   tokensPerSuccess: 'Tokens per success',
+  overallScore: 'Overall score',
+  accuracyScore: 'Accuracy score',
+  costScore: 'Cost score',
+  timeScore: 'Time score',
+  tokensScore: 'Tokens score',
 };
+
+const SCORE_METRICS: ComparedMetric[] = ['overallScore', 'accuracyScore', 'costScore', 'timeScore', 'tokensScore'];
 
 const RATE_METRICS: ComparedMetric[] = ['successRate', 'passAllK', 'falseSuccessRate'];
 const COST_METRICS: ComparedMetric[] = ['medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd'];
@@ -144,6 +165,7 @@ export function metricValue(metric: ComparedMetric, v: number | null, atLeast = 
   if (RATE_METRICS.includes(metric)) return pct(v);
   if (COST_METRICS.includes(metric)) return money(v, !atLeast);
   if (metric === 'medianActiveMs') return duration(v);
+  if (SCORE_METRICS.includes(metric)) return scoreText(v);
   return tokens(v);
 }
 
@@ -156,6 +178,7 @@ export function deltaText(d: MetricDelta): string {
   if (RATE_METRICS.includes(d.metric)) return `${sign}${Math.round(abs * 100)} pts`;
   if (COST_METRICS.includes(d.metric)) return `${sign}$${abs.toFixed(abs < 0.01 ? 4 : 2)}${d.atLeast ? ', a cost is unknown' : ''}`;
   if (d.metric === 'medianActiveMs') return `${sign}${duration(abs)}`;
+  if (SCORE_METRICS.includes(d.metric)) return `${sign}${scoreText(abs)} pts`;
   return `${sign}${tokens(abs)}`;
 }
 
@@ -171,3 +194,46 @@ export const DELTA_VERDICT_LABEL: Record<DeltaVerdict, string> = { noise: 'withi
 
 /** The headline cost of a group of trials: "$1.20" or "≥ $1.20". */
 export const costOf = (m: ScoreMetrics) => money(m.cost.totalUsd, m.cost.known);
+
+/** "$5.00 of $20.00", or "$5.00 (no cap)". */
+export function spendOfCap(spent: string, capUsd: number | null, money: (n: number) => string): string {
+  return capUsd === null ? `${spent} (no cap)` : `${spent} of ${money(capUsd)}`;
+}
+
+/** The policies whose trial runs record a video (#841, #845): `null` for none, "all policies", or their labels. */
+export function recordedPoliciesText(config: Pick<BenchmarkConfig, 'policies' | 'recordVideo'>): string | null {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : recorded.map((p) => p.label).join(', ');
+}
+
+// ---- The Benchmark Score (#871) ----
+
+/** A score to one decimal, or "n/a". */
+export const scoreText = (v: number | null | undefined): string => (v === null || v === undefined ? 'n/a' : v.toFixed(1));
+
+export const SCORE_DIMENSION_LABEL: Record<ScoreDimension, string> = { accuracy: 'Accuracy', cost: 'Cost', time: 'Time', tokens: 'Tokens' };
+
+export const SCORE_BADGE_LABEL: Record<ScoreBadge, string> = {
+  most_accurate: 'Most accurate',
+  cheapest: 'Cheapest per success',
+  fastest: 'Fastest',
+  most_token_efficient: 'Fewest tokens',
+};
+
+/** What each grade means, for its tooltip. */
+export const GRADE_TEXT: Record<ScoreGrade, string> = { S: 'S: 90 and over', A: 'A: 80 to 89.9', B: 'B: 70 to 79.9', C: 'C: 60 to 69.9', D: 'D: under 60' };
+
+/** The grade's colour: a theme palette key. */
+export function gradeColor(g: ScoreGrade | null): 'success' | 'info' | 'warning' | 'error' | 'default' {
+  if (g === 'S' || g === 'A') return 'success';
+  if (g === 'B') return 'info';
+  if (g === 'C') return 'warning';
+  if (g === 'D') return 'error';
+  return 'default';
+}
+
+/** "Accuracy 50 · Cost 20 · Time 15 · Tokens 15". */
+export function weightsText(w: Record<ScoreDimension, number>): string {
+  return (['accuracy', 'cost', 'time', 'tokens'] as const).map((d) => `${SCORE_DIMENSION_LABEL[d]} ${w[d]}`).join(' · ');
+}

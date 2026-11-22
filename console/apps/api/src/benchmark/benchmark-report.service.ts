@@ -5,6 +5,7 @@
 import { PassThrough, type Readable } from 'node:stream';
 
 import { HttpException, HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { resolveApiVersion } from '@marinoscar/platform-api/host';
 
 import { MCP_RATE_LIMITER, type McpRateLimiter } from '../mcp/mcp.rate-limit';
@@ -13,6 +14,7 @@ import { renderPdf } from '../tasks/run-report.pdf';
 import '../tasks/runs.errors';
 import { benchmarkExportFilename, benchmarkReportCsv, buildBenchmarkReport, type TrialRunText } from './benchmark-report';
 import { buildBenchmarkReportDefinition } from './benchmark-report.pdf';
+import { DEFAULT_SCORE_PRESET, type ScorePreset } from './scorecard.schemas';
 import { BENCHMARK_EXPORT_RATE_LIMIT, type BenchmarkExportFormat, type BenchmarkReport, type BenchmarkReportPaper } from './benchmark-report.schemas';
 import { BenchmarksService } from './benchmarks.service';
 import { ScorecardService } from './scorecard.service';
@@ -23,8 +25,12 @@ export const BENCHMARK_EXPORTED = 'benchmarks.exported' as const;
 export interface BenchmarkExportOptions {
   format: BenchmarkExportFormat;
   paper?: BenchmarkReportPaper;
+  /** The PDF leaderboard's weighting (#872); default `accuracy`. */
+  preset?: ScorePreset;
   baseline?: string;
   orgId?: string | null;
+  /** The viewer has `runs:read`: each trial carries its run's recording status (#846). Never the video. */
+  recordings?: boolean;
   /** The clock of `exportedAt` and the file name; default now. */
   now?: Date;
 }
@@ -48,17 +54,32 @@ export class BenchmarkReportService {
     private readonly benchmarks: BenchmarksService,
     private readonly scorecards: ScorecardService,
     @Optional() @Inject(MCP_RATE_LIMITER) private readonly limiter?: McpRateLimiter,
+    @Optional() private readonly config?: ConfigService,
   ) {}
+
+  /**
+   * The console's public origin (`APP_URL`, the `appUrl` the e-mails and report links use) for the PDF's links to each trial's run page
+   * (#863); null when it is not an http(s) URL, and the PDF then prints the path.
+   */
+  consoleUrl(): string | null {
+    const raw = (this.config?.get<string>('appUrl') ?? '').trim().replace(/\/+$/, '');
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' || url.protocol === 'http:' ? raw : null;
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * The report of one of the user's benchmarks (404 `BENCHMARK_NOT_FOUND` for any other), with the comparison when `baseline` is given
    * (409 `BENCHMARK_SUITE_MISMATCH` on another suite version). A benchmark still running is exported with `partial: true`.
    */
-  async build(userId: string, id: string, opts: { baseline?: string; now?: Date } = {}): Promise<BenchmarkReport> {
+  async build(userId: string, id: string, opts: { baseline?: string; now?: Date; recordings?: boolean } = {}): Promise<BenchmarkReport> {
     const benchmark = await this.benchmarks.get(userId, id);
     const [scorecard, trials, baseline] = await Promise.all([
       this.scorecards.scorecard(userId, id),
-      this.benchmarks.trials(userId, id),
+      this.benchmarks.trials(userId, id, {}, { recordings: opts.recordings }),
       opts.baseline ? this.scorecards.compare(userId, id, opts.baseline) : Promise.resolve(null),
     ]);
     const runIds = trials.items.map((t) => t.runId).filter((x): x is string => !!x);
@@ -73,13 +94,14 @@ export class BenchmarkReportService {
     const started = Date.now();
     await this.rateLimit(userId);
     const now = opts.now ?? new Date();
-    const report = await this.build(userId, id, { baseline: opts.baseline, now });
+    const report = await this.build(userId, id, { baseline: opts.baseline, now, recordings: opts.recordings });
     const filename = benchmarkExportFilename(id, now, opts.format);
     const paper = opts.paper ?? 'a4';
+    const preset = opts.preset ?? DEFAULT_SCORE_PRESET;
     let body: string | Readable;
     if (opts.format === 'pdf') {
       const out = new PassThrough();
-      const pdf = renderPdf(buildBenchmarkReportDefinition(report, { paper }));
+      const pdf = renderPdf(buildBenchmarkReportDefinition(report, { paper, preset, consoleUrl: this.consoleUrl() }));
       pdf.once('error', (err: Error) => {
         this.log.warn(`benchmarks.export: the PDF of benchmark ${id} could not be rendered: ${err.name}`);
         out.destroy(err);
@@ -89,10 +111,10 @@ export class BenchmarkReportService {
     } else {
       body = opts.format === 'csv' ? benchmarkReportCsv(report) : JSON.stringify(report, null, 2);
     }
-    this.log.log(`benchmarks.export user=${userId} benchmark=${id} format=${opts.format}${opts.format === 'pdf' ? ` paper=${paper}` : ''} trials=${report.trials.length} ms=${Date.now() - started}`);
+    this.log.log(`benchmarks.export user=${userId} benchmark=${id} format=${opts.format}${opts.format === 'pdf' ? ` paper=${paper} preset=${preset}` : ''} trials=${report.trials.length} ms=${Date.now() - started}`);
     await this.audit(userId, id, opts.orgId ?? null, {
       format: opts.format,
-      ...(opts.format === 'pdf' ? { paper } : {}),
+      ...(opts.format === 'pdf' ? { paper, preset } : {}),
       ...(opts.baseline ? { baselineId: opts.baseline } : {}),
       partial: report.partial,
       trials: report.trials.length,

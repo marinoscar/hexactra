@@ -8,12 +8,12 @@ import type { ReactElement } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { deltaText, deltaVerdict, newFormProblems, plannedRuns, rateText, type NewBenchmarkForm } from '../benchmarks/format';
+import { budgetOf, deltaText, deltaVerdict, newFormProblems, plannedRuns, rateText, recordedPoliciesText, type NewBenchmarkForm } from '../benchmarks/format';
 import { BenchmarkComparePage } from '../pages/BenchmarkComparePage';
 import { BenchmarkNewPage } from '../pages/BenchmarkNewPage';
 import { BenchmarkPage } from '../pages/BenchmarkPage';
 import { BenchmarksPage } from '../pages/BenchmarksPage';
-import type { Benchmark, BenchmarkComparison, BenchmarkSuite, BenchmarkTrial, MetricDelta, Scorecard, ScoreMetrics } from '../types/benchmarks';
+import type { Benchmark, BenchmarkComparison, BenchmarkScore, BenchmarkSuite, BenchmarkTrial, MetricDelta, Scorecard, ScoreMetrics, Scoring } from '../types/benchmarks';
 import { ConfirmProvider } from '../ui';
 import { mockViewport } from './matchMedia';
 
@@ -54,7 +54,7 @@ function benchmark(over: Partial<Benchmark> = {}): Benchmark {
     status: 'completed',
     suiteKey: 'builtin',
     suiteVersion: 2,
-    config: { challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25, trialTimeoutMinutes: 15 },
+    config: { challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25, trialTimeoutMinutes: 15, recordVideo: false },
     appVersion: '1.118.0',
     commit: '4f2c9a1e7b3d',
     spentUsd: 1.25,
@@ -86,6 +86,39 @@ function metrics(pass: number, judged: number, costUsd: number, known = true): S
   };
 }
 
+const overall = (value: number, rank: number, grade: 'S' | 'A' | 'B' | 'C' | 'D', tied = false) => ({ value, low: value - 8, high: Math.min(100, value + 4), rank, grade, tied });
+function score(over: Partial<BenchmarkScore>): BenchmarkScore {
+  return {
+    rated: true,
+    provisional: true,
+    judged: 6,
+    accuracy: 50,
+    accuracyLow: 30,
+    accuracyHigh: 70,
+    cost: 50,
+    costKnown: true,
+    time: 50,
+    tokens: 50,
+    overall: { accuracy: overall(50, 1, 'D'), balanced: overall(50, 1, 'D'), budget: overall(50, 1, 'D'), speed: overall(50, 1, 'D') },
+    badges: [],
+    ...over,
+  };
+}
+const SCORING: Scoring = {
+  method: 'hexactra.benchmark-score/1',
+  defaultPreset: 'accuracy',
+  presets: [
+    { id: 'accuracy', label: 'Accuracy first', weights: { accuracy: 50, cost: 20, time: 15, tokens: 15 } },
+    { id: 'balanced', label: 'Balanced', weights: { accuracy: 25, cost: 25, time: 25, tokens: 25 } },
+    { id: 'budget', label: 'Budget', weights: { accuracy: 35, cost: 40, time: 10, tokens: 15 } },
+    { id: 'speed', label: 'Speed', weights: { accuracy: 35, cost: 15, time: 40, tokens: 10 } },
+  ],
+  provisionalBelow: 10,
+};
+// Thorough leads under accuracy first and balanced; Economy, eight times cheaper, leads under budget and speed.
+const ECO_SCORE = score({ accuracy: 56.7, cost: 100, time: 100, tokens: 100, costKnown: true, badges: ['cheapest', 'fastest', 'most_token_efficient'], overall: { accuracy: overall(78.4, 2, 'B', true), balanced: overall(89.2, 2, 'A'), budget: overall(84.8, 1, 'A'), speed: overall(84.8, 1, 'A') } });
+const THO_SCORE = score({ accuracy: 100, cost: 54.8, time: 100, tokens: 100, costKnown: false, badges: ['most_accurate', 'fastest', 'most_token_efficient'], overall: { accuracy: overall(91, 1, 'S'), balanced: overall(88.7, 1, 'A'), budget: overall(81.9, 2, 'A'), speed: overall(83.2, 2, 'A') } });
+
 function scorecard(): Scorecard {
   const eco = metrics(3, 6, 0.25);
   const tho = metrics(6, 6, 1, false);
@@ -104,12 +137,13 @@ function scorecard(): Scorecard {
     computedAt: '2026-11-21T11:00:00Z',
     totals: { costUsd: 1.25, costKnown: false, inputTokens: 1_200_000, outputTokens: 90_000, cachedInputTokens: 400_000, totalTokens: 1_290_000, modelCalls: 120, counts: { total: 12, judged: 12, pass: 9, fail: 3, error: 0, skipped: 0, unsupported: 0, unfinished: 0 } },
     ranking: [
-      { rank: 1, ref: 'builtin:thorough', label: 'Thorough', successRate: 1, costPerSuccessUsd: 1 / 6, costKnown: false, medianActiveMs: 65_000, totalCostUsd: 1, totalTokens: 540_000 },
-      { rank: 2, ref: 'builtin:economy', label: 'Economy', successRate: 0.5, costPerSuccessUsd: 0.25 / 3, costKnown: true, medianActiveMs: 65_000, totalCostUsd: 0.25, totalTokens: 540_000 },
+      { rank: 1, ref: 'builtin:thorough', label: 'Thorough', successRate: 1, costPerSuccessUsd: 1 / 6, costKnown: false, medianActiveMs: 65_000, totalCostUsd: 1, totalTokens: 540_000, score: 91, grade: 'S' },
+      { rank: 2, ref: 'builtin:economy', label: 'Economy', successRate: 0.5, costPerSuccessUsd: 0.25 / 3, costKnown: true, medianActiveMs: 65_000, totalCostUsd: 0.25, totalTokens: 540_000, score: 78.4, grade: 'B' },
     ],
+    scoring: SCORING,
     policies: [
-      { ref: 'builtin:economy', label: 'Economy', rank: 2, metrics: eco, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.1) }, { category: 'forms', label: 'Forms', metrics: metrics(0, 3, 0.15) }] },
-      { ref: 'builtin:thorough', label: 'Thorough', rank: 1, metrics: tho, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.5) }, { category: 'forms', label: 'Forms', metrics: metrics(3, 3, 0.5) }] },
+      { ref: 'builtin:economy', label: 'Economy', rank: 2, metrics: eco, score: ECO_SCORE, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.1) }, { category: 'forms', label: 'Forms', metrics: metrics(0, 3, 0.15) }] },
+      { ref: 'builtin:thorough', label: 'Thorough', rank: 1, metrics: tho, score: THO_SCORE, categories: [{ category: 'navigation', label: 'Navigation', metrics: metrics(3, 3, 0.5) }, { category: 'forms', label: 'Forms', metrics: metrics(3, 3, 0.5) }] },
     ],
     categories: [
       { id: 'navigation', label: 'Navigation' },
@@ -160,6 +194,7 @@ function trial(over: Partial<BenchmarkTrial>): BenchmarkTrial {
     escalations: 0,
     startedAt: '2026-11-21T10:01:00Z',
     finishedAt: '2026-11-21T10:02:00Z',
+    recording: null,
     ...over,
   };
 }
@@ -187,20 +222,25 @@ function mount(element: ReactElement, path: string, routePath: string, permissio
 }
 
 describe('the benchmark helpers', () => {
-  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy' }], trials: '3', hostId: null, profile: 'default', capUsd: '25' };
+  const form: NewBenchmarkForm = { name: '', challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', label: 'Economy', recordVideo: false }], trials: '3', hostId: null, profile: 'default', capUsd: '25' };
 
   it('accepts a complete form and names each problem', () => {
     expect(newFormProblems(form, suite)).toEqual({});
     expect(newFormProblems({ ...form, challengeIds: ['form-upload'] }, suite).challenges).toMatch(/at least one challenge/);
     expect(newFormProblems({ ...form, policies: [] }, suite).policies).toMatch(/at least one agent policy/);
-    expect(newFormProblems({ ...form, policies: Array.from({ length: 9 }, (_, i) => ({ ref: `p${i}`, label: `P${i}` })) }, suite).policies).toBe('At most 8 policies.');
-    expect(newFormProblems({ ...form, policies: [{ ref: 'a', label: 'Same' }, { ref: 'b', label: 'same' }] }, suite).policies).toMatch(/its own label/);
+    expect(newFormProblems({ ...form, policies: Array.from({ length: 9 }, (_, i) => ({ ref: `p${i}`, label: `P${i}`, recordVideo: false })) }, suite).policies).toBe('At most 8 policies.');
+    expect(newFormProblems({ ...form, policies: [{ ref: 'a', label: 'Same', recordVideo: false }, { ref: 'b', label: 'same', recordVideo: false }] }, suite).policies).toMatch(/its own label/);
     expect(newFormProblems({ ...form, trials: '0' }, suite).trials).toMatch(/1 to 10/);
     expect(newFormProblems({ ...form, trials: '11' }, suite).trials).toMatch(/1 to 10/);
     expect(newFormProblems({ ...form, trials: '2.5' }, suite).trials).toBeDefined();
     expect(newFormProblems({ ...form, profile: 'Bad Name' }, suite).profile).toBeDefined();
-    expect(newFormProblems({ ...form, capUsd: '0' }, suite).capUsd).toBeDefined();
     expect(newFormProblems({ ...form, capUsd: '1001' }, suite).capUsd).toBeDefined();
+    expect(newFormProblems({ ...form, capUsd: '-1' }, suite).capUsd).toBeDefined();
+    expect(newFormProblems({ ...form, capUsd: 'ten' }, suite).capUsd).toBeDefined();
+    // The budget (#844): empty or 0 is no budget.
+    expect(newFormProblems({ ...form, capUsd: '' }, suite).capUsd).toBeUndefined();
+    expect(newFormProblems({ ...form, capUsd: '0' }, suite).capUsd).toBeUndefined();
+    expect([budgetOf(''), budgetOf(' 0 '), budgetOf('0.00'), budgetOf('12.5'), budgetOf('.5'), budgetOf('-3'), budgetOf('1e3')]).toEqual([null, null, null, 12.5, 0.5, undefined, undefined]);
     expect(plannedRuns(9, 3, 3)).toBe(81);
   });
 
@@ -229,6 +269,10 @@ describe('the list', () => {
     expect(within(list).getByText('running')).toBeInTheDocument();
     expect(within(list).getAllByText('Economy, Thorough')).toHaveLength(2);
     expect(await within(list).findByText('100% · Thorough')).toBeInTheDocument();
+    // The leader's Benchmark Score and grade (#871); n/a when its scorecard could not be read.
+    const top = within(list).getByTestId('top-score');
+    expect(top).toHaveTextContent('91.0');
+    expect(top).toHaveTextContent('S');
     expect(within(list).getAllByText('$1.25 of $25.00').length).toBe(2);
     expect(screen.getAllByRole('link', { name: /New benchmark/ }).length).toBeGreaterThan(0);
   });
@@ -279,6 +323,98 @@ describe('a new benchmark', () => {
     await screen.findByTestId('elsewhere');
     const post = host.requests.find((r) => r.method === 'POST')!;
     expect(post.body).toEqual({ challengeIds: ['nav-lookup', 'form-multistep'], policies: [{ ref: 'builtin:economy', label: 'Economy' }, { ref: 'builtin:thorough', label: 'Thorough' }], trials: 3, hostId: null, profile: 'default', capUsd: 25 });
+  });
+
+  it.each([
+    ['empty', ''],
+    ['0', '0'],
+  ])('starts with no budget when the budget is %s, and says so before it starts (#844)', async (_name, value) => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
+    const field = screen.getByRole('textbox', { name: 'Budget (USD)' });
+    expect(field).toHaveValue('25');
+    expect(screen.queryByRole('switch', { name: /spend cap/i })).toBeNull();
+    fireEvent.change(field, { target: { value } });
+    expect(screen.getByText(/Leave empty or 0 to run without a budget/)).toBeInTheDocument();
+    expect(screen.getByTestId('benchmark-plan')).toHaveTextContent('with no budget');
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('No budget');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: null });
+  });
+
+  it('sends a positive budget as the cap and names it before it starts; a negative one is refused (#844)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Economy/ }));
+    const field = screen.getByRole('textbox', { name: 'Budget (USD)' });
+    fireEvent.change(field, { target: { value: '-2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    expect(await screen.findByText(/Leave empty or 0 for no budget, or an amount up to/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.change(field, { target: { value: '7.5' } });
+    expect(screen.getByTestId('benchmark-plan')).toHaveTextContent('with a budget of $7.50');
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('no new trial starts once $7.50 is spent');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect(host.requests.find((r) => r.method === 'POST')!.body).toMatchObject({ capUsd: 7.5 });
+  });
+
+  it('records the video of one chosen policy when its tick is on, with the not-masked warning, and names it before starting (#845)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    const recordAll = await screen.findByRole('checkbox', { name: 'Record all' });
+    expect(recordAll).toBeDisabled();
+    expect(screen.queryByRole('checkbox', { name: /Record video for/ })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Economy/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Thorough/ }));
+    const economy = screen.getByRole('checkbox', { name: 'Record video for Economy' });
+    expect(economy).not.toBeChecked();
+    expect(screen.queryByTestId('benchmark-record-warning')).toBeNull();
+    fireEvent.click(economy);
+    expect(screen.getByTestId('benchmark-record-warning')).toHaveTextContent(/The trial runs of Economy will record a video.*not masked.*Only you can play it.*retention.*storage/);
+    expect(recordAll).not.toBeChecked();
+    expect(recordAll).toHaveAttribute('data-indeterminate', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('The runs of Economy record a video of the browser tab (not masked).');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    const body = host.requests.find((r) => r.method === 'POST')!.body as { policies: unknown[]; recordVideo?: boolean };
+    expect(body.policies).toEqual([{ ref: 'builtin:economy', label: 'Economy', recordVideo: true }, { ref: 'builtin:thorough', label: 'Thorough' }]);
+    expect(body.recordVideo).toBeUndefined();
+  });
+
+  it('"Record all" ticks every chosen policy and clears them again (#845)', async () => {
+    const host = mount(<BenchmarkNewPage />, '/n', '/n', perms, { ...base, 'POST /benchmarks': benchmark({ status: 'queued' }) });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /^Economy/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Thorough/ }));
+    const recordAll = screen.getByRole('checkbox', { name: 'Record all' });
+    fireEvent.click(recordAll);
+    expect(screen.getByRole('checkbox', { name: 'Record video for Economy' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Record video for Thorough' })).toBeChecked();
+    expect(recordAll).toBeChecked();
+    expect(screen.getByTestId('benchmark-record-warning')).toHaveTextContent(/^Every trial run will record a video/);
+    fireEvent.click(recordAll);
+    expect(screen.getByRole('checkbox', { name: 'Record video for Economy' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Record video for Thorough' })).not.toBeChecked();
+    expect(screen.queryByTestId('benchmark-record-warning')).toBeNull();
+    fireEvent.click(recordAll);
+    fireEvent.click(screen.getByRole('button', { name: 'Start benchmark' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Every run records a video of the browser tab (not masked).');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start benchmark' }));
+    await screen.findByTestId('elsewhere');
+    expect((host.requests.find((r) => r.method === 'POST')!.body as { policies: { recordVideo?: boolean }[] }).policies.map((p) => p.recordVideo)).toEqual([true, true]);
+  });
+
+  it('names the recorded policies on the benchmark page, or "all policies" (#845)', () => {
+    const config = benchmark().config;
+    expect(recordedPoliciesText(config)).toBeNull();
+    expect(recordedPoliciesText({ ...config, policies: config.policies.map((p, i) => ({ ...p, recordVideo: i === 0 })) })).toBe('Economy');
+    expect(recordedPoliciesText({ ...config, recordVideo: true })).toBe('all policies');
   });
 
   it('names the benchmark already running on that node', async () => {
@@ -344,6 +480,12 @@ describe('a benchmark', () => {
     expect(screen.getByText(/Cost: ≥ \$0.05/)).toBeInTheDocument();
   });
 
+  it('names the policies whose runs were recorded (#845)', async () => {
+    const config = benchmark().config;
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses({ config: { ...config, policies: [{ ...config.policies[0]!, recordVideo: false }, { ...config.policies[1]!, recordVideo: true }] } }));
+    expect(await screen.findByTestId('recorded-policies')).toHaveTextContent('Videos recorded: Thorough');
+  });
+
   it('offers only benchmarks on the same suite version as a baseline', async () => {
     mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses());
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Baseline' }));
@@ -375,6 +517,73 @@ describe('a benchmark', () => {
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel benchmark' }));
     await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === `/benchmarks/${ID}/cancel`)).toBe(true));
+  });
+});
+
+describe('the leaderboard (#871)', () => {
+  const responses = {
+    [`GET /benchmarks/${ID}`]: benchmark(),
+    [`GET /benchmarks/${ID}/trials`]: { items: trials },
+    [`GET /benchmarks/${ID}/scorecard`]: scorecard(),
+    'GET /benchmarks': { items: [benchmark()], total: 1 },
+  };
+  afterEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* none */
+    }
+  });
+
+  it('puts the leader first with its score, grade, band, sub-scores and badges, then every policy by rank', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const board = await screen.findByTestId('leaderboard');
+    const winner = within(board).getByTestId('leaderboard-winner');
+    expect(winner).toHaveTextContent('Thorough');
+    expect(within(winner).getByTestId('winner-score')).toHaveTextContent('91.0');
+    expect(within(winner).getByTestId('grade')).toHaveTextContent('S');
+    expect(winner).toHaveTextContent('95% band 83.0 to 95.0');
+    expect(winner).toHaveTextContent('Most accurate');
+    // An unknown cost makes the cost score an upper bound.
+    expect(winner.querySelector('[data-dimension="cost"]')).toHaveTextContent('≤ 54.8');
+    const rows = within(board).getAllByTestId('leaderboard-row');
+    expect(rows.map((r) => r.getAttribute('data-ref'))).toEqual(['builtin:thorough', 'builtin:economy']);
+    expect(rows[1]).toHaveTextContent('78.4');
+    expect(rows[1]).toHaveTextContent('Tied with #1');
+    expect(rows[1]).toHaveTextContent('Provisional');
+    expect(rows[1]).toHaveTextContent('Safety: 1 flagged');
+    expect(within(rows[1]!).getByRole('progressbar', { name: 'Accuracy score 56.7 of 100' })).toBeInTheDocument();
+    expect(board).toHaveTextContent('weights Accuracy 50 · Cost 20 · Time 15 · Tokens 15');
+    // The scorecard has the score row too.
+    expect(screen.getByTestId('scorecard-table').querySelector('[data-metric="score"]')).toHaveTextContent('78.4 · grade B · provisional');
+  });
+
+  it('re-ranks under another preset and remembers the choice for this viewer', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const board = await screen.findByTestId('leaderboard');
+    fireEvent.click(within(board).getByRole('button', { name: 'Budget' }));
+    expect(within(board).getByTestId('leaderboard-winner')).toHaveTextContent('Economy');
+    expect(within(board).getByTestId('winner-score')).toHaveTextContent('84.8');
+    expect(within(board).getAllByTestId('leaderboard-row').map((r) => r.getAttribute('data-ref'))).toEqual(['builtin:economy', 'builtin:thorough']);
+    expect(board).toHaveTextContent('weights Accuracy 35 · Cost 40 · Time 10 · Tokens 15');
+    expect(window.localStorage.getItem('hexactra.benchmarks.scorePreset')).toBe('budget');
+  });
+
+  it('says so when no policy is rated yet, and explains the method', async () => {
+    const card = scorecard();
+    const unrated = { ...card, policies: card.policies.map((p) => ({ ...p, score: { ...p.score, rated: false, overall: { ...p.score.overall, accuracy: { ...p.score.overall.accuracy, value: null, low: null, high: null, grade: null } } } })) };
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], { ...responses, [`GET /benchmarks/${ID}/scorecard`]: unrated });
+    expect(await screen.findByTestId('leaderboard-empty')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'How the score works' }));
+    expect(await screen.findByTestId('score-method')).toHaveTextContent('ten times 50');
+  });
+
+  it('fits a phone: the board stacks and the presets scroll', async () => {
+    restore = mockViewport(360);
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const board = await screen.findByTestId('leaderboard');
+    expect(within(board).getAllByRole('button', { name: /Accuracy first|Balanced|Budget|Speed/ })).toHaveLength(4);
+    expect(within(board).getAllByTestId('leaderboard-row')).toHaveLength(2);
   });
 });
 

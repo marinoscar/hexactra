@@ -21,6 +21,8 @@ export interface BenchmarkExportOptions {
   paper?: 'a4' | 'letter';
   /** An earlier benchmark on the same suite version: the report adds the comparison with it. */
   baseline?: string | null;
+  /** The PDF leaderboard's weighting (#872); the server's default (accuracy first) when absent. Ignored otherwise. */
+  preset?: string | null;
 }
 
 /** What the menu items say, in menu order. */
@@ -30,9 +32,10 @@ export const BENCHMARK_EXPORT_LABEL: Record<BenchmarkExportFormat, string> = { p
 export const BENCHMARK_EXPORT_NOTE = 'Sensitive data is masked in every format. Tokens and cost are included per trial, per policy and for the whole benchmark.';
 
 /** `GET /benchmarks/{id}/export`'s path and query. */
-export function benchmarkExportPath(id: string, { format, paper, baseline }: BenchmarkExportOptions): string {
+export function benchmarkExportPath(id: string, { format, paper, baseline, preset }: BenchmarkExportOptions): string {
   const q = new URLSearchParams({ format });
   if (format === 'pdf') q.set('paper', paper ?? defaultPaper());
+  if (format === 'pdf' && preset) q.set('preset', preset);
   if (baseline) q.set('baseline', baseline);
   return `/benchmarks/${encodeURIComponent(id)}/export?${q.toString()}`;
 }
@@ -50,12 +53,14 @@ export interface BenchmarkExportButtonProps {
   live?: boolean;
   /** Add the comparison with this baseline to the report. */
   baselineId?: string | null;
+  /** The weighting the PDF's leaderboard leads with (#872): the one chosen on the page's leaderboard. */
+  preset?: { id: string; label: string } | null;
   variant?: ButtonProps['variant'];
   sx?: ButtonProps['sx'];
 }
 
 /** "Export" with its menu (PDF, CSV, JSON); "Preparing…" and disabled while a file is made. Hidden without `benchmarks:read`. */
-export function BenchmarkExportButton({ benchmarkId, live = false, baselineId = null, variant = 'outlined', sx }: BenchmarkExportButtonProps) {
+export function BenchmarkExportButton({ benchmarkId, live = false, baselineId = null, preset = null, variant = 'outlined', sx }: BenchmarkExportButtonProps) {
   const host = useOptionalPlatformHost();
   const client = host?.api ?? null;
   const canExport = Boolean(host?.viewer.hasPermission('benchmarks:read') && client?.getBlob);
@@ -69,14 +74,14 @@ export function BenchmarkExportButton({ benchmarkId, live = false, baselineId = 
       setBusy(format);
       setError(null);
       try {
-        saveDownload(await exportBenchmark(client, benchmarkId, { format, baseline: baselineId }));
+        saveDownload(await exportBenchmark(client, benchmarkId, { format, baseline: baselineId, preset: preset?.id ?? null }));
       } catch (e) {
         setError(e instanceof Error && e.message ? e.message : 'Could not export the benchmark');
       } finally {
         setBusy(null);
       }
     },
-    [client, busy, benchmarkId, baselineId],
+    [client, busy, benchmarkId, baselineId, preset],
   );
   if (!canExport) return null;
   const choose = (format: BenchmarkExportFormat) => {
@@ -110,6 +115,11 @@ export function BenchmarkExportButton({ benchmarkId, live = false, baselineId = 
           <Typography variant="caption" component="p" color="text.secondary" sx={{ whiteSpace: 'normal' }}>
             {BENCHMARK_EXPORT_NOTE}
           </Typography>
+          {preset && (
+            <Typography variant="caption" component="p" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'normal' }} data-testid="export-preset">
+              The PDF opens with the leaderboard weighted “{preset.label}”.
+            </Typography>
+          )}
           {baselineId && (
             <Typography variant="caption" component="p" color="text.secondary" sx={{ mt: 0.5, whiteSpace: 'normal' }}>
               The report includes the comparison with the baseline.

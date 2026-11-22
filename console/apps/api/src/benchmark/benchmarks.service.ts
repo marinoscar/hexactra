@@ -11,7 +11,7 @@ import { FabricClient } from '../fabric/fabric.client';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
-import { inRunOrder, publicConfig, readBenchmarkConfig, type StoredBenchmarkConfig } from './benchmark-config';
+import { inRunOrder, publicConfig, readBenchmarkConfig, withRecordings, type StoredBenchmarkConfig } from './benchmark-config';
 import { BENCHMARK_STATUSES, LIVE_BENCHMARK_STATUSES, TRIAL_STATUSES, type BenchmarkStatus } from './benchmark.constants';
 import { enqueueBenchmarkAdvance } from './benchmark.jobs.enqueue';
 import { BenchmarkMetrics } from './benchmark.metrics';
@@ -22,7 +22,7 @@ import { BENCHMARK_LIMITS } from './benchmark.settings';
 import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTotals, type BenchmarkTrialView, type BenchmarkView, type CreateBenchmarkInput } from './benchmarks.schemas';
 import { SUITE, challengeById, missingCapabilities, seedFrom } from './suite/registry';
 import { CATEGORIES, CATEGORY_LABELS } from './suite/types';
-import { TRIAL_VIEW_OMIT, iso, oneOf, trialView } from './trial-view';
+import { TRIAL_RECORDING_SELECT, TRIAL_VIEW_OMIT, iso, oneOf, trialRecording, trialView } from './trial-view';
 
 /** Who is asking. */
 export interface BenchmarkActor {
@@ -98,13 +98,13 @@ export class BenchmarksService {
     // The suite's own order, whatever order they were named in.
     const challengeIds = SUITE.challenges.map((c) => c.id).filter((id) => asked.includes(id));
 
-    const policies: { ref: string; label: string }[] = [];
+    const policies: StoredBenchmarkConfig['policies'] = [];
     for (const [i, p] of dto.policies.entries()) {
       await this.policies.assertAssignable(userId, p.ref, `policies[${i}].ref (${p.ref})`);
       const label = p.label ?? (await this.policies.find(userId, p.ref))?.name ?? p.ref;
       if (policies.some((x) => x.ref === p.ref)) throw new BadRequestException({ code: 'POLICY_DUPLICATE', message: `The policy ${p.ref} is listed twice` });
       if (policies.some((x) => x.label === label)) throw new BadRequestException({ code: 'POLICY_DUPLICATE', message: `Two policies have the label "${label}": give one of them another label` });
-      policies.push({ ref: p.ref, label: label.slice(0, 200) });
+      policies.push({ ref: p.ref, label: label.slice(0, 200), recordVideo: p.recordVideo ?? false });
     }
 
     const hostId = dto.hostId ?? null;
@@ -115,16 +115,19 @@ export class BenchmarksService {
       if (!hosts.some((h) => h.id === hostId)) throw new BadRequestException({ code: 'BENCHMARK_HOST_NOT_FOUND', message: `No node ${hostId} is in the fleet` });
     }
 
-    const config: StoredBenchmarkConfig = {
+    // The owner's opt-in per policy (#845), or for every policy (#841), copied onto each trial's run when it is created, as a task's choice is.
+    const config: StoredBenchmarkConfig = withRecordings({
       challengeIds,
       policies,
       trials: dto.trials ?? settings.defaultTrials,
       hostId,
       profile: dto.profile,
-      capUsd: dto.capUsd ?? settings.defaultCapUsd,
+      // `null` or 0 is the owner's choice of no budget (#840, #844), stored as `null`; only an absent cap takes the deployment default.
+      capUsd: dto.capUsd === undefined ? settings.defaultCapUsd : dto.capUsd || null,
       trialTimeoutMinutes: dto.trialTimeoutMinutes ?? settings.trialTimeoutMinutes,
+      recordVideo: dto.recordVideo ?? false,
       orgId,
-    };
+    });
     const id = randomUUID();
     const name = dto.name ?? `Benchmark ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
     const now = new Date();
@@ -172,7 +175,7 @@ export class BenchmarksService {
 
     this.metrics.started();
     this.metrics.trials('unsupported', rows.filter((r) => r.verdict === 'unsupported').length);
-    await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd });
+    await this.audit(userId, orgId, BENCHMARK_AUDIT.started, id, { suite: `${SUITE.key}@${SUITE.version}`, challenges: challengeIds.length, policies: policies.length, trials: config.trials, runs: rows.length, capUsd: config.capUsd, recordVideo: config.recordVideo, recordedPolicies: config.policies.filter((p) => p.recordVideo).length });
     await enqueueBenchmarkAdvance(this.jobs, id, orgId, 'benchmark_started');
     this.log.log(`benchmark ${id}: started (${rows.length} trials)`);
     return this.view(created, await this.factsOf([id]));
@@ -200,14 +203,25 @@ export class BenchmarksService {
     return this.view(b, await this.factsOf([id]));
   }
 
-  /** The trials of a benchmark, in the order they run. */
-  async trials(userId: string, id: string, filter: { status?: string; verdict?: string; policyRef?: string; challengeId?: string } = {}): Promise<{ items: BenchmarkTrialView[] }> {
+  /**
+   * The trials of a benchmark, in the order they run. With `recordings` (the viewer has `runs:read`, the run page's rule), each trial
+   * carries its run's recording status (#846), read in the same query as the trials: never one query per trial.
+   */
+  async trials(
+    userId: string,
+    id: string,
+    filter: { status?: string; verdict?: string; policyRef?: string; challengeId?: string } = {},
+    opts: { recordings?: boolean } = {},
+  ): Promise<{ items: BenchmarkTrialView[] }> {
     const b = await this.find(userId, id);
     const rows = await this.prisma.benchmarkTrial.findMany({
       where: { benchmarkId: id, ...(filter.status ? { status: filter.status } : {}), ...(filter.verdict ? { verdict: filter.verdict } : {}), ...(filter.policyRef ? { policyRef: filter.policyRef } : {}), ...(filter.challengeId ? { challengeId: filter.challengeId } : {}) },
       omit: TRIAL_VIEW_OMIT,
+      include: { run: { select: { recording: { select: TRIAL_RECORDING_SELECT } } } },
     });
-    return { items: inRunOrder(readBenchmarkConfig(b.config), rows).map(trialView) };
+    return {
+      items: inRunOrder(readBenchmarkConfig(b.config), rows).map(({ run, ...t }) => trialView(t, opts.recordings && t.runId ? trialRecording(run?.recording, userId) : null)),
+    };
   }
 
   // ---- Cancel and delete ----

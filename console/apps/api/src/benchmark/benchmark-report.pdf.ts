@@ -1,5 +1,5 @@
-// The PDF report of a benchmark (E44.6, #744): the summary and ranking, the scorecard, the categories, the challenge x policy matrix, the
-// failure reasons, the comparison with a baseline when asked, and how it was measured. Tokens and cost sit next to every result.
+// The PDF report of a benchmark (E44.6, #744): the leaderboard first (the Benchmark Score under the chosen preset, #872), the summary and ranking, the scorecard, the categories, the challenge x policy matrix, the
+// failure reasons, the trial recordings (#863), the comparison with a baseline when asked, the rankings per dimension and under every preset (#872), and how it was measured. Tokens and cost sit next to every result.
 //
 // One source: the `BenchmarkReport` of `BenchmarkReportService.build`, already masked. Nothing here reads the database or masks again.
 // `buildBenchmarkReportDefinition(report, opts)` is pure (snapshot-tested); the run report's `renderPdf` lays it out with the bundled
@@ -9,12 +9,19 @@ import type { Content, ContextPageSize } from 'pdfmake/interfaces';
 
 import { REPORT_FOOTER_NOTE, reportDate, reportDuration, type ReportDefinition } from '../tasks/run-report.pdf';
 import type { BenchmarkReport, BenchmarkReportPaper } from './benchmark-report.schemas';
-import type { MetricDelta, Rate, ScoreMetrics } from './scorecard.schemas';
+import { SCORE_PRESETS, type MetricDelta, type PolicyScore, type Rate, type ScoreBadge, type ScoreDimension, type ScoreGrade, type ScoreMetrics, type ScorePreset } from './scorecard.schemas';
 import { CATEGORY_LABELS } from './suite/types';
 
 export interface BenchmarkReportOptions {
   /** A4 (the default) or US letter. */
   paper?: BenchmarkReportPaper;
+  /**
+   * The console's public origin (`APP_URL`), for the links to each recorded trial's run page (#863). Without it the report prints the
+   * path `/runs/<id>#recording`.
+   */
+  consoleUrl?: string | null;
+  /** The weighting of the leaderboard (#872): `accuracy` (the default), `balanced`, `budget` or `speed`. */
+  preset?: ScorePreset;
 }
 
 /** The banner of a benchmark that was still running when it was exported. */
@@ -22,13 +29,16 @@ export const BENCHMARK_REPORT_PARTIAL_BANNER = 'Benchmark in progress: partial r
 
 /** The section headings, in order; the read-back test looks for them. */
 export const BENCHMARK_REPORT_SECTIONS = {
+  leaderboard: 'Leaderboard',
   ranking: 'Ranking',
   scorecard: 'Scorecard',
   cost: 'Tokens and cost',
   categories: 'By category',
   matrix: 'Challenge x policy',
   failures: 'Failure reasons',
+  recordings: 'Trial recordings',
   baseline: 'Compared with the baseline',
+  rankings: 'Rankings',
   method: 'Method',
 } as const;
 
@@ -41,6 +51,10 @@ const MUTED = '#5a5e72';
 const RULE = '#d5d6e3';
 const SOFT_FILL = '#f2f2fb';
 const FAIL = '#b3261e';
+const BAR_TRACK = '#e4e4f4';
+const GOLD = '#c9971c';
+/** A grade's colour: S and A green, B blue, C amber, D red. */
+const GRADE_COLOR: Record<ScoreGrade, string> = { S: '#1b7a43', A: '#2e8b57', B: '#2b6cb0', C: '#b7791f', D: FAIL };
 const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><path d="M60 60V108L18.4 84V36L60 12L101.6 36V84L80 96.5" fill="none" stroke="${ACCENT}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><circle cx="60" cy="60" r="13" fill="${MARK_ACCENT}"/></svg>`;
 
 // ---- words ----
@@ -89,13 +103,23 @@ const METRIC_LABEL: Record<MetricDelta['metric'], string> = {
   outputTokens: 'Output tokens',
   cachedInputTokens: 'Cached input tokens',
   tokensPerSuccess: 'Tokens per success',
+  overallScore: 'Overall score',
+  accuracyScore: 'Accuracy score',
+  costScore: 'Cost score',
+  timeScore: 'Time score',
+  tokensScore: 'Tokens score',
 };
+
+const isScoreMetric = (m: MetricDelta['metric']): boolean => m.endsWith('Score');
+/** A score to one decimal. */
+const scoreText = (v: number | null | undefined): string => (v === null || v === undefined ? DASH : v.toFixed(1));
 
 function deltaValue(d: MetricDelta, v: number | null): string {
   if (v === null) return DASH;
   if (d.metric === 'successRate' || d.metric === 'passAllK' || d.metric === 'falseSuccessRate') return pct(v);
   if (d.metric === 'medianActiveMs') return ms(v);
   if (d.metric.endsWith('Usd')) return money(v, !d.atLeast);
+  if (isScoreMetric(d.metric)) return scoreText(v);
   return count(v);
 }
 
@@ -110,7 +134,9 @@ function deltaText(d: MetricDelta): string {
         ? ms(abs)
         : d.metric.endsWith('Usd')
           ? money(abs, !d.atLeast)
-          : count(abs);
+          : isScoreMetric(d.metric)
+            ? `${scoreText(abs)} pts`
+            : count(abs);
   const verdict = d.withinNoise ? 'within noise' : d.improved === true ? 'better' : d.improved === false ? 'worse' : 'no change';
   return `${sign}${v} (${verdict})`;
 }
@@ -148,9 +174,205 @@ function banner(title: string, text: string): Content {
   } as Content;
 }
 
+// ---- the Benchmark Score (#871, #872) ----
+
+const DIMS: ScoreDimension[] = ['accuracy', 'cost', 'time', 'tokens'];
+const DIM_LABEL: Record<ScoreDimension, string> = { accuracy: 'Accuracy', cost: 'Cost', time: 'Time', tokens: 'Tokens' };
+const BADGE_LABEL: Record<ScoreBadge, string> = { most_accurate: 'Most accurate', cheapest: 'Cheapest per success', fastest: 'Fastest', most_token_efficient: 'Fewest tokens' };
+
+/** The policies best first under a preset. */
+export function rankedUnder(policies: readonly PolicyScore[], preset: ScorePreset): PolicyScore[] {
+  return [...policies].sort((a, b) => a.score.overall[preset].rank - b.score.overall[preset].rank);
+}
+
+/** "Accuracy 50 · Cost 20 · Time 15 · Tokens 15". */
+function weightsOf(r: BenchmarkReport, preset: ScorePreset): string {
+  const w = r.scorecard.scoring.presets.find((p) => p.id === preset)?.weights;
+  return w ? DIMS.map((d) => `${DIM_LABEL[d]} ${w[d]}`).join(' · ') : '';
+}
+const presetLabel = (r: BenchmarkReport, preset: ScorePreset): string => r.scorecard.scoring.presets.find((p) => p.id === preset)?.label ?? preset;
+
+/** A horizontal bar of a 0 to 100 score, drawn (no image). */
+function bar(value: number | null, width: number, height = 5, color = ACCENT): Content {
+  const w = Math.max(0, Math.min(100, value ?? 0)) * (width / 100);
+  return {
+    canvas: [
+      { type: 'rect', x: 0, y: 0, w: width, h: height, r: height / 2, color: BAR_TRACK },
+      ...(w > 0 ? [{ type: 'rect', x: 0, y: 0, w: Math.max(w, height), h: height, r: height / 2, color }] : []),
+    ],
+    margin: [0, 1, 0, 0],
+  } as Content;
+}
+
+/** A sub-score: its value over its bar. `atMost`: the cost is unknown, so the score is an upper bound. */
+function subScore(value: number | null, width: number, atMost = false): Content {
+  return { stack: [{ text: value === null ? DASH : `${atMost ? '≤ ' : ''}${scoreText(value)}`, style: 'td', alignment: 'right' }, bar(value, width)] } as Content;
+}
+
+/** The grade as a coloured badge. */
+function gradeBadge(grade: ScoreGrade | null, size: 'big' | 'small' = 'small'): Content {
+  if (!grade) return { text: 'Not rated', style: 'small' };
+  return {
+    table: { body: [[{ text: grade, bold: true, color: '#ffffff', fontSize: size === 'big' ? 16 : 8.5, alignment: 'center', fillColor: GRADE_COLOR[grade] }]] },
+    layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => (size === 'big' ? 7 : 4), paddingRight: () => (size === 'big' ? 7 : 4), paddingTop: () => (size === 'big' ? 3 : 1), paddingBottom: () => (size === 'big' ? 3 : 1) },
+  } as Content;
+}
+
+/** The flags beside a score: badges, tied, provisional, safety. */
+function flagsText(p: PolicyScore, preset: ScorePreset): string {
+  const o = p.score.overall[preset];
+  return [
+    ...p.score.badges.map((b) => BADGE_LABEL[b]),
+    ...(o.tied ? ['Tied with #1'] : []),
+    ...(p.score.provisional ? ['Provisional'] : []),
+    ...(p.metrics.safety.flaggedTrials ? [`Safety: ${p.metrics.safety.flaggedTrials} flagged`] : []),
+  ].join(' · ');
+}
+
+/** The first section: the winner, then every policy ranked by its Benchmark Score under the preset. */
+function leaderboardSection(r: BenchmarkReport, preset: ScorePreset): Content[] {
+  const ranked = rankedUnder(r.scorecard.policies, preset);
+  const out: Content[] = [heading(BENCHMARK_REPORT_SECTIONS.leaderboard, 'leaderboard')];
+  out.push({ text: `Benchmark Score, 0 to 100, weighting "${presetLabel(r, preset)}" (${weightsOf(r, preset)}). Best first; the band is the 95% range from the accuracy intervals.`, style: 'small' });
+  const leader = ranked[0];
+  if (!leader || !leader.score.rated) {
+    out.push({ text: 'No policy has a judged trial yet: no score.', style: 'muted', margin: [0, 6, 0, 0] });
+    return out;
+  }
+  const o = leader.score.overall[preset];
+  out.push({
+    table: {
+      widths: [150, '*'],
+      body: [
+        [
+          {
+            stack: [
+              { text: `BEST OVERALL · ${presetLabel(r, preset).toUpperCase()}`, style: 'kickerSmall' },
+              {
+                columns: [
+                  { text: scoreText(o.value), style: 'heroScore', width: 'auto' },
+                  { stack: [gradeBadge(o.grade, 'big')], width: 'auto', margin: [8, 8, 0, 0] },
+                ],
+              },
+              { text: o.low !== null && o.high !== null ? `95% band ${scoreText(o.low)} to ${scoreText(o.high)}` : '', style: 'small' },
+            ],
+            fillColor: SOFT_FILL,
+          },
+          {
+            stack: [
+              { text: [{ text: '★ ', color: GOLD }, { text: leader.label }], style: 'heroLabel' },
+              {
+                columns: DIMS.map((d) => ({ stack: [{ text: DIM_LABEL[d], style: 'small' }, subScore(leader.score[d], 110, d === 'cost' && !leader.score.costKnown)], width: '*' })),
+                columnGap: 10,
+                margin: [0, 4, 0, 4],
+              },
+              { text: flagsText(leader, preset) || ' ', style: 'badges' },
+            ],
+            fillColor: SOFT_FILL,
+          },
+        ],
+      ],
+    },
+    layout: { hLineWidth: () => 0.8, vLineWidth: (i: number) => (i === 1 ? 0 : 0.8), hLineColor: () => ACCENT, vLineColor: () => ACCENT, paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 8 },
+    margin: [0, 6, 0, 8],
+  } as Content);
+  out.push(
+    grid(
+      ['#', 'Policy', 'Score', 'Band', 'Grade', 'Accuracy', 'Cost', 'Time', 'Tokens', 'Notes'],
+      ranked.map((p) => {
+        const x = p.score.overall[preset];
+        return [
+          { text: String(x.rank), style: 'rank' },
+          { text: p.label, style: 'tdStrong' },
+          { text: x.value === null ? DASH : scoreText(x.value), style: 'scoreCell' },
+          x.low === null || x.high === null ? DASH : `${scoreText(x.low)}–${scoreText(x.high)}`,
+          gradeBadge(x.grade),
+          subScore(p.score.accuracy, 56),
+          subScore(p.score.cost, 56, !p.score.costKnown),
+          subScore(p.score.time, 56),
+          subScore(p.score.tokens, 56),
+          { text: p.score.rated ? flagsText(p, preset) || DASH : 'Not rated: no judged trial', style: 'small' },
+        ];
+      }),
+      [14, '*', 38, 52, 30, 62, 62, 62, 62, 120],
+    ),
+  );
+  return out;
+}
+
+/** The rankings at the end: each dimension on its own, and the overall order under every preset. */
+function rankingsSection(r: BenchmarkReport, preset: ScorePreset): Content[] {
+  const ps = r.scorecard.policies;
+  const rated = ps.filter((p) => p.score.rated);
+  const raw: Record<ScoreDimension, (p: PolicyScore) => string> = {
+    accuracy: (p) => `${pct(p.metrics.successRate.value)} success, ${pct(p.metrics.passAllK.rate.value)} pass^${r.scorecard.k}`,
+    cost: (p) => `${money(p.metrics.cost.perSuccessUsd, p.metrics.cost.known)} per success`,
+    time: (p) => `${ms(p.metrics.speed.medianActiveMs)} median`,
+    tokens: (p) => `${count(p.metrics.tokens.perSuccess)} per success`,
+  };
+  const dimTable = (d: ScoreDimension): Content => {
+    const order = [...rated].sort((a, b) => (b.score[d] ?? -1) - (a.score[d] ?? -1));
+    return {
+      stack: [
+        { text: `${DIM_LABEL[d]}`, style: 'boxTitle', margin: [0, 0, 0, 2] },
+        grid(
+          ['#', 'Policy', 'Score', 'Measured'],
+          order.map((p, i) => [String(i + 1), { text: p.label, style: 'tdStrong' }, subScore(p.score[d], 40, d === 'cost' && !p.score.costKnown), raw[d](p)]),
+          [12, '*', 44, 100],
+        ),
+      ],
+    } as Content;
+  };
+  const out: Content[] = [heading(BENCHMARK_REPORT_SECTIONS.rankings, 'rankings', true)];
+  if (!rated.length) {
+    out.push({ text: 'No policy has a judged trial yet: nothing to rank.', style: 'muted' });
+    return out;
+  }
+  out.push(
+    { text: 'Each dimension on its own, best first, with what was measured. Cost, time and tokens are scored against the best policy of this benchmark on a log scale.', style: 'small' },
+    { columns: [dimTable('accuracy'), dimTable('cost')], columnGap: 16, margin: [0, 4, 0, 0] } as Content,
+    { columns: [dimTable('time'), dimTable('tokens')], columnGap: 16 } as Content,
+    { text: 'The overall order under every weighting', style: 'boxTitle', margin: [0, 6, 0, 2] },
+    {
+      text: `Rank and score under each preset (this report leads with "${presetLabel(r, preset)}"). A policy that leads under one weighting and not another wins on that dimension only.`,
+      style: 'small',
+    },
+    grid(
+      ['Policy', ...SCORE_PRESETS.map((x) => `${presetLabel(r, x)} (${r.scorecard.scoring.presets.find((y) => y.id === x)?.weights.accuracy ?? '?'}% accuracy)`)],
+      rankedUnder(ps, preset).map((p) => [
+        { text: p.label, style: 'tdStrong' },
+        ...SCORE_PRESETS.map((x) => {
+          const o = p.score.overall[x];
+          return o.value === null ? DASH : ({ text: `#${o.rank}  ${scoreText(o.value)} ${o.grade ?? ''}`, style: o.rank === 1 ? 'tdStrong' : 'td' } as Content);
+        }),
+      ]),
+      ['*', 110, 110, 110, 110],
+    ),
+  );
+  return out;
+}
+
+/** How the score is computed, for the Method section. */
+function scoreMethod(r: BenchmarkReport): Content[] {
+  return [
+    { text: 'How the Benchmark Score is computed', style: 'boxTitle', margin: [0, 8, 0, 2] },
+    {
+      ul: [
+        `Accuracy = 100 × (0.7 × success rate + 0.3 × pass^${r.scorecard.k}) × (1 − false-success rate), over the judged trials.`,
+        'Cost, Time and Tokens compare cost per success, median active time and tokens per success with the best policy of this benchmark, on a log scale: 100 × (1 − log10(this / best) / 2). The best is 100, twice it about 85, ten times 50, a hundred times or more 0. A policy with no pass scores 0 there.',
+        `Overall = the weighted mean under a preset: ${r.scorecard.scoring.presets.map((p) => `${p.label} (${DIMS.map((d) => `${p.weights[d]}`).join('/')})`).join(', ')}, in the order accuracy/cost/time/tokens.`,
+        'Band: the Overall score with accuracy at the ends of its 95% interval. A policy whose band overlaps the leader\'s is tied: the difference is not shown to be real.',
+        `Grades: S 90 and over, A 80, B 70, C 60, D below. Provisional: fewer than ${r.scorecard.scoring.provisionalBelow} judged trials. A safety flag is shown, never folded into the score.`,
+        'Cost, time and token scores are relative to this benchmark, so compare Overall scores within one benchmark; across benchmarks read the baseline deltas.',
+      ],
+      style: 'body',
+    } as Content,
+  ];
+}
+
 // ---- sections ----
 
-function summary(r: BenchmarkReport): Content[] {
+function summary(r: BenchmarkReport, preset: ScorePreset): Content[] {
   const b = r.benchmark;
   const sc = r.scorecard;
   const t = sc.totals;
@@ -165,6 +387,8 @@ function summary(r: BenchmarkReport): Content[] {
       columnGap: 0,
     } as Content,
     { text: b.name, style: 'title', outline: true, outlineText: 'Benchmark report', id: 'title' } as Content,
+    ...leaderboardSection(r, preset),
+    { text: 'Summary', style: 'boxTitle', margin: [0, 4, 0, 0] },
     factsTable([
       ['Status', r.partial ? `${b.status} (in progress)` : b.status],
       ['Suite', `${b.suiteKey} version ${b.suiteVersion}`],
@@ -178,15 +402,16 @@ function summary(r: BenchmarkReport): Content[] {
       ['Model calls', count(t.modelCalls)],
     ]),
     heading(BENCHMARK_REPORT_SECTIONS.ranking, 'ranking'),
-    { text: 'Best first: the higher success rate, then the lower cost per success, then the lower median active time. There is no composite score.', style: 'small' },
+    { text: 'Best first by the Benchmark Score (0 to 100, accuracy first weighting); equal scores by the higher success rate, then the lower cost per success, then the lower median active time.', style: 'small' },
   );
   const byRef = new Map(sc.policies.map((p) => [p.ref, p]));
   out.push(
     grid(
-      ['#', 'Policy', 'Success rate', 'Cost per success', 'Median active', 'Total cost', 'Total tokens', 'Models'],
+      ['#', 'Policy', 'Score', 'Success rate', 'Cost per success', 'Median active', 'Total cost', 'Total tokens', 'Models'],
       sc.ranking.map((e) => [
         String(e.rank),
         { text: e.label, style: 'tdStrong' },
+        e.score === null || e.score === undefined ? DASH : `${scoreText(e.score)} ${e.grade ?? ''}`.trim(),
         pct(e.successRate),
         money(e.costPerSuccessUsd, e.costKnown),
         ms(e.medianActiveMs),
@@ -194,7 +419,7 @@ function summary(r: BenchmarkReport): Content[] {
         count(e.totalTokens),
         (byRef.get(e.ref)?.metrics.models ?? []).join(', ') || DASH,
       ]),
-      [14, '*', 52, 56, 50, 50, 54, 90],
+      [14, '*', 40, 52, 56, 50, 50, 54, 80],
     ),
   );
   if (!sc.ranking.length) out.push({ text: 'No policy has a judged trial yet.', style: 'muted' });
@@ -309,6 +534,47 @@ function failuresSection(r: BenchmarkReport): Content[] {
   return out;
 }
 
+/** The trials whose run has a recording the viewer may see (`recording` is null without `runs:read`, #846). */
+const recordedTrials = (r: BenchmarkReport) => r.trials.filter((t) => t.recording && t.runId);
+
+const RECORDING_STATUS: Record<string, string> = { ready: 'ready', processing: 'still processing', recording: 'still recording', failed: 'failed' };
+
+/** The run page's player of a trial: `<origin>/runs/<id>#recording`, or the path alone when the origin is not known. */
+export function trialRecordingLink(runId: string, consoleUrl?: string | null): string {
+  return `${(consoleUrl ?? '').replace(/\/+$/, '')}/runs/${encodeURIComponent(runId)}#recording`;
+}
+
+/**
+ * Trial recordings (#863): one row per recorded trial with its status, its length once ready and a link to the run page's player. The
+ * video and its storage key are never here (the video is not masked). No section when nothing was recorded or the viewer lacks
+ * `runs:read` (then every `recording` is null).
+ */
+function recordingsSection(r: BenchmarkReport, consoleUrl?: string | null): Content[] {
+  const recorded = recordedTrials(r);
+  if (!recorded.length) return [];
+  return [
+    heading(BENCHMARK_REPORT_SECTIONS.recordings, 'recordings'),
+    { text: 'Each recorded trial run and where its video plays: the run page, signed in as the owner. The video is not masked and is never in this report.', style: 'small' },
+    grid(
+      ['Challenge', 'Policy', 'Trial', 'Recording', 'Length', 'Run page'],
+      recorded.map((t) => {
+        const href = trialRecordingLink(t.runId!, consoleUrl);
+        const status = t.recording!.status;
+        return [
+          t.challengeTitle,
+          t.policyLabel,
+          String(t.trialIndex + 1),
+          { text: RECORDING_STATUS[status] ?? status, style: status === 'failed' ? 'failed' : 'td' },
+          status === 'ready' ? ms(t.recording!.durationMs) : DASH,
+          // Only a full URL is a link: a bare path has nowhere to go from a PDF reader.
+          /^https?:\/\//.test(href) ? { text: href, link: href, style: 'link' } : href,
+        ];
+      }),
+      [110, 80, 26, 70, 46, '*'],
+    ),
+  ];
+}
+
 function baselineSection(r: BenchmarkReport): Content[] {
   const cmp = r.baseline;
   if (!cmp) return [];
@@ -342,14 +608,31 @@ function baselineSection(r: BenchmarkReport): Content[] {
   return out;
 }
 
-function methodSection(r: BenchmarkReport): Content[] {
+/** Which policies' trial runs record a video (#841, #845): "all policies", their labels, or `null` for none. */
+export function recordedPolicies(config: { recordVideo?: boolean; policies: { label: string; recordVideo?: boolean }[] }): string | null {
+  const recorded = config.policies.filter((p) => config.recordVideo || p.recordVideo);
+  if (recorded.length === 0) return null;
+  return recorded.length === config.policies.length ? 'all policies' : `${recorded.length === 1 ? 'policy' : 'policies'} ${recorded.map((p) => p.label).join(', ')}`;
+}
+
+/** The Method row: which policies were recorded (#845) and how many trials, pointing to the section that lists them (#863). */
+function recordingsRow(r: BenchmarkReport): string {
+  const n = recordedTrials(r).length;
+  const who = recordedPolicies(r.benchmark.config);
+  if (n) return `${n} of ${r.trials.length} trial${r.trials.length === 1 ? '' : 's'} recorded a video of the browser tab${who ? ` (${who})` : ''}: listed under "${BENCHMARK_REPORT_SECTIONS.recordings}", each played on its run page (not in this report).`;
+  return who ? `On for ${who}: each of their trial runs records a video of its browser tab, played on its run page (not in this report). No recording is listed here.` : 'Off.';
+}
+
+function methodSection(r: BenchmarkReport, preset: ScorePreset): Content[] {
   const b = r.benchmark;
   return [
     heading(BENCHMARK_REPORT_SECTIONS.method, 'method', true),
     factsTable([
+      ['Benchmark Score', `${r.scorecard.scoring.method}; this report's leaderboard uses "${presetLabel(r, preset)}" (${weightsOf(r, preset)}).`],
       ['Suite', `${b.suiteKey} version ${b.suiteVersion}: benchmarks compare only within one suite version.`],
       ['Trials', `${b.config.trials} per challenge and policy, one at a time, the policies alternating, on ${b.config.hostId ? 'one node' : 'a node the fabric picks'} (browser profile ${b.config.profile}).`],
-      ['Spend cap', `${money(b.config.capUsd)}: no new trial starts once it is spent. Trial timeout ${b.config.trialTimeoutMinutes} min.`],
+      ['Spend cap', `${b.config.capUsd === null ? 'No cap: each run kept its own policy budget' : `${money(b.config.capUsd)}: no new trial starts once it is spent`}. Trial timeout ${b.config.trialTimeoutMinutes} min.`],
+      ['Recordings', recordingsRow(r)],
     ]),
     { text: 'How a trial is graded', style: 'boxTitle', margin: [0, 8, 0, 2] },
     {
@@ -362,6 +645,7 @@ function methodSection(r: BenchmarkReport): Content[] {
       ],
       style: 'body',
     } as Content,
+    ...scoreMethod(r),
     { text: 'Definitions', style: 'boxTitle', margin: [0, 8, 0, 2] },
     {
       ul: [
@@ -385,7 +669,18 @@ export function buildBenchmarkReportDefinition(report: BenchmarkReport, options:
   const paper = options.paper ?? 'a4';
   const id8 = report.benchmark.id.slice(0, 8);
   const exported = reportDate(report.exportedAt);
-  const content: Content[] = [...summary(report), ...scorecardSection(report), ...categoriesSection(report), ...matrixSection(report), ...failuresSection(report), ...baselineSection(report), ...methodSection(report)];
+  const preset = options.preset ?? report.scorecard.scoring.defaultPreset;
+  const content: Content[] = [
+    ...summary(report, preset),
+    ...scorecardSection(report),
+    ...categoriesSection(report),
+    ...matrixSection(report),
+    ...failuresSection(report),
+    ...recordingsSection(report, options.consoleUrl),
+    ...baselineSection(report),
+    ...rankingsSection(report, preset),
+    ...methodSection(report, preset),
+  ];
   return {
     pageSize: PAGE[paper].size,
     pageOrientation: 'landscape',
@@ -425,6 +720,12 @@ export function buildBenchmarkReportDefinition(report: BenchmarkReport, options:
     styles: {
       wordmark: { fontSize: 13, bold: true, color: TEXT },
       kicker: { fontSize: 10, color: MUTED },
+      kickerSmall: { fontSize: 7.5, bold: true, color: MUTED, characterSpacing: 0.6 },
+      heroScore: { fontSize: 38, bold: true, color: TEXT, lineHeight: 1 },
+      heroLabel: { fontSize: 14, bold: true, color: TEXT },
+      badges: { fontSize: 8, color: ACCENT, bold: true },
+      rank: { fontSize: 9, bold: true, color: ACCENT },
+      scoreCell: { fontSize: 11, bold: true },
       title: { fontSize: 18, bold: true, lineHeight: 1.15, margin: [0, 10, 0, 6] },
       h2: { fontSize: 12.5, bold: true, color: ACCENT, margin: [0, 14, 0, 4] },
       body: { fontSize: 9 },
@@ -440,6 +741,7 @@ export function buildBenchmarkReportDefinition(report: BenchmarkReport, options:
       failed: { fontSize: 8, color: FAIL },
       failedStrong: { fontSize: 8, bold: true, color: FAIL },
       footer: { fontSize: 7.5, color: MUTED },
+      link: { fontSize: 8, color: ACCENT, decoration: 'underline' },
     },
   } as ReportDefinition;
 }

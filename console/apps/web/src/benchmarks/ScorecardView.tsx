@@ -9,7 +9,7 @@ import { Suspense, lazy, useId, type ReactNode } from 'react';
 import type { Counted, PolicyScore, ScoreMetrics, Scorecard } from '../types/benchmarks';
 import { useBreakpoint } from '../ui';
 import { VERDICT_MARK } from './BenchmarkChips';
-import { costOf, duration, failureReasonLabel, modelName, money, num, ofText, pct, rateText, tokens } from './format';
+import { costOf, duration, failureReasonLabel, modelName, money, num, ofText, pct, rateText, scoreText, tokens } from './format';
 
 const CategoryChart = lazy(() => import('./BenchmarkCharts').then((m) => ({ default: m.CategoryChart })));
 const SuccessCostChart = lazy(() => import('./BenchmarkCharts').then((m) => ({ default: m.SuccessCostChart })));
@@ -19,6 +19,19 @@ const counted = (list: Counted[], label: (k: string) => string = (k) => k) => (l
 /** Every metric row of the scorecard: its name and how a policy's metrics read. */
 const METRIC_ROWS: { key: string; label: string; value: (m: ScoreMetrics, p: PolicyScore) => ReactNode }[] = [
   { key: 'rank', label: 'Rank', value: (_m, p) => `#${p.rank}` },
+  {
+    key: 'score',
+    label: 'Benchmark Score (default weighting)',
+    value: (_m, p) => {
+      const o = p.score?.overall.accuracy;
+      return !o || o.value === null ? 'not rated' : `${scoreText(o.value)} · grade ${o.grade}${p.score.provisional ? ' · provisional' : ''}`;
+    },
+  },
+  {
+    key: 'subScores',
+    label: 'Accuracy / cost / time / tokens score',
+    value: (_m, p) => (p.score?.rated ? `${scoreText(p.score.accuracy)} / ${scoreText(p.score.cost)} / ${scoreText(p.score.time)} / ${scoreText(p.score.tokens)}` : 'not rated'),
+  },
   { key: 'success', label: 'Success rate (95% interval)', value: (m) => `${rateText(m.successRate)} · ${ofText(m.successRate.k, m.successRate.n)}` },
   { key: 'passk', label: 'Reliability (pass^k)', value: (m) => `${pct(m.passAllK.rate.value)} · ${ofText(m.passAllK.allPassed, m.passAllK.challenges)} challenges` },
   { key: 'cost', label: 'Total cost', value: (m) => costOf(m) },
@@ -198,7 +211,7 @@ export function ScorecardView({ scorecard }: { scorecard: Scorecard }) {
     <Stack spacing={2}>
       <Panel title={scorecard.live ? 'Scorecard (live, while the benchmark runs)' : 'Scorecard'} testId="scorecard">
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Ranked by success rate, then cost per success, then median active time. No single score. {scorecard.k} trials per challenge and policy.
+          Ranked by the Benchmark Score (accuracy first weighting; the Leaderboard switches it), then success rate, cost per success and median active time. {scorecard.k} trials per challenge and policy.
         </Typography>
         {isPhone ? <PolicyCards scorecard={scorecard} /> : <PolicyColumns scorecard={scorecard} />}
       </Panel>

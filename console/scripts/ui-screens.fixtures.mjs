@@ -1010,16 +1010,33 @@ const benchMetrics = (pol, idx) => {
   };
 };
 const ALL = BENCH_CHALLENGES.map((_, i) => i);
+// The Benchmark Score of each policy (#871): Thorough leads under accuracy first, Economy under budget.
+const benchOverall = (value, rank, grade, tied = false) => ({ value, low: Math.round((value - 9.4) * 10) / 10, high: Math.min(100, Math.round((value + 4.8) * 10) / 10), rank, grade, tied });
+const BENCH_SCORES = [
+  { rated: true, provisional: false, judged: 81, accuracy: 58.4, accuracyLow: 47.1, accuracyHigh: 68.9, cost: 100, costKnown: true, time: 100, tokens: 100, badges: ['cheapest', 'fastest', 'most_token_efficient'], overall: { accuracy: benchOverall(79.2, 3, 'B'), balanced: benchOverall(89.6, 1, 'A'), budget: benchOverall(85.4, 1, 'A'), speed: benchOverall(85.4, 1, 'A') } },
+  { rated: true, provisional: false, judged: 81, accuracy: 74.6, accuracyLow: 64.2, accuracyHigh: 83.1, cost: 81.2, costKnown: true, time: 92.3, tokens: 84.7, badges: [], overall: { accuracy: benchOverall(80.7, 2, 'A', true), balanced: benchOverall(83.2, 2, 'A'), budget: benchOverall(80.6, 2, 'A'), speed: benchOverall(85.1, 2, 'A') } },
+  { rated: true, provisional: false, judged: 81, accuracy: 91.3, accuracyLow: 83.4, accuracyHigh: 95.9, cost: 62.4, costKnown: false, time: 84.1, tokens: 70.2, badges: ['most_accurate'], overall: { accuracy: benchOverall(81.9, 1, 'A'), balanced: benchOverall(77, 3, 'B'), budget: benchOverall(76.9, 3, 'B'), speed: benchOverall(80.6, 3, 'A') } },
+];
+const BENCH_SCORING = {
+  method: 'hexactra.benchmark-score/1', defaultPreset: 'accuracy', provisionalBelow: 10,
+  presets: [
+    { id: 'accuracy', label: 'Accuracy first', weights: { accuracy: 50, cost: 20, time: 15, tokens: 15 } },
+    { id: 'balanced', label: 'Balanced', weights: { accuracy: 25, cost: 25, time: 25, tokens: 25 } },
+    { id: 'budget', label: 'Budget', weights: { accuracy: 35, cost: 40, time: 10, tokens: 15 } },
+    { id: 'speed', label: 'Speed', weights: { accuracy: 35, cost: 15, time: 40, tokens: 10 } },
+  ],
+};
 const benchScorecard = (id, name, status, live) => {
   const policiesScored = BENCH_POLICIES.map((pol, i) => ({
-    ref: pol.ref, label: pol.label, rank: [3, 2, 1][i], metrics: benchMetrics(pol, ALL),
+    ref: pol.ref, label: pol.label, rank: [3, 2, 1][i], metrics: benchMetrics(pol, ALL), score: BENCH_SCORES[i],
     categories: BENCH_CATEGORIES.map((c) => ({ category: c.id, label: c.label, metrics: benchMetrics(pol, ALL.filter((j) => BENCH_CHALLENGES[j][2] === c.id)) })),
   }));
   const sum = (f) => policiesScored.reduce((a, p) => a + f(p.metrics), 0);
   return {
-    format: 'hexactra.benchmark-scorecard', version: 1, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.121.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
+    format: 'hexactra.benchmark-scorecard', version: 2, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.121.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
     totals: { costUsd: Math.round(sum((m) => m.cost.totalUsd) * 1e6) / 1e6, costKnown: false, inputTokens: sum((m) => m.tokens.input), outputTokens: sum((m) => m.tokens.output), cachedInputTokens: sum((m) => m.tokens.cached), totalTokens: sum((m) => m.tokens.total), modelCalls: 812, counts: { total: 90, judged: 81, pass: 63, fail: 18, error: 0, skipped: 0, unsupported: 9, unfinished: 0 } },
-    ranking: [...policiesScored].sort((a, b) => a.rank - b.rank).map((p) => ({ rank: p.rank, ref: p.ref, label: p.label, successRate: p.metrics.successRate.value, costPerSuccessUsd: p.metrics.cost.perSuccessUsd, costKnown: p.metrics.cost.known, medianActiveMs: p.metrics.speed.medianActiveMs, totalCostUsd: p.metrics.cost.totalUsd, totalTokens: p.metrics.tokens.total })),
+    ranking: [...policiesScored].sort((a, b) => a.rank - b.rank).map((p) => ({ rank: p.rank, ref: p.ref, label: p.label, successRate: p.metrics.successRate.value, costPerSuccessUsd: p.metrics.cost.perSuccessUsd, costKnown: p.metrics.cost.known, medianActiveMs: p.metrics.speed.medianActiveMs, totalCostUsd: p.metrics.cost.totalUsd, totalTokens: p.metrics.tokens.total, score: p.score.overall.accuracy.value, grade: p.score.overall.accuracy.grade })),
+    scoring: BENCH_SCORING,
     policies: policiesScored,
     categories: BENCH_CATEGORIES,
     matrix: BENCH_CHALLENGES.map(([cid, title, category, , missing], j) => ({
@@ -1064,6 +1081,8 @@ const benchTrials = (live) =>
           inputTokens: ran ? Math.round(pol.tokens * 0.92) : null, outputTokens: ran ? Math.round(pol.tokens * 0.08) : null, cachedInputTokens: ran ? Math.round(pol.tokens * 0.4) : null,
           model: ran ? pol.model : null, models: null, costUsd: ran ? pol.cost : null, costKnown: ran ? pol.ref !== 'builtin:thorough' : null, stopReason: ran ? 'finished' : null,
           questions: ran ? 0 : null, escalations: ran ? 0 : null, startedAt: ran ? iso(-80_000_000) : null, finishedAt: ran ? iso(-79_900_000) : null,
+          // The trial runs' videos (#846): ready for most, one still being prepared, one that failed (shows nothing).
+          recording: ran && !(j === 0 && t === 2) ? (live && j === 7 ? { status: 'processing', durationMs: null } : t === 2 && pi === 1 ? { status: 'failed', durationMs: null } : { status: 'ready', durationMs: 61_000 }) : null,
         };
       }),
     ),

@@ -9,11 +9,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { cancelBenchmark, deleteBenchmark, getBenchmark, getScorecard, listBenchmarks, listTrials } from '../benchmarks/api';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
 import { BenchmarkExportButton } from '../components/BenchmarkExportMenu';
-import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, tokens } from '../benchmarks/format';
+import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, recordedPoliciesText, tokens } from '../benchmarks/format';
+import { Leaderboard, storePreset, storedPreset } from '../benchmarks/Leaderboard';
 import { ScorecardView } from '../benchmarks/ScorecardView';
 import { TrialList } from '../benchmarks/TrialList';
 import { errorText } from '../policies/usePolicyCatalog';
-import type { Benchmark, BenchmarkTrial, Scorecard } from '../types/benchmarks';
+import { SCORE_PRESETS, type Benchmark, type BenchmarkTrial, type Scorecard, type ScorePreset } from '../types/benchmarks';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, formatDateTime, useConfirm, type PageAction } from '../ui';
 
 /** How often a live benchmark is read again. */
@@ -45,7 +46,8 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
   const input = t ? t.inputTokens : b.totals.inputTokens;
   const output = t ? t.outputTokens : b.totals.outputTokens;
   const cached = t ? t.cachedInputTokens : b.totals.cachedInputTokens;
-  const share = b.config.capUsd > 0 ? Math.min(1, b.spentUsd / b.config.capUsd) : 0;
+  const share = b.config.capUsd !== null && b.config.capUsd > 0 ? Math.min(1, b.spentUsd / b.config.capUsd) : 0;
+  const recorded = recordedPoliciesText(b.config);
   return (
     <Box component="section" aria-label="Totals" sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' } }}>
       <Tile testId="total-cost" label="Total cost" value={money(cost, costKnown)} detail={costKnown ? `${(t?.modelCalls ?? b.totals.modelCalls).toLocaleString('en-US')} model calls` : 'At least: a model call had no price'} />
@@ -57,9 +59,14 @@ function TotalsStrip({ b, scorecard }: { b: Benchmark; scorecard: Scorecard | nu
           Spend against the cap
         </Typography>
         <Typography variant="h6" component="div" sx={{ fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
-          {money(b.spentUsd, b.totals.costKnown)} of {money(b.config.capUsd)}
+          {b.config.capUsd === null ? <>{money(b.spentUsd, b.totals.costKnown)} (no cap)</> : <>{money(b.spentUsd, b.totals.costKnown)} of {money(b.config.capUsd)}</>}
         </Typography>
         <LinearProgress variant="determinate" value={share * 100} aria-label={`${Math.round(share * 100)}% of the spend cap`} sx={{ mt: 0.75 }} />
+        {recorded && (
+          <Typography variant="caption" color="text.secondary" component="div" data-testid="recorded-policies" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
+            Videos recorded: {recorded}
+          </Typography>
+        )}
       </Paper>
     </Box>
   );
@@ -79,6 +86,8 @@ export function BenchmarkPage() {
   const [baseline, setBaseline] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The Benchmark Score's weighting (#871): this viewer's last choice, else the scorecard's default.
+  const [preset, setPreset] = useState<ScorePreset | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -159,6 +168,11 @@ export function BenchmarkPage() {
 
   const live = isLiveBenchmark(b.status);
   const p = b.progress;
+  const shownPreset: ScorePreset = preset ?? storedPreset(SCORE_PRESETS, scorecard?.scoring?.defaultPreset ?? 'accuracy');
+  const choosePreset = (next: ScorePreset) => {
+    setPreset(next);
+    storePreset(next);
+  };
   const ended = p.total - p.pending - p.running;
   const actions: PageAction[] = [
     { key: 'cancel', label: 'Cancel', Icon: StopCircleOutlinedIcon, onClick: () => void doCancel(), color: 'error', hidden: !canRun || !live, disabled: busy },
@@ -181,7 +195,13 @@ export function BenchmarkPage() {
         </Stack>
         {/* The report (E44.6, #744): PDF, CSV of trials, JSON; with the comparison when a baseline is chosen below. */}
         <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5 }} data-testid="benchmark-export">
-          <BenchmarkExportButton benchmarkId={b.id} live={isLiveBenchmark(b.status)} baselineId={baseline || null} sx={{ minHeight: 44 }} />
+          <BenchmarkExportButton
+            benchmarkId={b.id}
+            live={isLiveBenchmark(b.status)}
+            baselineId={baseline || null}
+            preset={scorecard?.scoring ? { id: shownPreset, label: scorecard.scoring.presets.find((x) => x.id === shownPreset)?.label ?? shownPreset } : null}
+            sx={{ minHeight: 44 }}
+          />
         </Stack>
       </PageHeader>
       <Stack spacing={2}>
@@ -193,6 +213,8 @@ export function BenchmarkPage() {
           </Typography>
           <LinearProgress variant="determinate" value={p.total ? (ended / p.total) * 100 : 0} aria-label={`${ofText(ended, p.total)} trials ended`} sx={{ mt: 1 }} />
         </Paper>
+
+        {scorecard && <Leaderboard scorecard={scorecard} preset={shownPreset} onPresetChange={choosePreset} />}
 
         <TotalsStrip b={b} scorecard={scorecard} />
 

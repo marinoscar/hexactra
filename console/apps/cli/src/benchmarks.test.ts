@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { benchmarkRequest, benchmarksCommand, setBenchmarkExportTarget, setBenchmarkPollMs } from './benchmarks.command.js';
-import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, scorecardText, usd, withCode, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type SuiteView } from './benchmarks.js';
+import { comparisonText, deltaLine, exportFilename, parsePolicyFlag, rate, recordedText, recordingLength, recordingSummary, scoreLine, scorecardText, trialLines, usd, withCode, type BenchmarkTrialView, type BenchmarkView, type ComparisonView, type ScoreMetricsView, type ScorecardView, type ScoreView, type SuiteView } from './benchmarks.js';
 import { setConsoleApiFactory } from './console-api.js';
 
 resetCliForTests();
@@ -38,6 +38,12 @@ function benchmark(over: Partial<BenchmarkView> = {}): BenchmarkView {
     finishedAt: '2026-11-21T11:00:00.000Z',
     ...over,
   };
+}
+
+const RUN = '55555555-5555-4555-8555-555555555555';
+
+function trial(over: Partial<BenchmarkTrialView> = {}): BenchmarkTrialView {
+  return { id: 't1', challengeId: 'nav-lookup', policyLabel: 'Economy', trialIndex: 0, status: 'graded', verdict: 'pass', failureReason: null, claimedSuccess: true, runId: RUN, activeMs: 30_000, steps: 8, inputTokens: 5_000, outputTokens: 400, cachedInputTokens: 2_000, model: 'openai:model-a', costUsd: 0.05, costKnown: true, ...over };
 }
 
 const r = (k: number, n: number) => ({ k, n, value: n ? k / n : null, low: n ? 0.2 : null, high: n ? 0.9 : null });
@@ -222,6 +228,74 @@ describe('benchmark helpers', () => {
     expect(text).toMatch(/Navigation\s+50% \(3\/6\)\s+33,000 tok \(in 30,000 \/ out 3,000 \/ cached 10,000\)\s+≥ \$0\.25/);
     expect(text).toContain('failures    wrong_result 3');
   });
+
+  it('prints the Benchmark Score per policy under the default or a chosen preset, and nothing from an older console (#871)', () => {
+    const o = (value: number, rank: number, grade: string, tied = false) => ({ value, low: value - 10, high: value + 5, rank, grade, tied });
+    const score = (accuracy: number, overall: Record<string, ReturnType<typeof o>>, badges: string[], provisional = false): ScoreView => ({ rated: true, provisional, accuracy, cost: 100, costKnown: true, time: 90, tokens: 80, overall, badges });
+    const base = scorecard();
+    const scored = scorecard({
+      scoring: { defaultPreset: 'accuracy', presets: [{ id: 'accuracy', label: 'Accuracy first', weights: {} }, { id: 'budget', label: 'Budget', weights: {} }] },
+      policies: [
+        { ...base.policies[0]!, score: score(56.7, { accuracy: o(78.4, 2, 'B', true), budget: o(84.8, 1, 'A') }, ['cheapest'], true) },
+        { ...base.policies[1]!, score: score(100, { accuracy: o(91, 1, 'S'), budget: o(81.9, 2, 'A') }, ['most_accurate']) },
+      ],
+    });
+    const text = scorecardText(benchmark(), scored).join('\n');
+    expect(text).toContain('Score      Accuracy first preset (--preset accuracy|balanced|budget|speed)');
+    expect(text.indexOf('#1 Thorough')).toBeLessThan(text.indexOf('#2 Economy'));
+    expect(text).toContain('score       91.0 S  (81.0-96.0)  accuracy 100.0 · cost 100.0 · time 90.0 · tokens 80.0  best: most accurate');
+    expect(text).toContain('score       78.4 B  (68.4-83.4)  accuracy 56.7 · cost 100.0 · time 90.0 · tokens 80.0  [provisional]  [tied with #1]  best: cheapest');
+    const budget = scorecardText(benchmark(), scored, undefined, 'budget').join('\n');
+    expect(budget.indexOf('#1 Economy')).toBeLessThan(budget.indexOf('#2 Thorough'));
+    expect(budget).toContain('Budget preset');
+    expect(scoreLine({ ...scored.policies[0]!.score!, rated: false }, 'accuracy')).toBe('  score       not rated (no judged trial)');
+    expect(scorecardText(benchmark(), base).join('\n')).not.toContain('score ');
+  });
+
+  it("prints each trial's recording state, and the run page URL of a ready one (#863)", () => {
+    expect([recordingLength(45_000), recordingLength(72_000), recordingLength(3_725_000), recordingLength(0)]).toEqual(['45s', '1m12s', '1h02m05s', '0s']);
+    const lines = trialLines(
+      [
+        trial({ recording: { status: 'ready', durationMs: 72_000 } }),
+        trial({ id: 't2', trialIndex: 1, recording: { status: 'processing', durationMs: null } }),
+        trial({ id: 't3', trialIndex: 2, recording: { status: 'recording', durationMs: null } }),
+        trial({ id: 't4', trialIndex: 3, recording: { status: 'failed', durationMs: null } }),
+        trial({ id: 't5', trialIndex: 4, recording: null }),
+      ],
+      { webUrl: 'https://console.example.test/' },
+    );
+    expect(lines).toHaveLength(6);
+    expect(lines[0]).toMatch(/#1 .*run 55555555 {2}rec ready 1m12s$/);
+    expect(lines[1]).toBe(`      https://console.example.test/runs/${RUN}#recording`);
+    expect(lines[2]).toMatch(/#2 .*run 55555555 {2}rec processing$/);
+    expect(lines[3]).toMatch(/#3 .*rec recording$/);
+    expect(lines[4]).toMatch(/#4 .*rec failed$/);
+    expect(lines[5]).toMatch(/#5 .*run 55555555$/);
+    // No console URL: the path.
+    expect(trialLines([trial({ recording: { status: 'ready', durationMs: 72_000 } })])[1]).toBe(`      /runs/${RUN}#recording`);
+  });
+
+  it('counts the recordings in the summary, and prints nothing extra for an older console without the field (#863)', () => {
+    const recorded = [
+      trial({ recording: { status: 'ready', durationMs: 1000 } }),
+      trial({ recording: { status: 'ready', durationMs: 2000 } }),
+      trial({ recording: { status: 'processing', durationMs: null } }),
+      trial({ recording: { status: 'recording', durationMs: null } }),
+      trial({ recording: { status: 'failed', durationMs: null } }),
+      trial({ recording: null }),
+    ];
+    expect(recordingSummary(recorded)).toBe('  Recordings 2 ready, 2 processing, 1 failed');
+    const text = scorecardText(benchmark(), scorecard(), recorded);
+    expect(text[text.findIndex((l) => l.startsWith('  Cost')) + 1]).toBe('  Recordings 2 ready, 2 processing, 1 failed');
+    // Older console: no `recording` field at all. Nothing recorded: every one null.
+    const older = [trial(), trial({ id: 't2' })];
+    expect(trialLines(older, { webUrl: 'https://console.example.test' })).toHaveLength(2);
+    expect(trialLines(older).join('\n')).not.toMatch(/rec |#recording/);
+    expect(recordingSummary(older)).toBeNull();
+    expect(recordingSummary([trial({ recording: null })])).toBeNull();
+    expect(recordingSummary(undefined)).toBeNull();
+    expect(scorecardText(benchmark(), scorecard(), older)).toEqual(scorecardText(benchmark(), scorecard()));
+  });
 });
 
 describe('hexactra benchmarks', () => {
@@ -262,10 +336,48 @@ describe('hexactra benchmarks', () => {
     expect(out).toContain(`started ${ID} (12 trials, cap $10)`);
   });
 
+  it('run --record <policy> records only that policy, --record alone every one, and the output names them (#845)', async () => {
+    const { seen } = fakeConsole((u, init) => {
+      if (u.pathname === '/api/agent-policies') return { body: [{ id: '44444444-4444-4444-8444-444444444444', name: 'Pinned A', builtin: false, description: null, version: 1, isDefault: false, hasNoHardStop: false, usage: { tasks: 0, schedules: 0 }, spec: {} }] };
+      if (u.pathname === '/api/benchmarks' && init?.method === 'POST') {
+        const sent = JSON.parse(String(init.body)) as { recordVideo?: boolean; policies: { ref: string; label?: string; recordVideo?: boolean }[] };
+        return { status: 201, body: benchmark({ status: 'queued', config: { ...benchmark().config, recordVideo: sent.recordVideo ?? false, policies: sent.policies.map((p) => ({ ref: p.ref, label: p.label ?? p.ref, recordVideo: p.recordVideo ?? false })) } }) };
+      }
+      return undefined;
+    });
+    const one = await run('benchmarks', 'run', '--policy', 'builtin:economy', '--policy', 'Pinned A=Model A', '--record', 'Model A');
+    expect(seen.filter((s) => s.method === 'POST').at(-1)!.body).toMatchObject({ policies: [{ ref: 'builtin:economy' }, { ref: '44444444-4444-4444-8444-444444444444', label: 'Model A', recordVideo: true }] });
+    expect(seen.filter((s) => s.method === 'POST').at(-1)!.body).not.toHaveProperty('recordVideo');
+    expect(one.out).toContain('recording Model A)');
+
+    await run('benchmarks', 'run', '--policy', 'builtin:economy', '--policy', 'Pinned A', '--record', 'builtin:economy', '--record', 'pinned a');
+    expect((seen.filter((s) => s.method === 'POST').at(-1)!.body as { policies: { recordVideo?: boolean }[] }).policies.map((p) => p.recordVideo)).toEqual([true, true]);
+
+    const all = await run('benchmarks', 'run', '--policy', 'builtin:economy', '--policy', 'Pinned A', '--record');
+    expect(seen.filter((s) => s.method === 'POST').at(-1)!.body).toMatchObject({ recordVideo: true, policies: [{ ref: 'builtin:economy' }, { ref: '44444444-4444-4444-8444-444444444444' }] });
+    expect(all.out).toContain('recording all policies)');
+
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], record: ['builtin:thorough'] })).rejects.toThrow(/--record builtin:thorough: not one of the --policy values/);
+    expect(recordedText({ recordVideo: true, policies: [{ ref: 'a', label: 'A' }] })).toBe('all policies');
+    expect(recordedText({ recordVideo: false, policies: [{ ref: 'a', label: 'A', recordVideo: true }, { ref: 'b', label: 'B' }] })).toBe('A');
+    expect(recordedText({ recordVideo: false, policies: [{ ref: 'a', label: 'A' }] })).toBeNull();
+  });
+
   it('run refuses bad flags before any request', async () => {
     await expect(benchmarkRequest({})).rejects.toThrow(/at least one policy/);
     await expect(benchmarkRequest({ policy: ['builtin:economy'], trials: '1.5' })).rejects.toThrow(/--trials takes a whole number/);
-    await expect(benchmarkRequest({ policy: ['builtin:economy'], capUsd: '0' })).rejects.toThrow(/--cap-usd/);
+    // `0` (#844) or `none` (#840): no budget, with either spelling of the flag; a negative amount is refused.
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], capUsd: '0' })).capUsd).toBeNull();
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], cap: '0' })).capUsd).toBeNull();
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], cap: '12.5' })).capUsd).toBe(12.5);
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], cap: '-1' })).rejects.toThrow(/--cap takes an amount/);
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], capUsd: 'lots' })).rejects.toThrow(/--cap-usd/);
+    await expect(benchmarkRequest({ policy: ['builtin:economy'], cap: '1', capUsd: '2' })).rejects.toThrow(/once/);
+    // `--cap-usd none`: no spend cap (#840).
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], capUsd: 'none' })).capUsd).toBeNull();
+    // `--record` (#841).
+    expect((await benchmarkRequest({ policy: ['builtin:economy'], record: true })).recordVideo).toBe(true);
+    expect(await benchmarkRequest({ policy: ['builtin:economy'] })).not.toHaveProperty('recordVideo');
   });
 
   it('run --wait follows the benchmark, prints the scorecard and exits 0 when it completes', async () => {
@@ -329,6 +441,38 @@ describe('hexactra benchmarks', () => {
     expect(out).toMatch(/nav-lookup .*fail \(wrong_result, claimed success\).*in 5,000 \/ out 400 \/ cached 2,000 {2}\$0\.05 {2}run 55555555/);
   });
 
+  it('show --trials prints the recording state and the run page URL on the configured console; the summary counts them (#863)', async () => {
+    vi.stubEnv('HEXACTRA_SERVER_URL', 'https://console.example.test');
+    try {
+      fakeConsole((u) => {
+        if (u.pathname === `/api/benchmarks/${ID}`) return { body: benchmark() };
+        if (u.pathname === `/api/benchmarks/${ID}/scorecard`) return { body: scorecard() };
+        if (u.pathname === `/api/benchmarks/${ID}/trials`)
+          return { body: { items: [trial({ recording: { status: 'ready', durationMs: 72_000 } }), trial({ id: 't2', trialIndex: 1, recording: { status: 'processing', durationMs: null } })] } };
+        return undefined;
+      });
+      const { out } = await run('benchmarks', 'show', ID, '--trials');
+      expect(out).toContain('  Recordings 1 ready, 1 processing, 0 failed');
+      expect(out).toMatch(/#1 .*rec ready 1m12s\n {6}https:\/\/console\.example\.test\/runs\/55555555-5555-4555-8555-555555555555#recording\n/);
+      expect(out).toMatch(/#2 .*rec processing\n/);
+      // Without --trials the summary still counts them.
+      expect((await run('benchmarks', 'show', ID)).out).toContain('  Recordings 1 ready, 1 processing, 0 failed');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('show prints no recording line for an older console whose trials have no recording field', async () => {
+    fakeConsole((u) => {
+      if (u.pathname === `/api/benchmarks/${ID}`) return { body: benchmark() };
+      if (u.pathname === `/api/benchmarks/${ID}/scorecard`) return { body: scorecard() };
+      if (u.pathname === `/api/benchmarks/${ID}/trials`) return { body: { items: [trial()] } };
+      return undefined;
+    });
+    const { out } = await run('benchmarks', 'show', ID, '--trials');
+    expect(out).not.toMatch(/Recordings|rec |#recording/);
+  });
+
   it('show reports an unknown benchmark with its code', async () => {
     fakeConsole((u) => (u.pathname.startsWith(`/api/benchmarks/${ID}`) ? { status: 404, body: { statusCode: 404, code: 'BENCHMARK_NOT_FOUND', message: 'No such benchmark.' } } : undefined));
     await expect(run('benchmarks', 'show', ID)).rejects.toThrow('404 BENCHMARK_NOT_FOUND: No such benchmark.');
@@ -382,17 +526,18 @@ describe('hexactra benchmarks', () => {
     }));
     for (const format of ['pdf', 'csv', 'json']) {
       const file = join(dir, `b.${format}`);
-      const { out } = await run('benchmarks', 'export', ID, '--format', format, '-o', file, ...(format === 'pdf' ? ['--paper', 'letter', '--baseline', BASE] : []));
+      const { out } = await run('benchmarks', 'export', ID, '--format', format, '-o', file, ...(format === 'pdf' ? ['--paper', 'letter', '--preset', 'budget', '--baseline', BASE] : []));
       expect(readFileSync(file, 'utf8')).toBe(files[format]!.body);
       expect(out).toContain(`wrote ${file}`);
     }
-    expect(urls[0]).toBe(`/api/benchmarks/${ID}/export?format=pdf&paper=letter&baseline=${BASE}`);
+    expect(urls[0]).toBe(`/api/benchmarks/${ID}/export?format=pdf&paper=letter&preset=budget&baseline=${BASE}`);
     expect(urls[1]).toBe(`/api/benchmarks/${ID}/export?format=csv`);
   });
 
   it('export refuses a bad format, a non-PDF body, and prints a refusal with its code', async () => {
     fakeConsole(() => undefined);
     await expect(run('benchmarks', 'export', ID, '--format', 'xlsx')).rejects.toThrow(/--format is one of json, csv, pdf/);
+    await expect(run('benchmarks', 'export', ID, '--format', 'pdf', '--preset', 'cheapest')).rejects.toThrow(/--preset must be one of accuracy, balanced, budget, speed/);
     setBenchmarkExportTarget(() => ({ apiBaseUrl: 'http://x/api', token: 't', fetch: vi.fn(async () => new Response('<html>', { status: 200 })) }));
     await expect(run('benchmarks', 'export', ID, '--format', 'pdf', '-o', join(mkdtempSync(join(tmpdir(), 'bench-')), 'x.pdf'))).rejects.toThrow(/did not send a PDF/);
     setBenchmarkExportTarget(() => ({ apiBaseUrl: 'http://x/api', token: 't', fetch: vi.fn(async () => new Response(JSON.stringify({ statusCode: 429, code: 'EXPORT_RATE_LIMITED', message: 'At most 10 exports a minute.' }), { status: 429 })) }));

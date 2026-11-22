@@ -22,3 +22,8 @@ export function readPdf(pdf: Buffer): ReadPdf {
 export function imageObjects(pdf: Buffer): number {
   return (pdf.toString('latin1').match(/\/Subtype \/Image/g) ?? []).length;
 }
+
+/** The URIs of the file's link annotations, in order (pdfkit writes annotation dictionaries uncompressed). */
+export function linkUris(pdf: Buffer): string[] {
+  return [...pdf.toString('latin1').matchAll(/\/URI \(((?:\\.|[^\\)])*)\)/g)].map((m) => m[1]!.replace(/\\(.)/g, '$1'));
+}

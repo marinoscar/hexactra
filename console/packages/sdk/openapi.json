@@ -49698,7 +49698,7 @@
         }
       },
       "post": {
-        "description": "Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent.\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
+        "description": "Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null` or `0`: no budget, stored as `null`; absent: the deployment default).\n\n**Requires:** authentication, plus permission `benchmarks:run`.",
         "operationId": "benchmarks_start",
         "parameters": [],
         "requestBody": {
@@ -49952,7 +49952,7 @@
     },
     "/api/benchmarks/{id}/trials": {
       "get": {
-        "description": "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "description": "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run, the run's id and, for a caller with `runs:read`, the status of the run's recording (`recording`; the video plays only on the run page). Never the seed, the site's state or an expected answer.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
         "operationId": "benchmarks_trials",
         "parameters": [
           {
@@ -50088,7 +50088,7 @@
     },
     "/api/benchmarks/{id}/scorecard": {
       "get": {
-        "description": "Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; \"at least\" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the ranking (success rate, then cost per success, then median active time; no composite score); and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "description": "Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; \"at least\" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the Benchmark Score of each policy (accuracy, cost, time and tokens sub-scores from 0 to 100, the Overall score with its band, rank and grade under each weighting preset, and badges; #871) and the ranking by it under the default preset; and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
         "operationId": "benchmarks_scorecard",
         "parameters": [
           {
@@ -50278,7 +50278,7 @@
     },
     "/api/benchmarks/{id}/export": {
       "get": {
-        "description": "A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
+        "description": "A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`, `preset=accuracy|balanced|budget|speed`): the leaderboard first (the Benchmark Score of each policy under the preset, its grade, band, four sub-scores and badges), then summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, the rankings per dimension and under every preset, and the method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.\n\n**Requires:** authentication, plus permission `benchmarks:read`.",
         "operationId": "benchmarks_export",
         "parameters": [
           {
@@ -50327,6 +50327,22 @@
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
+            }
+          },
+          {
+            "name": "preset",
+            "required": false,
+            "in": "query",
+            "description": "The PDF's Benchmark Score weighting for its leaderboard (#872): `accuracy` (the default), `balanced`, `budget` or `speed`. The scores under every preset are in the scorecard; ignored for `json` and `csv`.",
+            "schema": {
+              "default": "accuracy",
+              "type": "string",
+              "enum": [
+                "accuracy",
+                "balanced",
+                "budget",
+                "speed"
+              ]
             }
           }
         ],
@@ -111302,6 +111318,11 @@
                           },
                           "label": {
                             "type": "string"
+                          },
+                          "recordVideo": {
+                            "default": false,
+                            "description": "This policy's trial runs record a video of their browser tab (not masked, owner-only).",
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -111325,12 +111346,21 @@
                       "type": "string"
                     },
                     "capUsd": {
-                      "type": "number"
+                      "description": "The spend cap in USD; `null`: no cap.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "trialTimeoutMinutes": {
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "recordVideo": {
+                      "default": false,
+                      "description": "Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).",
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -111561,6 +111591,11 @@
                     },
                     "label": {
                       "type": "string"
+                    },
+                    "recordVideo": {
+                      "default": false,
+                      "description": "This policy's trial runs record a video of their browser tab (not masked, owner-only).",
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -111584,12 +111619,21 @@
                 "type": "string"
               },
               "capUsd": {
-                "type": "number"
+                "description": "The spend cap in USD; `null`: no cap.",
+                "type": [
+                  "number",
+                  "null"
+                ]
               },
               "trialTimeoutMinutes": {
                 "type": "integer",
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991
+              },
+              "recordVideo": {
+                "default": false,
+                "description": "Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).",
+                "type": "boolean"
               }
             },
             "required": [
@@ -111799,6 +111843,10 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "recordVideo": {
+                  "description": "Record a video of the browser tab of this policy's trial runs (run recordings, epic #755; #845). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false.",
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -111833,16 +111881,27 @@
             "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
           },
           "capUsd": {
-            "description": "No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`.",
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "maximum": 1000
+            "description": "The budget: no new trial starts once the benchmark has spent this much on model calls. `null` or `0`: no budget (stored as `null`; each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`.",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "trialTimeoutMinutes": {
             "description": "How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`.",
             "type": "integer",
             "minimum": 1,
             "maximum": 120
+          },
+          "recordVideo": {
+            "description": "`true`: record a video of every trial's browser tab, for every policy, whatever each policy's own `recordVideo` says (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false: only the policies that set `recordVideo` are recorded (#845).",
+            "type": "boolean"
           }
         },
         "required": [
@@ -112204,6 +112263,47 @@
                     "string",
                     "null"
                   ]
+                },
+                "recording": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "recording",
+                            "processing",
+                            "ready",
+                            "failed"
+                          ],
+                          "description": "`ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video."
+                        },
+                        "durationMs": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The length of the video once it is `ready`; null before."
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "durationMs"
+                      ],
+                      "description": "The trial run's video (epic #755), never the video itself: it is not masked and plays only on the run page."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`."
                 }
               },
               "required": [
@@ -112235,7 +112335,8 @@
                 "questions",
                 "escalations",
                 "startedAt",
-                "finishedAt"
+                "finishedAt",
+                "recording"
               ]
             },
             "description": "In the order the trials run."
@@ -112457,6 +112558,30 @@
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
+                },
+                "score": {
+                  "description": "The Overall score under the default preset.",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "grade": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "S",
+                        "A",
+                        "B",
+                        "C",
+                        "D"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -112468,10 +112593,91 @@
                 "costKnown",
                 "medianActiveMs",
                 "totalCostUsd",
-                "totalTokens"
+                "totalTokens",
+                "score",
+                "grade"
               ]
             },
-            "description": "Best first. No composite score."
+            "description": "Best first by the Overall score under the default preset; `policies[].score.overall` has the order under each preset."
+          },
+          "scoring": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "hexactra.benchmark-score/1"
+              },
+              "defaultPreset": {
+                "type": "string",
+                "enum": [
+                  "accuracy",
+                  "balanced",
+                  "budget",
+                  "speed"
+                ]
+              },
+              "presets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": [
+                        "accuracy",
+                        "balanced",
+                        "budget",
+                        "speed"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "weights": {
+                      "type": "object",
+                      "properties": {
+                        "accuracy": {
+                          "type": "number"
+                        },
+                        "cost": {
+                          "type": "number"
+                        },
+                        "time": {
+                          "type": "number"
+                        },
+                        "tokens": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "accuracy",
+                        "cost",
+                        "time",
+                        "tokens"
+                      ],
+                      "description": "Percentages; they add up to 100."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "weights"
+                  ]
+                }
+              },
+              "provisionalBelow": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "A policy with fewer judged trials than this is provisional."
+              }
+            },
+            "required": [
+              "method",
+              "defaultPreset",
+              "presets",
+              "provisionalBelow"
+            ]
           },
           "policies": {
             "type": "array",
@@ -112488,7 +112694,7 @@
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991,
-                  "description": "1 is best: success rate, then cost per success, then median active time."
+                  "description": "1 is best: the Overall score under the default preset, then success rate, cost per success and median active time."
                 },
                 "metrics": {
                   "type": "object",
@@ -113001,6 +113207,356 @@
                     "safety",
                     "models"
                   ]
+                },
+                "score": {
+                  "type": "object",
+                  "properties": {
+                    "rated": {
+                      "type": "boolean",
+                      "description": "False when the policy has no judged trial: every score is then null."
+                    },
+                    "provisional": {
+                      "type": "boolean",
+                      "description": "Fewer than 10 judged trials: the score can move a lot with more trials."
+                    },
+                    "judged": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "accuracy": {
+                      "description": "100 x (0.7 x success rate + 0.3 x pass^k) x (1 - false-success rate).",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "accuracyLow": {
+                      "description": "Accuracy from the low ends of the Wilson intervals (and the high end of false success).",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "accuracyHigh": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "cost": {
+                      "description": "Cost per success against the best policy of the benchmark, on a log scale: the best is 100, 10 times its cost 50, 100 times or more 0. 0 without a pass.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "costKnown": {
+                      "type": "boolean",
+                      "description": "False: some cost is unknown, so the cost per success is \"at least\" and the cost score is at most this."
+                    },
+                    "time": {
+                      "description": "Median active time against the best policy with a pass, on the same log scale. 0 without a pass.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "tokens": {
+                      "description": "Tokens per success against the best policy, on the same log scale. 0 without a pass.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "overall": {
+                      "type": "object",
+                      "properties": {
+                        "accuracy": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "The Overall score with accuracy at the low end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "The Overall score with accuracy at the high end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "rank": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "1 is best under this preset; a policy that is not rated ranks last."
+                            },
+                            "grade": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "S",
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                            },
+                            "tied": {
+                              "type": "boolean",
+                              "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "low",
+                            "high",
+                            "rank",
+                            "grade",
+                            "tied"
+                          ]
+                        },
+                        "balanced": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "The Overall score with accuracy at the low end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "The Overall score with accuracy at the high end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "rank": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "1 is best under this preset; a policy that is not rated ranks last."
+                            },
+                            "grade": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "S",
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                            },
+                            "tied": {
+                              "type": "boolean",
+                              "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "low",
+                            "high",
+                            "rank",
+                            "grade",
+                            "tied"
+                          ]
+                        },
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "The Overall score with accuracy at the low end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "The Overall score with accuracy at the high end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "rank": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "1 is best under this preset; a policy that is not rated ranks last."
+                            },
+                            "grade": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "S",
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                            },
+                            "tied": {
+                              "type": "boolean",
+                              "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "low",
+                            "high",
+                            "rank",
+                            "grade",
+                            "tied"
+                          ]
+                        },
+                        "speed": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "The Overall score with accuracy at the low end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "The Overall score with accuracy at the high end of its 95% band.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "rank": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "1 is best under this preset; a policy that is not rated ranks last."
+                            },
+                            "grade": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "S",
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                            },
+                            "tied": {
+                              "type": "boolean",
+                              "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                            }
+                          },
+                          "required": [
+                            "value",
+                            "low",
+                            "high",
+                            "rank",
+                            "grade",
+                            "tied"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "accuracy",
+                        "balanced",
+                        "budget",
+                        "speed"
+                      ]
+                    },
+                    "badges": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "most_accurate",
+                          "cheapest",
+                          "fastest",
+                          "most_token_efficient"
+                        ]
+                      },
+                      "description": "The dimensions this policy is best at in the benchmark (ties share a badge)."
+                    }
+                  },
+                  "required": [
+                    "rated",
+                    "provisional",
+                    "judged",
+                    "accuracy",
+                    "accuracyLow",
+                    "accuracyHigh",
+                    "cost",
+                    "costKnown",
+                    "time",
+                    "tokens",
+                    "overall",
+                    "badges"
+                  ],
+                  "description": "The Benchmark Score: four sub-scores from 0 to 100 and the Overall score under each preset (docs/benchmark.md, \"The Benchmark Score\")."
                 },
                 "categories": {
                   "type": "array",
@@ -113549,6 +114105,7 @@
                 "label",
                 "rank",
                 "metrics",
+                "score",
                 "categories"
               ]
             },
@@ -113711,6 +114268,7 @@
           "computedAt",
           "totals",
           "ranking",
+          "scoring",
           "policies",
           "categories",
           "matrix"
@@ -113846,7 +114404,12 @@
                     "inputTokens",
                     "outputTokens",
                     "cachedInputTokens",
-                    "tokensPerSuccess"
+                    "tokensPerSuccess",
+                    "overallScore",
+                    "accuracyScore",
+                    "costScore",
+                    "timeScore",
+                    "tokensScore"
                   ]
                 },
                 "current": {
@@ -113952,7 +114515,12 @@
                           "inputTokens",
                           "outputTokens",
                           "cachedInputTokens",
-                          "tokensPerSuccess"
+                          "tokensPerSuccess",
+                          "overallScore",
+                          "accuracyScore",
+                          "costScore",
+                          "timeScore",
+                          "tokensScore"
                         ]
                       },
                       "current": {
@@ -114315,6 +114883,11 @@
                         },
                         "label": {
                           "type": "string"
+                        },
+                        "recordVideo": {
+                          "default": false,
+                          "description": "This policy's trial runs record a video of their browser tab (not masked, owner-only).",
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -114338,12 +114911,21 @@
                     "type": "string"
                   },
                   "capUsd": {
-                    "type": "number"
+                    "description": "The spend cap in USD; `null`: no cap.",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
                   },
                   "trialTimeoutMinutes": {
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991
+                  },
+                  "recordVideo": {
+                    "default": false,
+                    "description": "Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -114729,6 +115311,30 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "score": {
+                      "description": "The Overall score under the default preset.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "grade": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "S",
+                            "A",
+                            "B",
+                            "C",
+                            "D"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -114740,10 +115346,91 @@
                     "costKnown",
                     "medianActiveMs",
                     "totalCostUsd",
-                    "totalTokens"
+                    "totalTokens",
+                    "score",
+                    "grade"
                   ]
                 },
-                "description": "Best first. No composite score."
+                "description": "Best first by the Overall score under the default preset; `policies[].score.overall` has the order under each preset."
+              },
+              "scoring": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "const": "hexactra.benchmark-score/1"
+                  },
+                  "defaultPreset": {
+                    "type": "string",
+                    "enum": [
+                      "accuracy",
+                      "balanced",
+                      "budget",
+                      "speed"
+                    ]
+                  },
+                  "presets": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "enum": [
+                            "accuracy",
+                            "balanced",
+                            "budget",
+                            "speed"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "weights": {
+                          "type": "object",
+                          "properties": {
+                            "accuracy": {
+                              "type": "number"
+                            },
+                            "cost": {
+                              "type": "number"
+                            },
+                            "time": {
+                              "type": "number"
+                            },
+                            "tokens": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "accuracy",
+                            "cost",
+                            "time",
+                            "tokens"
+                          ],
+                          "description": "Percentages; they add up to 100."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "weights"
+                      ]
+                    }
+                  },
+                  "provisionalBelow": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "A policy with fewer judged trials than this is provisional."
+                  }
+                },
+                "required": [
+                  "method",
+                  "defaultPreset",
+                  "presets",
+                  "provisionalBelow"
+                ]
               },
               "policies": {
                 "type": "array",
@@ -114760,7 +115447,7 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991,
-                      "description": "1 is best: success rate, then cost per success, then median active time."
+                      "description": "1 is best: the Overall score under the default preset, then success rate, cost per success and median active time."
                     },
                     "metrics": {
                       "type": "object",
@@ -115273,6 +115960,356 @@
                         "safety",
                         "models"
                       ]
+                    },
+                    "score": {
+                      "type": "object",
+                      "properties": {
+                        "rated": {
+                          "type": "boolean",
+                          "description": "False when the policy has no judged trial: every score is then null."
+                        },
+                        "provisional": {
+                          "type": "boolean",
+                          "description": "Fewer than 10 judged trials: the score can move a lot with more trials."
+                        },
+                        "judged": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "accuracy": {
+                          "description": "100 x (0.7 x success rate + 0.3 x pass^k) x (1 - false-success rate).",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "accuracyLow": {
+                          "description": "Accuracy from the low ends of the Wilson intervals (and the high end of false success).",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "accuracyHigh": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "cost": {
+                          "description": "Cost per success against the best policy of the benchmark, on a log scale: the best is 100, 10 times its cost 50, 100 times or more 0. 0 without a pass.",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "costKnown": {
+                          "type": "boolean",
+                          "description": "False: some cost is unknown, so the cost per success is \"at least\" and the cost score is at most this."
+                        },
+                        "time": {
+                          "description": "Median active time against the best policy with a pass, on the same log scale. 0 without a pass.",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "tokens": {
+                          "description": "Tokens per success against the best policy, on the same log scale. 0 without a pass.",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "overall": {
+                          "type": "object",
+                          "properties": {
+                            "accuracy": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "low": {
+                                  "description": "The Overall score with accuracy at the low end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "high": {
+                                  "description": "The Overall score with accuracy at the high end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "rank": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "1 is best under this preset; a policy that is not rated ranks last."
+                                },
+                                "grade": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "S",
+                                        "A",
+                                        "B",
+                                        "C",
+                                        "D"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                                },
+                                "tied": {
+                                  "type": "boolean",
+                                  "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "low",
+                                "high",
+                                "rank",
+                                "grade",
+                                "tied"
+                              ]
+                            },
+                            "balanced": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "low": {
+                                  "description": "The Overall score with accuracy at the low end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "high": {
+                                  "description": "The Overall score with accuracy at the high end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "rank": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "1 is best under this preset; a policy that is not rated ranks last."
+                                },
+                                "grade": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "S",
+                                        "A",
+                                        "B",
+                                        "C",
+                                        "D"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                                },
+                                "tied": {
+                                  "type": "boolean",
+                                  "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "low",
+                                "high",
+                                "rank",
+                                "grade",
+                                "tied"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "low": {
+                                  "description": "The Overall score with accuracy at the low end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "high": {
+                                  "description": "The Overall score with accuracy at the high end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "rank": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "1 is best under this preset; a policy that is not rated ranks last."
+                                },
+                                "grade": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "S",
+                                        "A",
+                                        "B",
+                                        "C",
+                                        "D"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                                },
+                                "tied": {
+                                  "type": "boolean",
+                                  "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "low",
+                                "high",
+                                "rank",
+                                "grade",
+                                "tied"
+                              ]
+                            },
+                            "speed": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "description": "The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "low": {
+                                  "description": "The Overall score with accuracy at the low end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "high": {
+                                  "description": "The Overall score with accuracy at the high end of its 95% band.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "rank": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "1 is best under this preset; a policy that is not rated ranks last."
+                                },
+                                "grade": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "S",
+                                        "A",
+                                        "B",
+                                        "C",
+                                        "D"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "S 90 and over, A 80, B 70, C 60, D below; null when not rated."
+                                },
+                                "tied": {
+                                  "type": "boolean",
+                                  "description": "Not first, but its band overlaps the leader's: the difference is not shown to be real."
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "low",
+                                "high",
+                                "rank",
+                                "grade",
+                                "tied"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "accuracy",
+                            "balanced",
+                            "budget",
+                            "speed"
+                          ]
+                        },
+                        "badges": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "most_accurate",
+                              "cheapest",
+                              "fastest",
+                              "most_token_efficient"
+                            ]
+                          },
+                          "description": "The dimensions this policy is best at in the benchmark (ties share a badge)."
+                        }
+                      },
+                      "required": [
+                        "rated",
+                        "provisional",
+                        "judged",
+                        "accuracy",
+                        "accuracyLow",
+                        "accuracyHigh",
+                        "cost",
+                        "costKnown",
+                        "time",
+                        "tokens",
+                        "overall",
+                        "badges"
+                      ],
+                      "description": "The Benchmark Score: four sub-scores from 0 to 100 and the Overall score under each preset (docs/benchmark.md, \"The Benchmark Score\")."
                     },
                     "categories": {
                       "type": "array",
@@ -115821,6 +116858,7 @@
                     "label",
                     "rank",
                     "metrics",
+                    "score",
                     "categories"
                   ]
                 },
@@ -115983,6 +117021,7 @@
               "computedAt",
               "totals",
               "ranking",
+              "scoring",
               "policies",
               "categories",
               "matrix"
@@ -116341,6 +117380,47 @@
                     "null"
                   ]
                 },
+                "recording": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "recording",
+                            "processing",
+                            "ready",
+                            "failed"
+                          ],
+                          "description": "`ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video."
+                        },
+                        "durationMs": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The length of the video once it is `ready`; null before."
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "durationMs"
+                      ],
+                      "description": "The trial run's video (epic #755), never the video itself: it is not masked and plays only on the run page."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`."
+                },
                 "goal": {
                   "description": "The trial run's goal, masked, with the trial's site token hidden; null when the run was deleted or never started.",
                   "type": [
@@ -116386,6 +117466,7 @@
                 "escalations",
                 "startedAt",
                 "finishedAt",
+                "recording",
                 "goal",
                 "result"
               ]
@@ -116524,7 +117605,12 @@
                             "inputTokens",
                             "outputTokens",
                             "cachedInputTokens",
-                            "tokensPerSuccess"
+                            "tokensPerSuccess",
+                            "overallScore",
+                            "accuracyScore",
+                            "costScore",
+                            "timeScore",
+                            "tokensScore"
                           ]
                         },
                         "current": {
@@ -116630,7 +117716,12 @@
                                   "inputTokens",
                                   "outputTokens",
                                   "cachedInputTokens",
-                                  "tokensPerSuccess"
+                                  "tokensPerSuccess",
+                                  "overallScore",
+                                  "accuracyScore",
+                                  "costScore",
+                                  "timeScore",
+                                  "tokensScore"
                                 ]
                               },
                               "current": {

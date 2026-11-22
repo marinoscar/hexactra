@@ -19,6 +19,9 @@ export interface RunRecordingView {
   masked: false;
 }
 
+/** The card's anchor: `/runs/:id#recording` opens the run page at the video. */
+export const RECORDING_ANCHOR = 'recording';
+
 const NOTES: Record<string, string> = {
   max_minutes: 'It stopped at the longest length your administrator allows; the run went on.',
   tab_closed: 'It ended when the tab it recorded was closed.',
@@ -109,6 +112,16 @@ export function RunRecording({ runId, canDelete = false, pollMs = 5_000 }: RunRe
     if (rec?.status === 'ready' && !src) void link();
   }, [rec?.status, src, link]);
 
+  // `/runs/:id#recording` (the benchmark trial list's "Recording" link, #846): once the card is there, bring it into view, once.
+  const card = useRef<HTMLElement | null>(null);
+  const scrolled = useRef(false);
+  const hasCard = rec !== null;
+  useEffect(() => {
+    if (!hasCard || scrolled.current || window.location.hash !== `#${RECORDING_ANCHOR}`) return;
+    scrolled.current = true;
+    card.current?.scrollIntoView?.({ block: 'start' });
+  }, [hasCard]);
+
   if (!rec) return null;
 
   const remove = async () => {
@@ -129,7 +142,7 @@ export function RunRecording({ runId, canDelete = false, pollMs = 5_000 }: RunRe
   const status = STATUS[rec.status];
   const note = rec.note ? NOTES[rec.note] : null;
   return (
-    <Paper variant="outlined" component="section" aria-labelledby={`recording-${runId}`} sx={{ p: 2, my: 2 }} data-testid="run-recording">
+    <Paper ref={card} id={RECORDING_ANCHOR} variant="outlined" component="section" aria-labelledby={`recording-${runId}`} sx={{ p: 2, my: 2, scrollMarginTop: 80 }} data-testid="run-recording">
       <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
         <Typography variant="subtitle1" component="h2" id={`recording-${runId}`} sx={{ mr: 'auto' }}>
           Recording

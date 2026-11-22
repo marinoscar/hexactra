@@ -9819,7 +9819,7 @@ export interface paths {
         put?: never;
         /**
          * Start a benchmark
-         * @description Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent.
+         * @description Runs every chosen challenge under every chosen agent policy, `trials` times each, one trial at a time, as ordinary runs on a node (`trigger: benchmark`). The answer comes back at once with the benchmark `queued`; follow it with `GET /api/benchmarks/{id}`. Each trial run is limited to the challenge site and uses no connection, saved login, identity detail or card. It spends on model calls: no new trial starts once `capUsd` is spent (`capUsd: null` or `0`: no budget, stored as `null`; absent: the deployment default).
          *
          *     **Requires:** authentication, plus permission `benchmarks:run`.
          */
@@ -9867,7 +9867,7 @@ export interface paths {
         };
         /**
          * List a benchmark's trials
-         * @description Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.
+         * @description Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run, the run's id and, for a caller with `runs:read`, the status of the run's recording (`recording`; the video plays only on the run page). Never the seed, the site's state or an expected answer.
          *
          *     **Requires:** authentication, plus permission `benchmarks:read`.
          */
@@ -9889,7 +9889,7 @@ export interface paths {
         };
         /**
          * A benchmark's scorecard
-         * @description Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the ranking (success rate, then cost per success, then median active time; no composite score); and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.
+         * @description Compares the policies: success rate with its 95% interval, reliability across the k trials (pass^k), speed, tokens and cost (totals, medians, per success; "at least" when a cost is unknown), false successes and failures, failure reasons, safety flags and the models used, per policy and per category; the challenge x policy matrix; the Benchmark Score of each policy (accuracy, cost, time and tokens sub-scores from 0 to 100, the Overall score with its band, rank and grade under each weighting preset, and badges; #871) and the ranking by it under the default preset; and the totals of the whole benchmark. Computed live while the benchmark runs (`live: true`), cached once it has ended. A benchmark with no judged trial has an empty scorecard.
          *
          *     **Requires:** authentication, plus permission `benchmarks:read`.
          */
@@ -9933,7 +9933,7 @@ export interface paths {
         };
         /**
          * Export a benchmark report as JSON, CSV or PDF
-         * @description A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.
+         * @description A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`, `preset=accuracy|balanced|budget|speed`): the leaderboard first (the Benchmark Score of each policy under the preset, its grade, band, four sub-scores and badges), then summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, the rankings per dimension and under every preset, and the method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.
          *
          *     **Requires:** authentication, plus permission `benchmarks:read`.
          */
@@ -24317,12 +24317,23 @@ export interface components {
                     policies: {
                         ref: string;
                         label: string;
+                        /**
+                         * @description This policy's trial runs record a video of their browser tab (not masked, owner-only).
+                         * @default false
+                         */
+                        recordVideo?: boolean;
                     }[];
                     trials: number;
                     hostId: string | null;
                     profile: string;
-                    capUsd: number;
+                    /** @description The spend cap in USD; `null`: no cap. */
+                    capUsd: number | null;
                     trialTimeoutMinutes: number;
+                    /**
+                     * @description Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).
+                     * @default false
+                     */
+                    recordVideo?: boolean;
                 };
                 /** @description The console version when the benchmark started. */
                 appVersion: string;
@@ -24373,12 +24384,23 @@ export interface components {
                 policies: {
                     ref: string;
                     label: string;
+                    /**
+                     * @description This policy's trial runs record a video of their browser tab (not masked, owner-only).
+                     * @default false
+                     */
+                    recordVideo?: boolean;
                 }[];
                 trials: number;
                 hostId: string | null;
                 profile: string;
-                capUsd: number;
+                /** @description The spend cap in USD; `null`: no cap. */
+                capUsd: number | null;
                 trialTimeoutMinutes: number;
+                /**
+                 * @description Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).
+                 * @default false
+                 */
+                recordVideo?: boolean;
             };
             /** @description The console version when the benchmark started. */
             appVersion: string;
@@ -24426,6 +24448,8 @@ export interface components {
                 ref: string;
                 /** @description The column's name in the scorecard. Absent: the policy's name. */
                 label?: string;
+                /** @description Record a video of the browser tab of this policy's trial runs (run recordings, epic #755; #845). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false. */
+                recordVideo?: boolean;
             }[];
             /** @description Attempts per challenge and policy. Absent: the deployment default (`benchmark.defaultTrials`). */
             trials?: number;
@@ -24436,10 +24460,12 @@ export interface components {
              * @default default
              */
             profile?: string;
-            /** @description No new trial starts once the benchmark has spent this much on model calls. Absent: `benchmark.defaultCapUsd`. */
-            capUsd?: number;
+            /** @description The budget: no new trial starts once the benchmark has spent this much on model calls. `null` or `0`: no budget (stored as `null`; each run keeps its own policy budget). Absent: `benchmark.defaultCapUsd`. */
+            capUsd?: number | null;
             /** @description How long one trial may take before it is stopped as timed out. Absent: `benchmark.trialTimeoutMinutes`. */
             trialTimeoutMinutes?: number;
+            /** @description `true`: record a video of every trial's browser tab, for every policy, whatever each policy's own `recordVideo` says (run recordings, epic #755). The video is NOT masked, is owner-only and is kept per the recordings retention. Default false: only the policies that set `recordVideo` are recorded (#845). */
+            recordVideo?: boolean;
         };
         BenchmarkTrialListResponseDto: {
             /** @description In the order the trials run. */
@@ -24501,6 +24527,16 @@ export interface components {
                 escalations: number | null;
                 startedAt: string | null;
                 finishedAt: string | null;
+                /** @description The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`. */
+                recording: {
+                    /**
+                     * @description `ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video.
+                     * @enum {string}
+                     */
+                    status: "recording" | "processing" | "ready" | "failed";
+                    /** @description The length of the video once it is `ready`; null before. */
+                    durationMs: number | null;
+                } | null;
             }[];
         };
         ScorecardResponseDto: {
@@ -24548,7 +24584,7 @@ export interface components {
                     unfinished: number;
                 };
             };
-            /** @description Best first. No composite score. */
+            /** @description Best first by the Overall score under the default preset; `policies[].score.overall` has the order under each preset. */
             ranking: {
                 rank: number;
                 ref: string;
@@ -24559,12 +24595,35 @@ export interface components {
                 medianActiveMs: number | null;
                 totalCostUsd: number;
                 totalTokens: number;
+                /** @description The Overall score under the default preset. */
+                score: number | null;
+                grade: ("S" | "A" | "B" | "C" | "D") | null;
             }[];
+            scoring: {
+                /** @constant */
+                method: "hexactra.benchmark-score/1";
+                /** @enum {string} */
+                defaultPreset: "accuracy" | "balanced" | "budget" | "speed";
+                presets: {
+                    /** @enum {string} */
+                    id: "accuracy" | "balanced" | "budget" | "speed";
+                    label: string;
+                    /** @description Percentages; they add up to 100. */
+                    weights: {
+                        accuracy: number;
+                        cost: number;
+                        time: number;
+                        tokens: number;
+                    };
+                }[];
+                /** @description A policy with fewer judged trials than this is provisional. */
+                provisionalBelow: number;
+            };
             /** @description In the benchmark's policy order (columns). */
             policies: {
                 ref: string;
                 label: string;
-                /** @description 1 is best: success rate, then cost per success, then median active time. */
+                /** @description 1 is best: the Overall score under the default preset, then success rate, cost per success and median active time. */
                 rank: number;
                 metrics: {
                     counts: {
@@ -24697,6 +24756,87 @@ export interface components {
                     };
                     /** @description The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on. */
                     models: string[];
+                };
+                /** @description The Benchmark Score: four sub-scores from 0 to 100 and the Overall score under each preset (docs/benchmark.md, "The Benchmark Score"). */
+                score: {
+                    /** @description False when the policy has no judged trial: every score is then null. */
+                    rated: boolean;
+                    /** @description Fewer than 10 judged trials: the score can move a lot with more trials. */
+                    provisional: boolean;
+                    judged: number;
+                    /** @description 100 x (0.7 x success rate + 0.3 x pass^k) x (1 - false-success rate). */
+                    accuracy: number | null;
+                    /** @description Accuracy from the low ends of the Wilson intervals (and the high end of false success). */
+                    accuracyLow: number | null;
+                    accuracyHigh: number | null;
+                    /** @description Cost per success against the best policy of the benchmark, on a log scale: the best is 100, 10 times its cost 50, 100 times or more 0. 0 without a pass. */
+                    cost: number | null;
+                    /** @description False: some cost is unknown, so the cost per success is "at least" and the cost score is at most this. */
+                    costKnown: boolean;
+                    /** @description Median active time against the best policy with a pass, on the same log scale. 0 without a pass. */
+                    time: number | null;
+                    /** @description Tokens per success against the best policy, on the same log scale. 0 without a pass. */
+                    tokens: number | null;
+                    overall: {
+                        accuracy: {
+                            /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                            value: number | null;
+                            /** @description The Overall score with accuracy at the low end of its 95% band. */
+                            low: number | null;
+                            /** @description The Overall score with accuracy at the high end of its 95% band. */
+                            high: number | null;
+                            /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                            rank: number;
+                            /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                            grade: ("S" | "A" | "B" | "C" | "D") | null;
+                            /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                            tied: boolean;
+                        };
+                        balanced: {
+                            /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                            value: number | null;
+                            /** @description The Overall score with accuracy at the low end of its 95% band. */
+                            low: number | null;
+                            /** @description The Overall score with accuracy at the high end of its 95% band. */
+                            high: number | null;
+                            /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                            rank: number;
+                            /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                            grade: ("S" | "A" | "B" | "C" | "D") | null;
+                            /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                            tied: boolean;
+                        };
+                        budget: {
+                            /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                            value: number | null;
+                            /** @description The Overall score with accuracy at the low end of its 95% band. */
+                            low: number | null;
+                            /** @description The Overall score with accuracy at the high end of its 95% band. */
+                            high: number | null;
+                            /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                            rank: number;
+                            /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                            grade: ("S" | "A" | "B" | "C" | "D") | null;
+                            /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                            tied: boolean;
+                        };
+                        speed: {
+                            /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                            value: number | null;
+                            /** @description The Overall score with accuracy at the low end of its 95% band. */
+                            low: number | null;
+                            /** @description The Overall score with accuracy at the high end of its 95% band. */
+                            high: number | null;
+                            /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                            rank: number;
+                            /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                            grade: ("S" | "A" | "B" | "C" | "D") | null;
+                            /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                            tied: boolean;
+                        };
+                    };
+                    /** @description The dimensions this policy is best at in the benchmark (ties share a badge). */
+                    badges: ("most_accurate" | "cheapest" | "fastest" | "most_token_efficient")[];
                 };
                 /** @description Only the categories the benchmark has, in the suite's order. */
                 categories: {
@@ -24891,7 +25031,7 @@ export interface components {
             /** @description The whole benchmark: total cost, total tokens and the input, output and cached input split. */
             totals: {
                 /** @enum {string} */
-                metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess" | "overallScore" | "accuracyScore" | "costScore" | "timeScore" | "tokensScore";
                 current: number | null;
                 baseline: number | null;
                 /** @description current - baseline; null when either is null. */
@@ -24918,7 +25058,7 @@ export interface components {
                 matchedBy: "ref" | "label";
                 deltas: {
                     /** @enum {string} */
-                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess" | "overallScore" | "accuracyScore" | "costScore" | "timeScore" | "tokensScore";
                     current: number | null;
                     baseline: number | null;
                     /** @description current - baseline; null when either is null. */
@@ -25013,12 +25153,23 @@ export interface components {
                     policies: {
                         ref: string;
                         label: string;
+                        /**
+                         * @description This policy's trial runs record a video of their browser tab (not masked, owner-only).
+                         * @default false
+                         */
+                        recordVideo?: boolean;
                     }[];
                     trials: number;
                     hostId: string | null;
                     profile: string;
-                    capUsd: number;
+                    /** @description The spend cap in USD; `null`: no cap. */
+                    capUsd: number | null;
                     trialTimeoutMinutes: number;
+                    /**
+                     * @description Every policy's trial runs record a video of their browser tab (not masked, owner-only): true when every policy's `recordVideo` is. Which policies are recorded is each policy's `recordVideo` (#845).
+                     * @default false
+                     */
+                    recordVideo?: boolean;
                 };
                 /** @description The console version when the benchmark started. */
                 appVersion: string;
@@ -25101,7 +25252,7 @@ export interface components {
                         unfinished: number;
                     };
                 };
-                /** @description Best first. No composite score. */
+                /** @description Best first by the Overall score under the default preset; `policies[].score.overall` has the order under each preset. */
                 ranking: {
                     rank: number;
                     ref: string;
@@ -25112,12 +25263,35 @@ export interface components {
                     medianActiveMs: number | null;
                     totalCostUsd: number;
                     totalTokens: number;
+                    /** @description The Overall score under the default preset. */
+                    score: number | null;
+                    grade: ("S" | "A" | "B" | "C" | "D") | null;
                 }[];
+                scoring: {
+                    /** @constant */
+                    method: "hexactra.benchmark-score/1";
+                    /** @enum {string} */
+                    defaultPreset: "accuracy" | "balanced" | "budget" | "speed";
+                    presets: {
+                        /** @enum {string} */
+                        id: "accuracy" | "balanced" | "budget" | "speed";
+                        label: string;
+                        /** @description Percentages; they add up to 100. */
+                        weights: {
+                            accuracy: number;
+                            cost: number;
+                            time: number;
+                            tokens: number;
+                        };
+                    }[];
+                    /** @description A policy with fewer judged trials than this is provisional. */
+                    provisionalBelow: number;
+                };
                 /** @description In the benchmark's policy order (columns). */
                 policies: {
                     ref: string;
                     label: string;
-                    /** @description 1 is best: success rate, then cost per success, then median active time. */
+                    /** @description 1 is best: the Overall score under the default preset, then success rate, cost per success and median active time. */
                     rank: number;
                     metrics: {
                         counts: {
@@ -25250,6 +25424,87 @@ export interface components {
                         };
                         /** @description The models (`provider:modelId`) that served the trials: each trial's tiers from its start tier to the tier it ended on. */
                         models: string[];
+                    };
+                    /** @description The Benchmark Score: four sub-scores from 0 to 100 and the Overall score under each preset (docs/benchmark.md, "The Benchmark Score"). */
+                    score: {
+                        /** @description False when the policy has no judged trial: every score is then null. */
+                        rated: boolean;
+                        /** @description Fewer than 10 judged trials: the score can move a lot with more trials. */
+                        provisional: boolean;
+                        judged: number;
+                        /** @description 100 x (0.7 x success rate + 0.3 x pass^k) x (1 - false-success rate). */
+                        accuracy: number | null;
+                        /** @description Accuracy from the low ends of the Wilson intervals (and the high end of false success). */
+                        accuracyLow: number | null;
+                        accuracyHigh: number | null;
+                        /** @description Cost per success against the best policy of the benchmark, on a log scale: the best is 100, 10 times its cost 50, 100 times or more 0. 0 without a pass. */
+                        cost: number | null;
+                        /** @description False: some cost is unknown, so the cost per success is "at least" and the cost score is at most this. */
+                        costKnown: boolean;
+                        /** @description Median active time against the best policy with a pass, on the same log scale. 0 without a pass. */
+                        time: number | null;
+                        /** @description Tokens per success against the best policy, on the same log scale. 0 without a pass. */
+                        tokens: number | null;
+                        overall: {
+                            accuracy: {
+                                /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                                value: number | null;
+                                /** @description The Overall score with accuracy at the low end of its 95% band. */
+                                low: number | null;
+                                /** @description The Overall score with accuracy at the high end of its 95% band. */
+                                high: number | null;
+                                /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                                rank: number;
+                                /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                                grade: ("S" | "A" | "B" | "C" | "D") | null;
+                                /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                                tied: boolean;
+                            };
+                            balanced: {
+                                /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                                value: number | null;
+                                /** @description The Overall score with accuracy at the low end of its 95% band. */
+                                low: number | null;
+                                /** @description The Overall score with accuracy at the high end of its 95% band. */
+                                high: number | null;
+                                /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                                rank: number;
+                                /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                                grade: ("S" | "A" | "B" | "C" | "D") | null;
+                                /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                                tied: boolean;
+                            };
+                            budget: {
+                                /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                                value: number | null;
+                                /** @description The Overall score with accuracy at the low end of its 95% band. */
+                                low: number | null;
+                                /** @description The Overall score with accuracy at the high end of its 95% band. */
+                                high: number | null;
+                                /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                                rank: number;
+                                /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                                grade: ("S" | "A" | "B" | "C" | "D") | null;
+                                /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                                tied: boolean;
+                            };
+                            speed: {
+                                /** @description The weighted mean of the four sub-scores, 0 to 100, one decimal. Null when the policy is not rated. */
+                                value: number | null;
+                                /** @description The Overall score with accuracy at the low end of its 95% band. */
+                                low: number | null;
+                                /** @description The Overall score with accuracy at the high end of its 95% band. */
+                                high: number | null;
+                                /** @description 1 is best under this preset; a policy that is not rated ranks last. */
+                                rank: number;
+                                /** @description S 90 and over, A 80, B 70, C 60, D below; null when not rated. */
+                                grade: ("S" | "A" | "B" | "C" | "D") | null;
+                                /** @description Not first, but its band overlaps the leader's: the difference is not shown to be real. */
+                                tied: boolean;
+                            };
+                        };
+                        /** @description The dimensions this policy is best at in the benchmark (ties share a badge). */
+                        badges: ("most_accurate" | "cheapest" | "fastest" | "most_token_efficient")[];
                     };
                     /** @description Only the categories the benchmark has, in the suite's order. */
                     categories: {
@@ -25477,6 +25732,16 @@ export interface components {
                 escalations: number | null;
                 startedAt: string | null;
                 finishedAt: string | null;
+                /** @description The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`. */
+                recording: {
+                    /**
+                     * @description `ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video.
+                     * @enum {string}
+                     */
+                    status: "recording" | "processing" | "ready" | "failed";
+                    /** @description The length of the video once it is `ready`; null before. */
+                    durationMs: number | null;
+                } | null;
                 /** @description The trial run's goal, masked, with the trial's site token hidden; null when the run was deleted or never started. */
                 goal: string | null;
                 /** @description What the agent answered, masked; null when it said nothing or the run is gone. */
@@ -25509,7 +25774,7 @@ export interface components {
                 /** @description The whole benchmark: total cost, total tokens and the input, output and cached input split. */
                 totals: {
                     /** @enum {string} */
-                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                    metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess" | "overallScore" | "accuracyScore" | "costScore" | "timeScore" | "tokensScore";
                     current: number | null;
                     baseline: number | null;
                     /** @description current - baseline; null when either is null. */
@@ -25536,7 +25801,7 @@ export interface components {
                     matchedBy: "ref" | "label";
                     deltas: {
                         /** @enum {string} */
-                        metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess";
+                        metric: "successRate" | "passAllK" | "falseSuccessRate" | "medianActiveMs" | "medianCostUsd" | "totalCostUsd" | "costPerSuccessUsd" | "totalTokens" | "inputTokens" | "outputTokens" | "cachedInputTokens" | "tokensPerSuccess" | "overallScore" | "accuracyScore" | "costScore" | "timeScore" | "tokensScore";
                         current: number | null;
                         baseline: number | null;
                         /** @description current - baseline; null when either is null. */
@@ -56647,6 +56912,8 @@ export interface operations {
                 paper?: "a4" | "letter";
                 /** @description An earlier benchmark on the same suite key and version: the report adds the comparison with it (409 `BENCHMARK_SUITE_MISMATCH` otherwise). */
                 baseline?: string;
+                /** @description The PDF's Benchmark Score weighting for its leaderboard (#872): `accuracy` (the default), `balanced`, `budget` or `speed`. The scores under every preset are in the scorecard; ignored for `json` and `csv`. */
+                preset?: "accuracy" | "balanced" | "budget" | "speed";
             };
             header?: never;
             path: {

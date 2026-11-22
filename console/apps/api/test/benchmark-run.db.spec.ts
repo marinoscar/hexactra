@@ -427,6 +427,94 @@ describe('the spend cap, the timeout, cancel and a node that is down', () => {
     expect((await service.trials(admin.id, b.id)).items.map((t) => [t.verdict, t.costUsd])).toEqual([['pass', 0.6], ['pass', 0.6], ['skipped', null]]);
   }, 120_000);
 
+  it('runs every trial when the owner chose no cap (`capUsd: null`, #840), and an absent cap takes the default', async () => {
+    const admin = await login('bench-nocap');
+    play = async (call, scene) => {
+      await prisma.run.update({ where: { id: scene.runId }, data: { costUsd: 0.6 } });
+      await honest(call, scene);
+    };
+    const b = await start(admin, { trials: 3, capUsd: null });
+    expect(b.config.capUsd).toBeNull();
+    await drive(b.id, admin.id);
+    expect(await service.get(admin.id, b.id)).toMatchObject({ status: 'completed', spentUsd: 1.8, progress: { total: 3, graded: 3, pass: 3, skipped: 0 } });
+
+    const res = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: (await login('bench-nocap-rest')).headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy' }], trials: 1, capUsd: null, profile: `nc-${stamp.slice(-6)}` } });
+    expect(res.statusCode).toBe(201);
+    const viaRest = res.json<{ data: BenchmarkView }>().data;
+    created.push(viaRest.id);
+    expect(viaRest.config.capUsd).toBeNull();
+    // A budget of 0 (#844) is no budget, stored as `null`; a negative one is refused.
+    const zero = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: (await login('bench-zero-rest')).headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy' }], trials: 1, capUsd: 0, profile: `z0-${stamp.slice(-6)}` } });
+    expect(zero.statusCode).toBe(201);
+    const zeroView = zero.json<{ data: BenchmarkView }>().data;
+    created.push(zeroView.id);
+    expect(zeroView.config.capUsd).toBeNull();
+    const stored = await prisma.benchmark.findUniqueOrThrow({ where: { id: zeroView.id }, select: { config: true } });
+    expect((stored.config as { capUsd: unknown }).capUsd).toBeNull();
+    const negative = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: (await login('bench-neg-rest')).headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy' }], trials: 1, capUsd: -1, profile: `ng-${stamp.slice(-6)}` } });
+    expect(negative.statusCode).toBe(400);
+    const defaulted = await start(admin, { trials: 1 });
+    expect(defaulted.config.capUsd).toBe(5);
+  }, 120_000);
+
+  it("records a video of every trial's run when the owner opted in, and of none otherwise (#841)", async () => {
+    const admin = await login('bench-record');
+    const recorded = await start(admin, { trials: 2, recordVideo: true });
+    expect(recorded.config.recordVideo).toBe(true);
+    await drive(recorded.id, admin.id);
+    const runIds = (await trialsOf(recorded.id)).map((t) => t.runId).filter((id): id is string => id !== null);
+    expect(runIds).toHaveLength(2);
+    expect((await prisma.run.findMany({ where: { id: { in: runIds } }, select: { recordVideo: true } })).map((r) => r.recordVideo)).toEqual([true, true]);
+    expect(await prisma.auditEvent.findFirst({ where: { action: 'benchmarks.started', targetId: recorded.id } })).toMatchObject({ meta: { recordVideo: true } });
+
+    const plain = await start(admin, { trials: 1 });
+    expect(plain.config.recordVideo).toBe(false);
+    await drive(plain.id, admin.id);
+    const [t] = await trialsOf(plain.id);
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: t!.runId! }, select: { recordVideo: true } })).recordVideo).toBe(false);
+  }, 120_000);
+
+  it("records only the trial runs of the policies the owner ticked (#845), and every one for a #841 config", async () => {
+    const admin = await login('bench-record-mixed');
+    const recordedBy = async (benchmarkId: string) => {
+      const trials = await trialsOf(benchmarkId);
+      expect(trials.every((t) => t.runId)).toBe(true);
+      const runs = await prisma.run.findMany({ where: { id: { in: trials.map((t) => t.runId!) } }, select: { id: true, recordVideo: true } });
+      return trials.map((t) => [t.policyRef, runs.find((r) => r.id === t.runId)!.recordVideo] as const).sort((a, b) => a[0].localeCompare(b[0]));
+    };
+
+    // One of two policies ticked: only its trial runs record.
+    const mixed = await start(admin, { trials: 2, policies: [{ ref: 'builtin:economy', recordVideo: true }, { ref: 'builtin:balanced' }] });
+    expect(mixed.config.policies.map((p) => [p.ref, p.recordVideo])).toEqual([['builtin:economy', true], ['builtin:balanced', false]]);
+    expect(mixed.config.recordVideo).toBe(false);
+    await drive(mixed.id, admin.id);
+    expect(await recordedBy(mixed.id)).toEqual([['builtin:balanced', false], ['builtin:balanced', false], ['builtin:economy', true], ['builtin:economy', true]]);
+    expect(await prisma.auditEvent.findFirst({ where: { action: 'benchmarks.started', targetId: mixed.id } })).toMatchObject({ meta: { recordVideo: false, recordedPolicies: 1 } });
+
+    // Every policy ticked, through REST: every run records, and the benchmark-wide flag reads true.
+    const all = await app.inject({ method: 'POST', url: '/api/benchmarks', headers: admin.headers, payload: { challengeIds: ['nav-lookup'], policies: [{ ref: 'builtin:economy', recordVideo: true }, { ref: 'builtin:balanced', recordVideo: true }], trials: 1, profile: `ra-${stamp.slice(-6)}` } });
+    expect(all.statusCode).toBe(201);
+    const allView = all.json<{ data: BenchmarkView }>().data;
+    created.push(allView.id);
+    expect(allView.config.recordVideo).toBe(true);
+    await drive(allView.id, admin.id);
+    expect((await recordedBy(allView.id)).map(([, r]) => r)).toEqual([true, true]);
+
+    // None ticked: no run records.
+    const none = await start(admin, { trials: 1, policies: [{ ref: 'builtin:economy' }, { ref: 'builtin:balanced', recordVideo: false }] });
+    await drive(none.id, admin.id);
+    expect((await recordedBy(none.id)).map(([, r]) => r)).toEqual([false, false]);
+
+    // A config stored by #841 (one benchmark-wide flag, no per-policy flag): every run records.
+    const older = await start(admin, { trials: 1, policies: [{ ref: 'builtin:economy' }, { ref: 'builtin:balanced' }] });
+    const row = await prisma.benchmark.findUniqueOrThrow({ where: { id: older.id }, select: { config: true } });
+    const cfg = row.config as { policies: { ref: string; label: string; recordVideo?: boolean }[] };
+    await prisma.benchmark.update({ where: { id: older.id }, data: { config: { ...cfg, recordVideo: true, policies: cfg.policies.map(({ ref, label }) => ({ ref, label })) } } });
+    expect((await service.get(admin.id, older.id)).config.policies.map((p) => p.recordVideo)).toEqual([true, true]);
+    await drive(older.id, admin.id);
+    expect((await recordedBy(older.id)).map(([, r]) => r)).toEqual([true, true]);
+  }, 180_000);
+
   it('stops a trial that runs past its timeout, fails it as `timeout`, and carries on with the next', async () => {
     const admin = await login('bench-timeout');
     const b = await start(admin, { trials: 2, trialTimeoutMinutes: 5 });

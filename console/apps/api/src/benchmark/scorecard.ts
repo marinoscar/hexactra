@@ -3,11 +3,14 @@
 // step, and bump `SCORECARD_VERSION` when a formula changes.
 import type { BenchmarkStatus } from './benchmark.constants';
 import type { BenchmarkTrialView } from './benchmarks.schemas';
+import { scorePolicies, scoringOf, tieBreak } from './score';
 import {
   COMPARED_METRICS,
+  DEFAULT_SCORE_PRESET,
   SCORECARD_FORMAT,
   SCORECARD_VERSION,
   type BenchmarkComparison,
+  type BenchmarkScore,
   type ComparedMetric,
   type MatrixRow,
   type MetricDelta,
@@ -182,20 +185,14 @@ export function metricsOf(trials: readonly ScoreTrial[], k: number): ScoreMetric
   };
 }
 
-/** Nulls last, then ascending or descending. */
-const cmp = (a: number | null, b: number | null, dir: 1 | -1): number => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : dir * (a - b));
-
-/** Policies best first: success rate (higher), then cost per success (lower), then median active time (lower), then the configured order. */
+/**
+ * Policies by the tie-break of the Benchmark Score: success rate (higher), then cost per success (lower), then median active time
+ * (lower), then the configured order. The scorecard ranks by the Overall score first (`score.ts`); this is its order among equals.
+ */
 export function rankPolicies<T extends { ref: string; metrics: ScoreMetrics }>(policies: readonly T[]): T[] {
   return policies
     .map((p, i) => ({ p, i }))
-    .sort(
-      (a, b) =>
-        cmp(a.p.metrics.successRate.value, b.p.metrics.successRate.value, -1) ||
-        cmp(a.p.metrics.cost.perSuccessUsd, b.p.metrics.cost.perSuccessUsd, 1) ||
-        cmp(a.p.metrics.speed.medianActiveMs, b.p.metrics.speed.medianActiveMs, 1) ||
-        a.i - b.i,
-    )
+    .sort((a, b) => tieBreak(a.p.metrics, b.p.metrics) || a.i - b.i)
     .map((x) => x.p);
 }
 
@@ -253,9 +250,9 @@ export function computeScorecard(b: ScoreBenchmark, trials: readonly ScoreTrial[
       categories: present.map((category: Category) => ({ category, label: CATEGORY_LABELS[category], metrics: metricsOf(mine.filter((t) => t.category === category), k) })),
     };
   });
-  const ranked = rankPolicies(scored);
-  const rankOf = new Map(ranked.map((p, i) => [p.ref, i + 1]));
-  const withRank: PolicyScore[] = scored.map((p) => ({ ...p, rank: rankOf.get(p.ref)! }));
+  const scores = scorePolicies(scored);
+  const withRank: PolicyScore[] = scored.map((p, i) => ({ ...p, rank: scores[i]!.overall[DEFAULT_SCORE_PRESET].rank, score: scores[i]! }));
+  const ranked = [...withRank].sort((a, b) => a.rank - b.rank);
 
   const spent = trials.filter(ran);
   const input = sum(spent.map((t) => t.inputTokens));
@@ -283,8 +280,8 @@ export function computeScorecard(b: ScoreBenchmark, trials: readonly ScoreTrial[
       modelCalls: sum(spent.map((t) => t.modelCalls)),
       counts: countsOf(trials),
     },
-    ranking: ranked.map((p, i) => ({
-      rank: i + 1,
+    ranking: ranked.map((p) => ({
+      rank: p.rank,
       ref: p.ref,
       label: p.label,
       successRate: p.metrics.successRate.value,
@@ -293,7 +290,10 @@ export function computeScorecard(b: ScoreBenchmark, trials: readonly ScoreTrial[
       medianActiveMs: p.metrics.speed.medianActiveMs,
       totalCostUsd: p.metrics.cost.totalUsd,
       totalTokens: p.metrics.tokens.total,
+      score: p.score.overall[DEFAULT_SCORE_PRESET].value,
+      grade: p.score.overall[DEFAULT_SCORE_PRESET].grade,
     })),
+    scoring: scoringOf(),
     policies: withRank,
     categories: present.map((id) => ({ id, label: CATEGORY_LABELS[id] })),
     matrix: matrixOf(b, trials, challengeIds, policies.map((p) => p.ref)),
@@ -321,6 +321,11 @@ const BETTER: Record<ComparedMetric, 'higher' | 'lower'> = {
   outputTokens: 'lower',
   cachedInputTokens: 'lower',
   tokensPerSuccess: 'lower',
+  overallScore: 'higher',
+  accuracyScore: 'higher',
+  costScore: 'higher',
+  timeScore: 'higher',
+  tokensScore: 'higher',
 };
 const COST_METRICS: readonly ComparedMetric[] = ['medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd'];
 
@@ -334,8 +339,11 @@ export function deltaOf(metric: ComparedMetric, current: number | null, baseline
   return { metric, current, baseline, delta, better, improved, withinNoise, atLeast: COST_METRICS.includes(metric) && !!opts.costKnown && !(opts.costKnown[0] && opts.costKnown[1]) };
 }
 
-/** The deltas of one policy against its counterpart. */
-export function policyDeltas(cur: ScoreMetrics, base: ScoreMetrics): MetricDelta[] {
+/**
+ * The deltas of one policy against its counterpart. The score deltas compare each policy's score within its own benchmark (the cost,
+ * time and token scores are relative to that benchmark's best), under the default preset.
+ */
+export function policyDeltas(cur: ScoreMetrics, base: ScoreMetrics, scores?: { cur: BenchmarkScore; base: BenchmarkScore }): MetricDelta[] {
   const known: [boolean, boolean] = [cur.cost.known, base.cost.known];
   const by: Record<ComparedMetric, MetricDelta> = {
     successRate: deltaOf('successRate', cur.successRate.value, base.successRate.value, { rates: [cur.successRate, base.successRate] }),
@@ -350,6 +358,11 @@ export function policyDeltas(cur: ScoreMetrics, base: ScoreMetrics): MetricDelta
     outputTokens: deltaOf('outputTokens', cur.tokens.output, base.tokens.output),
     cachedInputTokens: deltaOf('cachedInputTokens', cur.tokens.cached, base.tokens.cached),
     tokensPerSuccess: deltaOf('tokensPerSuccess', cur.tokens.perSuccess, base.tokens.perSuccess),
+    overallScore: deltaOf('overallScore', scores?.cur.overall[DEFAULT_SCORE_PRESET].value ?? null, scores?.base.overall[DEFAULT_SCORE_PRESET].value ?? null),
+    accuracyScore: deltaOf('accuracyScore', scores?.cur.accuracy ?? null, scores?.base.accuracy ?? null),
+    costScore: deltaOf('costScore', scores?.cur.cost ?? null, scores?.base.cost ?? null),
+    timeScore: deltaOf('timeScore', scores?.cur.time ?? null, scores?.base.time ?? null),
+    tokensScore: deltaOf('tokensScore', scores?.cur.tokens ?? null, scores?.base.tokens ?? null),
   };
   return COMPARED_METRICS.map((m) => by[m]);
 }
@@ -426,7 +439,7 @@ export function compareScorecards(cur: Scorecard, base: Scorecard, sides: { curr
       deltaOf('outputTokens', cur.totals.outputTokens, base.totals.outputTokens),
       deltaOf('cachedInputTokens', cur.totals.cachedInputTokens, base.totals.cachedInputTokens),
     ],
-    policies: pairs.map(({ cur: p, base: q, matchedBy }) => ({ ref: p.ref, label: p.label, baselineRef: q.ref, baselineLabel: q.label, matchedBy, deltas: policyDeltas(p.metrics, q.metrics) })),
+    policies: pairs.map(({ cur: p, base: q, matchedBy }) => ({ ref: p.ref, label: p.label, baselineRef: q.ref, baselineLabel: q.label, matchedBy, deltas: policyDeltas(p.metrics, q.metrics, { cur: p.score, base: q.score }) })),
     unmatched: { current: unmatched.map((p) => ({ ref: p.ref, label: p.label })), baseline: left.map((p) => ({ ref: p.ref, label: p.label })) },
     flipped,
   };
