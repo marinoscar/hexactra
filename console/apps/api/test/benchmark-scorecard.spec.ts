@@ -309,7 +309,37 @@ describe('compare', () => {
     expect(cmp.totals).toEqual([
       { metric: 'totalCostUsd', current: 0.175, baseline: 0.2, delta: -0.025, better: 'lower', improved: true, withinNoise: null, atLeast: true },
       { metric: 'totalTokens', current: 19_150, baseline: 19_150, delta: 0, better: 'lower', improved: null, withinNoise: null, atLeast: false },
+      { metric: 'inputTokens', current: 17_500, baseline: 17_500, delta: 0, better: 'lower', improved: null, withinNoise: null, atLeast: false },
+      { metric: 'outputTokens', current: 1_650, baseline: 1_650, delta: 0, better: 'lower', improved: null, withinNoise: null, atLeast: false },
+      { metric: 'cachedInputTokens', current: 2_400, baseline: 2_400, delta: 0, better: 'lower', improved: null, withinNoise: null, atLeast: false },
     ]);
+  });
+
+  it('the input, output and cached input token deltas, for the whole benchmark and per policy (#829)', () => {
+    // A heavier baseline: Economy's trials used twice the input, 50 more output each and no cached input; Balanced is the same.
+    const heavy = [...aTrials.map((t) => ({ ...t, inputTokens: t.inputTokens! * 2, outputTokens: t.outputTokens! + 50, cachedInputTokens: 0 })), ...bTrials];
+    const base = computeScorecard(bench, heavy, { live: false, now: NOW });
+    const c = compareScorecards(current, base, { current: side('cur'), baseline: side('base') });
+    expect(benchmarkComparisonSchema.parse(c)).toEqual(c);
+    const economy = Object.fromEntries(c.policies[0]!.deltas.map((d) => [d.metric, d]));
+    // Economy now: input 15,500, output 1,550, cached 2,400 (17,050 tokens, 4 passes). Baseline: input 31,000, output 1,550 + 6 x 50 =
+    // 1,850, cached 0 (32,850 tokens, 4 passes: 8,212.5 per success).
+    expect(economy.inputTokens).toEqual({ metric: 'inputTokens', current: 15_500, baseline: 31_000, delta: -15_500, better: 'lower', improved: true, withinNoise: null, atLeast: false });
+    expect(economy.outputTokens).toEqual({ metric: 'outputTokens', current: 1_550, baseline: 1_850, delta: -300, better: 'lower', improved: true, withinNoise: null, atLeast: false });
+    expect(economy.cachedInputTokens).toEqual({ metric: 'cachedInputTokens', current: 2_400, baseline: 0, delta: 2_400, better: 'lower', improved: false, withinNoise: null, atLeast: false });
+    expect(economy.totalTokens).toMatchObject({ current: 17_050, baseline: 32_850, delta: -15_800, improved: true });
+    expect(economy.tokensPerSuccess).toMatchObject({ current: 4262.5, baseline: 8212.5, delta: -3950, improved: true });
+    const balanced = Object.fromEntries(c.policies[1]!.deltas.map((d) => [d.metric, d]));
+    expect([balanced.inputTokens!.delta, balanced.outputTokens!.delta, balanced.cachedInputTokens!.delta]).toEqual([0, 0, 0]);
+    // The whole benchmark: Balanced adds 2,000 input and 100 output to each side.
+    const totals = Object.fromEntries(c.totals.map((d) => [d.metric, [d.current, d.baseline, d.delta]]));
+    expect(totals).toEqual({
+      totalCostUsd: [0.175, 0.175, 0],
+      totalTokens: [19_150, 34_950, -15_800],
+      inputTokens: [17_500, 33_000, -15_500],
+      outputTokens: [1_650, 1_950, -300],
+      cachedInputTokens: [2_400, 0, 2_400],
+    });
   });
 
   it('a rate whose intervals do not overlap is a real change', () => {

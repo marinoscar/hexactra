@@ -317,6 +317,9 @@ const BETTER: Record<ComparedMetric, 'higher' | 'lower'> = {
   totalCostUsd: 'lower',
   costPerSuccessUsd: 'lower',
   totalTokens: 'lower',
+  inputTokens: 'lower',
+  outputTokens: 'lower',
+  cachedInputTokens: 'lower',
   tokensPerSuccess: 'lower',
 };
 const COST_METRICS: readonly ComparedMetric[] = ['medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd'];
@@ -343,6 +346,9 @@ export function policyDeltas(cur: ScoreMetrics, base: ScoreMetrics): MetricDelta
     totalCostUsd: deltaOf('totalCostUsd', cur.cost.totalUsd, base.cost.totalUsd, { costKnown: known }),
     costPerSuccessUsd: deltaOf('costPerSuccessUsd', cur.cost.perSuccessUsd, base.cost.perSuccessUsd, { costKnown: known }),
     totalTokens: deltaOf('totalTokens', cur.tokens.total, base.tokens.total),
+    inputTokens: deltaOf('inputTokens', cur.tokens.input, base.tokens.input),
+    outputTokens: deltaOf('outputTokens', cur.tokens.output, base.tokens.output),
+    cachedInputTokens: deltaOf('cachedInputTokens', cur.tokens.cached, base.tokens.cached),
     tokensPerSuccess: deltaOf('tokensPerSuccess', cur.tokens.perSuccess, base.tokens.perSuccess),
   };
   return COMPARED_METRICS.map((m) => by[m]);
@@ -413,7 +419,13 @@ export function compareScorecards(cur: Scorecard, base: Scorecard, sides: { curr
   return {
     current: sides.current,
     baseline: sides.baseline,
-    totals: [deltaOf('totalCostUsd', cur.totals.costUsd, base.totals.costUsd, { costKnown: known }), deltaOf('totalTokens', cur.totals.totalTokens, base.totals.totalTokens)],
+    totals: [
+      deltaOf('totalCostUsd', cur.totals.costUsd, base.totals.costUsd, { costKnown: known }),
+      deltaOf('totalTokens', cur.totals.totalTokens, base.totals.totalTokens),
+      deltaOf('inputTokens', cur.totals.inputTokens, base.totals.inputTokens),
+      deltaOf('outputTokens', cur.totals.outputTokens, base.totals.outputTokens),
+      deltaOf('cachedInputTokens', cur.totals.cachedInputTokens, base.totals.cachedInputTokens),
+    ],
     policies: pairs.map(({ cur: p, base: q, matchedBy }) => ({ ref: p.ref, label: p.label, baselineRef: q.ref, baselineLabel: q.label, matchedBy, deltas: policyDeltas(p.metrics, q.metrics) })),
     unmatched: { current: unmatched.map((p) => ({ ref: p.ref, label: p.label })), baseline: left.map((p) => ({ ref: p.ref, label: p.label })) },
     flipped,

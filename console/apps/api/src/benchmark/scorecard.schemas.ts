@@ -165,7 +165,7 @@ export type Scorecard = z.infer<typeof scorecardSchema>;
 
 // ---- Compare ----
 
-export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'tokensPerSuccess'] as const;
+export const COMPARED_METRICS = ['successRate', 'passAllK', 'falseSuccessRate', 'medianActiveMs', 'medianCostUsd', 'totalCostUsd', 'costPerSuccessUsd', 'totalTokens', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'tokensPerSuccess'] as const;
 export type ComparedMetric = (typeof COMPARED_METRICS)[number];
 
 export const metricDeltaSchema = z.object({
@@ -205,7 +205,7 @@ const sideSchema = z.object({
 export const benchmarkComparisonSchema = z.object({
   current: sideSchema,
   baseline: sideSchema,
-  totals: z.array(metricDeltaSchema).describe('The whole benchmark: total cost and total tokens.'),
+  totals: z.array(metricDeltaSchema).describe('The whole benchmark: total cost, total tokens and the input, output and cached input split.'),
   policies: z.array(
     z.object({
       ref: z.string().describe('The policy in this benchmark.'),

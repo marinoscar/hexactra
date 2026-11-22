@@ -192,7 +192,32 @@ describe('GET /api/benchmarks/{id}/compare', () => {
     // 6/6 against 3/6: [0.610, 1] and [0.188, 0.812] overlap.
     expect(economy.successRate).toMatchObject({ current: 1, baseline: 0.5, delta: 0.5, withinNoise: true });
     expect(economy.costPerSuccessUsd).toMatchObject({ current: 0.01, baseline: 0.02, delta: -0.01, improved: true, atLeast: false });
-    expect(cmp.totals.map((d) => [d.metric, d.delta])).toEqual([['totalCostUsd', 0], ['totalTokens', 0]]);
+    expect(cmp.totals.map((d) => [d.metric, d.delta])).toEqual([['totalCostUsd', 0], ['totalTokens', 0], ['inputTokens', 0], ['outputTokens', 0], ['cachedInputTokens', 0]]);
+  });
+
+  it('carries the input, output and cached input token deltas, for the whole benchmark and per policy (#829)', async () => {
+    const admin = await login('score-compare-split');
+    // One trial per cell, two challenges, two policies; every default trial is 12,000 input, 600 output, 4,000 cached input.
+    const baseline = track(await createGradedBenchmark(prisma, admin.id, { trials: 1 }));
+    const current = track(await createGradedBenchmark(prisma, admin.id, { trials: 1, result: (c) => (c.policyRef === 'builtin:economy' ? { inputTokens: 10_000, outputTokens: 900, cachedInputTokens: 1_000 } : undefined) }));
+
+    const cmp = await read<BenchmarkComparison>(admin.headers, `/${current.id}/compare?baseline=${baseline.id}`);
+    const split = (ds: BenchmarkComparison['totals']) => Object.fromEntries(ds.filter((d) => ['inputTokens', 'outputTokens', 'cachedInputTokens', 'totalTokens'].includes(d.metric)).map((d) => [d.metric, [d.baseline, d.current, d.delta, d.improved]]));
+    // Economy: 2 x (12,000 / 600 / 4,000) before, 2 x (10,000 / 900 / 1,000) now.
+    expect(split(cmp.policies[0]!.deltas)).toEqual({
+      totalTokens: [25_200, 21_800, -3_400, true],
+      inputTokens: [24_000, 20_000, -4_000, true],
+      outputTokens: [1_200, 1_800, 600, false],
+      cachedInputTokens: [8_000, 2_000, -6_000, true],
+    });
+    expect(split(cmp.policies[1]!.deltas)).toEqual({ totalTokens: [25_200, 25_200, 0, null], inputTokens: [24_000, 24_000, 0, null], outputTokens: [1_200, 1_200, 0, null], cachedInputTokens: [8_000, 8_000, 0, null] });
+    // The whole benchmark adds Balanced's unchanged 24,000 / 1,200 / 8,000 to both sides.
+    expect(split(cmp.totals)).toEqual({
+      totalTokens: [50_400, 47_000, -3_400, true],
+      inputTokens: [48_000, 44_000, -4_000, true],
+      outputTokens: [2_400, 3_000, 600, false],
+      cachedInputTokens: [16_000, 10_000, -6_000, true],
+    });
   });
 
   it('refuses a baseline on another suite version, naming both', async () => {
