@@ -19,6 +19,9 @@ export interface ReplayMemory {
   intent: string | null;
   /** The run was handed to the agent: no later job replays again. */
   handedOver: boolean;
+  /** Verification (E46.10): the commit-class step the owner is being asked about, and the ones they allowed. */
+  awaitingConfirm?: string | null;
+  confirmed?: string[];
 }
 
 /** The last call the wrapper finished, as the observer saw it. */
@@ -103,6 +106,11 @@ export interface ReplayInput<C extends AnyContext> {
   save(): Promise<void>;
   /** The task's declared outputs, when it has any (`complete` is set when every one was produced). */
   outputs?: readonly string[];
+  /**
+   * A verification run (E46.10): every commit-class step asks the owner first through the run's own confirmation flow, whatever the task's
+   * confirmation setting and saved approvals say. The graph adds caution; it never removes it.
+   */
+  verify?: boolean;
 }
 
 const clip = (v: unknown, n = 160) => {
@@ -139,6 +147,8 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
   const { ctx, version, memory } = input;
   const hopDue = () => ctx.ports.clock.now() - ctx.startedAt > ctx.hopAfterMs;
   let hop = false;
+  let asked = false;
+  let declined = false;
   const handover = async (report: ExecutionReport): Promise<ReplayResult> => {
     memory.handedOver = true;
     const note = handoverNote(report);
@@ -155,8 +165,31 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
       goal: ctx.run.goal,
       ...(memory.done.length && resumeAt ? { fromStep: resumeAt, done } : {}),
       unknown,
-      before: async () => {
+      before: async (step) => {
         if ((await ctx.preflight()) !== null) return 'stop';
+        if (input.verify && step.commitClass && !(memory.confirmed ?? []).includes(step.id)) {
+          const pending = (ctx.memory as { pendingConfirmation?: unknown }).pendingConfirmation;
+          if (memory.awaitingConfirm === step.id) {
+            // Back after the owner answered: an approval left the run's pending confirmation set; anything else is a no.
+            memory.awaitingConfirm = null;
+            if (!pending) {
+              declined = true;
+              return 'stop';
+            }
+            memory.confirmed = [...(memory.confirmed ?? []), step.id];
+            return 'go';
+          }
+          const parsed = ctx.ports.questions.parse({ kind: 'confirmation', input: 'confirm', prompt: `A saved procedure is being checked for the first time. Allow its step "${step.label.slice(0, 120)}"? It can send or pay something.`, confirmLabel: 'Allow', denyLabel: 'Not now', risk: 'high' });
+          if (!parsed.ok) {
+            declined = true;
+            return 'stop';
+          }
+          if (await ctx.askPerson(parsed.spec, ctx.ports.clock.now())) {
+            memory.awaitingConfirm = step.id;
+            asked = true;
+          } else declined = true;
+          return 'stop';
+        }
         if (hopDue()) {
           hop = true;
           return 'stop';
@@ -193,6 +226,11 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
       if (ctx.state.handoffId || ctx.state.handoffAsk) return { kind: 'outcome', outcome: await pauseForPerson(ctx), report };
       return { kind: 'outcome', outcome: await pauseNow(ctx), report };
     case 'halted':
+      if (asked) {
+        await input.save();
+        return { kind: 'outcome', outcome: await pauseForPerson(ctx), report };
+      }
+      if (declined) return handover({ ...report, status: 'needs_owner' });
       if (ctx.ports.control.requested || flags.cancelRequested) return { kind: 'outcome', outcome: await cancelRun(ctx), report };
       if (ctx.ports.control.pauseRequested || flags.pauseRequested) return { kind: 'outcome', outcome: await pauseNow(ctx), report };
       if (hop) return { kind: 'outcome', outcome: 'continue', report };

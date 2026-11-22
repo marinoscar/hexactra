@@ -11,7 +11,7 @@ const TOOLS: Tool[] = [
 function kvHost() {
   const data = new Map<string, string>([['greeting', 'hello'], ['name', 'Ada']]);
   const ports: KgraphPorts = {
-    store: { getProcedure: async () => null, findProcedureForTask: async () => null, listProcedures: async () => [], putProcedure: async () => undefined, getVersion: async () => null, listVersions: async () => [], putVersion: async () => undefined, setVersionState: async () => false, recordEvidence: async () => ({ successes: 0, failures: 0, repairs: 0, lastSuccessAt: null, lastFailureAt: null }), deleteAll: async () => 0 },
+    store: { getProcedure: async () => null, findProcedureForTask: async () => null, listProcedures: async () => [], putProcedure: async () => undefined, getVersion: async () => null, listVersions: async () => [], putVersion: async () => undefined, setVersionState: async () => false, activate: async () => false, recordEvidence: async () => ({ successes: 0, failures: 0, repairs: 0, lastSuccessAt: null, lastFailureAt: null }), deleteAll: async () => 0 },
     tools: {
       invoke: async ({ tool, args }) => {
         const a = args as Record<string, string>;

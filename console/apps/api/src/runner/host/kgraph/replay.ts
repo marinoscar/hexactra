@@ -64,9 +64,12 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
       },
       memory: state,
       save: () => ctx.checkpoint(),
+      // A candidate's first replay is its verification run (E46.10): every commit-class step asks the owner first.
+      verify: version.state === 'candidate',
       outputs: readOutputs(run.outputsSpec).map((o) => (o as { key?: string }).key ?? o.label),
     });
     await recordKgRun(d, userId, run.id, version.id, result.kind === 'finished' ? 'replayed' : result.kind === 'handover' ? 'fell_back' : null);
+    if (version.state === 'candidate' && result.kind !== 'outcome') await settleVerification(d, userId, version.id, result.kind === 'finished');
     return result.kind === 'handover' ? null : result.outcome;
   } catch (err) {
     d.log.warn(`run ${run.id}: kgraph replay error, handing over: ${err instanceof Error ? err.name : 'error'}`);
@@ -75,6 +78,19 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
     return null;
   } finally {
     (ctx.ports as { observer?: typeof observer }).observer = original;
+  }
+}
+
+/**
+ * The end of a verification run (E46.10): a clean finish promotes the candidate to the procedure's one active version (compare-and-set: of two
+ * racing jobs one wins); a handover retires it, and the run the agent finishes is compiled into a new candidate. Best effort.
+ */
+async function settleVerification(d: HostDeps, userId: string, versionId: string, clean: boolean): Promise<void> {
+  try {
+    const moved = clean ? await d.kgraphStore!.activate(userId, versionId, 'candidate') : await d.kgraphStore!.setVersionState(userId, versionId, 'candidate', 'retired');
+    if (moved) await d.prisma.auditEvent.create({ data: { actorUserId: userId, action: clean ? 'kgraph.version.verified' : 'kgraph.version.retired', targetType: 'kgraph_version', targetId: versionId, meta: { versionId } } });
+  } catch (err) {
+    d.log.warn(`kgraph version ${versionId}: verification not settled: ${err instanceof Error ? err.name : 'error'}`);
   }
 }
 

@@ -102,6 +102,20 @@ export class PrismaProcedureStore implements ProcedureStorePort {
     return r.count === 1;
   }
 
+  async activate(owner: string, version: string, from: 'candidate' | 'verified' | 'suspended'): Promise<boolean> {
+    if (from !== 'candidate' && !canTransition(from, 'active')) return false;
+    return this.prisma.$transaction(async (tx) => {
+      const v = await tx.kgProcedureVersion.findFirst({ where: { id: version, userId: owner }, select: { procedureId: true } });
+      if (!v) return false;
+      // Compare-and-set on the current state: of two jobs racing, one moves it and the other changes nothing.
+      const moved = await tx.kgProcedureVersion.updateMany({ where: { id: version, userId: owner, state: from }, data: { state: 'active' } });
+      if (moved.count !== 1) return false;
+      await tx.kgProcedureVersion.updateMany({ where: { procedureId: v.procedureId, userId: owner, state: 'active', NOT: { id: version } }, data: { state: 'retired' } });
+      await tx.kgProcedure.updateMany({ where: { id: v.procedureId, userId: owner }, data: { activeVersionId: version } });
+      return true;
+    });
+  }
+
   async recordEvidence(owner: string, version: string, step: string | null, outcome: EvidenceOutcome, at: string): Promise<Evidence> {
     const db = this.db(owner);
     const v = await db.kgProcedureVersion.findFirst({ where: { id: version, userId: owner }, select: { id: true } });
