@@ -5975,6 +5975,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's savings ledger
+         * @description One row per run of the task with the Knowledge Graph on (newest first): steps by how they ran, model calls, tokens, cost and active time, and the task's AI-only baseline. A cost with `costKnown: false` is a lower bound.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphLedger_ledgerOf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kgraph/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the Knowledge Graph saved
+         * @description Per task with ledger rows: runs, the clean-replay rate, and model calls, cost and time against the AI-only baseline. With no baseline yet, no saving is shown.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:read`.
+         */
+        get: operations["kgraphLedger_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approval-rules": {
         parameters: {
             query?: never;
@@ -16673,6 +16717,7 @@ export interface components {
                 reviews: number;
                 evidence: number;
                 traces: number;
+                ledger: number;
             };
         };
         TaskKgraphResponseDto: {
@@ -16722,6 +16767,100 @@ export interface components {
         };
         AnswerReviewDto: {
             approve: boolean;
+        };
+        LedgerResponseDto: {
+            /** Format: uuid */
+            taskId: string;
+            /** @description The task's AI-only baseline: the median of its newest 10 (at most) succeeded AI-only runs, from the ledger's `ai_only` rows and the task's runs from before the feature was on. Null until there is one. */
+            baseline: {
+                /** @description How many runs the figures are the median of. */
+                runs: number;
+                modelCalls: number;
+                /** @description A lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False when a model call could not be priced: `costUsd` is then a lower bound ("at least"). */
+                costKnown: boolean;
+                activeMs: number;
+            } | null;
+            /** @description "no baseline yet" while the baseline is null (and then no saving is shown); otherwise null. */
+            note: string | null;
+            /** @description Newest first, at most 200. */
+            rows: {
+                /** Format: uuid */
+                runId: string;
+                /** @enum {string} */
+                mode: "learn" | "reuse";
+                /** @description The procedure version the run executed; null for an AI-only run. */
+                procedureVersionId: string | null;
+                /** @description The run's terminal status. */
+                runStatus: string;
+                /** @description Steps by how they ran. */
+                steps: {
+                    replayed: number;
+                    recovered: number;
+                    judge: number;
+                    agent: number;
+                };
+                modelCalls: number;
+                inputTokens: number;
+                outputTokens: number;
+                cachedInputTokens: number;
+                /** @description A lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False when a model call could not be priced: `costUsd` is then a lower bound ("at least"). */
+                costKnown: boolean;
+                activeMs: number;
+                /** @enum {string} */
+                outcome: "replayed_clean" | "recovered" | "repaired" | "fell_back" | "ai_only";
+                /** @description Whether the procedure's outcome checks passed; null when no procedure ran. */
+                checksPassed: boolean | null;
+                finishedAt: string;
+            }[];
+        };
+        KgraphSummaryResponseDto: {
+            tasks: {
+                /** Format: uuid */
+                taskId: string;
+                taskName: string;
+                /** @description Ledger rows read (the newest 100 at most). */
+                runs: number;
+                /** @description Runs that executed a procedure version. */
+                procedureRuns: number;
+                /** @description `replayed_clean` runs over procedure runs; null with none. */
+                cleanReplayRate: number | null;
+                /** @description The task's AI-only baseline: the median of its newest 10 (at most) succeeded AI-only runs, from the ledger's `ai_only` rows and the task's runs from before the feature was on. Null until there is one. */
+                baseline: {
+                    /** @description How many runs the figures are the median of. */
+                    runs: number;
+                    modelCalls: number;
+                    /** @description A lower bound while costKnown is false */
+                    costUsd: number;
+                    /** @description False when a model call could not be priced: `costUsd` is then a lower bound ("at least"). */
+                    costKnown: boolean;
+                    activeMs: number;
+                } | null;
+                /** @description "no baseline yet" while the baseline is null (and then no saving is shown); otherwise null. */
+                note: string | null;
+                /** @description Medians of the procedure runs; null with none. */
+                procedureFigures: {
+                    /** @description How many runs the figures are the median of. */
+                    runs: number;
+                    modelCalls: number;
+                    /** @description A lower bound while costKnown is false */
+                    costUsd: number;
+                    /** @description False when a model call could not be priced: `costUsd` is then a lower bound ("at least"). */
+                    costKnown: boolean;
+                    activeMs: number;
+                } | null;
+                /** @description Baseline minus the procedure runs (positive: saved). Null without a baseline or without a procedure run: a saving is never assumed. */
+                saving: {
+                    modelCalls: number;
+                    costUsd: number;
+                    /** @description False when the baseline or the procedure runs hold a lower-bound cost: the cost saving is then approximate. */
+                    costKnown: boolean;
+                    activeMs: number;
+                } | null;
+            }[];
         };
         ApprovalRulesListResponseDto: {
             /** @description Whether "Pause all" is on: while it is, no rule matches. */
@@ -42569,6 +42708,104 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ReviewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphLedger_ledgerOf: {
+        parameters: {
+            query: {
+                taskId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LedgerResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphLedger_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["KgraphSummaryResponseDto"];
                     };
                 };
             };

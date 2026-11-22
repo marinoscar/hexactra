@@ -133,6 +133,7 @@ model Task {
   // composed from app:kgraph.prisma
   kgSettings   KgTaskSettings?
   kgProcedures KgProcedure[]
+  kgLedger     KgLedger[]
 
   // composed from app:mail-triggers.prisma
   mailTriggers MailTrigger[]
@@ -305,6 +306,7 @@ model Run {
 
   // composed from app:kgraph.prisma
   kg       KgRun?
+  kgLedger KgLedger?
   kgTraces KgTrace[]
 
   // composed from app:questions.prisma

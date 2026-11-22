@@ -30097,6 +30097,169 @@
         }
       }
     },
+    "/api/kgraph/ledger": {
+      "get": {
+        "description": "One row per run of the task with the Knowledge Graph on (newest first): steps by how they ran, model calls, tokens, cost and active time, and the task's AI-only baseline. A cost with `costKnown: false` is a lower bound.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphLedger_ledgerOf",
+        "parameters": [
+          {
+            "name": "taskId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LedgerResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's savings ledger",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
+    "/api/kgraph/summary": {
+      "get": {
+        "description": "Per task with ledger rows: runs, the clean-replay rate, and model calls, cost and time against the AI-only baseline. With no baseline yet, no saving is shown.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
+        "operationId": "kgraphLedger_summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/KgraphSummaryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What the Knowledge Graph saved",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:read"
+          ]
+        }
+      }
+    },
     "/api/approval-rules": {
       "get": {
         "description": "Steps you told the agent not to ask about again, newest first, and whether \"Pause all\" is on (`paused`). A rule matches only on its site (the registrable domain of the page's real address), its kind and category and the exact label of the element (digits compared as `#`), within its limits. Rules are made only by ticking \"Don't ask again\" on a request; nothing here creates one.\n\n**Requires:** authentication, plus permission `approvals:read`.",
@@ -79753,6 +79916,9 @@
               },
               "traces": {
                 "type": "number"
+              },
+              "ledger": {
+                "type": "number"
               }
             },
             "required": [
@@ -79764,7 +79930,8 @@
               "runs",
               "reviews",
               "evidence",
-              "traces"
+              "traces",
+              "ledger"
             ]
           }
         },
@@ -79941,6 +80108,385 @@
           "approve"
         ],
         "additionalProperties": false
+      },
+      "LedgerResponseDto": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "runs": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many runs the figures are the median of."
+                  },
+                  "modelCalls": {
+                    "type": "number"
+                  },
+                  "costUsd": {
+                    "type": "number",
+                    "description": "A lower bound while costKnown is false"
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False when a model call could not be priced: `costUsd` is then a lower bound (\"at least\")."
+                  },
+                  "activeMs": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "runs",
+                  "modelCalls",
+                  "costUsd",
+                  "costKnown",
+                  "activeMs"
+                ],
+                "description": "Medians over the runs counted."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task's AI-only baseline: the median of its newest 10 (at most) succeeded AI-only runs, from the ledger's `ai_only` rows and the task's runs from before the feature was on. Null until there is one."
+          },
+          "note": {
+            "description": "\"no baseline yet\" while the baseline is null (and then no saving is shown); otherwise null.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "learn",
+                    "reuse"
+                  ]
+                },
+                "procedureVersionId": {
+                  "description": "The procedure version the run executed; null for an AI-only run.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "runStatus": {
+                  "type": "string",
+                  "description": "The run's terminal status."
+                },
+                "steps": {
+                  "type": "object",
+                  "properties": {
+                    "replayed": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "recovered": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "judge": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "agent": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "replayed",
+                    "recovered",
+                    "judge",
+                    "agent"
+                  ],
+                  "description": "Steps by how they ran."
+                },
+                "modelCalls": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "inputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "outputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "cachedInputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsd": {
+                  "type": "number",
+                  "description": "A lower bound while costKnown is false"
+                },
+                "costKnown": {
+                  "type": "boolean",
+                  "description": "False when a model call could not be priced: `costUsd` is then a lower bound (\"at least\")."
+                },
+                "activeMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "replayed_clean",
+                    "recovered",
+                    "repaired",
+                    "fell_back",
+                    "ai_only"
+                  ]
+                },
+                "checksPassed": {
+                  "description": "Whether the procedure's outcome checks passed; null when no procedure ran.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "finishedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "runId",
+                "mode",
+                "procedureVersionId",
+                "runStatus",
+                "steps",
+                "modelCalls",
+                "inputTokens",
+                "outputTokens",
+                "cachedInputTokens",
+                "costUsd",
+                "costKnown",
+                "activeMs",
+                "outcome",
+                "checksPassed",
+                "finishedAt"
+              ]
+            },
+            "description": "Newest first, at most 200."
+          }
+        },
+        "required": [
+          "taskId",
+          "baseline",
+          "note",
+          "rows"
+        ]
+      },
+      "KgraphSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskName": {
+                  "type": "string"
+                },
+                "runs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Ledger rows read (the newest 100 at most)."
+                },
+                "procedureRuns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Runs that executed a procedure version."
+                },
+                "cleanReplayRate": {
+                  "description": "`replayed_clean` runs over procedure runs; null with none.",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "baseline": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "runs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "How many runs the figures are the median of."
+                        },
+                        "modelCalls": {
+                          "type": "number"
+                        },
+                        "costUsd": {
+                          "type": "number",
+                          "description": "A lower bound while costKnown is false"
+                        },
+                        "costKnown": {
+                          "type": "boolean",
+                          "description": "False when a model call could not be priced: `costUsd` is then a lower bound (\"at least\")."
+                        },
+                        "activeMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "runs",
+                        "modelCalls",
+                        "costUsd",
+                        "costKnown",
+                        "activeMs"
+                      ],
+                      "description": "Medians over the runs counted."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The task's AI-only baseline: the median of its newest 10 (at most) succeeded AI-only runs, from the ledger's `ai_only` rows and the task's runs from before the feature was on. Null until there is one."
+                },
+                "note": {
+                  "description": "\"no baseline yet\" while the baseline is null (and then no saving is shown); otherwise null.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "procedureFigures": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "runs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "How many runs the figures are the median of."
+                        },
+                        "modelCalls": {
+                          "type": "number"
+                        },
+                        "costUsd": {
+                          "type": "number",
+                          "description": "A lower bound while costKnown is false"
+                        },
+                        "costKnown": {
+                          "type": "boolean",
+                          "description": "False when a model call could not be priced: `costUsd` is then a lower bound (\"at least\")."
+                        },
+                        "activeMs": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "runs",
+                        "modelCalls",
+                        "costUsd",
+                        "costKnown",
+                        "activeMs"
+                      ],
+                      "description": "Medians over the runs counted."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Medians of the procedure runs; null with none."
+                },
+                "saving": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "modelCalls": {
+                          "type": "number"
+                        },
+                        "costUsd": {
+                          "type": "number"
+                        },
+                        "costKnown": {
+                          "type": "boolean",
+                          "description": "False when the baseline or the procedure runs hold a lower-bound cost: the cost saving is then approximate."
+                        },
+                        "activeMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "modelCalls",
+                        "costUsd",
+                        "costKnown",
+                        "activeMs"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Baseline minus the procedure runs (positive: saved). Null without a baseline or without a procedure run: a saving is never assumed."
+                }
+              },
+              "required": [
+                "taskId",
+                "taskName",
+                "runs",
+                "procedureRuns",
+                "cleanReplayRate",
+                "baseline",
+                "note",
+                "procedureFigures",
+                "saving"
+              ]
+            }
+          }
+        },
+        "required": [
+          "tasks"
+        ]
       },
       "ApprovalRulesListResponseDto": {
         "type": "object",

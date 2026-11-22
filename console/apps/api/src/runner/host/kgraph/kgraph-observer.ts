@@ -21,5 +21,11 @@ export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService,
   const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
   const mode = await d.kgraph.modeFor({ userId, taskId: run.taskId, run: { isTaskRun, aiOnly } }).catch(() => 'off' as const);
   if (mode === 'off') return undefined;
+  // The run's Knowledge Graph facts (its mode), which the savings ledger reads when the run ends (E46.6). Best effort, outside any step.
+  try {
+    await d.prisma.forUser({ userId }).kgRun.upsert({ where: { runId: run.id }, create: { runId: run.id, userId, mode, aiOnly }, update: { mode } });
+  } catch (err) {
+    d.log.warn(`run ${run.id}: kgraph run facts not written: ${err instanceof Error ? err.name : 'error'}`);
+  }
   return new KgraphObserver({ prisma: d.prisma, log: d.log, userId, runId: run.id, goal: run.goal, inputs: run.inputs, ...(capture ? { capture } : {}) });
 }
