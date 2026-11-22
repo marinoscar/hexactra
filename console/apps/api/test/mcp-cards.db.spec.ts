@@ -14,7 +14,7 @@ import Ajv2020 from 'ajv/dist/2020';
 import { createApp } from '../src/main';
 import { McpDispatcher } from '../src/mcp/mcp.dispatcher';
 import { MCP_VERSIONS, type McpRequestContext } from '../src/mcp/mcp.protocol';
-import { MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
+import { MCP_CARD_SCOPE_IDS, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 import { TASKS_LIST_GOAL_CHARS } from '../src/mcp/mcp.tools';
 import { PrismaService } from '../src/prisma/prisma.service';
 import type { QuestionSpec } from '../src/questions/questions.contract';
@@ -187,7 +187,7 @@ describe('the question tools carry what the card needs', () => {
     const who = await login(`mcp-cards-tools-${stamp}@example.test`);
     const q = await ask(who, { input: 'number', constraints: { min: 1, max: 5, unit: 'bags' } });
     const list = await call(who, 'inbox_list', {});
-    expect(list.structuredContent).toMatchObject({ app_url: APP_URL, granted_scopes: [...MCP_SCOPE_IDS] });
+    expect(list.structuredContent).toMatchObject({ app_url: APP_URL, granted_scopes: [...MCP_CARD_SCOPE_IDS] });
     expect(list.structuredContent!.items.find((x: Json) => x.questionId === q.questionId)).toMatchObject({ input: 'number', constraints: { min: 1, max: 5, unit: 'bags' } });
     // The text is still the bare list (clients without structured content).
     expect(list.content[0]!.text).toContain(q.questionId);
@@ -223,7 +223,7 @@ describe('tasks_list (the tasks card)', () => {
     const r = await call(who, 'tasks_list', {});
     expect(r.isError).toBeFalsy();
     const s = r.structuredContent!;
-    expect(s).toMatchObject({ total: 2, next_cursor: null, app_url: APP_URL, granted_scopes: [...MCP_SCOPE_IDS] });
+    expect(s).toMatchObject({ total: 2, next_cursor: null, app_url: APP_URL, granted_scopes: [...MCP_CARD_SCOPE_IDS] });
     const fares = s.items.find((x: Json) => x.id === scheduled.structuredContent!.id);
     expect(fares).toMatchObject({ scheduleState: 'paused', paused: true, scheduleText: 'Paused', nextRunAt: null, lastRun: null, liveRunId: null, goalTruncated: true });
     expect(fares.goal.length).toBeLessThanOrEqual(TASKS_LIST_GOAL_CHARS);

@@ -9,8 +9,15 @@
 import type { OAuthScopeRisk } from '@marinoscar/platform-api/identity';
 
 /** Every scope a tool may name, in consent order (low risk first). */
-export const MCP_SCOPE_IDS = ['runs:read', 'usage:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write', 'browser:drive', 'browser:evaluate', 'desktop:control', 'policies:write'] as const;
+export const MCP_SCOPE_IDS = ['runs:read', 'usage:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write', 'procedures:read', 'procedures:run', 'browser:drive', 'browser:evaluate', 'desktop:control', 'policies:write'] as const;
 export type McpScope = (typeof MCP_SCOPE_IDS)[number];
+
+/**
+ * The scopes the widgets read (`granted_scopes` of a card's result, #467), in consent order: every scope before E46.22. The learned-procedure
+ * scopes are not among them (no card uses them), so the cards' output schemas and answers are unchanged.
+ */
+export const MCP_CARD_SCOPE_IDS = ['runs:read', 'usage:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write', 'browser:drive', 'browser:evaluate', 'desktop:control', 'policies:write'] as const satisfies readonly McpScope[];
+export type McpCardScope = (typeof MCP_CARD_SCOPE_IDS)[number];
 
 /** The id of the protected resource `/api/mcp` (an `oat_` token's audience). */
 export const MCP_OAUTH_RESOURCE_ID = 'mcp';
@@ -112,6 +119,25 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     permissions: ['runs:write', 'runs:read'],
   },
   {
+    id: 'procedures:read',
+    title: 'See the procedures the agent learned',
+    description: 'See the procedures your Hexactra agent learned from your saved tasks: their parameters, outputs, state and masked steps.',
+    risk: 'low',
+    // Opt-in (E46.22): the Knowledge Graph is off by default, and its tools are offered only while it is on for the deployment and the user.
+    default: false,
+    // GET /kgraph/procedures, /kgraph/procedures/:id.
+    permissions: ['kgraph:read'],
+  },
+  {
+    id: 'procedures:run',
+    title: 'Run a learned procedure',
+    description: 'Run one of the procedures your agent learned, with the values you give it. The run follows your limits and asks you what it must.',
+    risk: 'low',
+    default: false,
+    // GET /kgraph/procedures/:id, /tasks/:id/kgraph; POST /tasks/:id/runs (the run start path every run uses).
+    permissions: ['kgraph:read', 'runs:write', 'runs:read'],
+  },
+  {
     id: 'browser:drive',
     title: 'Control a browser on your machines directly, step by step',
     description: 'Open a browser on your machines and click, type, scroll, read pages and take screenshots, step by step.',
@@ -172,8 +198,8 @@ export type McpEffect = (typeof MCP_EFFECTS)[number];
  * or a session holds every scope. Display only: every call is still checked
  * by the server.
  */
-export function grantedScopes(credential: { scopes?: readonly string[] } | undefined): McpScope[] {
+export function grantedScopes(credential: { scopes?: readonly string[] } | undefined): McpCardScope[] {
   const held = credential?.scopes;
-  if (!held) return [...MCP_SCOPE_IDS];
-  return MCP_SCOPE_IDS.filter((s) => held.includes(s));
+  if (!held) return [...MCP_CARD_SCOPE_IDS];
+  return MCP_CARD_SCOPE_IDS.filter((s) => held.includes(s));
 }

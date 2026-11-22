@@ -176,18 +176,18 @@ describe('MCP tool manifest (#462)', () => {
 
   it('classifies the tools by the rules of #462', () => {
     const by = (n: string) => MCP_TOOLS.find((t) => t.name === n)!;
-    // 59 tools for the model (run_pause and run_resume, E38.2; usage_report, #733), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
-    expect(MCP_TOOLS).toHaveLength(61);
+    // 62 tools for the model (run_pause and run_resume, E38.2; usage_report, #733; procedures_list, procedure_get and procedure_run, E46.22), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
+    expect(MCP_TOOLS).toHaveLength(64);
     for (const n of ['run_cancel', 'browser_close', 'task_update', 'policy_update', 'policy_set_default', 'policies_import', 'task_pause', 'browser_click', 'browser_type', 'browser_press', 'browser_click_at', 'browser_drag', 'browser_type_keys', 'browser_key', 'browser_evaluate', 'browser_type_secret']) {
       expect([n, by(n).effect]).toEqual([n, 'destructive']);
     }
     for (const t of MCP_TOOLS.filter((x) => x.name.startsWith('browser_desktop_'))) expect([t.name, t.effect]).toEqual([t.name, t.name === 'browser_desktop_screenshot' ? 'read' : 'destructive']);
-    for (const n of ['browser_navigate', 'browser_scroll', 'browser_hover_at', 'browser_wait_for', 'browser_back', 'browser_open', 'run_goal', 'task_run', 'ask_human', 'inbox_answer', 'browser_request_human', 'run_pause', 'run_resume']) {
+    for (const n of ['browser_navigate', 'browser_scroll', 'browser_hover_at', 'browser_wait_for', 'browser_back', 'browser_open', 'run_goal', 'task_run', 'ask_human', 'inbox_answer', 'browser_request_human', 'run_pause', 'run_resume', 'procedure_run']) {
       expect([n, by(n).effect]).toEqual([n, 'write']);
     }
     for (const n of ['policies_export', 'run_export', 'schedule_preview', 'browser_handoff_status', 'browser_screenshot', 'browser_text', 'browser_elements', 'browser_tabs']) expect([n, by(n).effect]).toEqual([n, 'read']);
     for (const t of MCP_TOOLS) {
-      const web = t.name.startsWith('browser_') || t.name === 'run_goal' || t.name === 'task_run';
+      const web = t.name.startsWith('browser_') || t.name === 'run_goal' || t.name === 'task_run' || t.name === 'procedure_run';
       expect([t.name, t.openWorld]).toEqual([t.name, web]);
       const idem = t.effect === 'read' || ['task_pause', 'task_resume', 'policy_set_default', 'run_cancel', 'run_pause', 'run_resume', 'browser_close'].includes(t.name);
       expect([t.name, t.idempotent ?? false]).toEqual([t.name, idem]);
@@ -195,6 +195,20 @@ describe('MCP tool manifest (#462)', () => {
     // Read tools sit in a read scope; policies_export only reads, so it is runs:read (not policies:write).
     expect(by('policies_export').scope).toBe('runs:read');
     expect(by('browser_evaluate').scope).toBe('browser:evaluate');
+  });
+
+  it('the learned-procedure tools (E46.22): from the package descriptors, behind the Knowledge Graph switch, and nothing that changes a procedure or a switch', () => {
+    const kg = MCP_TOOLS.filter((t) => t.feature === 'kgraph');
+    expect(kg.map((t) => [t.name, t.scope, t.effect, t.openWorld])).toEqual([
+      ['procedures_list', 'procedures:read', 'read', false],
+      ['procedure_get', 'procedures:read', 'read', false],
+      ['procedure_run', 'procedures:run', 'write', true],
+    ]);
+    // Every other tool is always available.
+    expect(MCP_TOOLS.filter((t) => t.feature !== undefined && t.feature !== 'kgraph')).toEqual([]);
+    // Never over MCP: creating, editing, approving, declining, restoring, forgetting, exporting or importing a procedure, or a switch.
+    expect(MCP_TOOLS.map((t) => t.name).filter((n) => /(^|_)(procedures?|kgraph|reviews?)(_|$)/.test(n) && !['procedures_list', 'procedure_get', 'procedure_run'].includes(n))).toEqual([]);
+    expect(MCP_SCOPES.filter((s) => s.id.startsWith('procedures:')).map((s) => [s.id, s.default])).toEqual([['procedures:read', false], ['procedures:run', false]]);
   });
 
   it('declares an output schema for the 22 tools #462 lists', () => {

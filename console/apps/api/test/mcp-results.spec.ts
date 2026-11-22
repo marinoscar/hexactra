@@ -103,6 +103,13 @@ describe('every tool stays within the limits with the largest plausible answer',
   const step = (seq: number) => ({ id: RID, runId: RID, seq, kind: 'action', action: 'click', args: { s: big }, ok: true, summary: big, reasoning: big, screenshotKey: null, durationMs: 1, createdAt: 'now' });
   /** The biggest thing each REST route could answer. */
   function huge(method: string, path: string): unknown {
+    // The learned procedures (E46.22): 200 procedures, each with 500 steps, 50 parameters and 50 outputs with long labels.
+    if (method === 'GET' && path.startsWith('/kgraph/procedures/')) {
+      const steps = Array.from({ length: 500 }, (_, i) => ({ id: `s${i}`, kind: 'call', label: big, tool: 'click', target: big, usesAi: false, commitClass: false, health: 'healthy' }));
+      return { id: 'kgp-1', taskId: RID, taskName: big, name: big, state: 'active', health: 'healthy', activeVersion: { steps, parameters: Array.from({ length: 50 }, (_, i) => ({ name: `${i}${big}`, type: 'string', sensitive: false, required: true })), outputs: Array.from({ length: 50 }, () => ({ name: big, sensitive: false })) } };
+    }
+    if (method === 'GET' && path.startsWith('/kgraph/procedures')) return { enabled: true, procedures: Array.from({ length: 200 }, (_, i) => ({ id: `kgp-${i}` })) };
+    if (method === 'GET' && path.startsWith('/tasks/') && path.endsWith('/kgraph')) return { taskId: RID, mode: 'reuse', available: true };
     if (path.startsWith('/browser/sessions/') && path.endsWith('/actions')) {
       return {
         state: 'succeeded',
@@ -131,6 +138,7 @@ describe('every tool stays within the limits with the largest plausible answer',
     schedule_create: { task_id: RID, cron: '0 9 * * 1-5' }, schedule_preview: { cron: '0 9 * * 1-5' }, task_pause: { task_id: RID }, task_resume: { task_id: RID }, schedules_list: {}, inbox_list: {},
     inbox_answer: { question_id: RID, outcome: 'completed', value: 'x' }, question_card_answer: { question_id: RID, outcome: 'completed', value: 'x' }, ask_human: { prompt: 'p', input: 'text' }, question_status: { question_id: RID }, policies_list: {}, policy_get: { policy_id: 'builtin:balanced' },
     policy_create: { name: 'n', spec: {} }, policy_update: { policy_id: 'builtin:balanced' }, policy_set_default: { policy_id: null }, policies_export: {}, policies_import: { file: {} }, hosts_list: {}, browser_open: { goal: 'g' },
+    procedures_list: { limit: 50 }, procedure_get: { procedure_id: 'kgp-1' }, procedure_run: { procedure_id: 'kgp-1', inputs: { Customer: 'ACME' } },
     browser_request_human: { session_id: SID, kind: 'other', prompt: 'p' }, browser_handoff_status: { session_id: SID, handoff_id: RID }, browser_close: { session_id: SID },
   };
   const args = (t: McpTool): Record<string, unknown> => {
