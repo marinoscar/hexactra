@@ -39,6 +39,10 @@
       "types": "./dist/execute/index.d.ts",
       "default": "./dist/execute/index.js"
     },
+    "./repair": {
+      "types": "./dist/repair/index.d.ts",
+      "default": "./dist/repair/index.js"
+    },
     "./ports": {
       "types": "./dist/ports/index.d.ts",
       "default": "./dist/ports/index.js"

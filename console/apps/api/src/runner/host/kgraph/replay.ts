@@ -4,7 +4,7 @@
 // match hands the run to the loop with one note in the model's log. Any error is caught, counted and handed over: it never fails the run.
 import type { RunOutcome } from '@marinoscar/hexactra-agent';
 import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
-import { checkOutcome, isAuditRun, noopTelemetry, type ProcedureVersion } from '@marinoscar/hexactra-kgraph';
+import { breaker, checkOutcome, isAuditRun, noopTelemetry, type ProcedureVersion, type RunVerdict } from '@marinoscar/hexactra-kgraph';
 import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls, type ReplayMemory } from '@marinoscar/hexactra-kgraph/harness';
 
 import { declaredOutputs, learnShapes, readShapes } from '../../../kgraph/output-shapes';
@@ -35,7 +35,12 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
     const versions = await d.kgraphStore.listVersions(userId, procedure.id);
     const pinned = memory.kgraphReplay?.version;
     version = (pinned ? versions.find((v) => v.id === pinned) : null) ?? usableVersion(versions);
-    if (!version) return null;
+    if (!version) {
+      // A suspended procedure (E46.12): the run skips replay and is recorded as AI only; its success compiles a fresh candidate.
+      const suspended = versions.find((v) => v.state === 'suspended');
+      if (suspended) await recordKgRun(d, userId, run.id, suspended.id, 'ai_only', true);
+      return null;
+    }
     // An audit run (E46.11): every Nth run of the task runs with AI only, chosen here from the task's run count, never by a model or a page.
     if (!pinned && version.state !== 'candidate') {
       const { auditEvery } = await d.kgraph.systemSettingsOf();
@@ -84,7 +89,9 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
     const v = version;
     if (result.kind === 'finished' && declared.length) await learnShapes(d.prisma, userId, v.id, declared, result.report.outputs).catch(() => undefined);
     if (result.kind === 'handover' && result.note.startsWith('The saved procedure finished but')) await d.kgraphStore.recordEvidence(userId, v.id, null, 'failure', new Date().toISOString()).catch(() => undefined);
-    await recordKgRun(d, userId, run.id, version.id, result.kind === 'finished' ? 'replayed' : result.kind === 'handover' ? 'fell_back' : null);
+    const outcomeFailed = result.kind === 'handover' && result.note.startsWith('The saved procedure finished but');
+    await recordKgRun(d, userId, run.id, version.id, result.kind === 'finished' ? 'replayed' : outcomeFailed ? 'outcome_failed' : result.kind === 'handover' ? 'fell_back' : null);
+    if (result.kind !== 'outcome') await protect(d, userId, run.taskId!, version);
     if (version.state === 'candidate' && result.kind !== 'outcome') await settleVerification(d, userId, version.id, result.kind === 'finished');
     return result.kind === 'handover' ? null : result.outcome;
   } catch (err) {
@@ -107,6 +114,27 @@ async function settleVerification(d: HostDeps, userId: string, versionId: string
     if (moved) await d.prisma.auditEvent.create({ data: { actorUserId: userId, action: clean ? 'kgraph.version.verified' : 'kgraph.version.retired', targetType: 'kgraph_version', targetId: versionId, meta: { versionId } } });
   } catch (err) {
     d.log.warn(`kgraph version ${versionId}: verification not settled: ${err instanceof Error ? err.name : 'error'}`);
+  }
+}
+
+/**
+ * The circuit breaker (E46.12): over the outcomes of this version's own runs, oldest first. A suspension is a compare-and-set on `active`, so
+ * of two jobs only one suspends and only one notification is sent. Best effort: never changes the run.
+ */
+async function protect(d: HostDeps, userId: string, taskId: string, version: ProcedureVersion): Promise<void> {
+  try {
+    if (version.state !== 'active' || !d.kgraph) return;
+    const rows = await d.prisma.forUser({ userId }).kgRun.findMany({ where: { userId, procedureVersionId: version.id, outcome: { in: ['replayed', 'fell_back', 'outcome_failed'] } }, orderBy: { createdAt: 'asc' }, select: { outcome: true } });
+    const history: RunVerdict[] = rows.map((r) => (r.outcome === 'replayed' ? 'clean' : r.outcome === 'outcome_failed' ? 'outcome_failed' : 'agent'));
+    const { suspendAfterFailures } = await d.kgraph.systemSettingsOf();
+    const verdict = breaker(history, suspendAfterFailures);
+    if (!verdict.suspend) return;
+    if (!(await d.kgraphStore!.setVersionState(userId, version.id, 'active', 'suspended'))) return;
+    await d.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'kgraph.version.suspended', targetType: 'kgraph_version', targetId: version.id, meta: { versionId: version.id, reason: verdict.reason } } });
+    const task = await d.prisma.forUser({ userId }).task.findFirst({ where: { id: taskId, userId }, select: { name: true } });
+    await d.notifier?.kgraphSuspended?.(userId, taskId, task?.name ?? 'a task', version.id);
+  } catch (err) {
+    d.log.warn(`kgraph version ${version.id}: breaker not applied: ${err instanceof Error ? err.name : 'error'}`);
   }
 }
 
