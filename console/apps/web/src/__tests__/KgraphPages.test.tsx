@@ -157,9 +157,17 @@ describe('the Knowledge Graph page', () => {
     expect(await screen.findByText('Nothing to review')).toBeInTheDocument();
   });
 
-  it('Map is a placeholder until E46.21', async () => {
-    page(ON, [PROC], [], '/kgraph?tab=map');
-    expect(await screen.findByText('The map arrives soon')).toBeInTheDocument();
+  it('Map below 768 px: a short note and a link to the Procedures list, no canvas', async () => {
+    const restore = mockViewport(390);
+    try {
+      const host = page(ON, [PROC], [], '/kgraph?tab=map');
+      expect(await screen.findByText('The map needs a wider screen')).toBeInTheDocument();
+      expect(screen.getByText(/shows what the agent has learned to do reliably, not everything it can do/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Open the Procedures list' })).toHaveAttribute('href', '/kgraph');
+      expect(host.requests.some((r) => r.path.startsWith('/kgraph/graph'))).toBe(false);
+    } finally {
+      restore();
+    }
   });
 
   it('History: versions with state, source and date, and a readable diff', async () => {

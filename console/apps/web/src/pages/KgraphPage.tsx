@@ -1,7 +1,7 @@
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import { Box, MenuItem, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { getKgStatus, getKgSummary, listProcedures, type KgProcedureItem, type KgStatus, type KgTaskSummary } from '../kgraph/api';
@@ -9,6 +9,9 @@ import { HealthChip, KgraphOffNotice, StateChip, savingText } from '../kgraph/la
 import { KgReviewCard, usePendingKgReviews } from '../kgraph/ReviewCard';
 import { VersionHistory } from '../kgraph/VersionHistory';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, type Column } from '../ui';
+
+// The Map (E46.21) is its own chunk: no other page, and no other tab of this one, loads React Flow or the layout.
+const MapTab = lazy(() => import('../kgraph/map/MapTab'));
 
 const TABS = ['procedures', 'map', 'reviews', 'history'] as const;
 type KgTab = (typeof TABS)[number];
@@ -88,8 +91,9 @@ function ProceduresTab({ procedures, summaries }: { procedures: KgProcedureItem[
   );
 }
 
-function HistoryTab({ procedures }: { procedures: KgProcedureItem[] }) {
-  const [picked, setPicked] = useState<string>(procedures[0]?.id ?? '');
+function HistoryTab({ procedures, initial }: { procedures: KgProcedureItem[]; initial: string | null }) {
+  // `?procedure=` opens one procedure's history (the Map's side panel links here).
+  const [picked, setPicked] = useState<string>(initial ?? procedures[0]?.id ?? '');
   const id = procedures.some((p) => p.id === picked) ? picked : (procedures[0]?.id ?? '');
   return (
     <Stack spacing={2}>
@@ -107,7 +111,7 @@ function HistoryTab({ procedures }: { procedures: KgProcedureItem[] }) {
 
 /**
  * `/kgraph` (E46.20, #794): what the Knowledge Graph learned. Procedures (a task's learned steps, its state, health and what it saved
- * against AI only), Map (E46.21), Reviews (sensitive changes waiting for the owner) and History (versions and their diffs). Every
+ * against AI only), Map (E46.21, a lazily loaded chunk), Reviews (sensitive changes waiting for the owner) and History (versions and their diffs). Every
  * string from the graph is rendered as text, masked as the API returns it. While a switch is off the stored data is still shown.
  */
 export function KgraphPage() {
@@ -158,7 +162,9 @@ export function KgraphPage() {
       </Tabs>
       <ErrorBanner error={error} onRetry={() => void load()} />
       {tab === 'map' && (
-        <EmptyState Icon={AccountTreeOutlinedIcon} title="The map arrives soon" body="A picture of your procedures and the sites, accounts and tools they use. Until then, the Procedures tab lists the same steps as text." />
+        <Suspense fallback={<ListSkeleton />}>
+          <MapTab procedures={procedures} reviews={reviews.reviews} />
+        </Suspense>
       )}
       {tab === 'reviews' && (
         <Box aria-label="Reviews" component="section">
@@ -178,7 +184,7 @@ export function KgraphPage() {
         />
       )}
       {tab === 'procedures' && procedures && procedures.length > 0 && <ProceduresTab procedures={procedures} summaries={byTask} />}
-      {tab === 'history' && procedures && procedures.length > 0 && <HistoryTab procedures={procedures} />}
+      {tab === 'history' && procedures && procedures.length > 0 && <HistoryTab procedures={procedures} initial={params.get('procedure')} />}
     </PageContainer>
   );
 }
