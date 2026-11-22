@@ -16,7 +16,7 @@ export interface ObserverRun {
   conversationId: string | null;
 }
 
-export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService, 'modeFor'>; prisma: PrismaService; log: Logger }, userId: string, run: ObserverRun, aiOnly = false): Promise<ObserverPort | undefined> {
+export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'>; prisma: PrismaService; log: Logger }, userId: string, run: ObserverRun, aiOnly = false): Promise<ObserverPort | undefined> {
   if (!d.kgraph) return undefined;
   const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
   const mode = await d.kgraph.modeFor({ userId, taskId: run.taskId, run: { isTaskRun, aiOnly } }).catch(() => 'off' as const);

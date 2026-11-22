@@ -4,10 +4,10 @@
 // match hands the run to the loop with one note in the model's log. Any error is caught, counted and handed over: it never fails the run.
 import type { RunOutcome } from '@marinoscar/hexactra-agent';
 import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
-import { noopTelemetry, type ProcedureVersion } from '@marinoscar/hexactra-kgraph';
+import { checkOutcome, isAuditRun, noopTelemetry, type ProcedureVersion } from '@marinoscar/hexactra-kgraph';
 import { harnessJudge, harnessProbe, harnessToolInvoker, replayPhase, watchCalls, type ReplayMemory } from '@marinoscar/hexactra-kgraph/harness';
 
-import { readOutputs } from '../../../tasks/task-outputs.schemas';
+import { declaredOutputs, learnShapes, readShapes } from '../../../kgraph/output-shapes';
 import { readRunInputs } from '../../../tasks/task-params.schemas';
 import type { BuiltRun } from '../build-context';
 import type { HostDeps } from '../deps';
@@ -36,6 +36,15 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
     const pinned = memory.kgraphReplay?.version;
     version = (pinned ? versions.find((v) => v.id === pinned) : null) ?? usableVersion(versions);
     if (!version) return null;
+    // An audit run (E46.11): every Nth run of the task runs with AI only, chosen here from the task's run count, never by a model or a page.
+    if (!pinned && version.state !== 'candidate') {
+      const { auditEvery } = await d.kgraph.systemSettingsOf();
+      const n = await d.prisma.run.count({ where: { userId, taskId: run.taskId, createdAt: { lte: run.createdAt } } });
+      if (isAuditRun(n, auditEvery)) {
+        await recordKgRun(d, userId, run.id, version.id, 'ai_only', true);
+        return null;
+      }
+    }
   } catch (err) {
     d.log.warn(`run ${run.id}: kgraph replay not started: ${err instanceof Error ? err.name : 'error'}`);
     return null;
@@ -46,6 +55,8 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
   const original = ctx.ports.observer;
   const { observer, watch } = watchCalls(original);
   (ctx.ports as { observer?: typeof observer }).observer = observer;
+  const declared = declaredOutputs(run.outputsSpec);
+  const shapes = declared.length ? await readShapes(d.prisma, userId, version.id).catch(() => ({})) : {};
   try {
     const inputs: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(readRunInputs(run.inputs)?.values ?? {})) inputs[`p:${key}`] = v.value;
@@ -66,8 +77,13 @@ export async function maybeReplay(d: HostDeps, built: BuiltRun, s: RunStart): Pr
       save: () => ctx.checkpoint(),
       // A candidate's first replay is its verification run (E46.10): every commit-class step asks the owner first.
       verify: version.state === 'candidate',
-      outputs: readOutputs(run.outputsSpec).map((o) => (o as { key?: string }).key ?? o.label),
+      outputs: declared.map((o) => o.key),
+      // Outcome checks (E46.11): a replay that finishes with a missing, mistyped or implausible output hands over instead of succeeding.
+      ...(declared.length ? { checkOutcome: (outputs: Record<string, unknown>) => checkOutcome(declared, outputs, shapes) } : {}),
     });
+    const v = version;
+    if (result.kind === 'finished' && declared.length) await learnShapes(d.prisma, userId, v.id, declared, result.report.outputs).catch(() => undefined);
+    if (result.kind === 'handover' && result.note.startsWith('The saved procedure finished but')) await d.kgraphStore.recordEvidence(userId, v.id, null, 'failure', new Date().toISOString()).catch(() => undefined);
     await recordKgRun(d, userId, run.id, version.id, result.kind === 'finished' ? 'replayed' : result.kind === 'handover' ? 'fell_back' : null);
     if (version.state === 'candidate' && result.kind !== 'outcome') await settleVerification(d, userId, version.id, result.kind === 'finished');
     return result.kind === 'handover' ? null : result.outcome;
@@ -95,9 +111,9 @@ async function settleVerification(d: HostDeps, userId: string, versionId: string
 }
 
 /** The run's Knowledge Graph facts (best effort). */
-async function recordKgRun(d: HostDeps, userId: string, runId: string, versionId: string, outcome: string | null): Promise<void> {
+async function recordKgRun(d: HostDeps, userId: string, runId: string, versionId: string, outcome: string | null, aiOnly = false): Promise<void> {
   try {
-    const data = { mode: 'reuse', procedureVersionId: versionId, ...(outcome ? { outcome } : {}) };
+    const data = { mode: 'reuse', procedureVersionId: versionId, aiOnly, ...(outcome ? { outcome } : {}) };
     await d.prisma.kgRun.upsert({ where: { runId }, create: { runId, userId, ...data }, update: data });
   } catch (err) {
     d.log.warn(`run ${runId}: kg_runs not written: ${err instanceof Error ? err.name : 'error'}`);

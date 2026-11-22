@@ -111,6 +111,8 @@ export interface ReplayInput<C extends AnyContext> {
    * confirmation setting and saved approvals say. The graph adds caution; it never removes it.
    */
   verify?: boolean;
+  /** The outcome check of a completed walk (E46.11): a failure hands over instead of succeeding. */
+  checkOutcome?(outputs: Record<string, unknown>): { ok: boolean; problems: string[] };
 }
 
 const clip = (v: unknown, n = 160) => {
@@ -216,6 +218,14 @@ export async function replayPhase<C extends AnyContext>(input: ReplayInput<C>): 
       const declared = input.outputs ?? [];
       const fields = Object.fromEntries(declared.filter((k) => report.outputs[k] !== undefined).map((k) => [k, { value: report.outputs[k], ok: true }]));
       const patch = declared.length ? { outputs: fields as never, outputsComplete: Object.keys(fields).length === declared.length } : {};
+      const verdict = input.checkOutcome?.(report.outputs);
+      if (verdict && !verdict.ok) {
+        memory.handedOver = true;
+        const note = `The saved procedure finished but its result did not pass its checks: ${verdict.problems.slice(0, 5).join('; ')}. Verify the result and correct it.`;
+        ctx.memory.log.push(note);
+        await input.save();
+        return { kind: 'handover', note, report: { ...report, status: 'failed_check' } };
+      }
       if (declared.length && !patch.outputsComplete) return handover({ ...report, status: 'error' });
       await closeRun(ctx, 'succeeded', { result: 'Done by the saved procedure.', stopReason: 'finished', ...patch });
       return { kind: 'finished', outcome: 'succeeded', report };
