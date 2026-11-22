@@ -910,7 +910,7 @@ const benchScorecard = (id, name, status, live) => {
   }));
   const sum = (f) => policiesScored.reduce((a, p) => a + f(p.metrics), 0);
   return {
-    format: 'hexactra.benchmark-scorecard', version: 1, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.119.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
+    format: 'hexactra.benchmark-scorecard', version: 1, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.120.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
     totals: { costUsd: Math.round(sum((m) => m.cost.totalUsd) * 1e6) / 1e6, costKnown: false, inputTokens: sum((m) => m.tokens.input), outputTokens: sum((m) => m.tokens.output), cachedInputTokens: sum((m) => m.tokens.cached), totalTokens: sum((m) => m.tokens.total), modelCalls: 812, counts: { total: 90, judged: 81, pass: 63, fail: 18, error: 0, skipped: 0, unsupported: 9, unfinished: 0 } },
     ranking: [...policiesScored].sort((a, b) => a.rank - b.rank).map((p) => ({ rank: p.rank, ref: p.ref, label: p.label, successRate: p.metrics.successRate.value, costPerSuccessUsd: p.metrics.cost.perSuccessUsd, costKnown: p.metrics.cost.known, medianActiveMs: p.metrics.speed.medianActiveMs, totalCostUsd: p.metrics.cost.totalUsd, totalTokens: p.metrics.tokens.total })),
     policies: policiesScored,
@@ -933,7 +933,7 @@ const benchmarkRow = (id, name, status, ms, extra = {}) => {
   return {
     id, name, status, suiteKey: 'builtin', suiteVersion: 2,
     config: { challengeIds: BENCH_CHALLENGES.map((c) => c[0]), policies: BENCH_POLICIES.map((p) => ({ ref: p.ref, label: p.label })), trials: 3, hostId: IDS.host, profile: 'default', capUsd: 25, trialTimeoutMinutes: 15 },
-    appVersion: '1.119.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', spentUsd: live ? 4.12 : card.totals.costUsd, progress: benchProgress(live),
+    appVersion: '1.120.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', spentUsd: live ? 4.12 : card.totals.costUsd, progress: benchProgress(live),
     totals: { inputTokens: card.totals.inputTokens, outputTokens: card.totals.outputTokens, cachedInputTokens: card.totals.cachedInputTokens, modelCalls: 812, costUsd: live ? 4.12 : card.totals.costUsd, costKnown: false },
     baselineId: null, createdAt: iso(ms), startedAt: iso(ms + 5_000), finishedAt: live ? null : iso(ms + 3_600_000), ...extra,
   };
@@ -967,7 +967,7 @@ const delta = (metric, current, baseline, better, rate = false, atLeast = false)
   return { metric, current, baseline, delta: d, better, improved: d === null || d === 0 || withinNoise ? null : better === 'higher' ? d > 0 : d < 0, withinNoise, atLeast };
 };
 const benchComparison = {
-  current: { id: IDS.benchmark, name: benchCompleted.name, status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.119.0', commit: benchCompleted.commit, finishedAt: benchCompleted.finishedAt },
+  current: { id: IDS.benchmark, name: benchCompleted.name, status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.120.0', commit: benchCompleted.commit, finishedAt: benchCompleted.finishedAt },
   baseline: { id: IDS.baselineBenchmark, name: benchBaseline.name, status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.116.0', commit: benchBaseline.commit, finishedAt: benchBaseline.finishedAt },
   totals: [delta('totalCostUsd', 20.4, 23.9, 'lower', false, true), delta('totalTokens', 4_698_000, 5_120_000, 'lower')],
   policies: BENCH_POLICIES.map((p, i) => ({

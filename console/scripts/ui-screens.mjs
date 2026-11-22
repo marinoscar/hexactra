@@ -222,6 +222,7 @@ export const ROUTES = [
   ['admin-benchmark-compare', '/admin/settings/benchmarks/{benchmark}/compare/{baselineBenchmark}'],
   ['admin-factory-reset', '/admin/settings/factory-reset'],
   ['admin-run-history', '/admin/settings/run-history'],
+  ['admin-run-recordings', '/admin/settings/run-recordings'],
   ['admin-oauth-clients', '/admin/settings/oauth-clients'],
   ['admin-ai-app-limits', '/admin/settings/ai-app-limits'],
   // Outside the shell.
