@@ -880,7 +880,60 @@ RESPONSES['GET /kgraph/summary'] = { tasks: [{ taskId: IDS.task, taskName: kgPro
 RESPONSES['GET /kgraph/reviews'] = (url) => (url.searchParams.get('status') && url.searchParams.get('status') !== 'pending' ? [] : [kgReview]);
 RESPONSES[`GET /tasks/${IDS.task}/kgraph`] = { taskId: IDS.task, mode: 'reuse', available: true };
 RESPONSES[`GET /kgraph/runs/${IDS.finishedRun}`] = { enabled: true, runId: IDS.finishedRun, taskId: IDS.task, mode: 'reuse', aiOnly: false, outcome: 'replayed', procedureId: KG_PROC, versionId: 'kgv-ui-3', versionNumber: 3, steps: kgSteps.map((st, i) => ({ id: st.id, kind: st.kind, label: st.label, tool: st.tool, how: ['replayed', 'replayed', 'replayed', 'recovered', 'judged', 'not_reached'][i] })), ledger: null };
-RESPONSES['GET /admin/kgraph/settings'] = { enabled: true, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' };
+// The Map (E46.21, #795): the two procedures above with their steps, two sites, a work account with one used and one unused tool, a saved
+// login, and an unused account and saved login (drawn faint).
+const kgNode = (id, type, label, over = {}) => ({ id, type, label, health: 'unknown', counts: { successes: 0, failures: 0, repairs: 0, uses: 0 }, unused: false, cluster: null, procedure: null, ...over });
+const kgP1 = `procedure:${KG_PROC}`;
+const kgP2 = 'procedure:kgp-ui-2';
+const kgMapSteps = kgSteps.map((st) => kgNode(`step:${KG_PROC}:${st.id}`, 'Step', st.label, { health: st.health, counts: { ...st.counts, uses: 1 }, cluster: 'site:portal.example.test', procedure: kgP1 }));
+RESPONSES['GET /kgraph/graph'] = {
+  enabled: true,
+  nodes: [
+    kgNode(kgP1, 'Procedure', 'orders', { health: 'healthy', counts: { ...kgCounts(11, 2, 1), uses: 6 } }),
+    ...kgMapSteps,
+    kgNode(`param:${KG_PROC}:week`, 'Parameter', 'week', { procedure: kgP1 }),
+    kgNode(`output:${KG_PROC}:due`, 'Output', 'due', { procedure: kgP1 }),
+    kgNode(kgP2, 'Procedure', 'report', { counts: { ...kgCounts(0, 0, 0), uses: 2 } }),
+    kgNode('step:kgp-ui-2:r1', 'Step', 'open the weekly figures', { cluster: 'site:reports.example.test', procedure: kgP2 }),
+    kgNode('step:kgp-ui-2:r2', 'Step', 'mail the report', { procedure: kgP2 }),
+    kgNode('site:portal.example.test', 'Site', 'portal.example.test', { cluster: 'site:portal.example.test', counts: { ...kgCounts(0, 0, 0), uses: 6 } }),
+    kgNode('site:reports.example.test', 'Site', 'reports.example.test', { cluster: 'site:reports.example.test', counts: { ...kgCounts(0, 0, 0), uses: 1 } }),
+    kgNode('account:conn-work', 'Account', 'Work mail', { cluster: 'account:conn-work', counts: { ...kgCounts(0, 0, 0), uses: 1 } }),
+    kgNode('tool:mail_send', 'Tool', 'mail_send', { cluster: 'account:conn-work', counts: { ...kgCounts(0, 0, 0), uses: 1 } }),
+    kgNode('tool:drive_list', 'Tool', 'drive_list', { cluster: 'account:conn-work', unused: true }),
+    kgNode('secret:login:supplier portal', 'SecretRef', 'Supplier portal', { counts: { ...kgCounts(0, 0, 0), uses: 1 } }),
+    kgNode('account:conn-home', 'Account', 'Personal mail', { cluster: 'account:conn-home', unused: true }),
+    kgNode('secret:card:visa ending 4242', 'SecretRef', 'Visa ending 4242', { unused: true }),
+  ],
+  edges: [
+    { type: 'has', from: kgP1, to: kgMapSteps[0].id },
+    ...kgMapSteps.slice(1).map((st, i) => ({ type: 'then', from: kgMapSteps[i].id, to: st.id })),
+    ...kgMapSteps.map((st) => ({ type: 'uses', from: st.id, to: 'site:portal.example.test' })),
+    { type: 'uses', from: kgMapSteps[1].id, to: 'secret:login:supplier portal' },
+    { type: 'feeds', from: `param:${KG_PROC}:week`, to: kgMapSteps[4].id },
+    { type: 'feeds', from: kgMapSteps[3].id, to: kgMapSteps[4].id },
+    { type: 'feeds', from: kgMapSteps[4].id, to: `output:${KG_PROC}:due` },
+    { type: 'uses', from: kgP2, to: 'account:conn-work' },
+    { type: 'has', from: kgP2, to: 'step:kgp-ui-2:r1' },
+    { type: 'then', from: 'step:kgp-ui-2:r1', to: 'step:kgp-ui-2:r2' },
+    { type: 'feeds', from: 'step:kgp-ui-2:r1', to: 'step:kgp-ui-2:r2' },
+    { type: 'uses', from: 'step:kgp-ui-2:r1', to: 'site:reports.example.test' },
+    { type: 'uses', from: 'step:kgp-ui-2:r2', to: 'tool:mail_send' },
+    { type: 'uses', from: 'account:conn-work', to: 'tool:drive_list' },
+  ],
+  clusters: [
+    { id: 'site:portal.example.test', kind: 'site', label: 'portal.example.test', nodes: [...kgMapSteps.map((s) => s.id), 'site:portal.example.test'] },
+    { id: 'site:reports.example.test', kind: 'site', label: 'reports.example.test', nodes: ['step:kgp-ui-2:r1', 'site:reports.example.test'] },
+    { id: 'account:conn-work', kind: 'account', label: 'Work mail', nodes: ['account:conn-work', 'tool:mail_send', 'tool:drive_list'] },
+    { id: 'account:conn-home', kind: 'account', label: 'Personal mail', nodes: ['account:conn-home'] },
+  ],
+  collapsed: false,
+  truncated: false,
+  totalNodes: 20,
+  nodeLimit: 2000,
+  nextCursor: null,
+};
+RESPONSES['GET /admin/kgraph/settings'] ={ enabled: true, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' };
 
 // ---- Benchmarks (E44.5, #743): the list, the new form, a completed benchmark's scorecard and trials, a live one, the comparison ----
 
