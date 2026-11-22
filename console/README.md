@@ -427,7 +427,7 @@ The page reads the summary when it opens, when the window gets the focus, and ev
 The route behind it, `GET /api/home/summary`, is one read that never fails because a part is slow: what each block needs, its limits and what it never carries are in [docs/api-tasks-runs.md](docs/api-tasks-runs.md#home).
 ### Chat
 
-Chat is the home of the console: `/` opens a new chat (#713), and `/chat` lists them. Say what you want, and follow it in one thread. A chat needs `chat:read`; writing in one needs `chat:write`. An administrator chooses the chat's model under Administration → AI (feature "Chat: understand the request and start browser runs"); until then the thread says no model is set up.
+Chat is the home of the console: `/` opens a new chat (#713), and `/chat` lists them. Say what you want, and follow it in one thread. A chat needs `chat:read`; writing in one needs `chat:write`. The chat answers with **your default AI model**: Settings → AI Keys (`/settings/ai`) → *Default model*, chosen from the models an administrator enabled under Administration → AI Models. There is no per-feature model setting; with no default chosen and a single configured provider, that provider is used, otherwise the thread says no model is selected. (Task runs use their agent policy's model tiers instead.)
 
 | Desktop, dark | Phone, light |
 |---|---|
