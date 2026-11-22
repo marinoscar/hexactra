@@ -85,6 +85,7 @@ import { AiAppDetailPage } from './pages/AiAppDetailPage';
 import { AiAppsPage } from './pages/AiAppsPage';
 import { ConnectAiAppPage } from './pages/ConnectAiAppPage';
 import { RunRetentionCeilingPage } from './pages/RunRetentionCeilingPage';
+import { RecordingRetentionPage } from './pages/RecordingRetentionPage';
 import { RequestHistorySettingsPage } from './pages/RequestHistorySettingsPage';
 import { AgentPricingPage } from './pages/AgentPricingPage';
 import { AppPlatformHost } from './platformHost';
@@ -323,6 +324,7 @@ export function AppRoutes() {
           <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
           <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />
           <Route path="admin/settings/run-history" element={<Gate permission="system_settings:read"><RunRetentionCeilingPage /></Gate>} />
+          <Route path="admin/settings/run-recordings" element={<Gate permission="system_settings:read"><RecordingRetentionPage /></Gate>} />
           <Route path="admin/settings/request-history" element={<Gate permission="system_settings:read"><RequestHistorySettingsPage /></Gate>} />
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />
