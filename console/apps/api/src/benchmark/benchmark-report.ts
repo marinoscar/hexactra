@@ -89,6 +89,7 @@ export const CSV_COLUMNS = [
   'cost_known',
   'stop_reason',
   'run_id',
+  'recording',
 ] as const;
 
 type Cell = string | number | boolean | null | undefined;
@@ -131,6 +132,7 @@ export function benchmarkReportCsv(report: BenchmarkReport): string {
     t.costKnown,
     t.stopReason,
     t.runId,
+    t.recording?.status,
   ]);
   const lines = [CSV_COLUMNS.join(','), ...rows.map((r) => r.map(csvCell).join(','))];
   return `${lines.join('\r\n')}\r\n`;

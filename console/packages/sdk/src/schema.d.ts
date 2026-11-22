@@ -9275,7 +9275,7 @@ export interface paths {
         };
         /**
          * List a benchmark's trials
-         * @description Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.
+         * @description Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run, the run's id and, for a caller with `runs:read`, the status of the run's recording (`recording`; the video plays only on the run page). Never the seed, the site's state or an expected answer.
          *
          *     **Requires:** authentication, plus permission `benchmarks:read`.
          */
@@ -23202,6 +23202,16 @@ export interface components {
                 escalations: number | null;
                 startedAt: string | null;
                 finishedAt: string | null;
+                /** @description The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`. */
+                recording: {
+                    /**
+                     * @description `ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video.
+                     * @enum {string}
+                     */
+                    status: "recording" | "processing" | "ready" | "failed";
+                    /** @description The length of the video once it is `ready`; null before. */
+                    durationMs: number | null;
+                } | null;
             }[];
         };
         ScorecardResponseDto: {
@@ -24184,6 +24194,16 @@ export interface components {
                 escalations: number | null;
                 startedAt: string | null;
                 finishedAt: string | null;
+                /** @description The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`. */
+                recording: {
+                    /**
+                     * @description `ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video.
+                     * @enum {string}
+                     */
+                    status: "recording" | "processing" | "ready" | "failed";
+                    /** @description The length of the video once it is `ready`; null before. */
+                    durationMs: number | null;
+                } | null;
                 /** @description The trial run's goal, masked, with the trial's site token hidden; null when the run was deleted or never started. */
                 goal: string | null;
                 /** @description What the agent answered, masked; null when it said nothing or the run is gone. */

@@ -121,6 +121,17 @@ export class BenchmarkListResponseDto extends createZodDto(benchmarkListSchema) 
 
 export const trialCheckSchema = z.object({ name: z.string(), pass: z.boolean(), detail: z.string().optional() });
 
+/** The statuses of a run's recording (`RunRecording.status`, epic #755). */
+export const TRIAL_RECORDING_STATUSES = ['recording', 'processing', 'ready', 'failed'] as const;
+
+export const trialRecordingSchema = z
+  .object({
+    status: z.enum(TRIAL_RECORDING_STATUSES).describe('`ready`: the video plays on the run page (`/runs/{runId}#recording`); `recording` or `processing`: not yet; `failed`: no video.'),
+    durationMs: z.number().int().nullable().describe('The length of the video once it is `ready`; null before.'),
+  })
+  .describe("The trial run's video (epic #755), never the video itself: it is not masked and plays only on the run page.");
+export type TrialRecordingView = z.infer<typeof trialRecordingSchema>;
+
 export const benchmarkTrialSchema = z.object({
   id: z.string(),
   challengeId: z.string(),
@@ -151,6 +162,7 @@ export const benchmarkTrialSchema = z.object({
   escalations: z.number().int().nullable(),
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
+  recording: trialRecordingSchema.nullable().describe("The trial run's recording: null when the run was not recorded or was deleted, and for a viewer without `runs:read`."),
 });
 export type BenchmarkTrialView = z.infer<typeof benchmarkTrialSchema>;
 

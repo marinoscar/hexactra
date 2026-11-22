@@ -57,6 +57,8 @@ function trialsOf(): BenchmarkTrialView[] {
           escalations: 0,
           startedAt: new Date(Date.UTC(2026, 10, 1, 10, 0, n)).toISOString(),
           finishedAt: new Date(Date.UTC(2026, 10, 1, 10, 1, n)).toISOString(),
+          // The first trial run was recorded (#846), the second is still being prepared; the rest were not recorded.
+          recording: n === 1 ? { status: 'ready', durationMs: 61_000 } : n === 2 ? { status: 'processing', durationMs: null } : null,
         });
       }
     }

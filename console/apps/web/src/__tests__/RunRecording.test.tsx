@@ -1,5 +1,5 @@
 // Run recordings (epic #755): the Recording card on the run page, and the Record video switch in New run.
-import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
@@ -60,6 +60,28 @@ describe('the Recording card', () => {
     const host = renderIt(<RunRecording runId="r2" />, {});
     await waitFor(() => expect(host.requests.some((r: TestApiRequest) => r.path === '/runs/r2/recording')).toBe(true));
     expect(screen.queryByTestId('run-recording')).not.toBeInTheDocument();
+  });
+
+  it('scrolls to the video when the page is opened at #recording (a benchmark trial link, #846), and not otherwise', async () => {
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      renderIt(<RunRecording runId="r1" />, { 'GET /runs/r1/recording': READY, 'POST /runs/r1/recording/link': { url: '/api/recordings/tok' } });
+      await screen.findByTestId('run-recording');
+      expect(scroll).not.toHaveBeenCalled();
+      cleanup();
+
+      window.history.replaceState(null, '', '#recording');
+      renderIt(<RunRecording runId="r1" />, { 'GET /runs/r1/recording': READY, 'POST /runs/r1/recording/link': { url: '/api/recordings/tok' } });
+      const card = await screen.findByTestId('run-recording');
+      expect(card).toHaveAttribute('id', 'recording');
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+      expect(scroll.mock.contexts[0]).toBe(card);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+      window.history.replaceState(null, '', window.location.pathname);
+    }
   });
 
   it('deletes the video after a confirmation', async () => {

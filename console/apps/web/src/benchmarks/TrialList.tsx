@@ -1,5 +1,6 @@
 // A benchmark's trials (E44.5, #743): verdict, why it did not pass, the grader's checks, tokens
-// and cost, and a link to the trial's run ("run removed" once the run is deleted).
+// and cost, and a link to the trial's run ("run removed" once the run is deleted). When the run was
+// recorded (#846), "Recording" next to it opens the run page at its video; the video stays there.
 import { Box, Card, CardContent, Link, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -20,12 +21,35 @@ const tokenText = (t: BenchmarkTrial) => (t.inputTokens === null && t.outputToke
 /** The table's narrow form: "37.7k / 3.3k / 16.4k". */
 const shortTokens = (t: BenchmarkTrial) => (t.inputTokens === null && t.outputTokens === null ? 'n/a' : `${tokens(t.inputTokens)} / ${tokens(t.outputTokens)} / ${tokens(t.cachedInputTokens)}`);
 
+const LINK_SX = { display: 'inline-flex', alignItems: 'center', minHeight: 32 } as const;
+
+/** The run's video: a link once it is ready, "Recording…" while it is made, nothing when it failed or there is none. */
+function RecordingLink({ t }: { t: BenchmarkTrial }) {
+  if (!t.runId || !t.recording) return null;
+  if (t.recording.status === 'ready') {
+    return (
+      <Link component={RouterLink} to={`/runs/${t.runId}#recording`} sx={LINK_SX} aria-label={`Recording of ${t.challengeTitle}, ${t.policyLabel}, attempt ${t.trialIndex + 1}`}>
+        Recording
+      </Link>
+    );
+  }
+  if (t.recording.status === 'failed') return null;
+  return (
+    <Typography variant="body2" color="text.secondary" component="span" sx={LINK_SX}>
+      Recording…
+    </Typography>
+  );
+}
+
 function RunLink({ t }: { t: BenchmarkTrial }) {
   if (t.runId) {
     return (
-      <Link component={RouterLink} to={`/runs/${t.runId}`} sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32 }}>
-        Open run
-      </Link>
+      <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}>
+        <Link component={RouterLink} to={`/runs/${t.runId}`} sx={LINK_SX}>
+          Open run
+        </Link>
+        <RecordingLink t={t} />
+      </Stack>
     );
   }
   // A trial that started but has no run any more: the run was deleted (the trial's metrics stay).

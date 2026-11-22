@@ -22,7 +22,7 @@ import { BENCHMARK_LIMITS } from './benchmark.settings';
 import { BENCHMARK_MAX_POLICIES, type BenchmarkProgress, type BenchmarkSuiteView, type BenchmarkTotals, type BenchmarkTrialView, type BenchmarkView, type CreateBenchmarkInput } from './benchmarks.schemas';
 import { SUITE, challengeById, missingCapabilities, seedFrom } from './suite/registry';
 import { CATEGORIES, CATEGORY_LABELS } from './suite/types';
-import { TRIAL_VIEW_OMIT, iso, oneOf, trialView } from './trial-view';
+import { TRIAL_RECORDING_SELECT, TRIAL_VIEW_OMIT, iso, oneOf, trialRecording, trialView } from './trial-view';
 
 /** Who is asking. */
 export interface BenchmarkActor {
@@ -203,14 +203,25 @@ export class BenchmarksService {
     return this.view(b, await this.factsOf([id]));
   }
 
-  /** The trials of a benchmark, in the order they run. */
-  async trials(userId: string, id: string, filter: { status?: string; verdict?: string; policyRef?: string; challengeId?: string } = {}): Promise<{ items: BenchmarkTrialView[] }> {
+  /**
+   * The trials of a benchmark, in the order they run. With `recordings` (the viewer has `runs:read`, the run page's rule), each trial
+   * carries its run's recording status (#846), read in the same query as the trials: never one query per trial.
+   */
+  async trials(
+    userId: string,
+    id: string,
+    filter: { status?: string; verdict?: string; policyRef?: string; challengeId?: string } = {},
+    opts: { recordings?: boolean } = {},
+  ): Promise<{ items: BenchmarkTrialView[] }> {
     const b = await this.find(userId, id);
     const rows = await this.prisma.benchmarkTrial.findMany({
       where: { benchmarkId: id, ...(filter.status ? { status: filter.status } : {}), ...(filter.verdict ? { verdict: filter.verdict } : {}), ...(filter.policyRef ? { policyRef: filter.policyRef } : {}), ...(filter.challengeId ? { challengeId: filter.challengeId } : {}) },
       omit: TRIAL_VIEW_OMIT,
+      include: { run: { select: { recording: { select: TRIAL_RECORDING_SELECT } } } },
     });
-    return { items: inRunOrder(readBenchmarkConfig(b.config), rows).map(trialView) };
+    return {
+      items: inRunOrder(readBenchmarkConfig(b.config), rows).map(({ run, ...t }) => trialView(t, opts.recordings && t.runId ? trialRecording(run?.recording, userId) : null)),
+    };
   }
 
   // ---- Cancel and delete ----

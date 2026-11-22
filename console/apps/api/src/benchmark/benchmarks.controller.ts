@@ -26,7 +26,11 @@ import { ScorecardService } from './scorecard.service';
 interface Principal {
   id: string;
   activeOrgId?: string | null;
+  permissions?: string[];
 }
+
+/** A trial's recording status is shown only to a viewer who may open the run (`runs:read`, the run page's rule; #846). */
+export const canSeeRecordings = (user: Pick<Principal, 'permissions'>): boolean => (user.permissions ?? []).includes('runs:read');
 
 const NOT_FOUND = "`BENCHMARK_NOT_FOUND`: no such benchmark, or it is another administrator's.";
 
@@ -89,10 +93,11 @@ export class BenchmarksController {
   @Auth({ permissions: ['benchmarks:read'] })
   @ApiOperation({
     summary: "List a benchmark's trials",
-    description: "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run and the run's id. Never the seed, the site's state or an expected answer.",
+    description:
+      "Every trial in the order it runs: its verdict, why it did not pass, the grader's checks, whether the agent claimed success, the metrics copied from its run, the run's id and, for a caller with `runs:read`, the status of the run's recording (`recording`; the video plays only on the run page). Never the seed, the site's state or an expected answer.",
   })
-  trials(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: ListTrialsQueryDto) {
-    return this.benchmarks.trials(userId, id, q);
+  trials(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Query() q: ListTrialsQueryDto) {
+    return this.benchmarks.trials(user.id, id, q, { recordings: canSeeRecordings(user) });
   }
 
   @Get(':id/scorecard')
@@ -144,7 +149,7 @@ export class BenchmarksController {
       'A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run\'s goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `\'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial\'s site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.',
   })
   async export(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Query() q: BenchmarkExportQueryDto, @Res() reply: FastifyReply): Promise<void> {
-    const file = await this.reports.export(user.id, id, { format: q.format, paper: q.paper, baseline: q.baseline, orgId: user.activeOrgId ?? null });
+    const file = await this.reports.export(user.id, id, { format: q.format, paper: q.paper, baseline: q.baseline, orgId: user.activeOrgId ?? null, recordings: canSeeRecordings(user) });
     await reply.header('content-disposition', `attachment; filename="${file.filename}"`).header('cache-control', 'no-store').type(file.contentType).send(file.body);
   }
 

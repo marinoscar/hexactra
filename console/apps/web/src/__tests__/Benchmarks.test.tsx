@@ -160,6 +160,7 @@ function trial(over: Partial<BenchmarkTrial>): BenchmarkTrial {
     escalations: 0,
     startedAt: '2026-11-21T10:01:00Z',
     finishedAt: '2026-11-21T10:02:00Z',
+    recording: null,
     ...over,
   };
 }

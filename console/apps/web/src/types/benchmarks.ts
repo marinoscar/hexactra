@@ -109,6 +109,8 @@ export interface BenchmarkTrial {
   escalations: number | null;
   startedAt: string | null;
   finishedAt: string | null;
+  /** The trial run's video (#846): its status only; null when not recorded, the run is gone, or the viewer lacks `runs:read`. */
+  recording: { status: 'recording' | 'processing' | 'ready' | 'failed'; durationMs: number | null } | null;
 }
 
 export interface SuiteChallenge {
