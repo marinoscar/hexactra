@@ -145,6 +145,14 @@ export function pathMatches(pattern: string, path: string): boolean {
   return re.test(path);
 }
 
+/** Whether a judge's answer fits one field of its fixed schema. */
+export function fitsField(f: { type: string; values?: readonly string[] }, v: unknown): boolean {
+  if (f.type === 'number') return typeof v === 'number' && Number.isFinite(v);
+  if (f.type === 'boolean') return typeof v === 'boolean';
+  if (f.type === 'enum') return typeof v === 'string' && (f.values ?? []).includes(v);
+  return typeof v === 'string' && v.length <= 4000;
+}
+
 class Halt {
   constructor(readonly status: ExecutionStatus, readonly report: StepReport, readonly resume: ResumePoint) {}
 }
@@ -182,7 +190,7 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
         const r = report.results[b.step];
         if (!r) throw new Halt('error', { step: at.id, kind: at.kind, status: 'error', durationMs: 0, reason: `its input from ${b.step} is not available` }, { step: at.id });
         const src = byId.get(b.step);
-        if (src?.kind === 'extract' || src?.kind === 'judge') return getPath(r.value, b.path);
+        if (src?.kind === 'extract' || src?.kind === 'judge' || src?.kind === 'foreach') return getPath(r.value, b.path);
         return b.path ? getPath(structured(r), b.path) : r.text;
       }
       case 'judge': {
@@ -283,7 +291,9 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
       case 'judge': {
         report.judgeCalls++;
         const r = await ports.judge.judge({ goal: options.goal, inputs: Object.fromEntries(Object.entries(s.inputs).map(([k, b]) => [k, resolve(b, s)])), output: s.output });
-        if (!r.ok || !r.value) throw new Halt('error', finish('error', { reason: 'the judge gave no valid answer' }), { step: s.id });
+        // The answer must fit the step's fixed schema (E46.18): anything else is a failed check, never a guess.
+        const bad = !r.ok || !r.value ? 'no answer' : s.output.find((f) => !fitsField(f, r.value![f.name]))?.name;
+        if (bad) throw new Halt('failed_check', finish('failed_check', { failed: { check: 'result_shape', expected: s.output.map((f) => f.name), observed: bad === 'no answer' ? null : { field: bad } } }), { step: s.id, expected: 'an answer that fits the step', observed: bad === 'no answer' ? null : { field: bad } });
         report.results[s.id] = { text: JSON.stringify(r.value), value: r.value, ok: true };
         report.steps.push(finish('done'));
         return follow(s.id);
@@ -303,9 +313,33 @@ export async function executeProcedure(version: ProcedureVersion, inputs: Record
         report.steps.push(finish('done', v.note ? { notes: [v.note] } : {}));
         return v.ok ? s.then : s.else;
       }
-      case 'foreach':
-        // Loops arrive with E46.18: until then a version holding one is handed to the agent.
-        throw new Halt('agent', finish('agent', { reason: 'loops run with the agent' }), { step: s.id });
+      case 'foreach': {
+        // Iterate a list output (E46.18), bounded by the list, `maxItems` and the host's `before` (budgets). Each body step runs exactly as a
+        // step outside a loop: through the invoker and its gates, with its intent recorded, so a send inside asks or is gated every time.
+        const list = resolve(s.over, s);
+        if (!Array.isArray(list)) throw new Halt('failed_check', finish('failed_check', { failed: { check: 'result_shape', expected: 'a list', observed: typeof list } }), { step: s.id, expected: 'a list', observed: typeof list });
+        const exit = version.edges.find((e) => e.type === 'then' && !e.loop && e.from === s.id && !s.body.includes(e.to))?.to ?? null;
+        if (list.length === 0) {
+          // An empty list takes the learned `empty` path (the foreach's exit edge leads to a branch), otherwise the agent takes over.
+          if (exit && byId.get(exit)?.kind === 'branch') {
+            report.steps.push(finish('done', { notes: ['empty list'] }));
+            return exit;
+          }
+          throw new Halt('agent', finish('agent', { reason: 'the list was empty' }), { step: s.id, expected: 'items', observed: 0 });
+        }
+        const items = list.slice(0, s.maxItems);
+        report.steps.push(finish('done', { notes: [`${items.length} item(s)`] }));
+        for (let i = 0; i < items.length; i++) {
+          report.results[s.id] = { text: JSON.stringify(items[i]).slice(0, MAX_TEXT), value: items[i], ok: true };
+          for (const id of s.body) {
+            const body = byId.get(id);
+            if (!body) throw new Halt('error', finish('error', { reason: 'no such loop step' }), { step: id });
+            await runStep(body);
+            if (report.steps.at(-1)?.status === 'done') await options.after?.(body);
+          }
+        }
+        return exit;
+      }
     }
   };
 
