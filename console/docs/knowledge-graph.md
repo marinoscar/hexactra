@@ -125,7 +125,7 @@ How to measure a live comparison: [runbooks/kgraph-measurement.md](runbooks/kgra
 
 Knowledge Graph data lives in new `kg_` tables in the console's own PostgreSQL, behind the package's store port. No new service is required.
 
-The E46.4 load test met its bars except one: the heavy owner's Map query had a warm p95 of 2,083 ms against a bar of 2,000 ms, with about 130 ms of it in the database. **Accepting this miss is pending the owner's decision.**
+The E46.4 load test met its bars for the run-time queries, by a wide margin. Reading one owner's whole graph missed: the heavy owner's Map-columns read had a warm p95 of 2,104 ms (2,083 ms with covering indexes, not kept) against a bar of 2,000 ms. Most of that time is the API turning rows into objects, not the database. **The owner accepted the miss (2026-11-22):** the Map's view folds and pages above 2,000 nodes ([decision record](decisions/knowledge-graph.md#load-test-2026-11-22)).
 
 ## Upkeep
 
@@ -211,4 +211,4 @@ Your own switch is the user setting `kgraph.enabled` (`PATCH /api/user-settings`
 - **The framework recipes** for Hermes, OpenClaw and Pi are not verified, and the consent screen with the switch off is not tested (#796).
 - **Export, import and upkeep** have no page or CLI command.
 - **The live AI-only vs reuse comparison** is not measured.
-- **The E46.4 heavy-owner Map query** missed its bar (2,083 ms against 2,000 ms warm p95), pending the owner's decision.
+- **The E46.4 heavy-owner Map query** missed its bar (2,104 ms against 2,000 ms warm p95). The owner accepted it; the Map's view folds and pages above 2,000 nodes.
