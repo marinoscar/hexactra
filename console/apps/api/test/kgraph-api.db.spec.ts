@@ -193,7 +193,7 @@ describe('the Knowledge Graph API (#793)', () => {
 
   it('lists procedures with state, health and the ledger summary, and filters them', async () => {
     const list = (await call<{ procedures: Record<string, unknown>[] }>(owner, 'GET', '/kgraph/procedures')).data.procedures;
-    expect(list).toEqual([expect.objectContaining({ id: pid, taskId, name: 'Pay the bill', versionId: v2, versionNumber: 2, state: 'active', health: 'healthy', steps: 5, ledger: { runs: 0, procedureRuns: 0, cleanReplayRate: null } })]);
+    expect(list).toEqual([expect.objectContaining({ id: pid, taskId, name: 'Pay the bill', versionId: v2, versionNumber: 2, state: 'active', health: 'healthy', steps: 5, ledger: { runs: 0, procedureRuns: 0, cleanReplayRate: null, everydayRuns: 0 } })]);
     expect((await call<{ procedures: unknown[] }>(owner, 'GET', '/kgraph/procedures?state=retired')).data.procedures).toEqual([]);
     expect((await call<{ procedures: unknown[] }>(owner, 'GET', '/kgraph/procedures?q=nothing-like-it')).data.procedures).toEqual([]);
     expect((await call(owner, 'GET', '/kgraph/procedures?state=sleeping')).statusCode).toBe(400);
@@ -246,7 +246,7 @@ describe('the Knowledge Graph API (#793)', () => {
 
   it('says how each step of a run ran', async () => {
     const r = (await call<{ mode: string; outcome: string; versionNumber: number; procedureId: string; steps: { id: string; how: string }[] }>(owner, 'GET', `/kgraph/runs/${runId}`)).data;
-    expect(r).toMatchObject({ mode: 'reuse', outcome: 'fell_back', versionNumber: 2, procedureId: pid });
+    expect(r).toMatchObject({ mode: 'reuse', outcome: 'fell_back', versionNumber: 2, procedureId: pid, procedureName: 'Pay the bill' });
     expect(r.steps.map((s) => [s.id, s.how])).toEqual([
       ['s1', 'replayed'],
       ['s2', 'recovered'],

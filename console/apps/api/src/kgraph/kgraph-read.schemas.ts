@@ -23,6 +23,7 @@ const ledgerSummary = z.object({
   runs: z.number().int().describe('Ledger rows of the task.'),
   procedureRuns: z.number().int().describe('Runs that executed a procedure version.'),
   cleanReplayRate: z.number().nullable().describe('`replayed_clean` runs over procedure runs; null with none.'),
+  everydayRuns: z.number().int().describe('Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`.'),
 });
 export const procedureItemSchema = z.object({
   id: z.string(),
@@ -135,6 +136,7 @@ export const kgRunSchema = z.object({
   aiOnly: z.boolean(),
   outcome: z.string().nullable().describe('`replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running.'),
   procedureId: z.string().nullable(),
+  procedureName: z.string().nullable().describe("The procedure's name, masked; null when the run used none."),
   versionId: z.string().nullable(),
   versionNumber: z.number().int().nullable(),
   steps: z.array(z.object({ id: z.string(), kind: z.string(), label: z.string(), tool: z.string().nullable(), how })).describe("The version's steps and how each ran in this run."),

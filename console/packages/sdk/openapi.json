@@ -82499,12 +82499,19 @@
                         "number",
                         "null"
                       ]
+                    },
+                    "everydayRuns": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`."
                     }
                   },
                   "required": [
                     "runs",
                     "procedureRuns",
-                    "cleanReplayRate"
+                    "cleanReplayRate",
+                    "everydayRuns"
                   ]
                 }
               },
@@ -82623,12 +82630,19 @@
                   "number",
                   "null"
                 ]
+              },
+              "everydayRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`."
               }
             },
             "required": [
               "runs",
               "procedureRuns",
-              "cleanReplayRate"
+              "cleanReplayRate",
+              "everydayRuns"
             ]
           },
           "enabled": {
@@ -83808,6 +83822,13 @@
               "null"
             ]
           },
+          "procedureName": {
+            "description": "The procedure's name, masked; null when the run used none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "versionId": {
             "type": [
               "string",
@@ -83949,6 +83970,7 @@
           "aiOnly",
           "outcome",
           "procedureId",
+          "procedureName",
           "versionId",
           "versionNumber",
           "steps",

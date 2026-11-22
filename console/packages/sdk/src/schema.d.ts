@@ -17302,6 +17302,8 @@ export interface components {
                     procedureRuns: number;
                     /** @description `replayed_clean` runs over procedure runs; null with none. */
                     cleanReplayRate: number | null;
+                    /** @description Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`. */
+                    everydayRuns: number;
                 };
             }[];
         };
@@ -17329,6 +17331,8 @@ export interface components {
                 procedureRuns: number;
                 /** @description `replayed_clean` runs over procedure runs; null with none. */
                 cleanReplayRate: number | null;
+                /** @description Chats and one-off runs in which a version of this procedure ran (the everyday switch, E46.28): its `everyday` ledger rows. Outside `runs`. */
+                everydayRuns: number;
             };
             /** @description Both the deployment and your own switch are on. While false the stored data is shown and nothing is learned or replayed. */
             enabled: boolean;
@@ -17596,6 +17600,8 @@ export interface components {
             /** @description `replayed`, `fell_back`, `outcome_failed`, `ai_only`, ...: a short code, null while running. */
             outcome: string | null;
             procedureId: string | null;
+            /** @description The procedure's name, masked; null when the run used none. */
+            procedureName: string | null;
             versionId: string | null;
             versionNumber: number | null;
             /** @description The version's steps and how each ran in this run. */

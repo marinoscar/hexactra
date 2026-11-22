@@ -36,7 +36,7 @@ afterEach(() => {
   restore = null;
 });
 
-const ON = { deployment: true, user: true, available: true };
+const ON = { deployment: true, user: true, available: true, everyday: true };
 const proc = (id: string, taskName: string, state: KgProcedureItem['state'] = 'active'): KgProcedureItem => ({
   id,
   taskId: `00000000-0000-4000-8000-00000000000${id.slice(1)}`,
@@ -48,7 +48,7 @@ const proc = (id: string, taskName: string, state: KgProcedureItem['state'] = 'a
   health: 'healthy',
   steps: 2,
   updatedAt: '2026-11-20T10:00:00.000Z',
-  ledger: { runs: 3, procedureRuns: 2, cleanReplayRate: 1 },
+  ledger: { runs: 3, procedureRuns: 2, cleanReplayRate: 1, everydayRuns: id === 'p1' ? 4 : 0 },
 });
 const PROCS = [proc('p1', 'Download the <b>invoices</b>'), proc('p2', 'Check the orders', 'suspended'), proc('p3', 'Weekly report')];
 const REVIEW: KgReview = { id: 'r1', versionId: 'v9', procedureId: 'p1', status: 'pending', changes: [{ reason: 'recipient', text: 'would send to <img src=x onerror=alert(1)>' }], createdAt: '2026-11-21T10:00:00.000Z', expiresAt: '2026-12-21T10:00:00.000Z' };
@@ -117,6 +117,7 @@ describe('the Map', () => {
     const panel = screen.getByRole('complementary', { name: 'Details' });
     expect(within(panel).getByRole('link', { name: 'Step list' })).toHaveAttribute('href', '/kgraph/procedures/p1');
     expect(within(panel).getByRole('link', { name: 'History' })).toHaveAttribute('href', '/kgraph?tab=history&procedure=p1');
+    expect(within(panel).getByTestId('map-everyday-uses')).toHaveTextContent('Used in chats and one-off runs: 4');
     expect(within(panel).getByText('would send to <img src=x onerror=alert(1)>')).toBeInTheDocument();
     expect(document.querySelector('img[src="x"]')).toBeNull();
     fireEvent.click(within(panel).getByRole('button', { name: 'Show its steps' }));

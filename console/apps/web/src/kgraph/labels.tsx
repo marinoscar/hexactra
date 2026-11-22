@@ -1,6 +1,6 @@
 import { Alert, Chip } from '@mui/material';
 
-import type { KgHealth, KgMode, KgStatus, KgStepHow, KgVersionItem, KgVersionState } from './api';
+import type { KgHealth, KgMode, KgRunMode, KgStatus, KgStepHow, KgVersionItem, KgVersionState } from './api';
 import { formatCost } from '../ui';
 
 /** The three choices of a task, each with one line of help. `off` is "AI only". */
@@ -10,6 +10,9 @@ export const MODE_CHOICES: { value: KgMode; label: string; help: string }[] = [
   { value: 'reuse', label: 'Learn and reuse', help: 'Saved steps run without the model; the agent takes over or repairs when a page changed.' },
 ];
 export const MODE_LABEL: Record<KgMode, string> = { off: 'AI only', learn: 'Learn only', reuse: 'Learn and reuse' };
+export const RUN_MODE_LABEL: Record<KgRunMode, string> = { ...MODE_LABEL, everyday: 'Chat or one-off run' };
+/** "Used in chats and one-off runs: N" (E46.29): from the procedure's `everyday` ledger rows. */
+export const everydayUsesText = (n: number) => `Used in chats and one-off runs: ${n}`;
 
 export const STATE_LABEL: Record<KgVersionState, string> = { candidate: 'Candidate', verified: 'Verified', active: 'Active', suspended: 'Suspended', retired: 'Retired', rejected: 'Rejected' };
 const STATE_COLOR: Record<KgVersionState, 'default' | 'info' | 'success' | 'warning' | 'error'> = { candidate: 'info', verified: 'info', active: 'success', suspended: 'warning', retired: 'default', rejected: 'error' };
@@ -63,6 +66,13 @@ export function savingText(s: { saving: { modelCalls: number; costUsd: number; c
   const callsText = calls >= 0 ? `${calls} fewer model calls` : `${-calls} more model calls`;
   const cost = formatCost(Math.abs(s.saving.costUsd), s.saving.costKnown) ?? '$0.00';
   return `${callsText} and ${cost} ${s.saving.costUsd >= 0 ? 'less' : 'more'} than AI only, per run`;
+}
+
+/** Why "Use in chats and one-off runs" cannot be changed yet: it works only while the Knowledge Graph is on for the deployment and the owner. */
+export function everydayDisabledReason(status: KgStatus): string | null {
+  if (!status.deployment) return 'Available once your administrator allows the Knowledge Graph on this console.';
+  if (!status.user) return 'Turn on "Use the Knowledge Graph for my saved tasks" first.';
+  return null;
 }
 
 /** Why the feature does nothing for this viewer, or null when it is on. Says who can turn it on and that nothing was deleted. */
