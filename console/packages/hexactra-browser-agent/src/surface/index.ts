@@ -87,6 +87,25 @@ export function matchFingerprint(fp: ElementFingerprint, elements: readonly Page
   return pick(elements.filter(sameKind), 'page', 0.7) ?? { kind: 'not_found' };
 }
 
+/**
+ * Rung 3 of the recovery ladder (E46.16): relaxed matching. Role and name anywhere on the screen (tag, input type and anchor ignored, a
+ * lower name threshold). Still exactly one match or nothing.
+ */
+export function relaxedMatch(fp: ElementFingerprint, elements: readonly PageElement[]): Resolution {
+  const cands = elements.filter((e) => e.visible !== false && e.enabled !== false && (fp.role === null || norm(e.role) === norm(fp.role) || (e.role === null && norm(e.tag) === norm(fp.tag))));
+  const scored = cands.map((e) => ({ e, s: nameSimilarity(e.name, fp.name) })).filter((x) => x.s >= 0.34);
+  if (scored.length === 0) return { kind: 'not_found' };
+  const best = Math.max(...scored.map((x) => x.s));
+  const top = scored.filter((x) => x.s === best);
+  return top.length === 1 ? { kind: 'found', selector: top[0]!.e.selector, confidence: 0.5 * best, via: 'page' } : { kind: 'ambiguous', count: top.length };
+}
+
+/** Whether a located element's role fits the step's (rung 4's server-side check). */
+export function roleCompatible(want: string | null, wantTag: string | null, got: PageElement): boolean {
+  if (want === null) return norm(wantTag) === '' || norm(got.tag) === norm(wantTag) || got.role === null;
+  return norm(got.role) === norm(want) || (got.role === null && ((want === 'button' && (got.tag === 'button' || got.tag === 'a')) || (want === 'link' && got.tag === 'a') || (want === 'textbox' && (got.tag === 'input' || got.tag === 'textarea'))));
+}
+
 /** The page query that lists the controls a fingerprint can match. Reads no value. */
 export function surfaceElementsScript(): string {
   return `/* hexactra:surface-elements */(() => {

@@ -117,9 +117,11 @@ describe('the surface graph (#787)', () => {
     // Two equally good buttons: nothing is clicked by the procedure; the agent takes over.
     const third = (await db.run.create({ data: { userId: owner.userId, taskId: t.id, goal: 'Search the shop for blue pens' } })).id;
     const f3 = fabricWith([{ ...go, selector: '#a', selectors: ['#a'] }, { ...go, selector: '#b', selectors: ['#b'] }]);
-    const s3 = scriptedAi([[['finish', { success: true, result: 'Agent.' }]]]);
+    // Rung 4 asks the model once which control is meant (it names none here), then the agent takes over.
+    const s3 = scriptedAi([[], [['finish', { success: true, result: 'Agent.' }]]]);
     await runnerOf(f3, s3.ai).advance(third, owner.userId, null);
     expect(f3.actions.filter((a) => a.type === 'click')).toHaveLength(0);
-    expect(JSON.stringify(s3.inputs[0])).toContain('did not match');
+    expect(JSON.stringify(s3.inputs[0])).toContain("The page's controls (data)");
+    expect(JSON.stringify(s3.inputs[1])).toContain('did not match');
   });
 });

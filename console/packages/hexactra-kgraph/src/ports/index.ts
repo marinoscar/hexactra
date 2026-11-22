@@ -121,8 +121,23 @@ export interface JudgeResult {
  * goes through the host's model routing and budgets (in the console, `tierRequest(snapshot, 'fast')`); a result that does not match the schema
  * is `ok: false`, never a partial value.
  */
+export interface LocateRequest {
+  /** The step in the procedure's own terms: never an instruction from a run. */
+  tool: string;
+  role: string | null;
+  label: string | null;
+  anchor: string | null;
+  /** The page's controls, numbered (page text is data). */
+  elements: readonly { n: number; role: string | null; name: string | null; tag: string | null }[];
+}
+
 export interface JudgePort {
   judge(request: JudgeRequest): Promise<JudgeResult>;
+  /**
+   * Rung 4 of the recovery ladder (E46.16): one narrow model call that names the numbered control the step means, or null ("not here").
+   * Optional: a host without it skips the rung. The caller checks the answer (the number exists; the role fits) before using it.
+   */
+  locate?(request: LocateRequest): Promise<{ mark: number | null }>;
 }
 
 /** Time. A correct binding guarantees `sleep` resolves early (without throwing) when the run is stopped. */

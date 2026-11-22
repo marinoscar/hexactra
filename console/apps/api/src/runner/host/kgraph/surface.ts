@@ -40,6 +40,8 @@ export interface SurfaceInvokerOptions {
   signal?: AbortSignal;
   /** The page's URL now (a page query), for postconditions. */
   location(): Promise<string | null>;
+  /** Selectors a recovery rung found for a step (E46.16): used instead of resolving again. */
+  overrides?: Map<string, string>;
   /** Injected for tests. */
   random?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<boolean>;
@@ -73,7 +75,11 @@ export function surfaceInvoker(inner: ToolInvokerPort, version: ProcedureVersion
       if (browserActions > 0 && !(await sleep(pacingDelay(random, o.pacing, lastWasNavigation), o.signal))) return { ...miss('stopped while waiting', 'aborted'), stopped: true };
       let args = req.args;
       const el = step.element ? version.elements.find((e) => e.id === step.element) : undefined;
-      if (el) {
+      const override = o.overrides?.get(req.step);
+      if (override) {
+        o.overrides!.delete(req.step);
+        args = { ...args, selector: override };
+      } else if (el) {
         const ready = await waitForElement(browser, fingerprintOf(el, await shared(el.id).catch(() => null)), { timeoutMs: readinessTimeout([]), signal: o.signal, sleep });
         if (ready.kind === 'aborted') return { ...miss('stopped while waiting', 'aborted'), stopped: true };
         if (ready.kind !== 'found') return miss(`the element "${el.label ?? el.role ?? 'element'}" was ${ready.kind === 'ambiguous' ? 'ambiguous' : ready.kind === 'timeout' ? 'not ready in time' : 'not found'}`, ready.kind);
