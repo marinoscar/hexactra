@@ -4,6 +4,8 @@
 import { HIDDEN_TRIAL_TOKEN, CSV_COLUMNS, benchmarkExportFilename, benchmarkReportCsv, buildBenchmarkReport, csvCell, hideTrialTokens } from '../src/benchmark/benchmark-report';
 import { BENCHMARK_REPORT_PARTIAL_BANNER, BENCHMARK_REPORT_SECTIONS, buildBenchmarkReportDefinition, count, money, trialRecordingLink } from '../src/benchmark/benchmark-report.pdf';
 import { BENCHMARK_REPORT_TYPE, benchmarkReportSchema, type BenchmarkReport } from '../src/benchmark/benchmark-report.schemas';
+import { writeFileSync } from 'node:fs';
+
 import { renderPdfBuffer, type ReportDefinition } from '../src/tasks/run-report.pdf';
 import { POLICY_A, POLICY_B, SEEDED, reportInput } from './helpers/benchmark-report-fixture';
 import { parseCsv } from './helpers/csv-parse';
@@ -204,6 +206,39 @@ describe('the rendered PDF', () => {
     }
     expect(all).not.toContain(BENCHMARK_REPORT_PARTIAL_BANNER);
     expectMasked(all);
+  });
+
+  it('opens with the leaderboard on page 1, ahead of the summary, and ends with the rankings before the method (#872)', async () => {
+    const report = buildBenchmarkReport(reportInput({ baseline: true }));
+    const pdf = await renderPdfBuffer(buildBenchmarkReportDefinition(report));
+    if (process.env.BENCHMARK_PDF_OUT) writeFileSync(process.env.BENCHMARK_PDF_OUT, pdf);
+    const read = readPdf(pdf);
+    const first = text([read.text[0]!]);
+    const leader = report.scorecard.policies.find((p) => p.score.overall.accuracy.rank === 1)!;
+    expect(first.indexOf('Leaderboard')).toBeGreaterThanOrEqual(0);
+    expect(first.indexOf('Leaderboard')).toBeLessThan(first.indexOf('Summary'));
+    expect(first).toContain('BEST OVERALL · ACCURACY FIRST');
+    expect(first).toContain(leader.label);
+    expect(first).toContain(leader.score.overall.accuracy.value!.toFixed(1));
+    expect(first).toContain('weighting "Accuracy first" (Accuracy 50 · Cost 20 · Time 15 · Tokens 15)');
+    expect(read.outline.indexOf('Leaderboard')).toBeLessThan(read.outline.indexOf('Ranking'));
+    const all = text(read.text);
+    expect(all.lastIndexOf('Rankings')).toBeLessThan(all.lastIndexOf('How a trial is graded'));
+    expect(read.outline.indexOf('Rankings')).toBe(read.outline.indexOf('Method') - 1);
+    expect(all).toContain('The overall order under every weighting');
+    expect(all).toContain('How the Benchmark Score is computed');
+    expectMasked(all);
+  });
+
+  it('leads with the preset asked for, and names it in the Method (#872)', async () => {
+    const report = buildBenchmarkReport(reportInput());
+    const read = readPdf(await renderPdfBuffer(buildBenchmarkReportDefinition(report, { preset: 'budget' })));
+    const first = text([read.text[0]!]);
+    const leader = report.scorecard.policies.find((p) => p.score.overall.budget.rank === 1)!;
+    expect(first).toContain('BEST OVERALL · BUDGET');
+    expect(first).toContain('weighting "Budget" (Accuracy 35 · Cost 40 · Time 10 · Tokens 15)');
+    expect(first).toContain(leader.score.overall.budget.value!.toFixed(1));
+    expect(text(read.text)).toContain('this report\'s leaderboard uses "Budget"');
   });
 
   it('lists every recorded trial with its status, length and run-page link, and counts them in the Method row (#863)', async () => {

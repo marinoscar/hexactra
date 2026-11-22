@@ -526,17 +526,18 @@ describe('hexactra benchmarks', () => {
     }));
     for (const format of ['pdf', 'csv', 'json']) {
       const file = join(dir, `b.${format}`);
-      const { out } = await run('benchmarks', 'export', ID, '--format', format, '-o', file, ...(format === 'pdf' ? ['--paper', 'letter', '--baseline', BASE] : []));
+      const { out } = await run('benchmarks', 'export', ID, '--format', format, '-o', file, ...(format === 'pdf' ? ['--paper', 'letter', '--preset', 'budget', '--baseline', BASE] : []));
       expect(readFileSync(file, 'utf8')).toBe(files[format]!.body);
       expect(out).toContain(`wrote ${file}`);
     }
-    expect(urls[0]).toBe(`/api/benchmarks/${ID}/export?format=pdf&paper=letter&baseline=${BASE}`);
+    expect(urls[0]).toBe(`/api/benchmarks/${ID}/export?format=pdf&paper=letter&preset=budget&baseline=${BASE}`);
     expect(urls[1]).toBe(`/api/benchmarks/${ID}/export?format=csv`);
   });
 
   it('export refuses a bad format, a non-PDF body, and prints a refusal with its code', async () => {
     fakeConsole(() => undefined);
     await expect(run('benchmarks', 'export', ID, '--format', 'xlsx')).rejects.toThrow(/--format is one of json, csv, pdf/);
+    await expect(run('benchmarks', 'export', ID, '--format', 'pdf', '--preset', 'cheapest')).rejects.toThrow(/--preset must be one of accuracy, balanced, budget, speed/);
     setBenchmarkExportTarget(() => ({ apiBaseUrl: 'http://x/api', token: 't', fetch: vi.fn(async () => new Response('<html>', { status: 200 })) }));
     await expect(run('benchmarks', 'export', ID, '--format', 'pdf', '-o', join(mkdtempSync(join(tmpdir(), 'bench-')), 'x.pdf'))).rejects.toThrow(/did not send a PDF/);
     setBenchmarkExportTarget(() => ({ apiBaseUrl: 'http://x/api', token: 't', fetch: vi.fn(async () => new Response(JSON.stringify({ statusCode: 429, code: 'EXPORT_RATE_LIMITED', message: 'At most 10 exports a minute.' }), { status: 429 })) }));

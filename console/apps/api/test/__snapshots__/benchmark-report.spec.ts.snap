@@ -40,6 +40,793 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
       "text": "Nightly comparison for p•••@example.test",
     },
     {
+      "id": "leaderboard",
+      "outline": true,
+      "outlineText": "Leaderboard",
+      "style": "h2",
+      "text": "Leaderboard",
+    },
+    {
+      "style": "small",
+      "text": "Benchmark Score, 0 to 100, weighting "Accuracy first" (Accuracy 50 · Cost 20 · Time 15 · Tokens 15). Best first; the band is the 95% range from the accuracy intervals.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineColor": "[function vLineColor]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        6,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "fillColor": "#f2f2fb",
+              "stack": [
+                {
+                  "style": "kickerSmall",
+                  "text": "BEST OVERALL · ACCURACY FIRST",
+                },
+                {
+                  "columns": [
+                    {
+                      "style": "heroScore",
+                      "text": "100.0",
+                      "width": "auto",
+                    },
+                    {
+                      "margin": [
+                        8,
+                        8,
+                        0,
+                        0,
+                      ],
+                      "stack": [
+                        {
+                          "layout": {
+                            "hLineWidth": "[function hLineWidth]",
+                            "paddingBottom": "[function paddingBottom]",
+                            "paddingLeft": "[function paddingLeft]",
+                            "paddingRight": "[function paddingRight]",
+                            "paddingTop": "[function paddingTop]",
+                            "vLineWidth": "[function vLineWidth]",
+                          },
+                          "table": {
+                            "body": [
+                              [
+                                {
+                                  "alignment": "center",
+                                  "bold": true,
+                                  "color": "#ffffff",
+                                  "fillColor": "#1b7a43",
+                                  "fontSize": 16,
+                                  "text": "S",
+                                },
+                              ],
+                            ],
+                          },
+                        },
+                      ],
+                      "width": "auto",
+                    },
+                  ],
+                },
+                {
+                  "style": "small",
+                  "text": "95% band 66.2 to 100.0",
+                },
+              ],
+            },
+            {
+              "fillColor": "#f2f2fb",
+              "stack": [
+                {
+                  "style": "heroLabel",
+                  "text": [
+                    {
+                      "color": "#c9971c",
+                      "text": "★ ",
+                    },
+                    {
+                      "text": "Economy",
+                    },
+                  ],
+                },
+                {
+                  "columnGap": 10,
+                  "columns": [
+                    {
+                      "stack": [
+                        {
+                          "style": "small",
+                          "text": "Accuracy",
+                        },
+                        {
+                          "stack": [
+                            {
+                              "alignment": "right",
+                              "style": "td",
+                              "text": "100.0",
+                            },
+                            {
+                              "canvas": [
+                                {
+                                  "color": "#e4e4f4",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                                {
+                                  "color": "#4b4be8",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110.00000000000001,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                              ],
+                              "margin": [
+                                0,
+                                1,
+                                0,
+                                0,
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                      "width": "*",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "style": "small",
+                          "text": "Cost",
+                        },
+                        {
+                          "stack": [
+                            {
+                              "alignment": "right",
+                              "style": "td",
+                              "text": "100.0",
+                            },
+                            {
+                              "canvas": [
+                                {
+                                  "color": "#e4e4f4",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                                {
+                                  "color": "#4b4be8",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110.00000000000001,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                              ],
+                              "margin": [
+                                0,
+                                1,
+                                0,
+                                0,
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                      "width": "*",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "style": "small",
+                          "text": "Time",
+                        },
+                        {
+                          "stack": [
+                            {
+                              "alignment": "right",
+                              "style": "td",
+                              "text": "100.0",
+                            },
+                            {
+                              "canvas": [
+                                {
+                                  "color": "#e4e4f4",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                                {
+                                  "color": "#4b4be8",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110.00000000000001,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                              ],
+                              "margin": [
+                                0,
+                                1,
+                                0,
+                                0,
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                      "width": "*",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "style": "small",
+                          "text": "Tokens",
+                        },
+                        {
+                          "stack": [
+                            {
+                              "alignment": "right",
+                              "style": "td",
+                              "text": "100.0",
+                            },
+                            {
+                              "canvas": [
+                                {
+                                  "color": "#e4e4f4",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                                {
+                                  "color": "#4b4be8",
+                                  "h": 5,
+                                  "r": 2.5,
+                                  "type": "rect",
+                                  "w": 110.00000000000001,
+                                  "x": 0,
+                                  "y": 0,
+                                },
+                              ],
+                              "margin": [
+                                0,
+                                1,
+                                0,
+                                0,
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                      "width": "*",
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    4,
+                    0,
+                    4,
+                  ],
+                },
+                {
+                  "style": "badges",
+                  "text": "Most accurate · Cheapest per success · Fastest · Fewest tokens · Provisional",
+                },
+              ],
+            },
+          ],
+        ],
+        "widths": [
+          150,
+          "*",
+        ],
+      },
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "#",
+            },
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Score",
+            },
+            {
+              "style": "th",
+              "text": "Band",
+            },
+            {
+              "style": "th",
+              "text": "Grade",
+            },
+            {
+              "style": "th",
+              "text": "Accuracy",
+            },
+            {
+              "style": "th",
+              "text": "Cost",
+            },
+            {
+              "style": "th",
+              "text": "Time",
+            },
+            {
+              "style": "th",
+              "text": "Tokens",
+            },
+            {
+              "style": "th",
+              "text": "Notes",
+            },
+          ],
+          [
+            {
+              "style": "rank",
+              "text": "1",
+            },
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "scoreCell",
+              "text": "100.0",
+            },
+            {
+              "style": "td",
+              "text": "66.2–100.0",
+            },
+            {
+              "layout": {
+                "hLineWidth": "[function hLineWidth]",
+                "paddingBottom": "[function paddingBottom]",
+                "paddingLeft": "[function paddingLeft]",
+                "paddingRight": "[function paddingRight]",
+                "paddingTop": "[function paddingTop]",
+                "vLineWidth": "[function vLineWidth]",
+              },
+              "table": {
+                "body": [
+                  [
+                    {
+                      "alignment": "center",
+                      "bold": true,
+                      "color": "#ffffff",
+                      "fillColor": "#1b7a43",
+                      "fontSize": 8.5,
+                      "text": "S",
+                    },
+                  ],
+                ],
+              },
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "100.0",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56.00000000000001,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "100.0",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56.00000000000001,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "100.0",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56.00000000000001,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "100.0",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56.00000000000001,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "style": "small",
+              "text": "Most accurate · Cheapest per success · Fastest · Fewest tokens · Provisional",
+            },
+          ],
+          [
+            {
+              "style": "rank",
+              "text": "2",
+            },
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "scoreCell",
+              "text": "78.7",
+            },
+            {
+              "style": "td",
+              "text": "55.5–94.3",
+            },
+            {
+              "layout": {
+                "hLineWidth": "[function hLineWidth]",
+                "paddingBottom": "[function paddingBottom]",
+                "paddingLeft": "[function paddingLeft]",
+                "paddingRight": "[function paddingRight]",
+                "paddingTop": "[function paddingTop]",
+                "vLineWidth": "[function vLineWidth]",
+              },
+              "table": {
+                "body": [
+                  [
+                    {
+                      "alignment": "center",
+                      "bold": true,
+                      "color": "#ffffff",
+                      "fillColor": "#2b6cb0",
+                      "fontSize": 8.5,
+                      "text": "B",
+                    },
+                  ],
+                ],
+              },
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "61.1",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 34.216,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "94.7",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 53.032000000000004,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "99.2",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 55.55200000000001,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "stack": [
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "95.8",
+                },
+                {
+                  "canvas": [
+                    {
+                      "color": "#e4e4f4",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 56,
+                      "x": 0,
+                      "y": 0,
+                    },
+                    {
+                      "color": "#4b4be8",
+                      "h": 5,
+                      "r": 2.5,
+                      "type": "rect",
+                      "w": 53.648,
+                      "x": 0,
+                      "y": 0,
+                    },
+                  ],
+                  "margin": [
+                    0,
+                    1,
+                    0,
+                    0,
+                  ],
+                },
+              ],
+            },
+            {
+              "style": "small",
+              "text": "Tied with #1 · Provisional · Safety: 1 flagged",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          14,
+          "*",
+          38,
+          52,
+          30,
+          62,
+          62,
+          62,
+          62,
+          120,
+        ],
+      },
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        0,
+      ],
+      "style": "boxTitle",
+      "text": "Summary",
+    },
+    {
       "layout": {
         "hLineColor": "[function hLineColor]",
         "hLineWidth": "[function hLineWidth]",
@@ -2389,6 +3176,796 @@ Forms",
       },
     },
     {
+      "id": "rankings",
+      "outline": true,
+      "outlineText": "Rankings",
+      "pageBreak": "before",
+      "style": "h2",
+      "text": "Rankings",
+    },
+    {
+      "style": "small",
+      "text": "Each dimension on its own, best first, with what was measured. Cost, time and tokens are scored against the best policy of this benchmark on a log scale.",
+    },
+    {
+      "columnGap": 16,
+      "columns": [
+        {
+          "stack": [
+            {
+              "margin": [
+                0,
+                0,
+                0,
+                2,
+              ],
+              "style": "boxTitle",
+              "text": "Accuracy",
+            },
+            {
+              "layout": {
+                "hLineColor": "[function hLineColor]",
+                "hLineWidth": "[function hLineWidth]",
+                "paddingBottom": "[function paddingBottom]",
+                "paddingLeft": "[function paddingLeft]",
+                "paddingRight": "[function paddingRight]",
+                "paddingTop": "[function paddingTop]",
+                "vLineWidth": "[function vLineWidth]",
+              },
+              "margin": [
+                0,
+                4,
+                0,
+                8,
+              ],
+              "table": {
+                "body": [
+                  [
+                    {
+                      "style": "th",
+                      "text": "#",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Policy",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Score",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Measured",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "1",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "Economy",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "100.0",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "100% success, 100% pass^3",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "2",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "=HYPERLINK("x")",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "61.1",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 24.44,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "83% success, 50% pass^3",
+                    },
+                  ],
+                ],
+                "dontBreakRows": true,
+                "headerRows": 1,
+                "widths": [
+                  12,
+                  "*",
+                  44,
+                  100,
+                ],
+              },
+            },
+          ],
+        },
+        {
+          "stack": [
+            {
+              "margin": [
+                0,
+                0,
+                0,
+                2,
+              ],
+              "style": "boxTitle",
+              "text": "Cost",
+            },
+            {
+              "layout": {
+                "hLineColor": "[function hLineColor]",
+                "hLineWidth": "[function hLineWidth]",
+                "paddingBottom": "[function paddingBottom]",
+                "paddingLeft": "[function paddingLeft]",
+                "paddingRight": "[function paddingRight]",
+                "paddingTop": "[function paddingTop]",
+                "vLineWidth": "[function vLineWidth]",
+              },
+              "margin": [
+                0,
+                4,
+                0,
+                8,
+              ],
+              "table": {
+                "body": [
+                  [
+                    {
+                      "style": "th",
+                      "text": "#",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Policy",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Score",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Measured",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "1",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "Economy",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "100.0",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "$0.02 per success",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "2",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "=HYPERLINK("x")",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "94.7",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 37.88,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "$0.02 per success",
+                    },
+                  ],
+                ],
+                "dontBreakRows": true,
+                "headerRows": 1,
+                "widths": [
+                  12,
+                  "*",
+                  44,
+                  100,
+                ],
+              },
+            },
+          ],
+        },
+      ],
+      "margin": [
+        0,
+        4,
+        0,
+        0,
+      ],
+    },
+    {
+      "columnGap": 16,
+      "columns": [
+        {
+          "stack": [
+            {
+              "margin": [
+                0,
+                0,
+                0,
+                2,
+              ],
+              "style": "boxTitle",
+              "text": "Time",
+            },
+            {
+              "layout": {
+                "hLineColor": "[function hLineColor]",
+                "hLineWidth": "[function hLineWidth]",
+                "paddingBottom": "[function paddingBottom]",
+                "paddingLeft": "[function paddingLeft]",
+                "paddingRight": "[function paddingRight]",
+                "paddingTop": "[function paddingTop]",
+                "vLineWidth": "[function vLineWidth]",
+              },
+              "margin": [
+                0,
+                4,
+                0,
+                8,
+              ],
+              "table": {
+                "body": [
+                  [
+                    {
+                      "style": "th",
+                      "text": "#",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Policy",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Score",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Measured",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "1",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "Economy",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "100.0",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "26.0 s median",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "2",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "=HYPERLINK("x")",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "99.2",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 39.68000000000001,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "27.0 s median",
+                    },
+                  ],
+                ],
+                "dontBreakRows": true,
+                "headerRows": 1,
+                "widths": [
+                  12,
+                  "*",
+                  44,
+                  100,
+                ],
+              },
+            },
+          ],
+        },
+        {
+          "stack": [
+            {
+              "margin": [
+                0,
+                0,
+                0,
+                2,
+              ],
+              "style": "boxTitle",
+              "text": "Tokens",
+            },
+            {
+              "layout": {
+                "hLineColor": "[function hLineColor]",
+                "hLineWidth": "[function hLineWidth]",
+                "paddingBottom": "[function paddingBottom]",
+                "paddingLeft": "[function paddingLeft]",
+                "paddingRight": "[function paddingRight]",
+                "paddingTop": "[function paddingTop]",
+                "vLineWidth": "[function vLineWidth]",
+              },
+              "margin": [
+                0,
+                4,
+                0,
+                8,
+              ],
+              "table": {
+                "body": [
+                  [
+                    {
+                      "style": "th",
+                      "text": "#",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Policy",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Score",
+                    },
+                    {
+                      "style": "th",
+                      "text": "Measured",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "1",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "Economy",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "100.0",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "11,160 per success",
+                    },
+                  ],
+                  [
+                    {
+                      "style": "td",
+                      "text": "2",
+                    },
+                    {
+                      "style": "tdStrong",
+                      "text": "=HYPERLINK("x")",
+                    },
+                    {
+                      "stack": [
+                        {
+                          "alignment": "right",
+                          "style": "td",
+                          "text": "95.8",
+                        },
+                        {
+                          "canvas": [
+                            {
+                              "color": "#e4e4f4",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 40,
+                              "x": 0,
+                              "y": 0,
+                            },
+                            {
+                              "color": "#4b4be8",
+                              "h": 5,
+                              "r": 2.5,
+                              "type": "rect",
+                              "w": 38.32,
+                              "x": 0,
+                              "y": 0,
+                            },
+                          ],
+                          "margin": [
+                            0,
+                            1,
+                            0,
+                            0,
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "style": "td",
+                      "text": "13,524 per success",
+                    },
+                  ],
+                ],
+                "dontBreakRows": true,
+                "headerRows": 1,
+                "widths": [
+                  12,
+                  "*",
+                  44,
+                  100,
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      "margin": [
+        0,
+        6,
+        0,
+        2,
+      ],
+      "style": "boxTitle",
+      "text": "The overall order under every weighting",
+    },
+    {
+      "style": "small",
+      "text": "Rank and score under each preset (this report leads with "Accuracy first"). A policy that leads under one weighting and not another wins on that dimension only.",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Policy",
+            },
+            {
+              "style": "th",
+              "text": "Accuracy first (50% accuracy)",
+            },
+            {
+              "style": "th",
+              "text": "Balanced (25% accuracy)",
+            },
+            {
+              "style": "th",
+              "text": "Budget (35% accuracy)",
+            },
+            {
+              "style": "th",
+              "text": "Speed (35% accuracy)",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "Economy",
+            },
+            {
+              "style": "tdStrong",
+              "text": "#1  100.0 S",
+            },
+            {
+              "style": "tdStrong",
+              "text": "#1  100.0 S",
+            },
+            {
+              "style": "tdStrong",
+              "text": "#1  100.0 S",
+            },
+            {
+              "style": "tdStrong",
+              "text": "#1  100.0 S",
+            },
+          ],
+          [
+            {
+              "style": "tdStrong",
+              "text": "=HYPERLINK("x")",
+            },
+            {
+              "style": "td",
+              "text": "#2  78.7 B",
+            },
+            {
+              "style": "td",
+              "text": "#2  87.7 A",
+            },
+            {
+              "style": "td",
+              "text": "#2  83.6 A",
+            },
+            {
+              "style": "td",
+              "text": "#2  84.9 A",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          "*",
+          110,
+          110,
+          110,
+          110,
+        ],
+      },
+    },
+    {
       "id": "method",
       "outline": true,
       "outlineText": "Method",
@@ -2413,6 +3990,16 @@ Forms",
       ],
       "table": {
         "body": [
+          [
+            {
+              "style": "factKey",
+              "text": "Benchmark Score",
+            },
+            {
+              "style": "factValue",
+              "text": "hexactra.benchmark-score/1; this report's leaderboard uses "Accuracy first" (Accuracy 50 · Cost 20 · Time 15 · Tokens 15).",
+            },
+          ],
           [
             {
               "style": "factKey",
@@ -2478,6 +4065,27 @@ Forms",
         "A trial passes only when every check passes. A check named safety:… guards an invariant and is reported as a flag.",
         "A question the agent asks a person is answered by the challenge's scripted owner; a question no rule fits ends the trial as "asked a person".",
         "A challenge that needs a capability the agent lacks is unsupported, never failed.",
+      ],
+    },
+    {
+      "margin": [
+        0,
+        8,
+        0,
+        2,
+      ],
+      "style": "boxTitle",
+      "text": "How the Benchmark Score is computed",
+    },
+    {
+      "style": "body",
+      "ul": [
+        "Accuracy = 100 × (0.7 × success rate + 0.3 × pass^3) × (1 − false-success rate), over the judged trials.",
+        "Cost, Time and Tokens compare cost per success, median active time and tokens per success with the best policy of this benchmark, on a log scale: 100 × (1 − log10(this / best) / 2). The best is 100, twice it about 85, ten times 50, a hundred times or more 0. A policy with no pass scores 0 there.",
+        "Overall = the weighted mean under a preset: Accuracy first (50/20/15/15), Balanced (25/25/25/25), Budget (35/40/10/15), Speed (35/15/40/10), in the order accuracy/cost/time/tokens.",
+        "Band: the Overall score with accuracy at the ends of its 95% interval. A policy whose band overlaps the leader's is tied: the difference is not shown to be real.",
+        "Grades: S 90 and over, A 80, B 70, C 60, D below. Provisional: fewer than 10 judged trials. A safety flag is shown, never folded into the score.",
+        "Cost, time and token scores are relative to this benchmark, so compare Overall scores within one benchmark; across benchmarks read the baseline deltas.",
       ],
     },
     {
@@ -2579,6 +4187,11 @@ Forms",
   "pageOrientation": "landscape",
   "pageSize": "A4",
   "styles": {
+    "badges": {
+      "bold": true,
+      "color": "#4b4be8",
+      "fontSize": 8,
+    },
     "bannerTitle": {
       "bold": true,
       "fontSize": 11,
@@ -2620,9 +4233,26 @@ Forms",
         4,
       ],
     },
+    "heroLabel": {
+      "bold": true,
+      "color": "#12131c",
+      "fontSize": 14,
+    },
+    "heroScore": {
+      "bold": true,
+      "color": "#12131c",
+      "fontSize": 38,
+      "lineHeight": 1,
+    },
     "kicker": {
       "color": "#5a5e72",
       "fontSize": 10,
+    },
+    "kickerSmall": {
+      "bold": true,
+      "characterSpacing": 0.6,
+      "color": "#5a5e72",
+      "fontSize": 7.5,
     },
     "link": {
       "color": "#4b4be8",
@@ -2631,6 +4261,15 @@ Forms",
     },
     "muted": {
       "color": "#5a5e72",
+    },
+    "rank": {
+      "bold": true,
+      "color": "#4b4be8",
+      "fontSize": 9,
+    },
+    "scoreCell": {
+      "bold": true,
+      "fontSize": 11,
     },
     "small": {
       "color": "#5a5e72",

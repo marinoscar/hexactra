@@ -114,6 +114,9 @@ describe('GET /api/benchmarks/{id}/export', () => {
     expect(text).toContain(BENCHMARK_REPORT_SECTIONS.method);
     expect(text).toContain('151,200 (144,000 input, 7,200 output, 48,000 cached input)');
     expect(read.sizes[0]).toEqual([792, 612]);
+    // The leaderboard leads page 1 (#872).
+    expect(read.text[0]!.replace(/\s+/g, ' ')).toContain('BEST OVERALL · ACCURACY FIRST');
+    expect(text).toContain(BENCHMARK_REPORT_SECTIONS.rankings);
 
     for (const body of [json.body, csv.body, text]) for (const s of SENSITIVE) expect(body).not.toContain(s);
     // The JSON file's run text was there to mask: the goal is in it, its email masked.
@@ -152,19 +155,21 @@ describe('GET /api/benchmarks/{id}/export', () => {
     expect((await exportOf(other.headers, b.id)).statusCode).toBe(404);
     expect((await exportOf((await login('viewer', 'contributor')).headers, b.id)).statusCode).toBe(403);
     expect((await exportOf(owner.headers, b.id, '?format=xlsx')).statusCode).toBe(400);
+    expect((await exportOf(owner.headers, b.id, '?format=pdf&preset=cheapest')).statusCode).toBe(400);
   });
 
   it('writes the audit event benchmarks.exported with the format, never run text', async () => {
     const admin = await login('audit');
     const b = await seeded(admin.id);
     await exportOf(admin.headers, b.id, '?format=csv');
-    await exportOf(admin.headers, b.id, '?format=pdf');
+    const pdf = await exportOf(admin.headers, b.id, '?format=pdf&preset=speed');
+    expect(readPdf(pdf.rawPayload).text[0]!.replace(/\s+/g, ' ')).toContain('BEST OVERALL · SPEED');
     const events = await prisma.auditEvent.findMany({ where: { actorUserId: admin.id, action: 'benchmarks.exported' }, orderBy: { createdAt: 'asc' } });
     expect(events.map((e) => [e.targetType, e.targetId, (e.meta as { format?: string }).format])).toEqual([
       ['benchmark', b.id, 'csv'],
       ['benchmark', b.id, 'pdf'],
     ]);
-    expect(events[1]!.meta).toMatchObject({ benchmarkId: b.id, format: 'pdf', paper: 'a4', partial: false, trials: 12 });
+    expect(events[1]!.meta).toMatchObject({ benchmarkId: b.id, format: 'pdf', paper: 'a4', preset: 'speed', partial: false, trials: 12 });
     const all = JSON.stringify(events);
     expect(all).not.toContain('look up the record');
     expect(all).not.toContain('Found it');
@@ -189,7 +194,7 @@ describe('GET /api/benchmarks/{id}/export', () => {
   it('is in the OpenAPI document with its query and the three media types', async () => {
     const doc = (await app.inject({ method: 'GET', url: '/api/openapi.json' })).json<{ paths: Record<string, { get?: { parameters?: { name: string }[]; responses?: Record<string, { content?: Record<string, unknown> }> } }> }>();
     const op = doc.paths['/api/benchmarks/{id}/export']?.get;
-    expect(op?.parameters?.map((p) => p.name).sort()).toEqual(['baseline', 'format', 'id', 'paper']);
+    expect(op?.parameters?.map((p) => p.name).sort()).toEqual(['baseline', 'format', 'id', 'paper', 'preset']);
     expect(Object.keys(op?.responses?.['200']?.content ?? {}).sort()).toEqual(['application/json', 'application/pdf', 'text/csv']);
   });
 });

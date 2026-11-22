@@ -9341,7 +9341,7 @@ export interface paths {
         };
         /**
          * Export a benchmark report as JSON, CSV or PDF
-         * @description A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`): summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.
+         * @description A `hexactra.benchmark-report` file (`formatVersion` 1): the benchmark with its config, suite key and version, console version and commit; the scorecard (ranking, metrics per policy and per category, the challenge x policy matrix, the totals); every trial with its verdict, checks, metrics (input, output and cached tokens, cost, models) and run id, with its run's goal and result; and the comparison with `baseline` when asked. `format=csv`: one row per trial (RFC 4180; a cell starting with `=`, `+`, `-` or `@` is prefixed with `'`). `format=pdf` (`paper=a4` or `letter`, `preset=accuracy|balanced|budget|speed`): the leaderboard first (the Benchmark Score of each policy under the preset, its grade, band, four sub-scores and badges), then summary and ranking, scorecard, tokens and cost, categories, matrix, failure reasons, baseline deltas, the rankings per dimension and under every preset, and the method. Every string is masked (`masking.hits` counts what was) and a trial's site token is never included; there is no unmasked export. A benchmark still running exports as in progress (`partial: true`). Audit event `benchmarks.exported`.
          *
          *     **Requires:** authentication, plus permission `benchmarks:read`.
          */
@@ -54090,6 +54090,8 @@ export interface operations {
                 paper?: "a4" | "letter";
                 /** @description An earlier benchmark on the same suite key and version: the report adds the comparison with it (409 `BENCHMARK_SUITE_MISMATCH` otherwise). */
                 baseline?: string;
+                /** @description The PDF's Benchmark Score weighting for its leaderboard (#872): `accuracy` (the default), `balanced`, `budget` or `speed`. The scores under every preset are in the scorecard; ignored for `json` and `csv`. */
+                preset?: "accuracy" | "balanced" | "budget" | "speed";
             };
             header?: never;
             path: {

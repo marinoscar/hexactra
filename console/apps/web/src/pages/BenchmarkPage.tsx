@@ -195,7 +195,13 @@ export function BenchmarkPage() {
         </Stack>
         {/* The report (E44.6, #744): PDF, CSV of trials, JSON; with the comparison when a baseline is chosen below. */}
         <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5 }} data-testid="benchmark-export">
-          <BenchmarkExportButton benchmarkId={b.id} live={isLiveBenchmark(b.status)} baselineId={baseline || null} sx={{ minHeight: 44 }} />
+          <BenchmarkExportButton
+            benchmarkId={b.id}
+            live={isLiveBenchmark(b.status)}
+            baselineId={baseline || null}
+            preset={scorecard?.scoring ? { id: shownPreset, label: scorecard.scoring.presets.find((x) => x.id === shownPreset)?.label ?? shownPreset } : null}
+            sx={{ minHeight: 44 }}
+          />
         </Stack>
       </PageHeader>
       <Stack spacing={2}>
