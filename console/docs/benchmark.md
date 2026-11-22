@@ -1,6 +1,12 @@
 # Benchmarks
 
-A benchmark runs the same challenges under several agent policies on a real node and grades each trial from the challenge site's own state. The design and the reasons are in the [decision record](decisions/benchmark.md). This page is the working reference. It grows with the epic (E44, #738): the challenge site and its challenges (suite version 2), starting and running a benchmark through the API, and its scorecard are here; the pages, the exports and the CLI arrive with the issues that build them.
+A benchmark (epic E44, #738) runs the same challenges under several agent policies on a real node, in real Chrome, and grades each trial from the challenge site's own state, never from the agent's claim. Its scorecard compares the policies on success, reliability across repeated trials, speed, tokens (input, output, cached) and cost, per policy, per category and for the whole benchmark, and a benchmark can be compared with an earlier one to see whether a change made the agent better or worse. The design and the reasons are in the [decision record](decisions/benchmark.md); this page is the working reference.
+
+- Web: Administration → **Benchmarks** (`/admin/benchmarks`, #743): start one, watch it, read the scorecard, compare, export.
+- CLI: `hexactra benchmarks suite|list|run|show|compare|export|cancel` ([below](#the-cli)).
+- API: `/api/benchmarks` ([below](#the-api)). There is no MCP tool: a benchmark spends on model calls and is an administrator's feature.
+- Permissions: `benchmarks:read` (read, compare, export) and `benchmarks:run` (start, cancel, delete), both given to the organization administrator.
+- When to use it: the replay suite (`npm run scenarios --workspace=api`, [runner.md](runner.md#testing-a-change-to-the-agent)) checks the harness in CI against a fake site in seconds; a benchmark measures the real product with real models, and costs money.
 
 ## How a benchmark runs
 
@@ -74,6 +80,7 @@ Every route is under `/api/benchmarks`. Reading needs `benchmarks:read`; startin
 | `GET /{id}/trials` | Its trials in run order: verdict, failure reason, checks, `claimedSuccess`, the metrics copied from the run (`durationMs`, `activeMs`, `steps`, `modelCalls`, `inputTokens`, `outputTokens`, `cachedInputTokens`, `costUsd`, `costKnown`, `stopReason`, `questions`, `escalations`), `model` and `models` (the models its policy resolved to: each tier from start to max, and the tier it ended on), `runId`. Filters: `status`, `verdict`, `policyRef`, `challengeId` |
 | `GET /{id}/scorecard` | Its [scorecard](#reading-the-scorecard): live while it runs, cached once it has ended |
 | `GET /{id}/compare?baseline={id}` | Its [comparison](#comparing-with-a-baseline) with an earlier benchmark on the same suite key and version (`409 BENCHMARK_SUITE_MISMATCH` otherwise) |
+| `GET /{id}/export?format=json\|csv\|pdf` | The [report](#exporting-a-report) as a file (#744) |
 | `POST /{id}/cancel` | Cancel it |
 | `DELETE /{id}` | Delete one that has ended, with its trials. Its runs stay in the run history |
 
@@ -119,6 +126,46 @@ A trial never returns its seed, its token, the site's state or an expected answe
 | `benchmark-owner.ts`, `owner-script.ts` | The scripted owner, and its rules as pure functions |
 | `benchmark-grader.ts`, `trial-verdict.ts` | The run-end hook, and the verdict as a pure function |
 | `benchmark-site-address.ts` | The site's address and the reachability check |
+
+## The CLI
+
+`hexactra benchmarks` talks to `/api/benchmarks` as the signed-in user (`hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`). A benchmark is referred to by its id, the first characters of its id, or its exact name.
+
+| Command | What it does |
+|---|---|
+| `hexactra benchmarks suite [--json]` | The suite's key and version, the challenges with category, difficulty and whether the agent can attempt them, the defaults and limits, and whether a node can reach the challenge site |
+| `hexactra benchmarks list [--limit n] [--json]` | Your benchmarks, newest first: status, policies, passes and spend |
+| `hexactra benchmarks run --policy <ref> … [--challenge <id> …] [--trials n] [--cap-usd usd] [--timeout-minutes n] [--host <name\|id\|any>] [--profile name] [--name text] [--wait] [--json]` | Start one. `--policy` is repeatable (1 to 8): `builtin:<key>`, an id, or a name; `<ref>=<label>` names its column. `--challenge` is repeatable; without it the whole suite runs. `--wait` prints the progress as it changes, then the scorecard |
+| `hexactra benchmarks show <id> [--trials] [--json]` | The benchmark and its scorecard; `--trials` adds one line per trial (verdict, failure reason, active time, tokens, cost, run) |
+| `hexactra benchmarks compare <id> <baseline> [--json]` | The comparison with an earlier benchmark on the same suite version |
+| `hexactra benchmarks export <id> --format json\|csv\|pdf [-o file] [--paper a4\|letter] [--baseline <id>]` | The [report](#exporting-a-report) as a file; `-o -` writes it to stdout |
+| `hexactra benchmarks cancel <id>` | Cancel it |
+
+Tokens and cost are printed next to every result:
+
+- `show` (and `run --wait`) prints the whole benchmark's tokens (`in` / `out` / `cached`, cached being part of input), model calls and cost against the cap; then, ranked, each policy's success rate with its 95% interval, pass^k and false-success rate, its tokens (total, the split, the median per trial and per success), its cost (total, median per trial, per success) and speed; then each category of that policy with its success rate, tokens and cost.
+- `compare` prints both benchmarks' tokens and cost side by side, for the whole benchmark and for each matched policy, then each delta (success rate, pass^k, false success, median time, median cost, total cost, cost per success, total tokens, tokens per success) with `better`, `worse`, `same` or `within noise`, the policies that did not match, and the challenges that flipped.
+- A cost shown as `≥ $1.50` is a lower bound: a model call had no price (`costKnown: false`). Set the price in Administration → Model prices.
+
+| Exit | When |
+|---|---|
+| 0 | The command worked; with `--wait`, the benchmark `completed` |
+| 1 | With `--wait`, the benchmark ended `failed` or `cancelled` (the scorecard is still printed); a flag the CLI refused |
+| 3 | The console refused: the error is printed with its status and code, e.g. `hexactra: 400 BENCHMARK_SITE_UNREACHABLE: …`, `404 BENCHMARK_NOT_FOUND`, `409 BENCHMARK_SUITE_MISMATCH`, `429 EXPORT_RATE_LIMITED` |
+| 4, 5 | The console could not be reached; not signed in or the token expired |
+
+```bash
+hexactra benchmarks suite
+hexactra benchmarks run --policy builtin:economy --policy builtin:thorough --trials 3 --cap-usd 10 --host home-node --wait
+hexactra benchmarks show 1a2b3c4d --trials
+hexactra benchmarks compare 1a2b3c4d 9f8e7d6c
+hexactra benchmarks export 1a2b3c4d --format pdf -o benchmark.pdf
+hexactra benchmarks export 1a2b3c4d --format csv -o trials.csv
+```
+
+To compare models rather than policies, make one agent policy per model with `startTier` equal to `maxTier` and the tier pinned to that model (`hexactra policies`, [README, Agent policies](../README.md#agent-policies)), and name both with `--policy`.
+
+The CLI is `apps/cli/src/benchmarks.command.ts` (the commands) and `benchmarks.ts` (the text and the requests, pure), tested in `benchmarks.test.ts` with a fake console. The TUI has no benchmark screen: it is for watching runs and answering questions.
 
 ## Reading the scorecard
 
@@ -197,6 +244,32 @@ How the statistics are computed:
 | `scorecard.schemas.ts` | The shapes, for the pages and the report |
 | `scorecard.service.ts` | `ScorecardService`: `scorecard(userId, id)`, `compare(userId, id, baselineId)`, `cacheIfEnded(id)` |
 | Tests (`apps/api/test/`) | `benchmark-scorecard.spec.ts` (every formula with hand-computed numbers; the Wilson bounds against reference values to three decimals), `benchmark-scorecard.db.spec.ts` (the routes, the cache, a deleted run, the refusal and the flipped challenges) |
+
+## Exporting a report
+
+`GET /api/benchmarks/{id}/export?format=json|csv|pdf` (`benchmarks:read`; `paper=a4|letter` for the PDF, `baseline=<id>` to include the comparison) answers a file, not the `{ data }` envelope, with an attachment name `hexactra-benchmark-<8>-<yyyymmdd>.<ext>` (#744). The JSON is the whole report, the CSV one row per trial with its tokens and cost, the PDF the scorecard for reading. Goals, results and check notes are masked; there is no unmasked export. From the CLI: `hexactra benchmarks export`. At most 10 exports a minute (`429 EXPORT_RATE_LIMITED`).
+
+## Data and retention
+
+| Data | Where | Kept |
+|---|---|---|
+| A benchmark: its settings (`config`), status, spend, suite key and version, console version and commit, the cached scorecard (`summary`) | `Benchmark` (`prisma/fragments/benchmarks.prisma`) | Until the administrator deletes it (`DELETE /api/benchmarks/{id}`, only once it has ended), or with the user |
+| A trial: verdict, failure reason, checks, claimed success, and the metrics copied from its run (time, steps, model calls, input, output and cached tokens, cost, models, stop reason, questions) | `BenchmarkTrial` | With its benchmark |
+| A trial's site state and the hash of its token | `BenchmarkTrial.siteState`, `tokenHash` | With the trial; never returned by the API or exported |
+| A trial's run, steps and trace | `Run` (`trigger: benchmark`) | Like any run: run retention and Delete apply. The trial keeps its metrics and loses only its `runId` link, so the scorecard does not change |
+
+- A benchmark belongs to the administrator who started it, read through `PrismaService.forUser()`; another administrator cannot see it (`404 BENCHMARK_NOT_FOUND`). It is deleted with its user and is part of their data export (`benchmark.ownership.ts`).
+- Deleting a benchmark deletes its trials, not its runs: they stay in the run history (filter `trigger=benchmark`).
+- No seed, token, site state, expected answer or secret is in a log, a span, a metric, an audit event or an export.
+
+## What a benchmark does not measure
+
+- **One site, one origin.** Every challenge is on the console's own challenge site, so a benchmark says nothing about bot detection, captchas, real sign-ins, residential versus datacenter addresses, or sites that block automation. It measures the agent on controlled pages.
+- **No upload or download.** `form-upload` and `file-download` need capabilities the agent lacks (#662 and the download action) and are reported `unsupported`, never failed.
+- **No model judge.** A trial is graded from the site's stored state and the agent's answer. A task whose success only a person or a model could judge (the tone of a message, the quality of a summary) is not a challenge.
+- **Fixed challenges.** Seeds change every name, price and answer, but the kinds of task are known. A policy tuned to the suite may look better than it is on real tasks.
+- **Small numbers.** Three trials per cell give wide intervals (2 of 3 is 21% to 94%). A delta marked `within noise` is not shown to be real; run more trials before acting on it.
+- **The node and the provider drift.** Trials of all policies are interleaved so drift spreads over them, but a benchmark on a busy node or a slow provider day is not comparable with one on a quiet day. Compare benchmarks run close together.
 
 ## The challenge site
 
@@ -366,12 +439,13 @@ npx jest --config ./test/jest.config.js --testRegex 'benchmark-site\.db\.spec\.t
 
 ## Tests
 
-| Spec (`apps/api/test/`) | What it proves |
+| Spec (`apps/api/test/` unless it says) | What it proves |
 |---|---|
 | `benchmark-run.spec.ts` | A trial run's limits and that no other run can carry them, the scripted owner's rules, the verdict, the order of trials, the site address check |
 | `benchmark-run.db.spec.ts` | A benchmark end to end on a real database with a scripted model and the in-memory fabric: every trial graded, a false success, a scripted and an unscripted question, the cap, the timeout, cancel, a node that is down, a crash, the refusals |
 | `benchmark-site.spec.ts` | Every challenge solved through the site and graded, an untouched trial fails, two seeds differ, no inline script; the second pack's wrong results, its safety checks (`safe-confirm-payment` paying without a question and after a no) and its placeholders |
 | `benchmark-site.db.spec.ts` | The same solvers over real HTTP and a real database |
+| `apps/cli/src/benchmarks.test.ts` (vitest) | Every `hexactra benchmarks` command against a fake console: the request each sends, the tokens and cost it prints, `--wait` exiting non-zero on `failed` and `cancelled`, refusals printed with their code, the export files |
 | `support/benchmark-fixtures.ts` | `createGradedBenchmark(prisma, userId, opts)`: a finished benchmark with graded trials, for a spec that reads one |
 
 ```bash
