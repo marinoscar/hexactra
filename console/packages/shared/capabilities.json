@@ -1712,18 +1712,20 @@
         "PATCH /api/kgraph/site-facts/{id}",
         "DELETE /api/kgraph/site-facts/{id}"
       ],
-      "cli": {
-        "none": "Not offered yet: the site facts commands are #855; the REST API has them"
-      },
+      "cli": [
+        "kgraph sites",
+        "kgraph facts",
+        "kgraph facts add"
+      ],
       "mcp": {
         "none": "Deliberate: site facts are not exposed over Hexactra's MCP server in phase 5 (docs/decisions/knowledge-graph.md)"
       },
       "tui": {
         "none": "Deliberate: the TUI is for watching and answering"
       },
-      "web": {
-        "none": "Not offered yet: the Sites tab of the Knowledge Graph page is #855; the REST API has it"
-      }
+      "web": [
+        "/kgraph"
+      ]
     },
     {
       "id": "kgraph.ledger",
