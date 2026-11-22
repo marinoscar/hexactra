@@ -139,19 +139,25 @@ describe('the run recorder (#759)', () => {
     expect(handler).toBeDefined();
   });
 
-  it('pauses while a secret is asked for, and holds the recording when the job ends with the run waiting', async () => {
+  it('withholds nothing while a secret is asked for, keeps recording while the run waits, and holds only while the owner paused it (#882)', async () => {
     const r = await newRun();
-    const calls = fakeCalls([{ bytes: Buffer.concat([header(), frames(0, 1)]) }]);
+    const calls = fakeCalls([{ bytes: Buffer.concat([header(), frames(0, 1)]) }, { bytes: frames(100, 1) }]);
     const rec = (await RunRecorder.start(deps(memoryStore()), calls, r.runId, r.userId, { everyMs }))!;
     await rec.tick();
     await prisma.question.create({ data: { ownerUserId: r.userId, askedBy: `run:${r.runId}`, runId: r.runId, input: 'secret', kind: 'other', prompt: 'The code', status: 'pending', expiresAt: new Date(Date.now() + 3600_000) } as never });
     await rec.tick();
-    expect(calls.log).toContain('pause rec-1 true');
-    await prisma.question.updateMany({ where: { runId: r.runId }, data: { status: 'answered' } });
-    await rec.tick();
-    expect(calls.log).toContain('pause rec-1 false');
-    await prisma.run.update({ where: { id: r.runId }, data: { status: 'paused' } });
+    expect(calls.log).not.toContain('pause rec-1 true');
+    expect((await prisma.runRecording.findUniqueOrThrow({ where: { runId: r.runId } })).partCount).toBe(2);
+    // The job ends with the run waiting for the owner: the recording goes on.
+    await prisma.run.update({ where: { id: r.runId }, data: { status: 'waiting_human' } });
     await rec.endJob();
+    expect(calls.log).not.toContain('pause rec-1 true');
+
+    // A later job of a run the owner paused holds it.
+    const rec2 = (await RunRecorder.start(deps(memoryStore()), calls, r.runId, r.userId, { everyMs }))!;
+    await rec2.tick();
+    await prisma.run.update({ where: { id: r.runId }, data: { status: 'paused' } });
+    await rec2.endJob();
     expect(calls.log.at(-1)).toBe('pause rec-1 true');
     expect((await prisma.runRecording.findUniqueOrThrow({ where: { runId: r.runId } })).status).toBe('recording');
   });

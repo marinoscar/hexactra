@@ -292,8 +292,8 @@ A screenshot kept for a run's trace must not show a password, a one-time code, a
 
 A run the owner opted into **Record video** (epic #755, `docs/decisions/run-recordings.md`) is recorded with the `record_*` actions. The recording is **the one unmasked capture**: it is never a trace image, and the console keeps it owner-only and out of every export.
 
-- **What is kept out** (this reduces exposure; it is not masking): every frame while a `sensitive` `type` or `type_keys` runs (a handoff secret, a provider's value) and for one second after; every frame while the focused field is a password, one-time code, card, account or routing number field; every frame while the recording is paused.
-- **Handoffs and takeover:** `record_pull`, `record_pause` and `record_stop` always pass, so the runner can pause a recording while a secret is asked for and end it with its run. `record_start` is refused while a secret is asked for or typed, like a screenshot.
+- **Nothing is withheld** (#882): every frame is kept, also while a `sensitive` `type` or `type_keys` runs (a handoff secret, a provider's value) and while a password or card field has focus. Frames are left out only while the recording is paused and by the rate limit.
+- **Handoffs and takeover:** every `record_*` action passes, also while a secret is asked for or typed (unlike a screenshot).
 - **Format:** a pull's bytes are whole records of a small framed stream (`HXR1` header with the frame size and codec, then one record per encoded frame with its key-frame flag and time). The chunks, in `seq` order, are one stream; the console muxes it into a seekable WebM (`apps/chrome-extension/src/recording-format.ts`).
 - **Rate:** frames only arrive when the page repaints, at most 10 a second; the latest frame of a burst is kept. A key frame at least every 2 seconds.
 

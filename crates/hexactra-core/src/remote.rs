@@ -962,9 +962,9 @@ pub enum RemoteAction {
     /// Start recording the tab as video (epic #755, `docs/decisions/run-recordings.md`).
     /// The extension runs a CDP screencast of the tab and encodes it to WebM
     /// (VP8) in an offscreen document. **The video is not masked**: it is the
-    /// owner's opt-in run recording, never a trace image. Frames are dropped
-    /// while a secret is typed or a sensitive field has focus, and while the
-    /// recording is paused. Result: `{ "recording_id": ... }`. One recording
+    /// owner's opt-in run recording, never a trace image, and it withholds
+    /// nothing (#882): frames are left out only while the recording is
+    /// paused. Result: `{ "recording_id": ... }`. One recording
     /// per tab; a second start on the same tab fails with `recording_active`.
     RecordStart {
         /// Widest frame, in CSS pixels (320–1920, default 1280).

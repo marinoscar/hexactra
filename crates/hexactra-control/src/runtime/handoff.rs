@@ -868,14 +868,19 @@ mod tests {
         assert!(s.enqueue(sess, shot(), Duration::from_secs(1)).is_ok());
     }
 
-    // #755: a run recording is paused, pulled and stopped while a secret is
-    // asked for, but a new one does not start then.
+    // #882: a run recording withholds nothing. Every record action passes while
+    // a secret is asked for, start included.
     #[tokio::test]
-    async fn a_recording_is_controlled_but_not_started_while_a_secret_is_asked_for() {
+    async fn every_record_action_passes_while_a_secret_is_asked_for() {
         let (s, sess) = setup();
-        let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
+        let _ = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
         let id = || "rec-1".to_string();
-        for control in [
+        for action in [
+            RemoteAction::RecordStart {
+                max_width: None,
+                quality: None,
+                tab_id: None,
+            },
             RemoteAction::RecordPause {
                 recording_id: id(),
                 paused: true,
@@ -883,20 +888,10 @@ mod tests {
             RemoteAction::RecordPull { recording_id: id() },
             RemoteAction::RecordStop { recording_id: id() },
         ] {
-            assert!(s.enqueue(sess, control, Duration::from_secs(1)).is_ok());
+            assert!(s.enqueue(sess, action, Duration::from_secs(1)).is_ok());
         }
-        let start = || RemoteAction::RecordStart {
-            max_width: None,
-            quality: None,
-            tab_id: None,
-        };
-        assert!(matches!(
-            s.enqueue(sess, start(), Duration::from_secs(1)),
-            Err(StoreError::HandoffPending(x)) if x == h.id
-        ));
-        s.respond_handoff(h.id, Responder::Operator, answer(Some("424242"), None))
-            .unwrap();
-        assert!(s.enqueue(sess, start(), Duration::from_secs(1)).is_ok());
+        // A screenshot is still refused then: the trace stays masked and secret-free.
+        assert!(s.enqueue(sess, shot(), Duration::from_secs(1)).is_err());
     }
 
     #[tokio::test]
