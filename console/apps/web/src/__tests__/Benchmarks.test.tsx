@@ -382,7 +382,13 @@ describe('the comparison', () => {
   const comparison: BenchmarkComparison = {
     current: { id: ID, name: 'After', status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.118.0', commit: '4f2c9a1e7b3d5f60', finishedAt: '2026-11-21T11:00:00Z' },
     baseline: { id: BASE, name: 'Before', status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.116.0', commit: null, finishedAt: '2026-11-14T11:00:00Z' },
-    totals: [{ metric: 'totalCostUsd', current: 1.25, baseline: 1.65, delta: -0.4, better: 'lower', improved: true, withinNoise: null, atLeast: false }],
+    totals: [
+      { metric: 'totalCostUsd', current: 1.25, baseline: 1.65, delta: -0.4, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+      { metric: 'totalTokens', current: 1_290_000, baseline: 1_500_000, delta: -210_000, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+      { metric: 'inputTokens', current: 1_200_000, baseline: 1_400_000, delta: -200_000, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+      { metric: 'outputTokens', current: 90_000, baseline: 100_000, delta: -10_000, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+      { metric: 'cachedInputTokens', current: 400_000, baseline: 300_000, delta: 100_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
+    ],
     policies: [
       {
         ref: 'builtin:economy',
@@ -393,6 +399,9 @@ describe('the comparison', () => {
         deltas: [
           { metric: 'successRate', current: 0.6, baseline: 0.5, delta: 0.1, better: 'higher', improved: null, withinNoise: true, atLeast: false },
           { metric: 'medianActiveMs', current: 70_000, baseline: 60_000, delta: 10_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
+          { metric: 'inputTokens', current: 600_000, baseline: 700_000, delta: -100_000, better: 'lower', improved: true, withinNoise: null, atLeast: false },
+          { metric: 'outputTokens', current: 45_000, baseline: 40_000, delta: 5_000, better: 'lower', improved: false, withinNoise: null, atLeast: false },
+          { metric: 'cachedInputTokens', current: 200_000, baseline: 200_000, delta: 0, better: 'lower', improved: null, withinNoise: null, atLeast: false },
         ],
       },
     ],
@@ -415,6 +424,20 @@ describe('the comparison', () => {
     expect(screen.getByRole('list', { name: 'Whole benchmark deltas' })).toHaveTextContent('better');
     expect(screen.getByText('Only in the baseline: Retired policy')).toBeInTheDocument();
     expect(screen.getByText('fail (0 of 3) → pass (3 of 3)')).toBeInTheDocument();
+  });
+
+  it('shows the input, output and cached input token deltas for the whole benchmark and each policy (#829)', async () => {
+    mount(<BenchmarkComparePage />, `/c/${ID}/${BASE}`, '/c/:id/:baseline', ['benchmarks:read'], { [`GET /benchmarks/${ID}/compare`]: comparison });
+    const whole = await screen.findByRole('table', { name: 'Whole benchmark deltas' });
+    const row = (table: HTMLElement, metric: string) => table.querySelector(`[data-metric="${metric}"]`) as HTMLElement;
+    expect(row(whole, 'inputTokens')).toHaveTextContent(/^Input tokens1\.4M1\.2M−200k/i);
+    expect(row(whole, 'outputTokens')).toHaveTextContent(/^Output tokens100k90k−10k/i);
+    expect(row(whole, 'cachedInputTokens')).toHaveTextContent(/^Cached input tokens300k400k\+100k/i);
+    expect(within(row(whole, 'cachedInputTokens')).getByText('worse')).toBeInTheDocument();
+    const economy = screen.getByRole('table', { name: 'Deltas for Economy' });
+    expect(row(economy, 'inputTokens')).toHaveTextContent(/^Input tokens700k600k−100k/i);
+    expect(row(economy, 'outputTokens')).toHaveTextContent(/^Output tokens40k45k\+5,000worse/);
+    expect(row(economy, 'cachedInputTokens')).toHaveTextContent('no change');
   });
 
   it('says why two benchmarks cannot be compared', async () => {
