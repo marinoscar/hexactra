@@ -1,9 +1,12 @@
 // The Map's side panel (E46.21, #795): the clicked node's details, the tasks that use it, its pending reviews, and the links to the
 // step list and history. Everything the canvas does (expand, focus, what uses this site) is a button here too, so the keyboard reaches it.
 import { Box, Button, Chip, Divider, Link, Paper, Stack, Typography } from '@mui/material';
+import { usePlatformHost } from '@marinoscar/platform-web/core';
+import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import type { KgGraph, KgReview } from '../api';
+import { listKgSites, listSiteFacts, sitesTabPath, type KgGraph, type KgReview, type KgSiteFact } from '../api';
+import { factKindLabel } from '../siteFacts';
 import { HealthChip, StateChip } from '../labels';
 import { MAP_KIND_LABEL, procedureIdOf, tasksUsing, type MapNode, type MapProcedureInfo } from './mapModel';
 
@@ -33,6 +36,72 @@ function TaskLinks({ procedureId }: { procedureId: string }) {
         History
       </Button>
     </Stack>
+  );
+}
+
+/** A domain on a site: the site itself or one of its subdomains. */
+const onSite = (domain: string, site: string) => domain === site || domain.endsWith(`.${site}`);
+
+/**
+ * A Site node's active facts (E46.33) and a link to the Sites tab on that site. The node is a domain as the procedure saw it; the facts are
+ * kept per registrable domain, so the owner's sites are matched to it (the longest one wins). Nothing shows without `kgraph:read`.
+ */
+function SiteFactsSection({ domain }: { domain: string }) {
+  const { api, viewer } = usePlatformHost();
+  const canRead = viewer.hasPermission('kgraph:read');
+  const [state, setState] = useState<{ site: string | null; facts: KgSiteFact[] } | null>(null);
+  useEffect(() => {
+    if (!canRead) return;
+    let live = true;
+    setState(null);
+    (async () => {
+      const sites = await listKgSites(api);
+      const site = sites.map((s) => s.site).filter((s) => onSite(domain, s)).sort((a, b) => b.length - a.length)[0] ?? null;
+      const facts = site ? await listSiteFacts(api, site, 'active') : [];
+      if (live) setState({ site, facts });
+    })().catch(() => live && setState({ site: null, facts: [] }));
+    return () => {
+      live = false;
+    };
+  }, [api, domain, canRead]);
+  if (!canRead) return null;
+  const site = state?.site ?? null;
+  return (
+    <Box data-testid="map-site-facts">
+      <Divider sx={{ mb: 1 }} />
+      <Typography variant="subtitle2" component="h3">
+        Facts about this site
+      </Typography>
+      {state === null && (
+        <Typography variant="body2" color="text.secondary">
+          Loading…
+        </Typography>
+      )}
+      {state && state.facts.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          No active facts.
+        </Typography>
+      )}
+      {state && state.facts.length > 0 && (
+        <Stack component="ul" spacing={0.5} sx={{ pl: 2, my: 0.5 }}>
+          {state.facts.map((f) => (
+            <li key={f.id}>
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                <Typography component="span" variant="caption" color="text.secondary">
+                  {factKindLabel(f.kind)}:{' '}
+                </Typography>
+                {f.text}
+              </Typography>
+            </li>
+          ))}
+        </Stack>
+      )}
+      {state && (
+        <Link component={RouterLink} to={sitesTabPath(site ?? undefined)} variant="body2">
+          {site ? `Open ${site} in Sites` : 'Add a fact in Sites'}
+        </Link>
+      )}
+    </Box>
   );
 }
 
@@ -129,6 +198,7 @@ export function MapSidePanel({ node, graph, info, reviews, focus, impactSite, on
             )}
           </Box>
         )}
+        {node.type === 'Site' && <SiteFactsSection domain={node.id.startsWith('site:') ? node.id.slice(5) : node.label} />}
         {node.kind !== 'task' && node.kind !== 'step' && (
           <Box>
             <Divider sx={{ mb: 1 }} />

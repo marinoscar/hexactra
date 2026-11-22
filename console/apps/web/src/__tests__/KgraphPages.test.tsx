@@ -103,6 +103,7 @@ const page = (status: unknown, procedures: KgProcedureItem[], reviews: KgReview[
     'GET /kgraph/procedures': { enabled: (status as { available: boolean }).available, procedures },
     'GET /kgraph/summary': SUMMARY,
     'GET /kgraph/reviews?status=pending': reviews,
+    'GET /kgraph/reviews/site-facts': [],
     'GET /kgraph/procedures/kgp-1/versions': { enabled: true, procedureId: 'kgp-1', versions: [V2, V1] },
     'GET /kgraph/procedures/kgp-1/versions/2/diff': { enabled: true, procedureId: 'kgp-1', from: 1, to: 2, changes: [{ change: 'retargeted', before: null, after: null, args: [], text: 'Step 2 now finds the button by its label' }, { change: 'unchanged', before: null, after: null, args: [], text: 'same' }] },
     [`POST /kgraph/reviews/${REVIEW}/answer`]: (r: TestApiRequest) => ({ ...REVIEW_ROW, status: (r.body as { approve: boolean }).approve ? 'approved' : 'declined' }),
