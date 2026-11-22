@@ -17,8 +17,8 @@ const declared = new Set([...routeSources.matchAll(/<Route\s+path="([^"]+)"/g)].
 // The index route has no `path`: it is `/` (Home).
 if (/<Route\s+index\b/.test(routeSources)) declared.add('/');
 // The pages, their components (the task list's hook and actions), the live stream, the agent policy client (src/policies/api.ts
-// holds every policy call), the schedule editor's preview hook, the task form's client (src/taskForm/api.ts) the memories client (src/memories/api.ts) the secrets client (src/secrets/api.ts) the task outputs table (src/taskOutputs) the connections client (src/connections), the email triggers (src/mailTriggers) and the usage client (src/usage, #734).
-const calls = [...tsx('pages'), ...tsx('components'), ...tsx('policies'), ...tsx('schedule'), ...tsx('taskForm'), ...tsx('memories'), ...tsx('secrets'), ...tsx('taskOutputs'), ...tsx('connections'), ...tsx('mailTriggers'), ...tsx('deliveries'), ...tsx('usage'), read('live.ts'), read('api.ts')].join('\n');
+// holds every policy call), the schedule editor's preview hook, the task form's client (src/taskForm/api.ts) the memories client (src/memories/api.ts) the secrets client (src/secrets/api.ts) the task outputs table (src/taskOutputs) the connections client (src/connections), the email triggers (src/mailTriggers) the usage client (src/usage, #734) and the Knowledge Graph client (src/kgraph, E46.20).
+const calls = [...tsx('pages'), ...tsx('components'), ...tsx('policies'), ...tsx('schedule'), ...tsx('taskForm'), ...tsx('memories'), ...tsx('secrets'), ...tsx('taskOutputs'), ...tsx('connections'), ...tsx('mailTriggers'), ...tsx('deliveries'), ...tsx('usage'), ...tsx('kgraph'), read('live.ts'), read('api.ts')].join('\n');
 
 /** `/api/runs/{id}/cancel` → a pattern for the call `` `/runs/${...}/cancel` `` or `'/runs'`. */
 function callPattern(op: string): RegExp {

@@ -1635,9 +1635,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/settings/kgraph",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "kgraph.manage",
@@ -1660,9 +1661,11 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/settings/kgraph",
+        "/tasks/:id",
+        "/kgraph/procedures/:id"
+      ]
     },
     {
       "id": "kgraph.reviews",
@@ -1681,9 +1684,10 @@
       "tui": {
         "none": "Deliberate: answered in the signed-in web app only"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/kgraph",
+        "/inbox"
+      ]
     },
     {
       "id": "kgraph.ledger",
@@ -1701,9 +1705,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/kgraph"
+      ]
     },
     {
       "id": "kgraph.procedures",
@@ -1727,9 +1731,11 @@
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph pages (E46.20, #794)"
-      }
+      "web": [
+        "/kgraph",
+        "/kgraph/procedures/:id",
+        "/runs/:id"
+      ]
     },
     {
       "id": "kgraph.graph",
@@ -1766,9 +1772,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; deployment settings are set in the web app"
       },
-      "web": {
-        "none": "Arrives with the Knowledge Graph settings card (E46.20, #794)"
-      }
+      "web": [
+        "/admin/settings/kgraph"
+      ]
     }
   ]
 }
