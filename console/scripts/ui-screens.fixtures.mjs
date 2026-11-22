@@ -34,6 +34,10 @@ export const IDS = {
   carRun: '3333333c-3333-4333-8333-333333333333',
   // The memory `GET /memories` lists as "My wife".
   memory: 'a1000000-0000-4000-8000-000000000001',
+  // Benchmarks (E44.5, #743): a completed one with three policies, the running one, and the baseline it is compared with.
+  benchmark: 'b0000000-0000-4000-8000-000000000001',
+  liveBenchmark: 'b0000000-0000-4000-8000-000000000002',
+  baselineBenchmark: 'b0000000-0000-4000-8000-000000000003',
 };
 
 const PERMISSIONS = [
@@ -43,6 +47,7 @@ const PERMISSIONS = [
   'usage:read', 'user_settings:read', 'user_settings:write', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
   'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write',
+  'benchmarks:read', 'benchmarks:run',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -846,4 +851,152 @@ RESPONSES[`GET /task-builder/${IDS.builder}`] = {
 };
 RESPONSES[`POST /task-builder`] = { id: IDS.builder };
 
-export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id };
+// ---- Benchmarks (E44.5, #743): the list, the new form, a completed benchmark's scorecard and trials, a live one, the comparison ----
+
+const BENCH_CATEGORIES = [
+  { id: 'navigation', label: 'Navigation' }, { id: 'forms', label: 'Forms' }, { id: 'extraction', label: 'Extraction' }, { id: 'pointer', label: 'Pointer and widgets' },
+  { id: 'dynamic', label: 'Dynamic pages' }, { id: 'long', label: 'Long tasks' }, { id: 'safety', label: 'Judgement and safety' },
+];
+const BENCH_CHALLENGES = [
+  ['nav-lookup', 'Look up an order in an account', 'navigation', 1], ['nav-pagination', 'Find an entry across several pages', 'navigation', 2],
+  ['form-multistep', 'Complete a three-step registration', 'forms', 2], ['form-upload', 'Attach a document to a claim form', 'forms', 2, ['file_upload']],
+  ['extract-table', 'Report a figure from a table', 'extraction', 1], ['extract-infinite-scroll', 'Find an entry in an endless feed', 'extraction', 3],
+  ['ptr-slider', 'Set a value with a slider', 'pointer', 2], ['dyn-modal', 'Dismiss a dialog, then save a preference', 'dynamic', 2],
+  ['long-shop-checkout', 'Buy three items with a coupon and a delivery date', 'long', 3], ['safe-injection', 'Ignore instructions written on the page', 'safety', 2],
+];
+const benchSuite = {
+  key: 'builtin', version: 2, categories: BENCH_CATEGORIES,
+  challenges: BENCH_CHALLENGES.map(([id, title, category, difficulty, missing = []]) => ({ id, title, category, difficulty, requires: missing, supported: missing.length === 0, missing, confirmRiskyActions: category === 'safety' })),
+  defaults: { trials: 3, capUsd: 25, trialTimeoutMinutes: 15 },
+  limits: { maxPolicies: 8, maxTrials: 10, maxCapUsd: 1000, maxTrialTimeoutMinutes: 120 },
+  site: { baseUrl: 'https://console.example.test/benchmark/', reachable: true, problem: null },
+};
+const BENCH_POLICIES = [
+  { ref: 'builtin:economy', label: 'Economy (fast tier)', model: 'provider-a:model-small', pass: [1, 1, 1, 0, 1, 0, 0, 1, 0, 1], cost: 0.021, tokens: 41_000 },
+  { ref: 'builtin:balanced', label: 'Balanced', model: 'provider-a:model-mid', pass: [1, 1, 1, 0, 1, 1, 1, 1, 0, 1], cost: 0.084, tokens: 58_000 },
+  { ref: 'builtin:thorough', label: 'Thorough with a long policy label', model: 'provider-a:model-large-2026', pass: [1, 1, 1, 0, 1, 1, 1, 1, 1, 1], cost: 0.31, tokens: 77_000 },
+];
+const benchRate = (k, n) => {
+  if (n === 0) return { k, n, value: null, low: null, high: null };
+  const p = k / n; const z = 1.96; const d = 1 + (z * z) / n; const c = (p + (z * z) / (2 * n)) / d; const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return { k, n, value: p, low: Math.max(0, c - h), high: Math.min(1, c + h) };
+};
+const benchMetrics = (pol, idx) => {
+  const rows = idx.map((i) => ({ supported: BENCH_CHALLENGES[i][4] === undefined, pass: pol.pass[i] === 1 }));
+  const judged = rows.filter((r) => r.supported).length * 3;
+  const passes = rows.filter((r) => r.supported && r.pass).length * 3 - (idx.length > 3 && pol.ref === 'builtin:economy' ? 1 : 0);
+  const costTotal = Math.round(pol.cost * judged * 1e6) / 1e6;
+  const tokTotal = pol.tokens * judged;
+  const challengeCount = rows.filter((r) => r.supported).length;
+  return {
+    counts: { total: idx.length * 3, judged, pass: passes, fail: judged - passes, error: 0, skipped: 0, unsupported: (idx.length - challengeCount) * 3, unfinished: 0 },
+    successRate: benchRate(passes, judged),
+    passAllK: { k: 3, challenges: challengeCount, allPassed: Math.floor(passes / 3), rate: benchRate(Math.floor(passes / 3), challengeCount) },
+    falseSuccess: benchRate(pol.ref === 'builtin:economy' ? 2 : 0, judged), falseFailure: benchRate(0, judged),
+    speed: { medianActiveMs: 52_000 + pol.tokens / 2, p90ActiveMs: 140_000 + pol.tokens, medianSteps: 14, medianModelCalls: 9.5 },
+    cost: { totalUsd: costTotal, known: pol.ref !== 'builtin:thorough', medianPerTrialUsd: pol.cost, perSuccessUsd: passes ? Math.round((costTotal / passes) * 1e6) / 1e6 : null },
+    tokens: { input: Math.round(tokTotal * 0.92), output: Math.round(tokTotal * 0.08), cached: Math.round(tokTotal * 0.4), total: tokTotal, medianInput: Math.round(pol.tokens * 0.92), medianOutput: Math.round(pol.tokens * 0.08), medianCached: Math.round(pol.tokens * 0.4), perSuccess: passes ? Math.round(tokTotal / passes) : null },
+    failureReasons: judged > passes ? [{ key: 'wrong_result', count: Math.ceil((judged - passes) / 2) }, { key: 'stalled', count: Math.floor((judged - passes) / 2) }].filter((r) => r.count) : [],
+    stopReasons: [{ key: 'finished', count: judged }],
+    safety: pol.ref === 'builtin:economy' && idx.includes(9) ? { flaggedTrials: 1, checks: [{ key: 'safety:no-injected-order', count: 1 }] } : { flaggedTrials: 0, checks: [] },
+    models: pol.ref === 'builtin:balanced' ? [pol.model, 'provider-a:model-large-2026'] : [pol.model],
+  };
+};
+const ALL = BENCH_CHALLENGES.map((_, i) => i);
+const benchScorecard = (id, name, status, live) => {
+  const policiesScored = BENCH_POLICIES.map((pol, i) => ({
+    ref: pol.ref, label: pol.label, rank: [3, 2, 1][i], metrics: benchMetrics(pol, ALL),
+    categories: BENCH_CATEGORIES.map((c) => ({ category: c.id, label: c.label, metrics: benchMetrics(pol, ALL.filter((j) => BENCH_CHALLENGES[j][2] === c.id)) })),
+  }));
+  const sum = (f) => policiesScored.reduce((a, p) => a + f(p.metrics), 0);
+  return {
+    format: 'hexactra.benchmark-scorecard', version: 1, benchmarkId: id, name, status, live, suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.121.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', k: 3, computedAt: iso(-60_000),
+    totals: { costUsd: Math.round(sum((m) => m.cost.totalUsd) * 1e6) / 1e6, costKnown: false, inputTokens: sum((m) => m.tokens.input), outputTokens: sum((m) => m.tokens.output), cachedInputTokens: sum((m) => m.tokens.cached), totalTokens: sum((m) => m.tokens.total), modelCalls: 812, counts: { total: 90, judged: 81, pass: 63, fail: 18, error: 0, skipped: 0, unsupported: 9, unfinished: 0 } },
+    ranking: [...policiesScored].sort((a, b) => a.rank - b.rank).map((p) => ({ rank: p.rank, ref: p.ref, label: p.label, successRate: p.metrics.successRate.value, costPerSuccessUsd: p.metrics.cost.perSuccessUsd, costKnown: p.metrics.cost.known, medianActiveMs: p.metrics.speed.medianActiveMs, totalCostUsd: p.metrics.cost.totalUsd, totalTokens: p.metrics.tokens.total })),
+    policies: policiesScored,
+    categories: BENCH_CATEGORIES,
+    matrix: BENCH_CHALLENGES.map(([cid, title, category, , missing], j) => ({
+      challengeId: cid, title, category,
+      cells: BENCH_POLICIES.map((pol) => {
+        const verdicts = missing ? ['unsupported', 'unsupported', 'unsupported'] : live && j > 6 ? (j === 7 ? ['pass', null, null] : [null, null, null]) : pol.pass[j] ? ['pass', 'pass', 'pass'] : ['fail', 'pass', 'fail'];
+        const passes = verdicts.filter((v) => v === 'pass').length;
+        const judged = verdicts.filter((v) => v === 'pass' || v === 'fail').length;
+        return { policyRef: pol.ref, passes, judged, k: 3, verdicts, medianActiveMs: judged ? 48_000 + j * 9_000 : null, medianCostUsd: judged ? pol.cost : null, costKnown: pol.ref !== 'builtin:thorough', totalTokens: judged * pol.tokens, safetyFlagged: pol.ref === 'builtin:economy' && cid === 'safe-injection' };
+      }),
+    })),
+  };
+};
+const benchProgress = (live) => (live ? { total: 90, pending: 22, running: 1, graded: 58, skipped: 9, pass: 47, fail: 11, error: 0, unsupported: 9 } : { total: 90, pending: 0, running: 0, graded: 81, skipped: 9, pass: 63, fail: 18, error: 0, unsupported: 9 });
+const benchmarkRow = (id, name, status, ms, extra = {}) => {
+  const live = status === 'running';
+  const card = benchScorecard(id, name, status, live);
+  return {
+    id, name, status, suiteKey: 'builtin', suiteVersion: 2,
+    config: { challengeIds: BENCH_CHALLENGES.map((c) => c[0]), policies: BENCH_POLICIES.map((p) => ({ ref: p.ref, label: p.label })), trials: 3, hostId: IDS.host, profile: 'default', capUsd: 25, trialTimeoutMinutes: 15 },
+    appVersion: '1.121.0', commit: '4f2c9a1e7b3d5f60a8c1e2d3b4a5968778695a4b', spentUsd: live ? 4.12 : card.totals.costUsd, progress: benchProgress(live),
+    totals: { inputTokens: card.totals.inputTokens, outputTokens: card.totals.outputTokens, cachedInputTokens: card.totals.cachedInputTokens, modelCalls: 812, costUsd: live ? 4.12 : card.totals.costUsd, costKnown: false },
+    baselineId: null, createdAt: iso(ms), startedAt: iso(ms + 5_000), finishedAt: live ? null : iso(ms + 3_600_000), ...extra,
+  };
+};
+const benchCompleted = benchmarkRow(IDS.benchmark, 'Policies after the planner change, Nov 21', 'completed', -86_400_000);
+const benchLive = benchmarkRow(IDS.liveBenchmark, 'Nightly run', 'running', -1_200_000);
+const benchBaseline = benchmarkRow(IDS.baselineBenchmark, 'Baseline before the planner change', 'completed', -7 * 86_400_000, { appVersion: '1.116.0', commit: '0a1b2c3d4e5f60718293a4b5c6d7e8f901234567' });
+const benchTrials = (live) =>
+  BENCH_CHALLENGES.flatMap(([cid, title, category, , missing], j) =>
+    BENCH_POLICIES.flatMap((pol, pi) =>
+      [0, 1, 2].map((t) => {
+        const pending = live && j > 6 && !(j === 7 && t === 0);
+        const verdict = missing ? 'unsupported' : pending ? null : pol.pass[j] || t === 1 ? 'pass' : 'fail';
+        const ran = verdict === 'pass' || verdict === 'fail';
+        return {
+          id: `b1000000-0000-4000-8000-${String(j * 9 + pi * 3 + t).padStart(12, '0')}`, challengeId: cid, challengeTitle: title, category, policyRef: pol.ref, policyLabel: pol.label, trialIndex: t,
+          status: verdict === null ? (j === 7 && t === 1 && pi === 0 ? 'running' : 'pending') : missing ? 'skipped' : 'graded', verdict, failureReason: verdict === 'fail' ? (t === 2 ? 'stalled' : 'wrong_result') : missing ? 'unsupported' : null,
+          checks: ran ? [{ name: 'answer', pass: verdict === 'pass' }, { name: 'safety:no-injected-order', pass: !(pol.ref === 'builtin:economy' && cid === 'safe-injection' && t === 0) }] : null,
+          claimedSuccess: ran ? true : null, runId: ran ? (j === 0 && t === 2 ? null : IDS.finishedRun) : null,
+          durationMs: ran ? 61_000 : null, activeMs: ran ? 48_000 + j * 9_000 : null, steps: ran ? 14 : null, modelCalls: ran ? 9 : null,
+          inputTokens: ran ? Math.round(pol.tokens * 0.92) : null, outputTokens: ran ? Math.round(pol.tokens * 0.08) : null, cachedInputTokens: ran ? Math.round(pol.tokens * 0.4) : null,
+          model: ran ? pol.model : null, models: null, costUsd: ran ? pol.cost : null, costKnown: ran ? pol.ref !== 'builtin:thorough' : null, stopReason: ran ? 'finished' : null,
+          questions: ran ? 0 : null, escalations: ran ? 0 : null, startedAt: ran ? iso(-80_000_000) : null, finishedAt: ran ? iso(-79_900_000) : null,
+        };
+      }),
+    ),
+  );
+const delta = (metric, current, baseline, better, rate = false, atLeast = false) => {
+  const d = current === null || baseline === null ? null : Math.round((current - baseline) * 1e6) / 1e6;
+  const withinNoise = rate ? Math.abs(d ?? 0) < 0.15 : null;
+  return { metric, current, baseline, delta: d, better, improved: d === null || d === 0 || withinNoise ? null : better === 'higher' ? d > 0 : d < 0, withinNoise, atLeast };
+};
+const benchComparison = {
+  current: { id: IDS.benchmark, name: benchCompleted.name, status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.121.0', commit: benchCompleted.commit, finishedAt: benchCompleted.finishedAt },
+  baseline: { id: IDS.baselineBenchmark, name: benchBaseline.name, status: 'completed', suiteKey: 'builtin', suiteVersion: 2, appVersion: '1.116.0', commit: benchBaseline.commit, finishedAt: benchBaseline.finishedAt },
+  totals: [delta('totalCostUsd', 20.4, 23.9, 'lower', false, true), delta('totalTokens', 4_698_000, 5_120_000, 'lower')],
+  policies: BENCH_POLICIES.map((p, i) => ({
+    ref: p.ref, label: p.label, baselineRef: p.ref, baselineLabel: i === 2 ? 'Thorough' : p.label, matchedBy: i === 2 ? 'ref' : 'ref',
+    deltas: [
+      delta('successRate', [0.63, 0.78, 0.89][i], [0.6, 0.52, 0.85][i], 'higher', true), delta('passAllK', [0.56, 0.78, 0.89][i], [0.44, 0.56, 0.78][i], 'higher', true),
+      delta('falseSuccessRate', [0.07, 0, 0][i], [0.04, 0.04, 0][i], 'lower', true), delta('medianActiveMs', [72_500, 81_000, 90_500][i], [70_000, 95_000, 90_500][i], 'lower'),
+      delta('medianCostUsd', p.cost, p.cost * 1.1, 'lower', false, i === 2), delta('totalCostUsd', p.cost * 27, p.cost * 29, 'lower', false, i === 2),
+      delta('costPerSuccessUsd', p.cost * 1.5, p.cost * 2, 'lower', false, i === 2), delta('totalTokens', p.tokens * 27, p.tokens * 30, 'lower'), delta('tokensPerSuccess', p.tokens * 1.5, p.tokens * 2.1, 'lower'),
+    ],
+  })),
+  unmatched: { current: [], baseline: [{ ref: 'a0000000-0000-4000-8000-0000000000aa', label: 'My custom planner policy' }] },
+  flipped: [
+    { challengeId: 'nav-pagination', title: 'Find an entry across several pages', category: 'navigation', policyRef: 'builtin:balanced', policyLabel: 'Balanced', baseline: { outcome: 'fail', passes: 0, judged: 3 }, current: { outcome: 'pass', passes: 3, judged: 3 }, direction: 'better' },
+    { challengeId: 'dyn-modal', title: 'Dismiss a dialog, then save a preference', category: 'dynamic', policyRef: 'builtin:economy', policyLabel: 'Economy (fast tier)', baseline: { outcome: 'pass', passes: 3, judged: 3 }, current: { outcome: 'mixed', passes: 1, judged: 3 }, direction: 'worse' },
+  ],
+};
+Object.assign(RESPONSES, {
+  'GET /benchmarks/suite': benchSuite,
+  'GET /benchmarks': { items: [benchLive, benchCompleted, benchBaseline], total: 3 },
+  [`GET /benchmarks/${IDS.benchmark}`]: benchCompleted,
+  [`GET /benchmarks/${IDS.benchmark}/scorecard`]: benchScorecard(IDS.benchmark, benchCompleted.name, 'completed', false),
+  [`GET /benchmarks/${IDS.benchmark}/trials`]: { items: benchTrials(false) },
+  [`GET /benchmarks/${IDS.benchmark}/compare`]: benchComparison,
+  [`GET /benchmarks/${IDS.liveBenchmark}`]: benchLive,
+  [`GET /benchmarks/${IDS.liveBenchmark}/scorecard`]: benchScorecard(IDS.liveBenchmark, benchLive.name, 'running', true),
+  [`GET /benchmarks/${IDS.liveBenchmark}/trials`]: { items: benchTrials(true) },
+  [`GET /benchmarks/${IDS.baselineBenchmark}`]: benchBaseline,
+  [`GET /benchmarks/${IDS.baselineBenchmark}/scorecard`]: benchScorecard(IDS.baselineBenchmark, benchBaseline.name, 'completed', false),
+});
+
+export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id, benchmark: IDS.benchmark, liveBenchmark: IDS.liveBenchmark, baselineBenchmark: IDS.baselineBenchmark };
