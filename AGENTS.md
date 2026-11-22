@@ -86,8 +86,6 @@ Rules:
 - Do not delegate to sub-agents for now; the session working the issue does the work itself in its branch.
 - Remove the branch once the PR is merged. `git branch -a` shows what exists.
 
-**E46 integration branch (owner-approved exception, epic #770 only).** Knowledge Graph work (E46, #775–#799) branches `issue/<n>-<slug>` from `epic/e46-kgraph` and opens its PR against `epic/e46-kgraph`, not `main`; after the merge the issue is closed by hand (a closing keyword does not fire on a non-default branch). `origin/main` is merged into the epic branch through a PR before each issue. One final PR (E46.25) merges `epic/e46-kgraph` to `main`, the console version is bumped once there, and this exception ends when that PR merges.
-
 ## Commits
 
 Conventional Commits: `<type>(<scope>): <imperative summary>` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`). Small, single-intent commits; behavior changes ship with their tests. Reference the issue (`#<n>`) in the PR, and in commits where useful.
