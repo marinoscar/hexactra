@@ -3,7 +3,7 @@
 // where the layout changes.
 import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
-import { createTestApiError, createTestPlatformHost } from '@marinoscar/platform-web/testing';
+import { createTestApiError, createTestBlobResponse, createTestPlatformHost } from '@marinoscar/platform-web/testing';
 import type { ReactElement } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -350,6 +350,20 @@ describe('a benchmark', () => {
     expect(await screen.findByRole('option', { name: /Baseline/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Old suite/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+  });
+
+  it('mounts Export, which adds the chosen baseline to the report', async () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    const host = mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], {
+      ...responses(),
+      [`GET /benchmarks/${ID}/export?format=json&baseline=${BASE}`]: createTestBlobResponse('{}', { 'content-disposition': 'attachment; filename="hexactra-benchmark-b0000000-20261121.json"' }),
+    });
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: 'Baseline' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Baseline/ }));
+    fireEvent.click(within(screen.getByTestId('benchmark-export')).getByRole('button', { name: 'Export' }));
+    expect(await screen.findByText('The report includes the comparison with the baseline.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'JSON report' }));
+    await waitFor(() => expect(host.requests.some((r) => r.path === `/benchmarks/${ID}/export?format=json&baseline=${BASE}`)).toBe(true));
   });
 
   it('cancels a running benchmark after asking', async () => {

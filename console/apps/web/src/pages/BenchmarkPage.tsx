@@ -8,6 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { cancelBenchmark, deleteBenchmark, getBenchmark, getScorecard, listBenchmarks, listTrials } from '../benchmarks/api';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
+import { BenchmarkExportButton } from '../components/BenchmarkExportMenu';
 import { BENCHMARKS_PATH, comparePath, isLiveBenchmark, money, ofText, tokens } from '../benchmarks/format';
 import { ScorecardView } from '../benchmarks/ScorecardView';
 import { TrialList } from '../benchmarks/TrialList';
@@ -162,7 +163,6 @@ export function BenchmarkPage() {
   const actions: PageAction[] = [
     { key: 'cancel', label: 'Cancel', Icon: StopCircleOutlinedIcon, onClick: () => void doCancel(), color: 'error', hidden: !canRun || !live, disabled: busy },
     { key: 'delete', label: 'Delete', Icon: DeleteOutlineIcon, onClick: () => void doDelete(), color: 'error', hidden: !canRun || live, disabled: busy },
-    // The report's Export menu (JSON, CSV, PDF) goes here once its route exists (#744).
   ];
 
   return (
@@ -178,6 +178,10 @@ export function BenchmarkPage() {
             Suite {b.suiteKey} v{b.suiteVersion} · console {b.appVersion}
             {b.commit ? ` (${b.commit.slice(0, 7)})` : ''} · {b.config.trials} trials each · started {formatDateTime(b.startedAt ?? b.createdAt)}
           </Typography>
+        </Stack>
+        {/* The report (E44.6, #744): PDF, CSV of trials, JSON; with the comparison when a baseline is chosen below. */}
+        <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5 }} data-testid="benchmark-export">
+          <BenchmarkExportButton benchmarkId={b.id} live={isLiveBenchmark(b.status)} baselineId={baseline || null} sx={{ minHeight: 44 }} />
         </Stack>
       </PageHeader>
       <Stack spacing={2}>

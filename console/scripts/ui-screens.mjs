@@ -219,6 +219,8 @@ export const ROUTES = [
   ['admin-benchmark-new', '/admin/settings/benchmarks/new'],
   ['admin-benchmark', '/admin/settings/benchmarks/{benchmark}'],
   ['admin-benchmark-live', '/admin/settings/benchmarks/{liveBenchmark}'],
+  // Its Export menu (E44.6, #744), open.
+  ['admin-benchmark-export', '/admin/settings/benchmarks/{benchmark}', { action: pressButton('Export'), viewport: true }],
   ['admin-benchmark-compare', '/admin/settings/benchmarks/{benchmark}/compare/{baselineBenchmark}'],
   ['admin-factory-reset', '/admin/settings/factory-reset'],
   ['admin-run-history', '/admin/settings/run-history'],
