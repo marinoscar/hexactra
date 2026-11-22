@@ -35,6 +35,10 @@
       "types": "./dist/compile/index.d.ts",
       "default": "./dist/compile/index.js"
     },
+    "./execute": {
+      "types": "./dist/execute/index.d.ts",
+      "default": "./dist/execute/index.js"
+    },
     "./ports": {
       "types": "./dist/ports/index.d.ts",
       "default": "./dist/ports/index.js"
