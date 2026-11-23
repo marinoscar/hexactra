@@ -30,6 +30,17 @@ The recording is held (no frame kept) only while the owner has paused the run; i
 
 **Limits.** The recording follows the tab that was active when it started; a page the agent opens in a new tab is not in the video. A run whose browser restarted (a new session) continues in a new recording, and the video skips the time in between (`note: restarted`).
 
+### When there is no video
+
+The recording is made on the browser node, so the node must be as new as the console: the console's deploy updates the console and the fabric, **not** the node's agent and extension.
+
+| The card says | Why | Fix |
+|---|---|---|
+| "can't record video yet … older than this console" (`node_outdated`) | The node's host agent or extension does not know the record actions | On the node: `hexactra agent update`, then restart its browser (Chrome also updates the policy-installed extension by itself within a few hours). Run again. |
+| "did not start recording" (`start_failed`) | The node answered the start with an error and the recorder kept trying | `hexactra agent doctor` on the node; then as above |
+| "This browser can't record video" (`encoder_unavailable`) | The browser has no offscreen documents or no WebCodecs | Update Chrome on the node |
+| "Nothing was recorded" (`empty`) | The run had no browser session, or ended before the first frame | — |
+
 ## Statuses
 
 | Status | Meaning |
