@@ -142,6 +142,8 @@ export class TaskBuilderDraftService {
       useSavedLogins,
       useSavedIdentity: g.useSavedIdentity ?? false,
       useSavedCards: g.useSavedCards ?? false,
+      // The owner switches recording on in the task form; the builder never does (#906).
+      recordVideo: false,
       unattendedPayments: g.unattendedPayments ?? 'ask',
       needsBrowser: spec.needsBrowser ?? 'auto',
       parameters,

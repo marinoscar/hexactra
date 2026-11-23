@@ -26,6 +26,7 @@ export interface ChatView {
   useSavedLogins: boolean;
   useSavedIdentity: boolean;
   useSavedCards: boolean;
+  recordVideo: boolean;
   /** The connections the chat may use (E39.7). */
   connections: ConnectionSelectionView[];
   lastMessageAt: Date;
@@ -86,7 +87,7 @@ export function titleFromMessage(text: string): string {
 }
 
 function view(c: Conversation, connections: ConnectionSelectionView[] = []): ChatView {
-  return { connections, id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, useSavedCards: c.useSavedCards, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
+  return { connections, id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, useSavedCards: c.useSavedCards, recordVideo: c.recordVideo, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
 }
 function messageView(m: ChatMessage): ChatMessageView {
   return { id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt };
@@ -199,6 +200,7 @@ export class ChatService {
         useSavedLogins: input.useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
         ...(input.useSavedIdentity !== undefined ? { useSavedIdentity: input.useSavedIdentity } : {}),
         ...(input.useSavedCards !== undefined ? { useSavedCards: input.useSavedCards } : {}),
+        ...(input.recordVideo !== undefined ? { recordVideo: input.recordVideo } : {}),
       },
     });
     if (selections.length) await this.prisma.$transaction((tx) => replaceConversationConnections(tx, c.id, selections));

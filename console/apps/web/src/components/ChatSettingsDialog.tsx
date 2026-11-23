@@ -1,4 +1,4 @@
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Switch, Typography, useMediaQuery } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, FormHelperText, Stack, Switch, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useEffect, useState } from 'react';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
@@ -24,7 +24,7 @@ export interface ChatSettingsDialogProps {
   onSave: (settings: ChatSettings) => Promise<void>;
 }
 
-const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false, useSavedIdentity: chat.useSavedIdentity ?? false, useSavedCards: chat.useSavedCards ?? false });
+const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false, useSavedIdentity: chat.useSavedIdentity ?? false, useSavedCards: chat.useSavedCards ?? false, recordVideo: chat.recordVideo ?? false });
 
 /**
  * How the chat's runs execute: the machine, the browser profile, the agent
@@ -86,6 +86,16 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             control={<Switch checked={values.confirmRiskyActions} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, confirmRiskyActions: e.target.checked }))} />}
             label="Ask me before a purchase or another step that is hard to undo"
           />
+          {/* The chat's runs record a video (#906): not masked, owner-only. */}
+          <Box>
+            <FormControlLabel
+              control={<Switch checked={values.recordVideo} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, recordVideo: e.target.checked }))} slotProps={{ input: { 'aria-describedby': 'chat-record-help' } }} />}
+              label="Record a video of this chat's runs"
+            />
+            <FormHelperText id="chat-record-help" sx={{ mt: 0 }}>
+              Watch each run afterwards on its page. The video is not masked: anything on the page or typed into it is visible. Only you can watch it.
+            </FormHelperText>
+          </Box>
           {/* Disabled, with the reason, while no provider is connected or a switch is off (E37.4, #593). */}
           <SavedLoginsToggle
             checked={values.useSavedLogins}

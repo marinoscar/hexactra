@@ -26,6 +26,8 @@ export interface ChatTaskDraft {
   useSavedLogins: boolean;
   useSavedIdentity: boolean;
   useSavedCards: boolean;
+  /** The chat's Record video switch (#906), carried over to the task. */
+  recordVideo: boolean;
   /** The goal's `{{Name}}` parameters the draft proposes (#556): checked like a saved task's; empty when nothing varies. */
   parameters: TaskParameter[];
   /** The values a run of the task would return (E39.5, #600), proposed from what the finished run reported (an amount paid, a confirmation number, a date); empty when nothing is worth keeping. */
@@ -240,6 +242,7 @@ export class ChatTaskDraftService {
       useSavedLogins: c.useSavedLogins,
       useSavedIdentity: c.useSavedIdentity,
       useSavedCards: c.useSavedCards,
+      recordVideo: c.recordVideo,
       parameters: draftDefinitions(goal, base.parameters ?? [], memories),
       outputs: draftOutputDefinitions(base.outputs ?? []),
       connections: await this.usedConnections(userId, c.id),

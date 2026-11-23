@@ -26,6 +26,7 @@ export const chatResponseSchema = z.object({
   useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"),
   useSavedIdentity: z.boolean().describe("Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"),
   useSavedCards: z.boolean().describe("Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"),
+  recordVideo: z.boolean().describe("Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"),
   connections: z.array(connectionSelectionViewSchema).describe('The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server).'),
   lastMessageAt: iso,
   createdAt: iso,
@@ -63,6 +64,7 @@ export const chatTaskDraftResponseSchema = z.object({
   useSavedLogins: z.boolean().describe("The chat's saved-logins switch (E37.3), carried over to the task"),
   useSavedIdentity: z.boolean().describe("The chat's saved-details switch (E37.6), carried over to the task"),
   useSavedCards: z.boolean().describe("The chat's saved-cards switch (E37.7), carried over to the task"),
+  recordVideo: z.boolean().describe("The chat's Record video switch (#906), carried over to the task"),
   parameters: z.array(taskParameterResponseSchema).describe("The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."),
   outputs: z.array(taskOutputResponseSchema).describe('The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping.'),
   connections: z
