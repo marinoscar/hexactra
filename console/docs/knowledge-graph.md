@@ -184,7 +184,7 @@ While the deployment's switch and yours are both on, the console's MCP server li
 
 While either switch is off, the tools are not listed. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, or changes a switch.
 
-**Not verified** (#796): the agent-framework recipes for Hermes, OpenClaw and Pi were not run against these tools (their smoke test needs those frameworks' CLIs, which were not installed). No test checks the OAuth consent screen itself with the switch off; only `tools/list` is checked.
+**Verified:** CI runs the Hermes, OpenClaw and Pi recipes against these tools (`agent-clients.db.spec.ts` with `AGENT_CLIENTS_SMOKE=1`). With the switch off, `tools/list` and the consent flow are tested for every caller (`mcp-kgraph-consent.db.spec.ts`, #893). One platform behaviour remains: a client that explicitly asks for a Knowledge Graph scope still sees it on consent, though the grant does nothing ([security-hosted-clients.md](security-hosted-clients.md)).
 
 ## The CLI
 

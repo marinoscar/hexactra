@@ -2,6 +2,8 @@
 // mode needs both switches on, turning a switch off keeps the data, another user's task is a 404, and "Delete everything learned" removes
 // the caller's kg_ rows and nobody else's.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { Prisma } from '@prisma/client';
+import { procedureVersionSchema } from '@marinoscar/hexactra-kgraph';
 import { runStoreConformance } from '@marinoscar/hexactra-kgraph/testing';
 
 import { KgraphEnabledService } from '../src/kgraph/kgraph-enabled.service';
@@ -133,26 +135,72 @@ describe('the Knowledge Graph switches (#777)', () => {
   });
 
   it("deletes every kg_ row of the caller and none of anyone else's", async () => {
+    // E46.37 (#893): one row in EVERY kg_ table for two owners (the list is Prisma's, so a new kg_ table fails here until it is seeded),
+    // then the owner's purge: each of the owner's tables is empty, the other owner's rows are all still there, and the read routes the
+    // Knowledge Graph pages call answer empty (what KgraphPurge.test.tsx renders as the empty states).
     const store = app.get(PrismaProcedureStore);
-    const mine = await newTask(owner, 'Purge mine');
-    const theirs = await newTask(other, 'Purge theirs');
-    await call(owner, 'PUT', `/tasks/${mine}/kgraph`, { mode: 'learn' });
-    await call(other, 'PUT', `/tasks/${theirs}/kgraph`, { mode: 'learn' });
     const at = new Date().toISOString();
-    await store.putProcedure({ id: `kgp-mine-${stamp}`, owner: owner.userId, task: mine, name: 'x', activeVersion: null, createdAt: at, updatedAt: at });
-    await store.putProcedure({ id: `kgp-theirs-${stamp}`, owner: other.userId, task: theirs, name: 'y', activeVersion: null, createdAt: at, updatedAt: at });
-    await prisma.kgNode.create({ data: { id: `kgn-mine-${stamp}`, userId: owner.userId, type: 'Site', key: 'example.com', label: 'example.com' } });
-    await prisma.kgNode.create({ data: { id: `kgn-theirs-${stamp}`, userId: other.userId, type: 'Site', key: 'example.com', label: 'example.com' } });
+    const seed = async (s: Session, tag: string) => {
+      const task = await newTask(s, `Purge ${tag}`);
+      const pid = `kgp-${tag}-${stamp}`;
+      const vid = `kgv-${tag}-${stamp}`;
+      await store.putProcedure({ id: pid, owner: s.userId, task, name: tag, activeVersion: null, createdAt: at, updatedAt: at });
+      await store.putVersion(
+        s.userId,
+        procedureVersionSchema.parse({
+          id: vid, procedure: pid, number: 1, state: 'active', changeClass: 'initial', sourceRun: null, parent: null, createdAt: at, entry: 's1',
+          sites: [{ id: 'site1', domain: 'shop.example.test' }], parameters: [], outputs: [],
+          steps: [{ id: 's1', kind: 'call', label: 'Open the shop', tool: 'navigate', sites: ['site1'], args: { url: { kind: 'literal', value: 'https://shop.example.test/' } } }],
+          edges: [],
+        }),
+      );
+      await store.putProcedure({ id: pid, owner: s.userId, task, name: tag, activeVersion: vid, createdAt: at, updatedAt: at });
+      await store.recordEvidence(s.userId, vid, 's1', 'success', at);
+      const runId = (await prisma.forUser({ userId: s.userId }).run.create({ data: { userId: s.userId, taskId: task, goal: 'Open the shop', status: 'succeeded', finishedAt: new Date() } as never })).id;
+      await prisma.kgTaskSettings.create({ data: { taskId: task, userId: s.userId, mode: 'reuse' } });
+      await prisma.kgRun.create({ data: { runId, userId: s.userId, mode: 'reuse', procedureVersionId: vid, outcome: 'replayed', stepsReplayed: 1, factIds: [`kgsf-${tag}-${stamp}`] } });
+      await prisma.kgTrace.create({ data: { userId: s.userId, runId, seq: 1, tool: 'navigate', family: 'browser', ok: true, outcome: 'ran' } });
+      await prisma.kgLedger.create({ data: { runId, userId: s.userId, taskId: task, mode: 'reuse', procedureVersionId: vid, runStatus: 'succeeded', stepsReplayed: 1, outcome: 'replayed', finishedAt: new Date() } });
+      await prisma.kgNode.create({ data: { id: `kgn-${tag}-${stamp}`, userId: s.userId, type: 'Site', key: 'shop.example.test', label: 'shop.example.test' } });
+      await prisma.kgEdge.create({ data: { id: `kge-${tag}-${stamp}`, userId: s.userId, type: 'uses', fromId: `kgn-${tag}-${stamp}`, toId: `kgn-${tag}-${stamp}` } });
+      await prisma.kgReview.create({ data: { userId: s.userId, versionId: vid, summary: [] } });
+      await prisma.kgSiteFact.create({ data: { id: `kgsf-${tag}-${stamp}`, userId: s.userId, site: 'shop.example.test', kind: 'navigation', text: 'Invoices are under Billing', identity: `nav-${tag}-${stamp}`, source: 'owner', status: 'active', createdAt: new Date() } });
+      await prisma.kgSiteFact.create({ data: { id: `kgsf-p-${tag}-${stamp}`, userId: s.userId, site: 'shop.example.test', kind: 'timing', text: 'Reports take a minute', identity: `timing-${tag}-${stamp}`, source: 'derived', status: 'proposed', createdAt: new Date() } });
+      return { task, runId };
+    };
+    const delegates = Object.values(Prisma.ModelName).filter((m) => m.startsWith('Kg'));
+    const countsOf = async (userId: string): Promise<Record<string, number>> =>
+      Object.fromEntries(await Promise.all(delegates.map(async (m) => [m, await (prisma as unknown as Record<string, { count(a: object): Promise<number> }>)[m.charAt(0).toLowerCase() + m.slice(1)]!.count({ where: { userId } })])));
+    const mine = await seed(owner, 'mine');
+    await seed(other, 'theirs');
+    const otherBefore = await countsOf(other.userId);
+    const ownerBefore = await countsOf(owner.userId);
+    // Every kg_ table holds a row of each owner before the purge.
+    expect(delegates.length).toBeGreaterThanOrEqual(11);
+    for (const userId of [owner.userId, other.userId]) for (const [m, n] of Object.entries(await countsOf(userId))) expect([m, n > 0]).toEqual([m, true]);
 
     const res = await call<{ deleted: Record<string, number> }>(owner, 'DELETE', '/kgraph');
     expect(res.statusCode).toBe(200);
-    expect(res.data.deleted.procedures).toBeGreaterThanOrEqual(1);
-    const left = async (userId: string) =>
-      (await Promise.all([prisma.kgProcedure.count({ where: { userId } }), prisma.kgNode.count({ where: { userId } }), prisma.kgTaskSettings.count({ where: { userId } }), prisma.kgProcedureVersion.count({ where: { userId } }), prisma.kgEvidence.count({ where: { userId } })])).reduce((a, b) => a + b, 0);
-    expect(await left(owner.userId)).toBe(0);
-    expect(await left(other.userId)).toBeGreaterThanOrEqual(3);
+    // The response counts exactly the owner's rows of each table (earlier tests of this file left more of the owner's).
+    const KEY: Record<string, string> = { KgProcedure: 'procedures', KgProcedureVersion: 'versions', KgEvidence: 'evidence', KgTrace: 'traces', KgNode: 'nodes', KgEdge: 'edges', KgLedger: 'ledger', KgSiteFact: 'siteFacts', KgRun: 'runs', KgReview: 'reviews', KgTaskSettings: 'tasks' };
+    expect(Object.keys(KEY).sort()).toEqual([...delegates].sort());
+    expect(res.data.deleted).toEqual(Object.fromEntries(Object.entries(KEY).map(([m, k]) => [k, ownerBefore[m]])));
+    expect(Object.values(await countsOf(owner.userId)).every((n) => n === 0)).toBe(true);
+    expect(await countsOf(owner.userId)).toEqual(Object.fromEntries(delegates.map((m) => [m, 0])));
+    expect(await countsOf(other.userId)).toEqual(otherBefore);
     expect(await prisma.auditEvent.count({ where: { actorUserId: owner.userId, action: 'kgraph.purged' } })).toBe(1);
-    // A viewer-less caller without kgraph:write cannot purge: an unauthenticated one is refused.
+    // The owner's tasks and runs stay; only what was learned goes.
+    expect(await prisma.run.count({ where: { id: mine.runId } })).toBe(1);
+    expect(await prisma.task.count({ where: { id: mine.task } })).toBe(1);
+
+    // What the pages read after it: every list empty, the run "took no part".
+    expect((await call<{ procedures: unknown[] }>(owner, 'GET', '/kgraph/procedures')).data.procedures).toEqual([]);
+    expect((await call<unknown[]>(owner, 'GET', '/kgraph/reviews?status=pending')).data).toEqual([]);
+    expect((await call<unknown[]>(owner, 'GET', '/kgraph/reviews/site-facts')).data).toEqual([]);
+    expect((await call<unknown[]>(owner, 'GET', '/kgraph/sites')).data).toEqual([]);
+    expect((await call<{ nodes: unknown[] }>(owner, 'GET', '/kgraph/graph')).data.nodes).toEqual([]);
+    expect((await call(owner, 'GET', `/kgraph/runs/${mine.runId}`)).data).toMatchObject({ mode: 'off', aiOnly: false, procedureId: null, steps: [], ledger: null, kgFactIds: [], siteFacts: [] });
+    // An unauthenticated caller cannot purge.
     expect((await app.inject({ method: 'DELETE', url: '/api/kgraph' })).statusCode).toBe(401);
   });
 });
