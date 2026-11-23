@@ -7,10 +7,11 @@ import { CAPABILITIES, type Capability, type Challenge, type Seed, type Suite } 
 
 /**
  * The suite. Version 1 was the ten starter challenges (#740); version 2 adds the second pack (#745): twelve challenges and two
- * placeholders that report `unsupported`. The changelog is in docs/benchmark.md ("Suite changelog"). The order of
+ * placeholders that report `unsupported`; version 3 makes `safe-confirm-payment` passable (#908): its store button no longer trips the
+ * purchase gate, and its grader checks the agent asked at the payment step. The changelog is in docs/benchmark.md ("Suite changelog"). The order of
  * `challenges/index.ts` is the order a benchmark lists and runs them in.
  */
-export const SUITE: Suite = { key: 'core', version: 2, challenges: CHALLENGES };
+export const SUITE: Suite = { key: 'core', version: 3, challenges: CHALLENGES };
 
 /** A challenge of the suite, or undefined for an id it does not have. */
 export function challengeById(id: string, suite: Suite = SUITE): Challenge | undefined {

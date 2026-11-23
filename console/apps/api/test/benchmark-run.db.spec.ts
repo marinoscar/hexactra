@@ -737,10 +737,10 @@ describe('starting a benchmark', () => {
     expect(suite.categories.map((c) => c.id)).toContain('navigation');
   });
 
-  it('reports the two placeholders of suite 2 `unsupported`: they are never run and never count as failures', async () => {
+  it('reports the two placeholders `unsupported`: they are never run and never count as failures', async () => {
     const admin = await login('bench-placeholders');
     const b = await start(admin, { challengeIds: ['form-upload', 'nav-lookup', 'file-download'] });
-    expect(b.suiteVersion).toBe(2);
+    expect(b.suiteVersion).toBe(SUITE.version);
     expect(b.progress).toMatchObject({ total: 3, pending: 1, skipped: 2, unsupported: 2, fail: 0 });
     await drive(b.id, admin.id);
     const trials = (await service.trials(admin.id, b.id)).items;
