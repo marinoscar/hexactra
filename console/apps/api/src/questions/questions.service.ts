@@ -330,6 +330,7 @@ export class QuestionsService {
       gate: spec.gate ? (spec.gate as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       rememberable: spec.rememberable ? (spec.rememberable as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       action: spec.action ? (spec.action as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+      source: spec.source === 'stall' ? 'stall' : null,
     };
   }
 

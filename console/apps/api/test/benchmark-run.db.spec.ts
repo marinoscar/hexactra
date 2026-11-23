@@ -335,6 +335,24 @@ describe('a benchmark, end to end', () => {
 });
 
 describe('the scripted owner', () => {
+  it('a stall handoff nobody can answer ends the trial as stalled, not asked_person, and keeps the handoff as its last check (#909)', async () => {
+    const admin = await login('bench-stall');
+    // Thorough asks a person when stuck and has nowhere to escalate. Reading the same unchanged page three times is a real repeat.
+    play = async (call, scene) => {
+      await call('navigate', { url: `${SITE_BASE}/t/${scene.token}/`, reason: 'open the site' });
+      for (let i = 0; i < 3; i++) await call('read_text', { reason: 'read the page' });
+    };
+    const b = await start(admin, { policies: [{ ref: 'builtin:thorough' }] });
+    await drive(b.id, admin.id);
+    const [t] = await trialsOf(b.id);
+    expect(t).toMatchObject({ status: 'graded', verdict: 'fail', failureReason: 'stalled', stopReason: 'cancelled' });
+    const last = (t!.checks as { name: string; pass: boolean; detail?: string }[]).at(-1)!;
+    expect(last).toMatchObject({ name: 'stall-handoff', pass: false });
+    expect(last.detail).toContain('The agent is stuck: repeated');
+    const questions = await prisma.question.findMany({ where: { runId: t!.runId! }, select: { input: true, source: true } });
+    expect(questions).toEqual([{ input: 'takeover', source: 'stall' }]);
+  }, 120_000);
+
   it('answers a scripted question as the owner and the run continues; a question nobody scripted ends the trial as asked_person; nothing is saved', async () => {
     const admin = await login('bench-owner');
     const restore = withOwner('nav-lookup', [{ kind: 'confirmation', input: 'confirm', match: 'open the customer list', answer: { type: 'approve' } }]);

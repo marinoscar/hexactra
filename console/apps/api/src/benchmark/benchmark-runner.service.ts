@@ -144,7 +144,7 @@ export class BenchmarkRunner {
     if (stopFrom !== null) return this.stop(owner, config, trial, endedAt ? 'cancelled' : 'timeout', Date.now() >= stopFrom + STOP_GRACE_MS);
     if (run.status === 'waiting_human') {
       const turn = await this.owner.answer(owner, trial, run);
-      if (turn === 'unscripted') return this.stop(owner, config, trial, 'asked_person', false);
+      if (turn === 'unscripted' || turn === 'stalled') return this.stop(owner, config, trial, turn === 'stalled' ? 'stalled' : 'asked_person', false);
     } else if ((await this.prisma.question.count({ where: { runId: run.id, status: 'pending', blocking: true, createdAt: { gt: new Date(Date.now() - 60_000) } } })) > 0) {
       // The question is recorded a moment before the run starts waiting on it: look again once it does (for a minute, no longer).
       await enqueueBenchmarkAdvance(this.jobs, trial.benchmarkId, config.orgId, 'benchmark_recheck', QUESTION_RECHECK_MS);
@@ -156,7 +156,7 @@ export class BenchmarkRunner {
    * Stops a trial's run through the ordinary cancel path, with the reason written on the trial first so the grader knows why the run
    * was cancelled. `force`: the run did not end by itself in time (no job holds it), so it is ended here. True: still going.
    */
-  private async stop(owner: { userId: string; orgId: string | null }, config: StoredBenchmarkConfig, trial: RunningTrial, reason: Extract<TrialFailureReason, 'timeout' | 'asked_person' | 'cancelled'>, force: boolean): Promise<boolean> {
+  private async stop(owner: { userId: string; orgId: string | null }, config: StoredBenchmarkConfig, trial: RunningTrial, reason: Extract<TrialFailureReason, 'timeout' | 'asked_person' | 'stalled' | 'cancelled'>, force: boolean): Promise<boolean> {
     await this.prisma.benchmarkTrial.updateMany({ where: { id: trial.id, status: 'running', failureReason: null }, data: { failureReason: reason } });
     const runId = trial.runId!;
     try {

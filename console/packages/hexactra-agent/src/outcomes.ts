@@ -137,7 +137,8 @@ export async function respondToStall(ctx: Ctx, profile: Profile, signal: StallSi
     memory.stallHandoffs = (memory.stallHandoffs ?? 0) + 1;
     const parsed = ctx.ports.questions.parse({ kind: 'other', input: 'takeover', prompt: stallHandoffPrompt(signal.reason, lastActions(ctx.stall)) });
     if (!parsed.ok) throw new Error(parsed.message);
-    if (await ctx.askPerson(parsed.spec, Date.now())) {
+    // Tagged here, after parsing (#909): the question is the harness's own, not the model's.
+    if (await ctx.askPerson({ ...parsed.spec, source: 'stall' }, Date.now())) {
       await ctx.checkpoint();
       return pauseForPerson(ctx);
     }
