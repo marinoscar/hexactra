@@ -45,6 +45,18 @@ For example, to run a saved task once under a bigger budget (`task_run`):
 { "name": "task_run", "arguments": { "task_id": "<task id>", "policy_id": "builtin:thorough" } }
 ```
 
+## Running a learned procedure
+
+When the Knowledge Graph is on for the deployment and for the agent's console user ([decision record](decisions/knowledge-graph.md)), the server also lists `procedures_list`, `procedure_get` and `procedure_run` (E46.22). While either switch is off they are not listed at all, and a direct call answers that they are turned off. `procedure_run` takes an active procedure's id and its parameters by name, starts an ordinary run of its task (the same policy, limits, gates and questions in your Inbox) and returns the run id at once; follow it with `run_wait`. No tool creates, changes, approves, restores or forgets a procedure. Add them to the tool filters above:
+
+- Hermes: `tools: { include: [run_goal, run_status, run_wait, inbox_list, inbox_answer, run_cancel, procedures_list, procedure_get, procedure_run] }`.
+- OpenClaw: `toolFilter: { include: [..., "procedures_list", "procedure_get", "procedure_run"] }`.
+- Pi: add `"procedures_*": "direct", "procedure_*": "direct"` to `"toolExposure"`.
+
+```json
+{ "name": "procedure_run", "arguments": { "procedure_id": "<id from procedures_list>", "inputs": { "Customer": "ACME" } } }
+```
+
 ## Asking you a question
 
 Any of the three frameworks can stop and ask you something with `ask_human` (add it, and `question_status`, to the tool filters above). You answer in the console, the Android app, the CLI, a notification button or your own webhook receiver ([questions.md](questions.md)). For example, the model calls:

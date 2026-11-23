@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config@3/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [["@marinoscar/hexactra-agent", "@marinoscar/hexactra-browser-agent"]],
+  "fixed": [["@marinoscar/hexactra-agent", "@marinoscar/hexactra-browser-agent", "@marinoscar/hexactra-kgraph"]],
   "linked": [],
   "access": "public",
   "baseBranch": "main",

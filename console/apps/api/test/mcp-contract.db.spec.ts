@@ -8,6 +8,10 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import Ajv2020 from 'ajv/dist/2020';
 import { z } from 'zod';
 
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { procedureVersionSchema } from '@marinoscar/hexactra-kgraph';
+
+import { PrismaProcedureStore } from '../src/kgraph/prisma-procedure-store';
 import { createApp } from '../src/main';
 import { FabricClient } from '../src/fabric/fabric.client';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
@@ -165,6 +169,35 @@ describe('structured results validate against the output schemas (real REST answ
       await rpc(t, 'tools/call', { name: 'browser_close', arguments: { session_id: session } });
     } finally {
       spy.mockRestore();
+    }
+  });
+
+  it('the learned-procedure tools (E46.22), with the Knowledge Graph on', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `mcp-contract-kg-${stamp}@example.test`, role: 'contributor' } });
+    const t = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const prisma = app.get(PrismaService);
+    const userId = (await prisma.user.findUniqueOrThrow({ where: { email: `mcp-contract-kg-${stamp}@example.test` }, select: { id: true } })).id;
+    const settings = app.get(SystemSettingsService);
+    // The deployment switch, set through the settings service (the actor is recorded only).
+    await settings.patchSettings({ kgraph: { enabled: true } } as never, userId);
+    try {
+      await app.inject({ method: 'PATCH', url: '/api/user-settings', headers: { authorization: `Bearer ${t}` }, payload: { kgraph: { enabled: true } } });
+      const taskId = (await app.inject({ method: 'POST', url: '/api/tasks', headers: { authorization: `Bearer ${t}` }, payload: { name: 'Report', goal: 'Export the report' } })).json().data.id as string;
+      await app.inject({ method: 'PUT', url: `/api/tasks/${taskId}/kgraph`, headers: { authorization: `Bearer ${t}` }, payload: { mode: 'reuse' } });
+      const store = app.get(PrismaProcedureStore);
+      const at = new Date().toISOString();
+      const pid = `kgp-contract-${stamp}`;
+      await store.putProcedure({ id: pid, owner: userId, task: taskId, name: 'Report', activeVersion: null, createdAt: at, updatedAt: at });
+      await store.putVersion(userId, procedureVersionSchema.parse({ id: `kgv-contract-${stamp}`, procedure: pid, number: 1, state: 'active', changeClass: 'initial', sourceRun: null, parent: null, createdAt: at, entry: 's1', sites: [{ id: 'site1', domain: 'shop.example.test' }], outputs: [{ id: 'o1', name: 'file', step: 's1', sensitive: false }], steps: [{ id: 's1', kind: 'call', label: 'Open', tool: 'navigate', sites: ['site1'], args: { url: { kind: 'literal', value: 'https://shop.example.test/' } } }], edges: [] }));
+      await store.putProcedure({ id: pid, owner: userId, task: taskId, name: 'Report', activeVersion: `kgv-contract-${stamp}`, createdAt: at, updatedAt: at });
+      expect(await call(t, 'procedures_list', {})).toMatchObject({ procedures: [{ id: pid, state: 'active', outputs: [{ name: 'file' }] }], has_more: false });
+      expect(await call(t, 'procedure_get', { procedure_id: pid })).toMatchObject({ id: pid, steps: [{ id: 's1' }], untrusted: true });
+      expect(await call(t, 'procedure_run', { procedure_id: pid })).toMatchObject({ procedure_id: pid, task_id: taskId, status: 'queued' });
+      // The site-fact tools (E46.35).
+      expect(await call(t, 'site_fact_propose', { site: 'example.test', kind: 'navigation', text: 'Reports are under Account, then Exports' })).toMatchObject({ outcome: 'proposed', status: 'proposed' });
+      expect(await call(t, 'site_facts_list', { status: 'proposed' })).toMatchObject({ facts: [{ site: 'example.test', source: 'agent_proposed', status: 'proposed' }], has_more: false, untrusted: true });
+    } finally {
+      await settings.patchSettings({ kgraph: { enabled: false } } as never, userId);
     }
   });
 

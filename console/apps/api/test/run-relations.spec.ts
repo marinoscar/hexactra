@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { effectiveOnDelete, readSchemaDatamodel } from '@marinoscar/platform-api/testing';
 
 /** Run-id columns with no foreign key, each cleared by `RunDeleteService`. Adding one means handling it there. */
-const PLAIN_RUN_ID_COLUMNS = ['ApprovalRule.lastUsedRunId', 'ApprovalRuleUse.runId', 'MailTriggerEvent.runId', 'McpActivity.runId', 'Memory.sourceRunId', 'SecretsActivity.runId', 'TaskSchedule.lastRunId'];
+const PLAIN_RUN_ID_COLUMNS = ['ApprovalRule.lastUsedRunId', 'ApprovalRuleUse.runId', 'KgProcedureVersion.sourceRunId', 'MailTriggerEvent.runId', 'McpActivity.runId', 'Memory.sourceRunId', 'SecretsActivity.runId', 'TaskSchedule.lastRunId'];
 
 /**
  * Foreign keys to Run that are ON DELETE SET NULL on purpose: the row outlives
@@ -24,7 +24,7 @@ describe('relations to Run', () => {
   it('every foreign key to Run is ON DELETE CASCADE, or SET NULL where the row is meant to outlive the run', () => {
     const toRun = foreignKeys.filter((fk) => fk.field.type === 'Run');
     // The ones known today; a new one appears here and must cascade too.
-    expect(toRun.map((fk) => `${fk.model}.${fk.field.name}`).sort()).toEqual(['BenchmarkTrial.run', 'ChatMessage.run', 'Question.run', 'RunDelivery.run', 'RunGuidance.run', 'RunRecording.run', 'RunStep.run']);
+    expect(toRun.map((fk) => `${fk.model}.${fk.field.name}`).sort()).toEqual(['BenchmarkTrial.run', 'ChatMessage.run', 'KgLedger.run', 'KgRun.run', 'KgTrace.run', 'Question.run', 'RunDelivery.run', 'RunGuidance.run', 'RunRecording.run', 'RunStep.run']);
     for (const fk of toRun) {
       const field = `${fk.model}.${fk.field.name}`;
       expect({ field, onDelete: effectiveOnDelete(fk.field) }).toEqual({ field, onDelete: SET_NULL_RUN_KEYS.includes(field) ? 'SetNull' : 'Cascade' });

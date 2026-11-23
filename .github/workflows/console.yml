@@ -3,10 +3,10 @@ name: Console CI
 # The Hexactra Console (EnterpriseAppBase starter app) lives in console/.
 on:
   push:
-    branches: [main]
+    branches: [main, 'epic/**']
     paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', 'scripts/package-agent-bundle.mjs', 'scripts/pack-crx3.mjs', 'scripts/crx3.mjs', '.github/workflows/console.yml']
   pull_request:
-    branches: [main]
+    branches: [main, 'epic/**']
     paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', 'scripts/package-agent-bundle.mjs', 'scripts/pack-crx3.mjs', 'scripts/crx3.mjs', '.github/workflows/console.yml']
   workflow_dispatch:
 
@@ -102,6 +102,10 @@ jobs:
           path: console/apps/api/test-results/scenarios.xml
           if-no-files-found: warn
       - run: npm run build
+      # The web bundle against apps/web/bundle-baseline.json (#894): per-chunk differences, raw and gzip. It fails when the
+      # Knowledge Graph Map's libraries reach a chunk outside the Map, or a chunk the Map shares with other pages is new or
+      # changed (a few seconds; it builds the app itself, and fails when it finds no baseline or no chunk).
+      - run: npm run bundle:compare --workspace=web
 
       # The db tier: the whole app against the migrated, seeded database.
       - run: npm run prisma:migrate --workspace=api

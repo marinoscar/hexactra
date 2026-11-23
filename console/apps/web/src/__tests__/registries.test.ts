@@ -75,7 +75,10 @@ describe('shell navigation', () => {
   });
 
   it('keeps Fleet, Settings and Administration in the full table the user menu and the rail draw', () => {
-    expect(NAVIGATION.destinations.slice(5).map((d) => d.key)).toEqual(['fleet', 'settings', 'console']);
+    // The Knowledge Graph (E46.20) shows only while the `kgraph` feature is on (both switches), behind what GET /api/kgraph/procedures enforces.
+    expect(NAVIGATION.destinations.slice(5).map((d) => d.key)).toEqual(['kgraph', 'fleet', 'settings', 'console']);
+    const kgraph = NAVIGATION.destinations.find((d) => d.key === 'kgraph');
+    expect([kgraph?.path, kgraph?.permission, kgraph?.feature]).toEqual(['/kgraph', 'kgraph:read', 'kgraph']);
   });
 
   it('mounts the phone bar and the Inbox count in the shell', () => {
@@ -126,6 +129,8 @@ describe('browser agent cards', () => {
       ['/settings/usage', 'usage:read', undefined],
       // E43.5 (#735), appended: the user's own `agentPricing` in GET/PATCH /api/user-settings.
       ['/settings/model-prices', 'user_settings:read', undefined],
+      // E46.20 (#794), appended: what GET /api/kgraph/status enforces.
+      ['/settings/kgraph', 'kgraph:read', undefined],
     ]);
   });
 
@@ -149,6 +154,8 @@ describe('browser agent cards', () => {
       ['AI usage & cost', '/admin/settings/usage', 'ai_config:read', undefined],
       // E45.6 (#761), appended: the `recordings` namespace of the system settings.
       ['Run recordings', '/admin/settings/run-recordings', 'system_settings:read', undefined],
+      // E46.20 (#794), appended: what GET and PUT /api/admin/kgraph/settings enforce.
+      ['Knowledge Graph', '/admin/settings/kgraph', 'kgraph:admin', undefined],
       // E44.5 (#743), appended: what GET /api/benchmarks enforces.
       ['Benchmarks', '/admin/settings/benchmarks', 'benchmarks:read', undefined],
     ]);

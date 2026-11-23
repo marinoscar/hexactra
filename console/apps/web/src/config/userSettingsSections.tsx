@@ -1,3 +1,4 @@
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
@@ -142,6 +143,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: PaidOutlinedIcon,
         path: '/settings/model-prices',
         permission: 'user_settings:read',
+      },
+      // The Knowledge Graph (E46.20). `kgraph:read` is what GET /api/kgraph/status enforces; the switch and
+      // Delete everything learned (DELETE /api/kgraph) need `kgraph:write`, checked in the page.
+      {
+        title: 'Knowledge Graph',
+        description: 'Let your saved tasks learn their steps and repeat them without the model, see what was learned, or delete everything learned.',
+        Icon: AccountTreeOutlinedIcon,
+        path: '/settings/kgraph',
+        permission: 'kgraph:read',
       },
     ],
   },

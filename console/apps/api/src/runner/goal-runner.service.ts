@@ -28,6 +28,11 @@ import { RunStopSignal } from './stop-signal';
 import { AGENT, ATTR } from './trace-attributes';
 import { beforeLoop } from './host/before-loop';
 import { buildRun } from './host/build-context';
+import { KgraphAfterRun } from '../kgraph/kgraph-compile.job';
+import { KgraphEnabledService } from '../kgraph/kgraph-enabled.service';
+import { PrismaProcedureStore } from '../kgraph/prisma-procedure-store';
+import { KgraphSiteFactsService } from '../kgraph/site-facts.service';
+import { maybeReplay } from './host/kgraph/replay';
 import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
 import { RunRecorder, fabricRecorderCalls } from './host/run-recorder';
@@ -78,6 +83,11 @@ export class GoalRunnerService {
     @Optional() public traces?: RunTraceService,
     /** The owner's MCP servers (E39.9): absent without the connections module, and then no MCP tool is offered. */
     @Optional() public mcp?: McpRunService,
+    // The Knowledge Graph's gate (E46.5): absent, or off for a run, and no observer is bound.
+    @Optional() public kgraph?: KgraphEnabledService,
+    @Optional() public kgraphAfterRun?: KgraphAfterRun,
+    @Optional() public kgraphStore?: PrismaProcedureStore,
+    @Optional() public kgraphSiteFacts?: KgraphSiteFactsService,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -104,6 +114,10 @@ export class GoalRunnerService {
       connections: this.connections,
       traces: this.traces,
       mcp: this.mcp,
+      kgraph: this.kgraph,
+      kgraphAfterRun: this.kgraphAfterRun,
+      kgraphStore: this.kgraphStore,
+      kgraphSiteFacts: this.kgraphSiteFacts,
       clock: () => this.clock(),
       log: this.log,
     };
@@ -167,9 +181,13 @@ export class GoalRunnerService {
     const deps = this.deps();
     const started = await startRun(deps, runId, userId, orgId, lease, tr, stop);
     if (typeof started === 'string') return started;
-    const { loop, ctx, profile } = await buildRun(deps, started);
+    const built = await buildRun(deps, started);
+    const { loop, ctx, profile } = built;
     const early = await beforeLoop(ctx);
     if (early) return early;
+    // The Knowledge Graph (E46.9): only a reuse-mode task run with a usable procedure replays it; anything else returns null at once.
+    const replayed = await maybeReplay(deps, built, started);
+    if (replayed) return replayed;
     return loop.run(profile as never);
   }
 }

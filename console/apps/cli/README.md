@@ -228,6 +228,22 @@ hexactra policies default --reset                   # back to builtin:balanced
 
 A policy is named by its id, an id prefix, its name or (for a built-in) its key, with or without `builtin:`. Pass one with `--policy` to `runs start`, `tasks run` (this run only), `tasks create`, `tasks update` (`--policy default` follows your default) and `schedules create`. Without it a run uses the schedule's, the task's, then your default policy. `policies export` writes to stdout without `-o`, so it pipes into `policies import -` on another console.
 
+### Knowledge Graph: learned procedures
+
+The **Knowledge Graph** learns a saved task's procedure from your own runs and replays it without the model; the AI steps back in only when a step no longer works. It is off by default: your administrator allows it for the deployment, you turn it on for yourself, then a task chooses `learn` or `reuse` (in the web app). See the console's docs/decisions/knowledge-graph.md.
+
+```bash
+hexactra kgraph status                      # your administrator's switch, yours, and whether both are on (--json)
+hexactra kgraph on                          # turn it on for yourself (off turns it off; what was learned is kept, unused)
+hexactra kgraph list                        # procedures with version, state, health, steps and clean-replay rate (--task, --state, --search, --json)
+hexactra kgraph show "Pay the bill"         # one procedure as its ordered steps: kind, tool, target, uses AI, commits, arguments by source (--json)
+hexactra kgraph versions <procedure>        # its versions, newest first (--json)
+hexactra kgraph restore <procedure> 3       # bring back retired or suspended version 3 (a number or a version id)
+hexactra kgraph forget <procedure>          # retire every version; the task learns again from its next successful run
+```
+
+A procedure is named by its id, an id prefix, or its procedure or task name. Nothing here shows a typed value: an argument reads as where it comes from (`literal`, masked like the run trace; `parameter` with its name; `secret` with the saved login's label; an earlier step), and a sensitive parameter is shown by name only. While the feature is off for you, `list`, `show` and `versions` still show what was learned and say so; `restore` and `forget` answer `409 KGRAPH_OFF`. A change the agent proposes to a send, a payment, a recipient, a site, an account or a saved login is approved only in the signed-in web app, never here. "Delete everything learned" is in the web app (or `DELETE /api/kgraph`).
+
 ### The inbox: answer what agents wait for
 
 When a run needs a person (a CAPTCHA, a one-time code, a sign-in, a confirmation), it waits in the inbox. Your answer resumes it.

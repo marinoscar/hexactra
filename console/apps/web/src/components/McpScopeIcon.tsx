@@ -6,14 +6,18 @@
 // icon, so a warning icon here would show twice (#460).
 import type { ReactNode } from 'react';
 import type { SvgIconComponent } from '@mui/icons-material';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined';
 import EditCalendarOutlinedIcon from '@mui/icons-material/EditCalendarOutlined';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
+import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined';
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined';
+import RepeatOutlinedIcon from '@mui/icons-material/RepeatOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 
@@ -25,6 +29,10 @@ export const MCP_SCOPE_ICONS: Readonly<Record<string, { Icon: SvgIconComponent }
   'tasks:write': { Icon: EditCalendarOutlinedIcon },
   'inbox:read': { Icon: InboxOutlinedIcon },
   'inbox:write': { Icon: QuestionAnswerOutlinedIcon },
+  'procedures:read': { Icon: AccountTreeOutlinedIcon },
+  'procedures:run': { Icon: RepeatOutlinedIcon },
+  'site_facts:read': { Icon: PlaceOutlinedIcon },
+  'site_facts:write': { Icon: AddLocationAltOutlinedIcon },
   'browser:drive': { Icon: MouseOutlinedIcon },
   'browser:evaluate': { Icon: CodeOutlinedIcon },
   'desktop:control': { Icon: DesktopWindowsOutlinedIcon },

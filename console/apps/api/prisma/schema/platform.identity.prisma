@@ -147,6 +147,19 @@ model User {
   // composed from app:documents.prisma
   documents Document[]
 
+  // composed from app:kgraph.prisma
+  kgSiteFacts        KgSiteFact[]
+  kgLedger           KgLedger[]
+  kgTraces           KgTrace[]
+  kgTaskSettings     KgTaskSettings[]
+  kgRuns             KgRun[]
+  kgNodes            KgNode[]
+  kgEdges            KgEdge[]
+  kgProcedures       KgProcedure[]
+  kgProcedureVersions KgProcedureVersion[]
+  kgEvidence         KgEvidence[]
+  kgReviews          KgReview[]
+
   // composed from app:mail-triggers.prisma
   mailTriggers      MailTrigger[]
   mailTriggerEvents MailTriggerEvent[]

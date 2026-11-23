@@ -1,0 +1,130 @@
+{
+  "id": "pv-daily-summary-1",
+  "procedure": "proc-daily-summary",
+  "number": 1,
+  "state": "candidate",
+  "changeClass": "initial",
+  "sourceRun": "run-daily-summary-learn-1",
+  "parent": null,
+  "createdAt": "2026-11-20T08:05:00.000Z",
+  "entry": "find-mail",
+  "parameters": [
+    { "id": "day", "name": "day", "type": "date", "sensitive": false, "required": true },
+    { "id": "sheet", "name": "sales sheet", "type": "string", "sensitive": false, "required": true },
+    { "id": "recipient", "name": "summary recipient", "type": "string", "sensitive": false, "required": true }
+  ],
+  "sites": [{ "id": "sales-site", "domain": "example.com" }],
+  "accounts": [{ "id": "work-google", "connectionId": "conn-google-1", "provider": "google" }],
+  "steps": [
+    {
+      "id": "find-mail",
+      "kind": "call",
+      "label": "Find today's sales report email",
+      "tool": "mail_search",
+      "args": {
+        "connection": { "kind": "literal", "value": "conn-google-1" },
+        "subject": { "kind": "literal", "value": "Daily sales report" },
+        "after": { "kind": "parameter", "parameter": "day" },
+        "limit": { "kind": "literal", "value": 1 }
+      },
+      "checks": [{ "kind": "result_shape", "step": "find-mail", "ok": true, "fields": ["messages.0.id"] }],
+      "segment": "gather"
+    },
+    {
+      "id": "report-link",
+      "kind": "extract",
+      "label": "The dashboard link in the email",
+      "from": "find-mail",
+      "path": "messages.0.link",
+      "segment": "gather"
+    },
+    {
+      "id": "open-dashboard",
+      "kind": "call",
+      "label": "Open the sales dashboard",
+      "tool": "navigate",
+      "args": { "url": { "kind": "output", "step": "report-link" } },
+      "sites": ["sales-site"],
+      "screen": "dashboard",
+      "checks": [{ "kind": "location", "host": "sales.example.com", "pathPattern": "/dashboard/**", "tolerance": 0 }],
+      "segment": "gather"
+    },
+    {
+      "id": "read-total",
+      "kind": "call",
+      "label": "Read the day's total",
+      "tool": "read_text",
+      "args": { "selector": { "kind": "literal", "value": "#daily-total" } },
+      "sites": ["sales-site"],
+      "screen": "dashboard",
+      "element": "daily-total",
+      "checks": [{ "kind": "element_present", "element": "daily-total", "selector": "#daily-total", "tolerance": 0 }],
+      "segment": "gather"
+    },
+    {
+      "id": "total",
+      "kind": "extract",
+      "label": "The total as a number",
+      "from": "read-total",
+      "pattern": "\\$?([0-9][0-9,]*\\.[0-9]{2})",
+      "segment": "gather"
+    },
+    {
+      "id": "append-row",
+      "kind": "call",
+      "label": "Append the day's row to the sales sheet",
+      "tool": "sheet_append_rows",
+      "commitClass": true,
+      "args": {
+        "connection": { "kind": "literal", "value": "conn-google-1" },
+        "file_id": { "kind": "parameter", "parameter": "sheet" },
+        "sheet": { "kind": "literal", "value": "Daily" },
+        "rows": { "kind": "output", "step": "total" }
+      },
+      "checks": [{ "kind": "result_shape", "step": "append-row", "ok": true, "fields": [] }],
+      "segment": "record"
+    },
+    {
+      "id": "send-summary",
+      "kind": "call",
+      "label": "Send the summary",
+      "tool": "mail_send",
+      "commitClass": true,
+      "args": {
+        "connection": { "kind": "literal", "value": "conn-google-1" },
+        "to": { "kind": "parameter", "parameter": "recipient" },
+        "subject": { "kind": "literal", "value": "Daily sales summary" },
+        "body": { "kind": "output", "step": "total" }
+      },
+      "checks": [{ "kind": "result_shape", "step": "send-summary", "ok": true, "fields": [] }],
+      "segment": "report"
+    }
+  ],
+  "edges": [
+    { "type": "then", "from": "find-mail", "to": "report-link" },
+    { "type": "then", "from": "report-link", "to": "open-dashboard" },
+    { "type": "then", "from": "open-dashboard", "to": "read-total" },
+    { "type": "then", "from": "read-total", "to": "total" },
+    { "type": "then", "from": "total", "to": "append-row" },
+    { "type": "then", "from": "append-row", "to": "send-summary" },
+    { "type": "feeds", "from": "find-mail", "to": "report-link" },
+    { "type": "feeds", "from": "report-link", "to": "open-dashboard", "arg": "url" },
+    { "type": "feeds", "from": "read-total", "to": "total" },
+    { "type": "feeds", "from": "total", "to": "append-row", "arg": "rows" },
+    { "type": "feeds", "from": "total", "to": "send-summary", "arg": "body" },
+    { "type": "uses", "from": "find-mail", "to": "work-google" },
+    { "type": "uses", "from": "append-row", "to": "work-google" },
+    { "type": "uses", "from": "send-summary", "to": "work-google" },
+    { "type": "uses", "from": "find-mail", "to": "mail_search" },
+    { "type": "uses", "from": "open-dashboard", "to": "navigate" },
+    { "type": "uses", "from": "read-total", "to": "read_text" },
+    { "type": "uses", "from": "append-row", "to": "sheet_append_rows" },
+    { "type": "uses", "from": "send-summary", "to": "mail_send" },
+    { "type": "uses", "from": "open-dashboard", "to": "sales-site" },
+    { "type": "on", "from": "open-dashboard", "to": "dashboard" },
+    { "type": "on", "from": "read-total", "to": "daily-total" }
+  ],
+  "outputs": [{ "id": "day-total", "name": "day total", "step": "total", "sensitive": false }],
+  "screens": [{ "id": "dashboard", "site": "sales-site", "label": "Sales dashboard", "pathPattern": "/dashboard/**" }],
+  "elements": [{ "id": "daily-total", "screen": "dashboard", "role": "status", "label": "Today's total", "selectors": ["#daily-total", "[data-testid=daily-total]"] }]
+}

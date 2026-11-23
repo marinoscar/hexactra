@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.136.0",
+  "version": "1.137.0",
   "private": true,
   "engines": {
     "node": ">=24"
@@ -22,6 +22,7 @@
     "scenarios": "ts-node --transpile-only scripts/scenarios.ts",
     "scenarios:schema": "ts-node --transpile-only scripts/scenarios.ts --write-schema",
     "scenarios:live": "ts-node --transpile-only scripts/scenarios-live.ts",
+    "kgraph:loadtest": "node scripts/kgraph-loadtest.mjs",
     "db:compose": "platform db compose",
     "db:compose:check": "platform db compose --check",
     "db:sync": "platform db sync",
@@ -34,6 +35,7 @@
     "@fastify/multipart": "^10.0.0",
     "@marinoscar/hexactra-agent": "0.1.0-next.0",
     "@marinoscar/hexactra-browser-agent": "0.1.0-next.0",
+    "@marinoscar/hexactra-kgraph": "0.1.0-next.0",
     "@marinoscar/platform-api": "^0.1.0-next.39",
     "@marinoscar/platform-contract": "^0.1.0-next.39",
     "@marinoscar/platform-db": "^0.1.0-next.39",

@@ -35,6 +35,8 @@ import { MailTriggersModule } from './mail-triggers/mail-triggers.module';
 import { loadSecretsStoreModule, secretsStoreMountable } from './secrets/builtin/secrets-store.loader';
 import { TasksModule } from './tasks/tasks.module';
 import { UsageModule } from './usage/usage.module';
+import { KgraphModule } from './kgraph/kgraph.module';
+import { KgraphLedgerModule } from './kgraph/ledger.module';
 import { MemoriesModule } from './memories/memories.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
@@ -64,6 +66,9 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     PoliciesModule,
     // Memories (#551): the owner's saved facts.
     MemoriesModule,
+    // The Knowledge Graph (epic E46): learned procedures, off by default at every level.
+    KgraphModule,
+    KgraphLedgerModule,
     // Saved approvals (#554): rules the owner can see, narrow, pause and revoke.
     ApprovalsModule,
     // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.

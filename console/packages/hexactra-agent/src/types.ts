@@ -144,6 +144,8 @@ export interface RunState {
   handoffId: string | null;
   handoffExpiresAt: Date | null;
   handoffAsk: { prompt: string; kind: string; input: string } | null;
+  /** Observer calls that threw (E46.5): counted, never surfaced to the run. Absent: none. */
+  observerErrors?: number;
 }
 
 /** What the stall detector learns from a result beyond its arguments. `secret` steps are not fed to it at all. */

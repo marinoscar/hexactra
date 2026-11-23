@@ -235,6 +235,8 @@ A run survives its worker dying (a crash, a deploy, a lost lease): it carries on
 
 Not covered: an external site's action cannot be made transactional, and a browser profile lost with its node is not recovered.
 
+**A replayed procedure keeps the same rules.** With the Knowledge Graph on for a task in `reuse` mode ([knowledge-graph.md](knowledge-graph.md)), the learned steps run through the same `executeTool` wrapper, so a commit-class step is intent-recorded before it is sent. The replay's memory (`kgraphReplay`) keeps the step whose intent was recorded; after a crash that step is never invoked again, and the agent and the gates take over ([runner.md, Replay](runner.md#replay-a-saved-procedure-before-the-loop-e469)).
+
 ## The run page
 
 The console shows the trace on the run's page (#544; README, "A run's page"): each question with its full masked prompt, its kind and the answer line built from `question.answer` (the outcome, where it was given from `channel`, the time, and how long the agent waited since the question step), the `guidance` steps as "You added: …", the "Confirmed by you" marker from `confirmedActions`, and a lazy thumbnail per step with `hasScreenshot`, fetched with the session from `GET /api/runs/{id}/steps/{seq}/screenshot` and shown through an object URL. A lightbox pages through the run's pictures; a **Pictures** filter keeps only those steps. The captions per `screenshotMoment`:

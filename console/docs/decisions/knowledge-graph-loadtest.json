@@ -1,0 +1,645 @@
+{
+  "issue": "E46.4 (#778)",
+  "startedAt": "2026-11-22T02:24:21.595Z",
+  "finishedAt": "2026-11-22T04:25:33.422Z",
+  "command": "node scripts/kgraph-loadtest.mjs --database hexactra_kgraph_load --owners 200 --heavy 1 --out knowledge-graph-loadtest.json",
+  "postgres": {
+    "version": "PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+    "settings": {
+      "effective_cache_size": "524288 x 8kB",
+      "jit": "on",
+      "max_connections": "100",
+      "random_page_cost": "4",
+      "shared_buffers": "16384 x 8kB",
+      "work_mem": "4096 x kB"
+    }
+  },
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "memTotalKb": 16473744,
+    "node": "v22.23.5"
+  },
+  "dataset": {
+    "owners": 200,
+    "heavyOwners": 1,
+    "heavyFactor": 10,
+    "normalShape": {
+      "tasks": 100,
+      "steps": 30,
+      "versions": 10,
+      "sites": 50,
+      "screens": 30,
+      "elements": 20
+    },
+    "heavyShape": {
+      "tasks": 1000,
+      "steps": 30,
+      "versions": 10,
+      "sites": 500,
+      "screens": 30,
+      "elements": 20
+    },
+    "build": {
+      "loaded": false,
+      "seconds": 0
+    },
+    "counts": {
+      "tables": {
+        "users": {
+          "rows": 200,
+          "totalBytes": 98304
+        },
+        "tasks": {
+          "rows": 20900,
+          "totalBytes": 5087232
+        },
+        "runs": {
+          "rows": 200,
+          "totalBytes": 253952
+        },
+        "run_steps": {
+          "rows": 0,
+          "totalBytes": 73728
+        },
+        "kg_procedures": {
+          "rows": 20900,
+          "totalBytes": 5701632
+        },
+        "kg_procedure_versions": {
+          "rows": 209000,
+          "totalBytes": 503635968
+        },
+        "kg_evidence": {
+          "rows": 6479000,
+          "totalBytes": 1474560000
+        },
+        "kg_nodes": {
+          "rows": 7241850,
+          "totalBytes": 3159490560
+        },
+        "kg_edges": {
+          "rows": 7900200,
+          "totalBytes": 2596200448
+        }
+      },
+      "heavyOwner": {
+        "kg_procedures": 1000,
+        "kg_procedure_versions": 10000,
+        "kg_evidence": 310000,
+        "kg_nodes": 346500,
+        "kg_edges": 378000
+      },
+      "expectedPerNormalOwner": {
+        "kg_procedures": 100,
+        "kg_procedure_versions": 1000,
+        "kg_evidence": 31000,
+        "kg_nodes": 34650,
+        "kg_edges": 37800
+      },
+      "expectedPerHeavyOwner": {
+        "kg_procedures": 1000,
+        "kg_procedure_versions": 10000,
+        "kg_evidence": 310000,
+        "kg_nodes": 346500,
+        "kg_edges": 378000
+      }
+    }
+  },
+  "method": {
+    "iterations": 1000,
+    "heavyIterations": 1000,
+    "heavyColdSamples": 5,
+    "warmKeys": 20,
+    "cold": [
+      "shared_buffers (128 MB) overwritten with a 256 MB scratch table through pg_prewarm",
+      "OS page cache dropped (sync; echo 3 > /proc/sys/vm/drop_caches)"
+    ],
+    "timing": "client wall time of the Prisma calls, ms",
+    "percentiles": "nearest rank"
+  },
+  "q2Fidelity": {
+    "same": true,
+    "store": [
+      "SELECT \"public\".\"kg_procedure_versions\".\"id\" FROM \"public\".\"kg_procedure_versions\" WHERE (\"public\".\"kg_procedure_versions\".\"id\" = $1 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $2 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+      "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+      "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+      "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3",
+      "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+      "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+      "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3"
+    ],
+    "transaction": [
+      "SELECT \"public\".\"kg_procedure_versions\".\"id\" FROM \"public\".\"kg_procedure_versions\" WHERE (\"public\".\"kg_procedure_versions\".\"id\" = $1 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $2 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+      "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+      "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+      "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3",
+      "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+      "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+      "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3"
+    ]
+  },
+  "results": {
+    "1": {
+      "name": "Load one task's active procedure version (with its evidence)",
+      "bar": {
+        "warmP95Ms": 50
+      },
+      "cold": {
+        "n": 1000,
+        "p50": 4.491879000000154,
+        "p95": 6.788442000000032,
+        "p99": 9.842945000000327,
+        "mean": 4.802041780000006,
+        "min": 2.5583010000000286,
+        "max": 82.95348100000047
+      },
+      "warm": {
+        "n": 1000,
+        "p50": 2.5963190000002214,
+        "p95": 4.067517999999836,
+        "p99": 6.16729099999975,
+        "mean": 2.7240888550000038,
+        "min": 1.6373579999999492,
+        "max": 10.371898999999758
+      },
+      "plans": {
+        "cold": [
+          {
+            "sql": "SELECT \"public\".\"kg_procedures\".\"id\", \"public\".\"kg_procedures\".\"user_id\", \"public\".\"kg_procedures\".\"task_id\", \"public\".\"kg_procedures\".\"name\", \"public\".\"kg_procedures\".\"active_version_id\", \"public\".\"kg_procedures\".\"created_at\", \"public\".\"kg_procedures\".\"updated_at\" FROM \"public\".\"kg_procedures\" WHERE (\"public\".\"kg_procedures\".\"task_id\" = $1 AND \"public\".\"kg_procedures\".\"user_id\" = $2 AND \"public\".\"kg_procedures\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+            "plan": "Limit  (cost=0.29..8.31 rows=1 width=101) (actual time=0.223..0.224 rows=1 loops=1)\n  Buffers: shared read=3\n  ->  Index Scan using kg_procedures_user_id_task_id_key on kg_procedures  (cost=0.29..8.31 rows=1 width=101) (actual time=0.222..0.222 rows=1 loops=1)\n        Index Cond: ((user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid) AND (task_id = '022b6588-3d4f-290e-d876-eb259170afc6'::uuid))\n        Buffers: shared read=3\nPlanning:\n  Buffers: shared hit=9 read=6\nPlanning Time: 0.521 ms\nExecution Time: 0.241 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_procedure_versions\".\"id\", \"public\".\"kg_procedure_versions\".\"user_id\", \"public\".\"kg_procedure_versions\".\"procedure_id\", \"public\".\"kg_procedure_versions\".\"seq\", \"public\".\"kg_procedure_versions\".\"state\", \"public\".\"kg_procedure_versions\".\"graph\", \"public\".\"kg_procedure_versions\".\"change_class\", \"public\".\"kg_procedure_versions\".\"source_run_id\", \"public\".\"kg_procedure_versions\".\"parent_version_id\", \"public\".\"kg_procedure_versions\".\"created_at\", \"public\".\"kg_procedure_versions\".\"updated_at\" FROM \"public\".\"kg_procedure_versions\" WHERE (\"public\".\"kg_procedure_versions\".\"id\" = $1 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $2 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+            "plan": "Limit  (cost=0.42..8.44 rows=1 width=559) (actual time=0.318..0.319 rows=1 loops=1)\n  Buffers: shared read=4\n  ->  Index Scan using kg_procedure_versions_pkey on kg_procedure_versions  (cost=0.42..8.44 rows=1 width=559) (actual time=0.317..0.317 rows=1 loops=1)\n        Index Cond: ((id)::text = 'kgload-v-6-60-10'::text)\n        Filter: (user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid)\n        Buffers: shared read=4\nPlanning:\n  Buffers: shared hit=20 read=4\nPlanning Time: 0.356 ms\nExecution Time: 0.341 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"version_id\" IN ($1) OFFSET $2",
+            "plan": "Index Scan using kg_evidence_version_id_step_id_key on kg_evidence  (cost=0.56..126.64 rows=31 width=80) (actual time=0.855..1.475 rows=31 loops=1)\n  Index Cond: ((version_id)::text = 'kgload-v-6-60-10'::text)\n  Buffers: shared read=35\nPlanning:\n  Buffers: shared hit=16 read=2\nPlanning Time: 0.346 ms\nExecution Time: 1.494 ms"
+          }
+        ],
+        "warm": [
+          {
+            "sql": "SELECT \"public\".\"kg_procedures\".\"id\", \"public\".\"kg_procedures\".\"user_id\", \"public\".\"kg_procedures\".\"task_id\", \"public\".\"kg_procedures\".\"name\", \"public\".\"kg_procedures\".\"active_version_id\", \"public\".\"kg_procedures\".\"created_at\", \"public\".\"kg_procedures\".\"updated_at\" FROM \"public\".\"kg_procedures\" WHERE (\"public\".\"kg_procedures\".\"task_id\" = $1 AND \"public\".\"kg_procedures\".\"user_id\" = $2 AND \"public\".\"kg_procedures\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+            "plan": "Limit  (cost=0.29..8.31 rows=1 width=101) (actual time=0.014..0.015 rows=1 loops=1)\n  Buffers: shared hit=3\n  ->  Index Scan using kg_procedures_user_id_task_id_key on kg_procedures  (cost=0.29..8.31 rows=1 width=101) (actual time=0.013..0.013 rows=1 loops=1)\n        Index Cond: ((user_id = '74ceaf04-e086-c9e3-d1c5-5e9e3adf4a7c'::uuid) AND (task_id = 'd0656916-1ab1-c16a-b45f-b5c74c55c8e5'::uuid))\n        Buffers: shared hit=3\nPlanning Time: 0.099 ms\nExecution Time: 0.031 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_procedure_versions\".\"id\", \"public\".\"kg_procedure_versions\".\"user_id\", \"public\".\"kg_procedure_versions\".\"procedure_id\", \"public\".\"kg_procedure_versions\".\"seq\", \"public\".\"kg_procedure_versions\".\"state\", \"public\".\"kg_procedure_versions\".\"graph\", \"public\".\"kg_procedure_versions\".\"change_class\", \"public\".\"kg_procedure_versions\".\"source_run_id\", \"public\".\"kg_procedure_versions\".\"parent_version_id\", \"public\".\"kg_procedure_versions\".\"created_at\", \"public\".\"kg_procedure_versions\".\"updated_at\" FROM \"public\".\"kg_procedure_versions\" WHERE (\"public\".\"kg_procedure_versions\".\"id\" = $1 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $2 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+            "plan": "Limit  (cost=0.42..8.44 rows=1 width=559) (actual time=0.018..0.019 rows=1 loops=1)\n  Buffers: shared hit=4\n  ->  Index Scan using kg_procedure_versions_pkey on kg_procedure_versions  (cost=0.42..8.44 rows=1 width=559) (actual time=0.017..0.018 rows=1 loops=1)\n        Index Cond: ((id)::text = 'kgload-v-136-84-10'::text)\n        Filter: (user_id = '74ceaf04-e086-c9e3-d1c5-5e9e3adf4a7c'::uuid)\n        Buffers: shared hit=4\nPlanning Time: 0.085 ms\nExecution Time: 0.035 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"version_id\" IN ($1) OFFSET $2",
+            "plan": "Index Scan using kg_evidence_version_id_step_id_key on kg_evidence  (cost=0.56..126.64 rows=31 width=80) (actual time=0.018..0.052 rows=31 loops=1)\n  Index Cond: ((version_id)::text = 'kgload-v-136-84-10'::text)\n  Buffers: shared hit=35\nPlanning Time: 0.052 ms\nExecution Time: 0.063 ms"
+          }
+        ]
+      }
+    },
+    "2": {
+      "name": "Write evidence for one step (in a transaction with a run_steps insert)",
+      "bar": {
+        "warmP95Ms": 50
+      },
+      "cold": {
+        "n": 1000,
+        "p50": 7.115632999999434,
+        "p95": 9.678906000001007,
+        "p99": 12.69893299999967,
+        "mean": 7.275462059000014,
+        "min": 3.6767519999993965,
+        "max": 39.626045000000886
+      },
+      "warm": {
+        "n": 1000,
+        "p50": 4.96435300000303,
+        "p95": 7.128092999999353,
+        "p99": 9.108460999999807,
+        "mean": 5.118348204000023,
+        "min": 2.7637099999992643,
+        "max": 28.950910999999905
+      },
+      "plans": {
+        "cold": [
+          {
+            "sql": "INSERT INTO \"public\".\"run_steps\" (\"id\",\"run_id\",\"seq\",\"kind\",\"action\",\"args\",\"ok\",\"summary\",\"reasoning\",\"phase\",\"duration_ms\",\"created_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING \"public\".\"run_steps\".\"id\", \"public\".\"run_steps\".\"run_id\", \"public\".\"run_steps\".\"seq\", \"public\".\"run_steps\".\"kind\", \"public\".\"run_steps\".\"action\", \"public\".\"run_steps\".\"args\", \"public\".\"run_steps\".\"ok\", \"public\".\"run_steps\".\"summary\", \"public\".\"run_steps\".\"reasoning\", \"public\".\"run_steps\".\"screenshot_key\", \"public\".\"run_steps\".\"screenshot_moment\", \"public\".\"run_steps\".\"screenshot_masked\", \"public\".\"run_steps\".\"screenshot_note\", \"public\".\"run_steps\".\"question_id\", \"public\".\"run_steps\".\"phase\", \"public\".\"run_steps\".\"duration_ms\", \"public\".\"run_steps\".\"created_at\"",
+            "plan": "Insert on run_steps  (cost=0.00..0.01 rows=1 width=1975) (actual time=0.652..0.654 rows=1 loops=1)\n  Buffers: shared hit=3 read=4 dirtied=4\n  ->  Result  (cost=0.00..0.01 rows=1 width=1975) (actual time=0.002..0.002 rows=1 loops=1)\nPlanning Time: 0.048 ms\nTrigger for constraint run_steps_run_id_fkey: time=0.798 calls=1\nTrigger for constraint run_steps_question_id_fkey: time=1.205 calls=1\nExecution Time: 2.679 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_procedure_versions\".\"id\" FROM \"public\".\"kg_procedure_versions\" WHERE (\"public\".\"kg_procedure_versions\".\"id\" = $1 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $2 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+            "plan": "Limit  (cost=0.42..8.44 rows=1 width=17) (actual time=0.280..0.281 rows=1 loops=1)\n  Buffers: shared hit=2 read=2\n  ->  Index Scan using kg_procedure_versions_pkey on kg_procedure_versions  (cost=0.42..8.44 rows=1 width=17) (actual time=0.279..0.279 rows=1 loops=1)\n        Index Cond: ((id)::text = 'kgload-v-27-98-10'::text)\n        Filter: (user_id = 'f7860fea-7bee-465c-f7aa-e7c06cf93bd2'::uuid)\n        Buffers: shared hit=2 read=2\nPlanning Time: 0.058 ms\nExecution Time: 0.291 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+            "plan": "Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.45 rows=1 width=16) (actual time=0.018..0.051 rows=1 loops=1)\n  Index Cond: ((user_id = 'f7860fea-7bee-465c-f7aa-e7c06cf93bd2'::uuid) AND ((version_id)::text = 'kgload-v-27-98-10'::text))\n  Filter: ((step_id)::text = ''::text)\n  Rows Removed by Filter: 30\n  Buffers: shared hit=36\nPlanning Time: 0.053 ms\nExecution Time: 0.058 ms"
+          },
+          {
+            "sql": "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+            "plan": "Update on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.781..0.806 rows=1 loops=1)\n  Buffers: shared hit=53 read=8 dirtied=2\n  ->  Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.010..0.035 rows=1 loops=1)\n        Index Cond: ((user_id = 'f7860fea-7bee-465c-f7aa-e7c06cf93bd2'::uuid) AND ((version_id)::text = 'kgload-v-27-98-10'::text))\n        Filter: ((id = '935920b5-2b16-400b-9a4c-4ae4833284df'::uuid) AND ((step_id)::text = ''::text))\n        Rows Removed by Filter: 30\n        Buffers: shared hit=34\nPlanning Time: 0.058 ms\nExecution Time: 0.992 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3",
+            "plan": "Limit  (cost=0.43..8.45 rows=1 width=80) (actual time=0.007..0.007 rows=1 loops=1)\n  Buffers: shared hit=5\n  ->  Index Scan using kg_evidence_pkey on kg_evidence  (cost=0.43..8.45 rows=1 width=80) (actual time=0.006..0.006 rows=1 loops=1)\n        Index Cond: (id = '935920b5-2b16-400b-9a4c-4ae4833284df'::uuid)\n        Buffers: shared hit=5\nPlanning Time: 0.051 ms\nExecution Time: 0.015 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+            "plan": "Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.45 rows=1 width=16) (actual time=0.010..0.055 rows=1 loops=1)\n  Index Cond: ((user_id = 'f7860fea-7bee-465c-f7aa-e7c06cf93bd2'::uuid) AND ((version_id)::text = 'kgload-v-27-98-10'::text))\n  Filter: ((step_id)::text = 's3'::text)\n  Rows Removed by Filter: 30\n  Buffers: shared hit=35\nPlanning Time: 0.037 ms\nExecution Time: 0.062 ms"
+          },
+          {
+            "sql": "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+            "plan": "Update on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.342..0.356 rows=1 loops=1)\n  Buffers: shared hit=51 read=2 dirtied=1\n  ->  Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.013..0.026 rows=1 loops=1)\n        Index Cond: ((user_id = 'f7860fea-7bee-465c-f7aa-e7c06cf93bd2'::uuid) AND ((version_id)::text = 'kgload-v-27-98-10'::text))\n        Filter: ((id = '1c217c43-04be-4265-b48f-03125ff635e9'::uuid) AND ((step_id)::text = 's3'::text))\n        Rows Removed by Filter: 30\n        Buffers: shared hit=35\nPlanning Time: 0.059 ms\nExecution Time: 0.371 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3",
+            "plan": "Limit  (cost=0.43..8.45 rows=1 width=80) (actual time=0.026..0.026 rows=1 loops=1)\n  Buffers: shared hit=5\n  ->  Index Scan using kg_evidence_pkey on kg_evidence  (cost=0.43..8.45 rows=1 width=80) (actual time=0.025..0.025 rows=1 loops=1)\n        Index Cond: (id = '1c217c43-04be-4265-b48f-03125ff635e9'::uuid)\n        Buffers: shared hit=5\nPlanning Time: 0.052 ms\nExecution Time: 0.040 ms"
+          }
+        ],
+        "warm": [
+          {
+            "sql": "INSERT INTO \"public\".\"run_steps\" (\"id\",\"run_id\",\"seq\",\"kind\",\"action\",\"args\",\"ok\",\"summary\",\"reasoning\",\"phase\",\"duration_ms\",\"created_at\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING \"public\".\"run_steps\".\"id\", \"public\".\"run_steps\".\"run_id\", \"public\".\"run_steps\".\"seq\", \"public\".\"run_steps\".\"kind\", \"public\".\"run_steps\".\"action\", \"public\".\"run_steps\".\"args\", \"public\".\"run_steps\".\"ok\", \"public\".\"run_steps\".\"summary\", \"public\".\"run_steps\".\"reasoning\", \"public\".\"run_steps\".\"screenshot_key\", \"public\".\"run_steps\".\"screenshot_moment\", \"public\".\"run_steps\".\"screenshot_masked\", \"public\".\"run_steps\".\"screenshot_note\", \"public\".\"run_steps\".\"question_id\", \"public\".\"run_steps\".\"phase\", \"public\".\"run_steps\".\"duration_ms\", \"public\".\"run_steps\".\"created_at\"",
+            "plan": "Insert on run_steps  (cost=0.00..0.01 rows=1 width=1975) (actual time=0.159..0.160 rows=1 loops=1)\n  Buffers: shared hit=13 read=2 dirtied=1 written=1\n  ->  Result  (cost=0.00..0.01 rows=1 width=1975) (actual time=0.002..0.002 rows=1 loops=1)\nPlanning Time: 0.064 ms\nTrigger for constraint run_steps_run_id_fkey: time=0.153 calls=1\nTrigger for constraint run_steps_question_id_fkey: time=0.004 calls=1\nExecution Time: 0.338 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_procedure_versions\".\"id\" FROM \"public\".\"kg_procedure_versions\" WHERE (\"public\".\"kg_procedure_versions\".\"id\" = $1 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $2 AND \"public\".\"kg_procedure_versions\".\"user_id\" = $3) LIMIT $4 OFFSET $5",
+            "plan": "Limit  (cost=0.42..8.44 rows=1 width=17) (actual time=0.016..0.016 rows=1 loops=1)\n  Buffers: shared hit=4\n  ->  Index Scan using kg_procedure_versions_pkey on kg_procedure_versions  (cost=0.42..8.44 rows=1 width=17) (actual time=0.015..0.015 rows=1 loops=1)\n        Index Cond: ((id)::text = 'kgload-v-6-93-10'::text)\n        Filter: (user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid)\n        Buffers: shared hit=4\nPlanning Time: 0.067 ms\nExecution Time: 0.027 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+            "plan": "Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.45 rows=1 width=16) (actual time=0.034..0.036 rows=1 loops=1)\n  Index Cond: ((user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid) AND ((version_id)::text = 'kgload-v-6-93-10'::text))\n  Filter: ((step_id)::text = ''::text)\n  Rows Removed by Filter: 30\n  Buffers: shared hit=36\nPlanning Time: 0.071 ms\nExecution Time: 0.043 ms"
+          },
+          {
+            "sql": "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+            "plan": "Update on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.046..0.049 rows=1 loops=1)\n  Buffers: shared hit=39\n  ->  Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.027..0.029 rows=1 loops=1)\n        Index Cond: ((user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid) AND ((version_id)::text = 'kgload-v-6-93-10'::text))\n        Filter: ((id = '82801d69-5065-4129-9533-e87385587a09'::uuid) AND ((step_id)::text = ''::text))\n        Rows Removed by Filter: 30\n        Buffers: shared hit=36\nPlanning Time: 0.060 ms\nExecution Time: 0.064 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3",
+            "plan": "Limit  (cost=0.43..8.45 rows=1 width=80) (actual time=0.008..0.009 rows=1 loops=1)\n  Buffers: shared hit=4\n  ->  Index Scan using kg_evidence_pkey on kg_evidence  (cost=0.43..8.45 rows=1 width=80) (actual time=0.007..0.008 rows=1 loops=1)\n        Index Cond: (id = '82801d69-5065-4129-9533-e87385587a09'::uuid)\n        Buffers: shared hit=4\nPlanning Time: 0.029 ms\nExecution Time: 0.016 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\" FROM \"public\".\"kg_evidence\" WHERE ((\"public\".\"kg_evidence\".\"version_id\" = $1 AND \"public\".\"kg_evidence\".\"step_id\" = $2) AND \"public\".\"kg_evidence\".\"user_id\" = $3) OFFSET $4",
+            "plan": "Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.45 rows=1 width=16) (actual time=0.029..0.031 rows=1 loops=1)\n  Index Cond: ((user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid) AND ((version_id)::text = 'kgload-v-6-93-10'::text))\n  Filter: ((step_id)::text = 's12'::text)\n  Rows Removed by Filter: 30\n  Buffers: shared hit=36\nPlanning Time: 0.046 ms\nExecution Time: 0.038 ms"
+          },
+          {
+            "sql": "UPDATE \"public\".\"kg_evidence\" SET \"successes\" = (\"public\".\"kg_evidence\".\"successes\" + $1), \"last_success_at\" = $2 WHERE (\"public\".\"kg_evidence\".\"id\" IN ($3) AND ((\"public\".\"kg_evidence\".\"version_id\" = $4 AND \"public\".\"kg_evidence\".\"step_id\" = $5) AND \"public\".\"kg_evidence\".\"user_id\" = $6)) RETURNING \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\"",
+            "plan": "Update on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.046..0.048 rows=1 loops=1)\n  Buffers: shared hit=39\n  ->  Index Scan using kg_evidence_user_id_version_id_idx on kg_evidence  (cost=0.43..8.46 rows=1 width=18) (actual time=0.024..0.026 rows=1 loops=1)\n        Index Cond: ((user_id = '7587b897-4605-fa6e-a276-33873589eead'::uuid) AND ((version_id)::text = 'kgload-v-6-93-10'::text))\n        Filter: ((id = 'eec072f1-728b-4b62-a79c-d94b4efb06a6'::uuid) AND ((step_id)::text = 's12'::text))\n        Rows Removed by Filter: 30\n        Buffers: shared hit=36\nPlanning Time: 0.052 ms\nExecution Time: 0.063 ms"
+          },
+          {
+            "sql": "SELECT \"public\".\"kg_evidence\".\"id\", \"public\".\"kg_evidence\".\"user_id\", \"public\".\"kg_evidence\".\"version_id\", \"public\".\"kg_evidence\".\"step_id\", \"public\".\"kg_evidence\".\"successes\", \"public\".\"kg_evidence\".\"failures\", \"public\".\"kg_evidence\".\"repairs\", \"public\".\"kg_evidence\".\"last_success_at\", \"public\".\"kg_evidence\".\"last_failure_at\" FROM \"public\".\"kg_evidence\" WHERE \"public\".\"kg_evidence\".\"id\" = $1 LIMIT $2 OFFSET $3",
+            "plan": "Limit  (cost=0.43..8.45 rows=1 width=80) (actual time=0.009..0.010 rows=1 loops=1)\n  Buffers: shared hit=4\n  ->  Index Scan using kg_evidence_pkey on kg_evidence  (cost=0.43..8.45 rows=1 width=80) (actual time=0.009..0.009 rows=1 loops=1)\n        Index Cond: (id = 'eec072f1-728b-4b62-a79c-d94b4efb06a6'::uuid)\n        Buffers: shared hit=4\nPlanning Time: 0.029 ms\nExecution Time: 0.018 ms"
+          }
+        ]
+      }
+    },
+    "3": {
+      "name": "Which tasks use this site (one join)",
+      "bar": {
+        "warmP95Ms": 50
+      },
+      "cold": {
+        "n": 1000,
+        "p50": 0.9972880000022997,
+        "p95": 1.4518580000003567,
+        "p99": 2.032455000000482,
+        "mean": 1.0114649870000576,
+        "min": 0.39055200000075274,
+        "max": 5.444487999997364
+      },
+      "warm": {
+        "n": 1000,
+        "p50": 0.6692079999993439,
+        "p95": 0.8701250000012806,
+        "p99": 1.4691729999976815,
+        "mean": 0.6880964979999953,
+        "min": 0.3378359999987879,
+        "max": 4.363572999998723
+      },
+      "plans": {
+        "cold": [
+          {
+            "sql": "SELECT t.id, t.key, t.label\nFROM kg_edges e\nJOIN kg_nodes t ON t.id = e.from_id AND t.user_id = e.user_id AND t.type = 'Task'\nWHERE e.user_id = $1::uuid AND e.to_id = $2 AND e.type = 'uses'",
+            "plan": "Nested Loop  (cost=1.11..17.29 rows=1 width=67) (actual time=0.444..0.684 rows=6 loops=1)\n  Buffers: shared hit=26 read=11\n  ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges e  (cost=0.56..8.58 rows=1 width=39) (actual time=0.335..0.426 rows=6 loops=1)\n        Index Cond: ((user_id = '89a07591-6d9c-2d65-82fd-19793404fda9'::uuid) AND ((to_id)::text = 'kgload-n-31-site-15'::text) AND ((type)::text = 'uses'::text))\n        Buffers: shared read=7\n  ->  Index Scan using kg_nodes_pkey on kg_nodes t  (cost=0.56..8.58 rows=1 width=83) (actual time=0.041..0.041 rows=1 loops=6)\n        Index Cond: ((id)::text = (e.from_id)::text)\n        Filter: ((user_id = '89a07591-6d9c-2d65-82fd-19793404fda9'::uuid) AND ((type)::text = 'Task'::text))\n        Buffers: shared hit=26 read=4\nPlanning:\n  Buffers: shared hit=52 read=31\nPlanning Time: 2.006 ms\nExecution Time: 0.706 ms"
+          }
+        ],
+        "warm": [
+          {
+            "sql": "SELECT t.id, t.key, t.label\nFROM kg_edges e\nJOIN kg_nodes t ON t.id = e.from_id AND t.user_id = e.user_id AND t.type = 'Task'\nWHERE e.user_id = $1::uuid AND e.to_id = $2 AND e.type = 'uses'",
+            "plan": "Nested Loop  (cost=1.11..17.32 rows=1 width=67) (actual time=0.019..0.044 rows=6 loops=1)\n  Buffers: shared hit=37\n  ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges e  (cost=0.56..8.58 rows=1 width=39) (actual time=0.010..0.013 rows=6 loops=1)\n        Index Cond: ((user_id = '071d7f72-883c-cd8d-d339-0e26e153cad4'::uuid) AND ((to_id)::text = 'kgload-n-116-site-34'::text) AND ((type)::text = 'uses'::text))\n        Buffers: shared hit=7\n  ->  Index Scan using kg_nodes_pkey on kg_nodes t  (cost=0.56..8.58 rows=1 width=83) (actual time=0.004..0.004 rows=1 loops=6)\n        Index Cond: ((id)::text = (e.from_id)::text)\n        Filter: ((user_id = '071d7f72-883c-cd8d-d339-0e26e153cad4'::uuid) AND ((type)::text = 'Task'::text))\n        Buffers: shared hit=30\nPlanning:\n  Buffers: shared hit=12\nPlanning Time: 0.240 ms\nExecution Time: 0.064 ms"
+          }
+        ]
+      }
+    },
+    "4": {
+      "name": "Load the whole graph of one owner for the Map (nodes and edges, every column)",
+      "normal": {
+        "bar": {
+          "warmP95Ms": 500
+        },
+        "cold": {
+          "n": 199,
+          "p50": 400.53466099999787,
+          "p95": 587.7019169999985,
+          "p99": 698.519432000001,
+          "mean": 420.3526261306534,
+          "min": 291.1823849999928,
+          "max": 710.0931920000003
+        },
+        "warm": {
+          "n": 1000,
+          "p50": 399.2933910000138,
+          "p95": 540.9212109999498,
+          "p99": 614.6402390000003,
+          "mean": 405.73160907499954,
+          "min": 276.21507599999313,
+          "max": 718.3553970000357
+        },
+        "plans": {
+          "cold": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"user_id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\", \"public\".\"kg_edges\".\"props\", \"public\".\"kg_edges\".\"created_at\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_edges  (cost=866.12..83399.71 rows=37879 width=100) (actual time=13.928..183.539 rows=37800 loops=1)\n  Recheck Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n  Heap Blocks: exact=2358\n  Buffers: shared hit=13 read=2487\n  ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..856.65 rows=37879 width=0) (actual time=10.641..10.642 rows=37800 loops=1)\n        Index Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n        Buffers: shared read=142\nPlanning:\n  Buffers: shared hit=5 read=1\nPlanning Time: 0.337 ms\nExecution Time: 186.059 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"user_id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\", \"public\".\"kg_nodes\".\"props\", \"public\".\"kg_nodes\".\"created_at\", \"public\".\"kg_nodes\".\"updated_at\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_nodes  (cost=2594.85..92559.27 rows=34360 width=196) (actual time=44.530..255.033 rows=34650 loops=1)\n  Recheck Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n  Heap Blocks: exact=2869\n  Buffers: shared hit=2 read=3445\n  ->  Bitmap Index Scan on kg_nodes_user_id_type_key_key  (cost=0.00..2586.26 rows=34360 width=0) (actual time=42.766..42.767 rows=34650 loops=1)\n        Index Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n        Buffers: shared read=578\nPlanning:\n  Buffers: shared hit=7 read=2\nPlanning Time: 0.320 ms\nExecution Time: 258.116 ms"
+            }
+          ],
+          "warm": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"user_id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\", \"public\".\"kg_edges\".\"props\", \"public\".\"kg_edges\".\"created_at\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_edges  (cost=866.12..83399.71 rows=37879 width=100) (actual time=1.978..8.460 rows=37800 loops=1)\n  Recheck Cond: (user_id = '58977ddf-88c4-b541-f623-202ba57ce79d'::uuid)\n  Heap Blocks: exact=2355\n  Buffers: shared hit=2498\n  ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..856.65 rows=37879 width=0) (actual time=1.567..1.568 rows=37800 loops=1)\n        Index Cond: (user_id = '58977ddf-88c4-b541-f623-202ba57ce79d'::uuid)\n        Buffers: shared hit=143\nPlanning Time: 0.111 ms\nExecution Time: 10.360 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"user_id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\", \"public\".\"kg_nodes\".\"props\", \"public\".\"kg_nodes\".\"created_at\", \"public\".\"kg_nodes\".\"updated_at\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_nodes  (cost=2594.85..92559.27 rows=34360 width=196) (actual time=2.288..9.874 rows=34650 loops=1)\n  Recheck Cond: (user_id = '58977ddf-88c4-b541-f623-202ba57ce79d'::uuid)\n  Heap Blocks: exact=2912\n  Buffers: shared hit=3489\n  ->  Bitmap Index Scan on kg_nodes_user_id_type_key_key  (cost=0.00..2586.26 rows=34360 width=0) (actual time=1.843..1.843 rows=34650 loops=1)\n        Index Cond: (user_id = '58977ddf-88c4-b541-f623-202ba57ce79d'::uuid)\n        Buffers: shared hit=577\nPlanning Time: 0.081 ms\nExecution Time: 11.604 ms"
+            }
+          ]
+        }
+      },
+      "heavyNodePostgres": {
+        "note": "diagnostic: the same SQL through node-postgres, one statement after the other, warm",
+        "warm": {
+          "n": 100,
+          "p50": 2679.5786579996347,
+          "p95": 3182.0444970000535,
+          "p99": 3376.302097999491,
+          "mean": 2729.2347946699524,
+          "min": 2358.3849759995937,
+          "max": 3591.6067429995164
+        }
+      },
+      "heavy": {
+        "bar": {
+          "warmP95Ms": 2000
+        },
+        "cold": {
+          "n": 5,
+          "p50": 4423.416819000035,
+          "p95": 4773.764675999992,
+          "p99": 4773.764675999992,
+          "mean": 4368.733953199978,
+          "min": 3697.4380540000275,
+          "max": 4773.764675999992
+        },
+        "warm": {
+          "n": 1000,
+          "p50": 4208.630659000017,
+          "p95": 5287.86639300012,
+          "p99": 5709.465712999925,
+          "mean": 4288.976469086002,
+          "min": 3278.175777000375,
+          "max": 6405.923768999986
+        },
+        "plans": {
+          "cold": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"user_id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\", \"public\".\"kg_edges\".\"props\", \"public\".\"kg_edges\".\"created_at\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=9027.02..204708.34 rows=351802 width=100) (actual time=36.069..186.995 rows=378000 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared read=7561\n  ->  Parallel Bitmap Heap Scan on kg_edges  (cost=8027.02..168528.14 rows=146584 width=100) (actual time=11.467..138.254 rows=126000 loops=3)\n        Recheck Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Heap Blocks: exact=1592\n        Buffers: shared read=7561\n        ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..7939.07 rows=351802 width=0) (actual time=33.209..33.210 rows=378000 loops=1)\n              Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n              Buffers: shared read=1411\nPlanning Time: 0.101 ms\nJIT:\n  Functions: 6\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.469 ms, Inlining 0.000 ms, Optimization 0.000 ms, Emission 0.000 ms, Total 0.469 ms\nExecution Time: 211.081 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"user_id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\", \"public\".\"kg_nodes\".\"props\", \"public\".\"kg_nodes\".\"created_at\", \"public\".\"kg_nodes\".\"updated_at\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=1000.00..279708.45 rows=349451 width=196) (actual time=4.475..991.241 rows=346500 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared read=206055\n  ->  Parallel Seq Scan on kg_nodes  (cost=0.00..243763.35 rows=145605 width=196) (actual time=3.367..927.577 rows=115500 loops=3)\n        Filter: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Rows Removed by Filter: 2298450\n        Buffers: shared read=206055\nPlanning Time: 0.078 ms\nJIT:\n  Functions: 6\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.392 ms, Inlining 0.000 ms, Optimization 0.677 ms, Emission 8.944 ms, Total 10.013 ms\nExecution Time: 1013.157 ms"
+            }
+          ],
+          "warm": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"user_id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\", \"public\".\"kg_edges\".\"props\", \"public\".\"kg_edges\".\"created_at\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=9027.02..204708.34 rows=351802 width=100) (actual time=9.464..47.428 rows=378000 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared hit=7561\n  ->  Parallel Bitmap Heap Scan on kg_edges  (cost=8027.02..168528.14 rows=146584 width=100) (actual time=3.127..18.867 rows=126000 loops=3)\n        Recheck Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Heap Blocks: exact=944\n        Buffers: shared hit=7561\n        ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..7939.07 rows=351802 width=0) (actual time=8.390..8.391 rows=378000 loops=1)\n              Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n              Buffers: shared hit=1411\nPlanning Time: 0.115 ms\nJIT:\n  Functions: 6\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.467 ms, Inlining 0.000 ms, Optimization 0.000 ms, Emission 0.000 ms, Total 0.467 ms\nExecution Time: 64.245 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"user_id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\", \"public\".\"kg_nodes\".\"props\", \"public\".\"kg_nodes\".\"created_at\", \"public\".\"kg_nodes\".\"updated_at\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=1000.00..279708.45 rows=349451 width=196) (actual time=2.083..250.395 rows=346500 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared hit=8301 read=197754\n  ->  Parallel Seq Scan on kg_nodes  (cost=0.00..243763.35 rows=145605 width=196) (actual time=2.570..223.518 rows=115500 loops=3)\n        Filter: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Rows Removed by Filter: 2298450\n        Buffers: shared hit=8301 read=197754\nPlanning Time: 0.099 ms\nJIT:\n  Functions: 6\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.469 ms, Inlining 0.000 ms, Optimization 0.547 ms, Emission 7.093 ms, Total 8.109 ms\nExecution Time: 265.914 ms"
+            }
+          ]
+        }
+      }
+    },
+    "5": {
+      "name": "Impact of a site: site <- screens <- elements <- steps <- tasks",
+      "bar": {
+        "warmP95Ms": 50
+      },
+      "cold": {
+        "n": 1000,
+        "p50": 13.383318999782205,
+        "p95": 31.079613000154495,
+        "p99": 41.97294999938458,
+        "mean": 15.849892647994682,
+        "min": 3.570696000009775,
+        "max": 261.53227399941534
+      },
+      "warm": {
+        "n": 1000,
+        "p50": 3.1860469998791814,
+        "p95": 4.499161999672651,
+        "p99": 6.9810379995033145,
+        "mean": 3.3696943180067467,
+        "min": 2.951090999878943,
+        "max": 13.369686000049114
+      },
+      "plans": {
+        "cold": [
+          {
+            "sql": "SELECT DISTINCT t.id, t.key, t.label\nFROM kg_edges sc\nJOIN kg_edges el ON el.user_id = sc.user_id AND el.to_id = sc.from_id AND el.type = 'on'\nJOIN kg_edges st ON st.user_id = sc.user_id AND st.to_id = el.from_id AND st.type = 'on'\nJOIN kg_edges tk ON tk.user_id = sc.user_id AND tk.to_id = st.from_id AND tk.type = 'uses'\nJOIN kg_nodes t ON t.id = tk.from_id AND t.user_id = sc.user_id AND t.type = 'Task'\nWHERE sc.user_id = $1::uuid AND sc.to_id = $2 AND sc.type = 'on'",
+            "plan": "Unique  (cost=39.00..39.01 rows=1 width=67) (actual time=8.764..8.779 rows=6 loops=1)\n  Buffers: shared hit=3176 read=54\n  ->  Sort  (cost=39.00..39.01 rows=1 width=67) (actual time=8.763..8.768 rows=60 loops=1)\n        Sort Key: t.id, t.key, t.label\n        Sort Method: quicksort  Memory: 30kB\n        Buffers: shared hit=3176 read=54\n        ->  Nested Loop  (cost=2.79..38.99 rows=1 width=67) (actual time=0.530..8.664 rows=60 loops=1)\n              Buffers: shared hit=3173 read=54\n              ->  Nested Loop  (cost=2.23..30.40 rows=1 width=39) (actual time=0.515..8.463 rows=60 loops=1)\n                    Buffers: shared hit=2873 read=54\n                    ->  Nested Loop  (cost=1.67..23.79 rows=1 width=39) (actual time=0.503..8.025 rows=60 loops=1)\n                          Buffers: shared hit=2578 read=49\n                          ->  Nested Loop  (cost=1.11..17.17 rows=1 width=39) (actual time=0.476..6.625 rows=600 loops=1)\n                                Buffers: shared hit=121 read=46\n                                ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges sc  (cost=0.56..8.58 rows=1 width=39) (actual time=0.383..0.455 rows=30 loops=1)\n                                      Index Cond: ((user_id = '2149acd8-fec1-93c6-f36b-6b1a8b74809a'::uuid) AND ((to_id)::text = 'kgload-n-141-site-8'::text) AND ((type)::text = 'on'::text))\n                                      Buffers: shared hit=1 read=5\n                                ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges el  (cost=0.56..8.58 rows=1 width=61) (actual time=0.110..0.202 rows=20 loops=30)\n                                      Index Cond: ((user_id = '2149acd8-fec1-93c6-f36b-6b1a8b74809a'::uuid) AND ((to_id)::text = (sc.from_id)::text) AND ((type)::text = 'on'::text))\n                                      Buffers: shared hit=120 read=41\n                          ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges st  (cost=0.56..6.61 rows=1 width=61) (actual time=0.002..0.002 rows=0 loops=600)\n                                Index Cond: ((user_id = '2149acd8-fec1-93c6-f36b-6b1a8b74809a'::uuid) AND ((to_id)::text = (el.from_id)::text) AND ((type)::text = 'on'::text))\n                                Buffers: shared hit=2457 read=3\n                    ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges tk  (cost=0.56..6.61 rows=1 width=61) (actual time=0.007..0.007 rows=1 loops=60)\n                          Index Cond: ((user_id = '2149acd8-fec1-93c6-f36b-6b1a8b74809a'::uuid) AND ((to_id)::text = (st.from_id)::text) AND ((type)::text = 'uses'::text))\n                          Buffers: shared hit=295 read=5\n              ->  Index Scan using kg_nodes_pkey on kg_nodes t  (cost=0.56..8.43 rows=1 width=83) (actual time=0.003..0.003 rows=1 loops=60)\n                    Index Cond: ((id)::text = (tk.from_id)::text)\n                    Filter: ((user_id = '2149acd8-fec1-93c6-f36b-6b1a8b74809a'::uuid) AND ((type)::text = 'Task'::text))\n                    Buffers: shared hit=300\nPlanning:\n  Buffers: shared hit=2 read=10\nPlanning Time: 2.282 ms\nExecution Time: 8.844 ms"
+          }
+        ],
+        "warm": [
+          {
+            "sql": "SELECT DISTINCT t.id, t.key, t.label\nFROM kg_edges sc\nJOIN kg_edges el ON el.user_id = sc.user_id AND el.to_id = sc.from_id AND el.type = 'on'\nJOIN kg_edges st ON st.user_id = sc.user_id AND st.to_id = el.from_id AND st.type = 'on'\nJOIN kg_edges tk ON tk.user_id = sc.user_id AND tk.to_id = st.from_id AND tk.type = 'uses'\nJOIN kg_nodes t ON t.id = tk.from_id AND t.user_id = sc.user_id AND t.type = 'Task'\nWHERE sc.user_id = $1::uuid AND sc.to_id = $2 AND sc.type = 'on'",
+            "plan": "Unique  (cost=39.00..39.01 rows=1 width=67) (actual time=1.670..1.683 rows=6 loops=1)\n  Buffers: shared hit=3224\n  ->  Sort  (cost=39.00..39.01 rows=1 width=67) (actual time=1.670..1.674 rows=60 loops=1)\n        Sort Key: t.id, t.key, t.label\n        Sort Method: quicksort  Memory: 30kB\n        Buffers: shared hit=3224\n        ->  Nested Loop  (cost=2.79..38.99 rows=1 width=67) (actual time=0.108..1.638 rows=60 loops=1)\n              Buffers: shared hit=3224\n              ->  Nested Loop  (cost=2.23..30.40 rows=1 width=39) (actual time=0.099..1.496 rows=60 loops=1)\n                    Buffers: shared hit=2924\n                    ->  Nested Loop  (cost=1.67..23.79 rows=1 width=39) (actual time=0.094..1.328 rows=60 loops=1)\n                          Buffers: shared hit=2624\n                          ->  Nested Loop  (cost=1.11..17.17 rows=1 width=39) (actual time=0.022..0.273 rows=600 loops=1)\n                                Buffers: shared hit=164\n                                ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges sc  (cost=0.56..8.58 rows=1 width=39) (actual time=0.014..0.019 rows=30 loops=1)\n                                      Index Cond: ((user_id = '2722fdb5-bf60-bdf1-f568-9c97681f7b3e'::uuid) AND ((to_id)::text = 'kgload-n-16-site-7'::text) AND ((type)::text = 'on'::text))\n                                      Buffers: shared hit=6\n                                ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges el  (cost=0.56..8.58 rows=1 width=61) (actual time=0.003..0.005 rows=20 loops=30)\n                                      Index Cond: ((user_id = '2722fdb5-bf60-bdf1-f568-9c97681f7b3e'::uuid) AND ((to_id)::text = (sc.from_id)::text) AND ((type)::text = 'on'::text))\n                                      Buffers: shared hit=158\n                          ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges st  (cost=0.56..6.61 rows=1 width=61) (actual time=0.001..0.001 rows=0 loops=600)\n                                Index Cond: ((user_id = '2722fdb5-bf60-bdf1-f568-9c97681f7b3e'::uuid) AND ((to_id)::text = (el.from_id)::text) AND ((type)::text = 'on'::text))\n                                Buffers: shared hit=2460\n                    ->  Index Scan using kg_edges_user_id_to_id_type_idx on kg_edges tk  (cost=0.56..6.61 rows=1 width=61) (actual time=0.002..0.002 rows=1 loops=60)\n                          Index Cond: ((user_id = '2722fdb5-bf60-bdf1-f568-9c97681f7b3e'::uuid) AND ((to_id)::text = (st.from_id)::text) AND ((type)::text = 'uses'::text))\n                          Buffers: shared hit=300\n              ->  Index Scan using kg_nodes_pkey on kg_nodes t  (cost=0.56..8.43 rows=1 width=83) (actual time=0.002..0.002 rows=1 loops=60)\n                    Index Cond: ((id)::text = (tk.from_id)::text)\n                    Filter: ((user_id = '2722fdb5-bf60-bdf1-f568-9c97681f7b3e'::uuid) AND ((type)::text = 'Task'::text))\n                    Buffers: shared hit=300\nPlanning:\n  Buffers: shared hit=12\nPlanning Time: 1.313 ms\nExecution Time: 1.718 ms"
+          }
+        ]
+      }
+    },
+    "4m": {
+      "name": "Load the whole graph of one owner, Map columns only (node id, type, key, label; edge id, type, from, to)",
+      "normal": {
+        "bar": {
+          "warmP95Ms": 500
+        },
+        "cold": {
+          "n": 199,
+          "p50": 362.03143199998885,
+          "p95": 981.1174710001796,
+          "p99": 1218.1977949999273,
+          "mean": 456.9999560401798,
+          "min": 144.0853349994868,
+          "max": 1219.908789999783
+        },
+        "warm": {
+          "n": 1000,
+          "p50": 157.4213840002194,
+          "p95": 224.96551799960434,
+          "p99": 254.9570760000497,
+          "mean": 166.60602377599292,
+          "min": 126.23651100043207,
+          "max": 299.21473999973387
+        },
+        "plans": {
+          "cold": [
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_nodes  (cost=2594.85..92559.27 rows=34360 width=74) (actual time=86.419..243.912 rows=34650 loops=1)\n  Recheck Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n  Heap Blocks: exact=2869\n  Buffers: shared read=3447\n  ->  Bitmap Index Scan on kg_nodes_user_id_type_key_key  (cost=0.00..2586.26 rows=34360 width=0) (actual time=84.666..84.666 rows=34650 loops=1)\n        Index Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n        Buffers: shared read=578\nPlanning Time: 0.106 ms\nExecution Time: 245.978 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_edges  (cost=866.12..83399.71 rows=37879 width=71) (actual time=9.793..169.626 rows=37800 loops=1)\n  Recheck Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n  Heap Blocks: exact=2358\n  Buffers: shared read=2500\n  ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..856.65 rows=37879 width=0) (actual time=9.360..9.373 rows=37800 loops=1)\n        Index Cond: (user_id = '1085a379-6d4b-0d58-c998-268d05bcf6e9'::uuid)\n        Buffers: shared read=142\nPlanning Time: 0.109 ms\nExecution Time: 172.129 ms"
+            }
+          ],
+          "warm": [
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_nodes  (cost=2594.85..92559.27 rows=34360 width=74) (actual time=2.192..10.153 rows=34650 loops=1)\n  Recheck Cond: (user_id = '51a1f19f-13e0-ec1a-8ccf-f0b784db3921'::uuid)\n  Heap Blocks: exact=2676\n  Buffers: shared hit=3259\n  ->  Bitmap Index Scan on kg_nodes_user_id_type_key_key  (cost=0.00..2586.26 rows=34360 width=0) (actual time=1.831..1.832 rows=34650 loops=1)\n        Index Cond: (user_id = '51a1f19f-13e0-ec1a-8ccf-f0b784db3921'::uuid)\n        Buffers: shared hit=583\nPlanning Time: 0.079 ms\nExecution Time: 11.689 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Bitmap Heap Scan on kg_edges  (cost=866.12..83399.71 rows=37879 width=71) (actual time=1.603..9.668 rows=37800 loops=1)\n  Recheck Cond: (user_id = '51a1f19f-13e0-ec1a-8ccf-f0b784db3921'::uuid)\n  Heap Blocks: exact=2378\n  Buffers: shared hit=2527\n  ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..856.65 rows=37879 width=0) (actual time=1.290..1.290 rows=37800 loops=1)\n        Index Cond: (user_id = '51a1f19f-13e0-ec1a-8ccf-f0b784db3921'::uuid)\n        Buffers: shared hit=149\nPlanning Time: 0.065 ms\nExecution Time: 11.315 ms"
+            }
+          ]
+        }
+      },
+      "heavyNodePostgres": {
+        "note": "diagnostic: the same SQL through node-postgres, one statement after the other, warm",
+        "warm": {
+          "n": 100,
+          "p50": 1102.1524200001732,
+          "p95": 1435.3892769999802,
+          "p99": 1546.383892999962,
+          "mean": 1102.9297235799954,
+          "min": 767.8644310003147,
+          "max": 1592.0473269997165
+        }
+      },
+      "heavy": {
+        "bar": {
+          "warmP95Ms": 2000
+        },
+        "cold": {
+          "n": 5,
+          "p50": 1848.5928840003908,
+          "p95": 1866.7065619993955,
+          "p99": 1866.7065619993955,
+          "mean": 1752.6865502001717,
+          "min": 1562.9394270004705,
+          "max": 1866.7065619993955
+        },
+        "warm": {
+          "n": 1000,
+          "p50": 1703.067156999372,
+          "p95": 2104.452304000035,
+          "p99": 2372.1443920005113,
+          "mean": 1744.7759016029938,
+          "min": 1378.967791000381,
+          "max": 2604.783877999522
+        },
+        "plans": {
+          "cold": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=9027.02..204708.34 rows=351802 width=71) (actual time=32.816..194.862 rows=378000 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared read=7561\n  ->  Parallel Bitmap Heap Scan on kg_edges  (cost=8027.02..168528.14 rows=146584 width=71) (actual time=13.378..139.525 rows=126000 loops=3)\n        Recheck Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Heap Blocks: exact=1891\n        Buffers: shared read=7561\n        ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..7939.07 rows=351802 width=0) (actual time=26.841..26.842 rows=378000 loops=1)\n              Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n              Buffers: shared read=1411\nPlanning Time: 0.107 ms\nJIT:\n  Functions: 12\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.886 ms, Inlining 0.000 ms, Optimization 0.775 ms, Emission 11.026 ms, Total 12.687 ms\nExecution Time: 214.302 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=1000.00..279708.45 rows=349451 width=74) (actual time=5.245..808.151 rows=346500 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared read=206055\n  ->  Parallel Seq Scan on kg_nodes  (cost=0.00..243763.35 rows=145605 width=74) (actual time=4.341..773.179 rows=115500 loops=3)\n        Filter: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Rows Removed by Filter: 2298450\n        Buffers: shared read=206055\nPlanning Time: 0.201 ms\nJIT:\n  Functions: 12\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.919 ms, Inlining 0.000 ms, Optimization 0.893 ms, Emission 11.430 ms, Total 13.242 ms\nExecution Time: 827.522 ms"
+            }
+          ],
+          "warm": [
+            {
+              "sql": "SELECT \"public\".\"kg_edges\".\"id\", \"public\".\"kg_edges\".\"type\", \"public\".\"kg_edges\".\"from_id\", \"public\".\"kg_edges\".\"to_id\" FROM \"public\".\"kg_edges\" WHERE (\"public\".\"kg_edges\".\"user_id\" = $1 AND \"public\".\"kg_edges\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=9027.02..204708.34 rows=351802 width=71) (actual time=12.278..71.852 rows=378000 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared hit=7561\n  ->  Parallel Bitmap Heap Scan on kg_edges  (cost=8027.02..168528.14 rows=146584 width=71) (actual time=10.350..32.460 rows=126000 loops=3)\n        Recheck Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Heap Blocks: exact=2705\n        Buffers: shared hit=7561\n        ->  Bitmap Index Scan on kg_edges_user_id_to_id_type_idx  (cost=0.00..7939.07 rows=351802 width=0) (actual time=8.277..8.278 rows=378000 loops=1)\n              Index Cond: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n              Buffers: shared hit=1411\nPlanning Time: 0.096 ms\nJIT:\n  Functions: 12\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.889 ms, Inlining 0.000 ms, Optimization 0.748 ms, Emission 21.061 ms, Total 22.698 ms\nExecution Time: 88.832 ms"
+            },
+            {
+              "sql": "SELECT \"public\".\"kg_nodes\".\"id\", \"public\".\"kg_nodes\".\"type\", \"public\".\"kg_nodes\".\"key\", \"public\".\"kg_nodes\".\"label\" FROM \"public\".\"kg_nodes\" WHERE (\"public\".\"kg_nodes\".\"user_id\" = $1 AND \"public\".\"kg_nodes\".\"user_id\" = $2) OFFSET $3",
+              "plan": "Gather  (cost=1000.00..279708.45 rows=349451 width=74) (actual time=3.127..639.966 rows=346500 loops=1)\n  Workers Planned: 2\n  Workers Launched: 2\n  Buffers: shared hit=8183 read=197872\n  ->  Parallel Seq Scan on kg_nodes  (cost=0.00..243763.35 rows=145605 width=74) (actual time=3.838..216.419 rows=115500 loops=3)\n        Filter: (user_id = '001fe940-a5b0-4bf1-f1ee-692fc2518cae'::uuid)\n        Rows Removed by Filter: 2298450\n        Buffers: shared hit=8183 read=197872\nPlanning Time: 0.080 ms\nJIT:\n  Functions: 12\n  Options: Inlining false, Optimization false, Expressions true, Deforming true\n  Timing: Generation 0.682 ms, Inlining 0.000 ms, Optimization 0.688 ms, Emission 10.681 ms, Total 12.051 ms\nExecution Time: 656.365 ms"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "verdicts": [
+    {
+      "query": "q1",
+      "bar": "warm p95 <= 50 ms",
+      "warmP95Ms": 4.067517999999836,
+      "coldP95Ms": 6.788442000000032,
+      "met": true,
+      "coldWithinBar": true
+    },
+    {
+      "query": "q2",
+      "bar": "warm p95 <= 50 ms",
+      "warmP95Ms": 7.128092999999353,
+      "coldP95Ms": 9.678906000001007,
+      "met": true,
+      "coldWithinBar": true
+    },
+    {
+      "query": "q3",
+      "bar": "warm p95 <= 50 ms",
+      "warmP95Ms": 0.8701250000012806,
+      "coldP95Ms": 1.4518580000003567,
+      "met": true,
+      "coldWithinBar": true
+    },
+    {
+      "query": "q5",
+      "bar": "warm p95 <= 50 ms",
+      "warmP95Ms": 4.499161999672651,
+      "coldP95Ms": 31.079613000154495,
+      "met": true,
+      "coldWithinBar": true
+    },
+    {
+      "query": "q4 normal owner",
+      "bar": "warm p95 <= 500 ms",
+      "warmP95Ms": 540.9212109999498,
+      "coldP95Ms": 587.7019169999985,
+      "met": false,
+      "coldWithinBar": false
+    },
+    {
+      "query": "q4 heavy owner",
+      "bar": "warm p95 <= 2000 ms",
+      "warmP95Ms": 5287.86639300012,
+      "coldP95Ms": 4773.764675999992,
+      "met": false,
+      "coldWithinBar": false
+    },
+    {
+      "query": "q4 normal owner, Map columns",
+      "bar": "warm p95 <= 500 ms",
+      "warmP95Ms": 224.96551799960434,
+      "coldP95Ms": 981.1174710001796,
+      "met": true,
+      "coldWithinBar": false
+    },
+    {
+      "query": "q4 heavy owner, Map columns",
+      "bar": "warm p95 <= 2000 ms",
+      "warmP95Ms": 2104.452304000035,
+      "coldP95Ms": 1866.7065619993955,
+      "met": false,
+      "coldWithinBar": true
+    }
+  ],
+  "allMet": false
+}

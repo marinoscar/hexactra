@@ -9,6 +9,8 @@ const PUSH = isSliceEnabled('android-app') ? (['push', 'android_app'] as const) 
 export const RUN_NEEDS_YOU_EVENT = 'runs.needs_you';
 export const RUN_FINISHED_EVENT = 'runs.finished';
 export const SCHEDULE_FAILING_EVENT = 'schedules.failing';
+/** A task's saved procedure stopped working and was switched off (E46.12): once per suspension. */
+export const KGRAPH_SUSPENDED_EVENT = 'kgraph.suspended';
 export const RUN_REMINDER_EVENT = 'runs.needs_you_reminder';
 export const QUESTION_ASKED_EVENT = 'questions.asked';
 /** Run retention (#422): the default rule is about to delete runs for the first time. */
@@ -92,6 +94,11 @@ const overBudget: BrowserNotificationTemplate = (d) => ({
   title: 'Still working, over its usual limit',
   body: trim(`${str(d, 'usedOfLimit') ? `${str(d, 'usedOfLimit')} ${str(d, 'budget')}. ` : ''}${str(d, 'goal')}`, 180),
   link: finishedLink(d),
+});
+const kgraphSuspended: BrowserNotificationTemplate = (d) => ({
+  title: 'A saved procedure was switched off',
+  body: trim(`The saved procedure for ${str(d, 'task')} stopped working and was switched off. The task still runs with AI.`, 180),
+  link: str(d, 'url') || undefined,
 });
 const stillPaused: BrowserNotificationTemplate = (d) => ({
   title: 'Still paused',
@@ -236,6 +243,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
       defaultEnabled: true,
     },
     browserTemplate: stillPaused,
+  },
+  {
+    event: {
+      key: KGRAPH_SUSPENDED_EVENT,
+      label: 'Saved procedure switched off',
+      description: "A task's saved procedure kept failing and was switched off. The task still runs with AI; you can restore an earlier version.",
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: kgraphSuspended,
   },
   {
     event: {
@@ -406,6 +423,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === CONNECTION_MCP_TOOLS_CHANGED_EVENT) return { tag: `connection-tools-${str(data, 'connectionId') || 'changed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === DELIVERY_FAILED_EVENT) return { tag: `delivery-${str(data, 'taskId') || 'failed'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === MAIL_TRIGGER_ATTENTION_EVENT) return { tag: `mail-trigger-${str(data, 'triggerId') || 'attention'}-${str(data, 'kind')}`.slice(0, 64), urgency: 'normal' };
+  if (event.key === KGRAPH_SUSPENDED_EVENT) return { tag: `kgraph-${str(data, 'versionId') || 'suspended'}`.slice(0, 64), urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };

@@ -9,6 +9,7 @@ import { QuestionCard, inboxItemToCard, type AnswerResult } from '../components/
 import { answerRequest, isSettledError, type AnswerBody, type InboxItem } from '../components/questions';
 import { useNow } from '../components/RunActivity';
 import { useOpenViewer } from '../components/useOpenViewer';
+import { KgReviewCard, usePendingKgReviews } from '../kgraph/ReviewCard';
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 export type { InboxItem } from '../components/questions';
@@ -45,6 +46,9 @@ export function InboxPage() {
   const itemsRef = useRef<InboxItem[] | null>(null);
   const settledRef = useRef<Set<string>>(new Set());
   const openViewer = useOpenViewer(setError);
+  // Knowledge Graph changes waiting for the owner (E46.20): in the Suggestions group; none (and no request) without `kgraph:read`.
+  const kgReviews = usePendingKgReviews();
+  const reviews = kgReviews.reviews ?? [];
   // `/inbox?run=<id>` (or `?q=<question id>`): the deep link of a "needs you" notification.
   const [params, setParams] = useSearchParams();
   // Two views of one destination (E40.3): what waits, and what is over (`?tab=history`).
@@ -135,7 +139,7 @@ export function InboxPage() {
         <>
           <ErrorBanner error={error} />
           {items === null && !error && <CardSkeleton rows={2} />}
-          {items?.length === 0 && (
+          {items?.length === 0 && reviews.length === 0 && (
             <EmptyState Icon={InboxOutlinedIcon} title="Nothing is waiting for you" body="When an agent needs a code, a choice or your approval, it shows up here." />
           )}
           {(focusRun || focusQuestion) && items && items.length > 0 && !items.some(focused) && (
@@ -182,7 +186,7 @@ export function InboxPage() {
               ))}
             </Box>
           )}
-          {suggestions.length > 0 && (
+          {(suggestions.length > 0 || reviews.length > 0) && (
             <Box component="section" aria-label="Suggestions" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
               <Typography variant="overline" component="h2" color="text.secondary">
                 Suggestions
@@ -202,6 +206,9 @@ export function InboxPage() {
                   onAnswer={(answer) => respond(item, answer)}
                   onLeft={() => left(item.questionId)}
                 />
+              ))}
+              {reviews.map((r) => (
+                <KgReviewCard key={r.id} review={r} onAnswered={() => kgReviews.drop(r.id)} />
               ))}
             </Box>
           )}

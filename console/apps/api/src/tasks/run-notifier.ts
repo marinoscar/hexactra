@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
-import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_STILL_PAUSED_EVENT, RUN_CARD_AMOUNT_MISMATCH_EVENT, RUN_CARD_USED_EVENT, RUN_SAVED_APPROVALS_EVENT, RUN_SAVED_LOGIN_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, RUN_STILL_PAUSED_EVENT, RUN_CARD_AMOUNT_MISMATCH_EVENT, RUN_CARD_USED_EVENT, RUN_SAVED_APPROVALS_EVENT, RUN_SAVED_LOGIN_EVENT, SCHEDULE_FAILING_EVENT, KGRAPH_SUSPENDED_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
 import { RunReportLinks } from './run-report-link';
 import { outputsView } from './task-outputs';
@@ -163,6 +163,11 @@ export class RunNotifier {
    * once per run. It leads to the chat, where the owner can press Stop. No
    * webhook: nothing about the run's state changed.
    */
+  /** A task's saved procedure was suspended by the circuit breaker (E46.12): once per suspension, with a link to the task. Names only. */
+  async kgraphSuspended(userId: string, taskId: string, taskName: string, versionId: string): Promise<void> {
+    await this.send(KGRAPH_SUSPENDED_EVENT, userId, { taskId, task: taskName.slice(0, 120), versionId, url: this.url(`/tasks/${taskId}`) });
+  }
+
   async overBudget(userId: string, run: RunRef, usedOfLimit: string, label: string): Promise<void> {
     await this.sendFor(run, RUN_OVER_BUDGET_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), usedOfLimit, budget: label, ...this.at(run, `/runs/${run.id}`, 'runUrl') });
   }

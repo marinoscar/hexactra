@@ -52,6 +52,12 @@ import { buildSavedCardTools } from './tools/saved-card-tools';
 import { savedIdentityTools } from './tools/saved-identity';
 import { savedLoginTools } from './tools/saved-logins';
 import { proposeMemory, proposeSavingLogin } from './tools/propose';
+import { kgraphObserverFor } from './kgraph/kgraph-observer';
+import { surfaceCapture } from './kgraph/surface';
+import { subProcedures } from './kgraph/sub-procedure';
+import { procedureTools, proceduresFamily } from './tools/procedures';
+import { everydayBinding } from './kgraph/everyday';
+import { runCandidateSites, SITE_FACT_MODES, siteFactsBinding } from './kgraph/site-facts';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -112,6 +118,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   const browser = new FabricBrowser(session, d.fabric, sessionId, s.connections.lazyBrowser ? ensureSession : undefined);
   const masking = readMasking(memory, browser, () => currentUrlOf(browser));
   const store = new PrismaRunStore(d, userId, run.id, lease, { run, session, sessionId: () => sessionRef.id });
+  // The Knowledge Graph's capture (E46.5): bound only when the run's mode is learn or reuse; otherwise no observer at all.
+  const observer = await kgraphObserverFor(d, userId, run, false, (tool, args) => surfaceCapture(browser, browserState, tool, args));
   const ports: Ports = {
     model: new AiModelPort(d.ai, userId, orgId),
     store,
@@ -124,6 +132,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     ids: { uuid: () => randomUUID() },
     approvals: approvalPort({ d, userId, orgId, run, currentUrl: () => currentUrlOf(browser), hasBrowser: () => Boolean(sessionRef.id) }),
     pictures: picturesPort({ d, userId, runId: run.id, memory, browser, masking, hasBrowser: () => Boolean(sessionRef.id) }),
+    ...(observer ? { observer } : {}),
   };
   const browserState: BrowserState = { labels: new Map(), marks: new Map(), view: null };
   const identityParams = readRunInputs(run.inputs)?.identity ?? [];
@@ -198,6 +207,21 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     },
   } satisfies BrowserHooks);
 
+  // The owner's learned procedures as tools (E46.22): only when the run's Knowledge Graph mode is reuse; otherwise not even constructed.
+  const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
+  const kgMode: string = d.kgraph && (d.kgraphStore || d.kgraphSiteFacts) ? await d.kgraph.modeFor({ userId, taskId: run.taskId ?? null, run: { isTaskRun } }) : 'off';
+  const reuse = Boolean(d.kgraphStore) && kgMode === 'reuse';
+  // The everyday switch (E46.28): a chat or one-off run is offered the owner's procedures that fit its goal, and a block naming them. Off: null,
+  // and nothing below changes.
+  const everyday = reuse
+    ? null
+    : await everydayBinding(d, userId, isTaskRun, { run: { id: run.id, goal: run.goal, taskId: run.taskId ?? null, inputs: run.inputs }, allowedDomains: [...allowedDomains, ...appDomains], connections: s.connections.list, profile: () => profile });
+  const procedures = reuse ? { tools: procedureTools(subProcedures(d, userId, run.taskId ?? null, run.inputs, () => profile)), family: proceduresFamily } : (everyday?.procedures ?? null);
+  // Site facts (E46.31, E46.32): the "About these sites" block and the tools, only in a learn, reuse or everyday run (E46.28's binding is
+  // non-null exactly then); otherwise not even constructed.
+  const factMode = SITE_FACT_MODES.has(kgMode) ? kgMode : everyday ? 'everyday' : null;
+  const facts = factMode ? await siteFactsBinding(d, userId, run, factMode, await runCandidateSites(d, userId, run, [...allowedDomains, ...appDomains])) : null;
+  const siteFacts = facts?.tools ?? null;
   // The tools, in the order the model has always been offered them (one function, shared with the scenario kit).
   const registry = registerRunTools<HostContext>({
     needsBrowser: s.connections.needsBrowser,
@@ -208,6 +232,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     savedCards: flags.savedCards ? buildSavedCardTools(cardCtx) : null,
     connections: s.connections.list.length > 0 && Boolean(d.connections),
     ...(s.connections.list.length > 0 ? await mcpToolset(d, userId, s.connections.list).then((m) => ({ mcp: m.tools, mcpFamilies: m.families })) : { mcp: [] }),
+    procedures,
+    siteFacts,
   });
 
   // A run an email started (E39.8): a reference to the message, never its content.
@@ -231,7 +257,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
       return line ? [line] : [];
     },
     summarizeGuidance: guidanceSummary,
-    aboutOwner: await aboutOwner(d, userId, run, memory.context),
+    // The memories, then "About these sites" (E46.32), then (everyday, E46.28) the saved procedures that may fit: all data, in the stable prefix.
+    aboutOwner: [await aboutOwner(d, userId, run, memory.context), facts?.block ?? '', everyday?.block ?? ''].filter(Boolean).join('\n\n'),
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),
     wrapUpNote: (c) => outputsWrapUpNote(c.ext.outputs),
   };

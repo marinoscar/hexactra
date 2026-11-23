@@ -1634,6 +1634,295 @@
         "/admin/settings/benchmarks/new",
         "/admin/settings/benchmarks/:id"
       ]
+    },
+    {
+      "id": "kgraph.status",
+      "description": "See whether the Knowledge Graph is available to you (the deployment and your own switch), whether your everyday switch is on, and a task's Knowledge Graph mode",
+      "rest": [
+        "GET /api/kgraph/status",
+        "GET /api/tasks/{id}/kgraph"
+      ],
+      "cli": "kgraph status",
+      "mcp": {
+        "none": "Deliberate: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); the procedure tools (procedures_list, procedure_get, procedure_run) and the site-fact tools (site_facts_list, site_fact_propose) are offered only while both are on"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": [
+        "/settings/kgraph",
+        "/tasks/:id"
+      ]
+    },
+    {
+      "id": "kgraph.manage",
+      "description": "Choose a task's Knowledge Graph mode (off, learn, reuse), restore an earlier version of a procedure or forget it, delete everything learned, and turn your own switch on or off (your user setting kgraph.enabled)",
+      "rest": [
+        "PUT /api/tasks/{id}/kgraph",
+        "DELETE /api/kgraph",
+        "POST /api/kgraph/procedures/{id}/restore",
+        "POST /api/kgraph/procedures/{id}/forget"
+      ],
+      "cli": [
+        "kgraph restore",
+        "kgraph forget",
+        "kgraph off",
+        "kgraph on"
+      ],
+      "mcp": {
+        "none": "Deliberate: only the owner, signed in to the console, turns learning on or deletes it; no hosted AI app changes it (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": [
+        "/settings/kgraph",
+        "/tasks/:id",
+        "/kgraph/procedures/:id"
+      ]
+    },
+    {
+      "id": "kgraph.everyday",
+      "description": "Use what was learned in chats and one-off runs: turn your own everyday switch on or off (your user setting kgraph.everyday; it works while the Knowledge Graph is on for you), and see where saved procedures were used (the run page's \"Used saved procedure\" line and each procedure's count of chats and one-off runs)",
+      "rest": [
+        "GET /api/kgraph/status",
+        "PATCH /api/user-settings",
+        "GET /api/kgraph/runs/{runId}",
+        "GET /api/kgraph/procedures/{id}"
+      ],
+      "cli": [
+        "kgraph everyday"
+      ],
+      "mcp": {
+        "none": "Deliberate: the switch is the owner's, set in the console or the CLI; no hosted AI app turns it on (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": [
+        "/settings/kgraph",
+        "/runs/:id",
+        "/kgraph/procedures/:id",
+        "/kgraph"
+      ]
+    },
+    {
+      "id": "kgraph.reviews",
+      "description": "See the Knowledge Graph changes waiting for your review and approve or decline them (signed-in console only)",
+      "rest": [
+        "GET /api/kgraph/reviews",
+        "GET /api/kgraph/reviews/{id}",
+        "POST /api/kgraph/reviews/{id}/answer",
+        "GET /api/kgraph/reviews/site-facts",
+        "POST /api/kgraph/reviews/site-facts/{id}/answer"
+      ],
+      "cli": {
+        "none": "Deliberate: a review is answered only by the owner signed in to the console (docs/decisions/knowledge-graph.md)"
+      },
+      "mcp": {
+        "none": "Deliberate: no hosted AI app or MCP client sees or answers a review"
+      },
+      "tui": {
+        "none": "Deliberate: answered in the signed-in web app only"
+      },
+      "web": [
+        "/kgraph",
+        "/inbox"
+      ]
+    },
+    {
+      "id": "kgraph.site_facts",
+      "description": "See, add, edit, archive, restore and delete short facts about a site that a later run reads as data (Knowledge Graph phase 5); a fact you type is active at once, a proposal waits in your reviews; an agent or AI app connected over MCP can read them and propose one, never approve it",
+      "rest": [
+        "GET /api/kgraph/sites",
+        "GET /api/kgraph/sites/{site}/facts",
+        "POST /api/kgraph/sites/{site}/facts",
+        "POST /api/kgraph/sites/{site}/facts/proposals",
+        "PATCH /api/kgraph/site-facts/{id}",
+        "DELETE /api/kgraph/site-facts/{id}"
+      ],
+      "cli": [
+        "kgraph sites",
+        "kgraph facts",
+        "kgraph facts add"
+      ],
+      "mcp": [
+        "site_facts_list",
+        "site_fact_propose"
+      ],
+      "tui": {
+        "none": "Deliberate: the TUI is for watching and answering"
+      },
+      "web": [
+        "/kgraph"
+      ]
+    },
+    {
+      "id": "kgraph.auto_facts",
+      "description": "Site facts derived automatically after every learn, reuse and everyday run, and your opt-in to approve facts from server records automatically (your user setting kgraph.autoApproveFacts, off by default; it covers derived navigation, timing and quirk facts only, while sign-in facts, the agent's proposals and imported facts always wait for you); see which facts it approved",
+      "rest": [
+        "GET /api/kgraph/status",
+        "PATCH /api/user-settings",
+        "GET /api/kgraph/reviews/site-facts",
+        "GET /api/kgraph/sites/{site}/facts"
+      ],
+      "cli": [
+        "kgraph auto-approve-facts"
+      ],
+      "mcp": {
+        "none": "Deliberate: the setting is the owner's, set in the console or the CLI; no hosted AI app turns it on, and a proposal from an MCP client always waits for the owner (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": [
+        "/settings/kgraph",
+        "/kgraph"
+      ]
+    },
+    {
+      "id": "kgraph.ledger",
+      "description": "See what the Knowledge Graph saved: a task's savings ledger (each run's model calls, cost and time) and a per-task summary against its AI-only baseline",
+      "rest": [
+        "GET /api/kgraph/ledger",
+        "GET /api/kgraph/summary"
+      ],
+      "cli": {
+        "none": "Not offered yet: `hexactra kgraph list` shows each task's clean-replay rate; the ledger itself is read through the REST API or the web app"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
+      },
+      "web": [
+        "/kgraph"
+      ]
+    },
+    {
+      "id": "kgraph.procedures",
+      "description": "Read your learned procedures: the list with state, health and the ledger summary, one procedure as an ordered step list (kind, tool, target, uses AI, health, arguments by source), its versions and a readable diff between two, and how a run's steps ran (replayed, recovered, judged or done by the agent)",
+      "rest": [
+        "GET /api/kgraph/procedures",
+        "GET /api/kgraph/procedures/{id}",
+        "GET /api/kgraph/procedures/{id}/versions",
+        "GET /api/kgraph/procedures/{id}/versions/{version}",
+        "GET /api/kgraph/procedures/{id}/versions/{version}/diff",
+        "GET /api/kgraph/runs/{runId}"
+      ],
+      "cli": [
+        "kgraph list",
+        "kgraph show",
+        "kgraph versions"
+      ],
+      "mcp": [
+        "procedures_list",
+        "procedure_get"
+      ],
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is read in the web app"
+      },
+      "web": [
+        "/kgraph",
+        "/kgraph/procedures/:id",
+        "/runs/:id"
+      ]
+    },
+    {
+      "id": "kgraph.procedure_run",
+      "description": "Run a learned procedure: start a run of an active procedure's task with its parameters, through the run start path every run uses (its policy, limits, gates and Inbox questions)",
+      "rest": [
+        "GET /api/kgraph/procedures/{id}",
+        "GET /api/tasks/{id}/kgraph",
+        "POST /api/tasks/{id}/runs"
+      ],
+      "cli": "tasks run",
+      "mcp": "procedure_run",
+      "tui": {
+        "none": "The TUI is for watching and answering; a run started this way is watched there like any run"
+      },
+      "web": [
+        "/tasks/:id"
+      ]
+    },
+    {
+      "id": "kgraph.graph",
+      "description": "The Knowledge Graph map: procedures, steps and the tools, sites, accounts and saved logins they use, with the connected accounts, added tools and saved logins no procedure uses yet, clustered per site and per account",
+      "rest": [
+        "GET /api/kgraph/graph"
+      ],
+      "cli": {
+        "none": "Deliberate: the map is a picture, drawn in the web app; `kgraph list` and `kgraph show` read the same procedures as text"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps and MCP clients read procedures with procedures_list and procedure_get (E46.22); the ledger and the map are read in the console"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the map is drawn in the web app"
+      },
+      "web": [
+        "/kgraph"
+      ]
+    },
+    {
+      "id": "kgraph.admin",
+      "description": "Allow or stop the Knowledge Graph for the whole deployment and set its audit, suspension, retention and pacing rules (administrators)",
+      "rest": [
+        "GET /api/admin/kgraph/settings",
+        "PUT /api/admin/kgraph/settings"
+      ],
+      "cli": {
+        "none": "Deliberate: a deployment setting is changed by an administrator in the web app's settings; `kgraph status` shows whether it is on"
+      },
+      "mcp": {
+        "none": "Deliberate: no hosted AI app or MCP client changes a deployment setting"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; deployment settings are set in the web app"
+      },
+      "web": [
+        "/admin/settings/kgraph"
+      ]
+    },
+    {
+      "id": "kgraph.upkeep",
+      "description": "Run the Knowledge Graph's library upkeep now (administrators)",
+      "rest": [
+        "POST /api/kgraph/admin/upkeep"
+      ],
+      "cli": {
+        "none": "An administrator's action in the web app"
+      },
+      "mcp": {
+        "none": "Deliberate: an administrator's maintenance action, not for hosted AI apps"
+      },
+      "tui": {
+        "none": "An administrator's action in the web app"
+      },
+      "web": {
+        "none": "Not in the web app yet: the daily job runs it; an administrator runs it now through the REST route"
+      }
+    },
+    {
+      "id": "kgraph.transfer",
+      "description": "Export your Knowledge Graph procedures as a file, and import a file (it waits for your review and a verification run)",
+      "rest": [
+        "GET /api/kgraph/export",
+        "POST /api/kgraph/import"
+      ],
+      "cli": {
+        "none": "Arrives with the Knowledge Graph CLI commands (E46.19)"
+      },
+      "mcp": {
+        "none": "Deliberate: procedures are not exported to or imported from hosted AI apps (docs/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "Done in the web app or the REST API"
+      },
+      "web": {
+        "none": "Not in the web app yet: export and import go through the REST API"
+      }
     }
   ]
 }

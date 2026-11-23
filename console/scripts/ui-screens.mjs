@@ -268,6 +268,25 @@ export const ROUTES = [
   ['task-connections-detail', '/tasks/{carTask}'],
   ['run-connections', '/runs/{carRun}'],
   ['settings-connections-details', '/settings/connections', { action: openConnectionDetails }],
+  // The Knowledge Graph (E46.20, #794): the page's tabs, a procedure, a version's diff, the settings cards' pages. The task page
+  // (`task-detail`), a finished run (`run-finished`) and the Inbox (`inbox`) show its control, panel and review card in the mock.
+  ['kgraph', '/kgraph'],
+  ['kgraph-reviews', '/kgraph?tab=reviews'],
+  ['kgraph-sites', '/kgraph?tab=sites'],
+  ['kgraph-site-facts', '/kgraph?tab=sites&site=example.test'],
+  ['kgraph-site-add', '/kgraph?tab=sites&site=example.test', { action: pressButton('Add a fact') }],
+  // The Map (E46.21): the canvas from 768 px up, the short note and link below; then a task opened in the side panel and expanded, and
+  // "what uses this site" (run these two at 768, 1024 and 1440: below 768 there is no map to press).
+  ['kgraph-map', '/kgraph?tab=map', { action: settleMap }],
+  ['kgraph-map-task', '/kgraph?tab=map', { action: mapPress('Task: Export the open orders', 'Show its steps') }],
+  ['kgraph-map-site', '/kgraph?tab=map', { action: mapPress('Site: portal.example.test', 'What uses this site') }],
+  ['kgraph-history', '/kgraph?tab=history', { action: pressButton('What changed') }],
+  ['kgraph-procedure', '/kgraph/procedures/kgp-ui-1'],
+  // E46.29: a chat run that used a saved procedure (the everyday switch): "Used saved procedure: <name>" in the run's Knowledge Graph panel.
+  ['run-everyday', '/runs/{chatRun}'],
+  ['settings-kgraph', '/settings/kgraph'],
+  ['settings-kgraph-delete', '/settings/kgraph', { viewport: true, action: pressButton('Delete everything learned') }],
+  ['admin-kgraph', '/admin/settings/kgraph'],
   ['inbox-account-approvals', '/inbox', {
     action: async (page) => {
       await page.getByRole('button', { name: 'Show all' }).first().click({ timeout: 5_000 });
@@ -276,6 +295,24 @@ export const ROUTES = [
     },
   }],
 ];
+
+/** The Map (E46.21): from 768 px up, wait for the lazily loaded canvas and its fit; below, the note is the page. */
+async function settleMap(page, width) {
+  if (width < 768) return;
+  await page.locator('.react-flow__node').first().waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(600);
+}
+
+/** The Map: choose a node in the keyboard list (its accessible name starts with `node`), then press `button` in the side panel. */
+function mapPress(node, button) {
+  return async (page, width) => {
+    if (width < 768) return;
+    await settleMap(page, width);
+    await page.getByRole('list', { name: 'Nodes on the map' }).getByRole('button', { name: new RegExp(`^${node.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first().click({ timeout: 5_000 });
+    await page.getByRole('complementary', { name: 'Details' }).getByRole('button', { name: button, exact: true }).click({ timeout: 5_000 });
+    await page.waitForTimeout(800);
+  };
+}
 
 /** The task form: open "Accounts the agent may use" and "Where the result goes". */
 async function openSections(page) {

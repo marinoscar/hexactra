@@ -1,4 +1,5 @@
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
@@ -20,7 +21,7 @@ import { USER_SETTINGS_SECTIONS } from './userSettingsSections';
  * `/admin/*` (Console mode). Every `permission` is the exact string the API
  * enforces; the Console shows for anyone who can open one of its cards.
  */
-export const NAVIGATION: ShellNavigation<'chat' | 'overview' | 'inbox' | 'tasks' | 'runs' | 'fleet' | 'settings' | 'console'> = {
+export const NAVIGATION: ShellNavigation<'chat' | 'overview' | 'inbox' | 'tasks' | 'runs' | 'kgraph' | 'fleet' | 'settings' | 'console'> = {
   destinations: [
     // Chat is the home (#713): `/` is a new chat, and every chat is under `/chat`.
     { key: 'chat', label: 'Chat', compactLabel: 'Chat', Icon: ChatBubbleOutlineIcon, path: '/', permission: 'chat:read' },
@@ -29,6 +30,8 @@ export const NAVIGATION: ShellNavigation<'chat' | 'overview' | 'inbox' | 'tasks'
     { key: 'overview', label: 'Overview', compactLabel: 'Overview', Icon: DashboardIcon, path: '/overview' },
     { key: 'tasks', label: 'Tasks', compactLabel: 'Tasks', Icon: AssignmentOutlinedIcon, path: '/tasks', permission: 'tasks:read' },
     { key: 'runs', label: 'Runs', compactLabel: 'Runs', Icon: PlayCircleOutlineIcon, path: '/runs', permission: 'runs:read' },
+    // The Knowledge Graph (E46.20): only while the deployment's and the viewer's own switch are on (the `kgraph` feature, App.tsx).
+    { key: 'kgraph', label: 'Knowledge Graph', compactLabel: 'Learned', Icon: AccountTreeOutlinedIcon, path: '/kgraph', permission: 'kgraph:read', feature: 'kgraph' },
     { key: 'fleet', label: 'Fleet', compactLabel: 'Fleet', Icon: DnsOutlinedIcon, path: '/fleet', permission: 'fleet:read' },
     { key: 'settings', label: 'Settings', compactLabel: 'Settings', Icon: SettingsIcon, path: '/settings' },
     {
@@ -37,11 +40,11 @@ export const NAVIGATION: ShellNavigation<'chat' | 'overview' | 'inbox' | 'tasks'
       compactLabel: 'Admin',
       Icon: AdminPanelSettingsIcon,
       path: '/admin/settings',
-      anyPermission: ['system_settings:read', 'fabric_config:read', 'users:read', 'org_members:read', 'organizations:read', 'jobs:read', ...sliceConsolePermissions],
+      anyPermission: ['system_settings:read', 'fabric_config:read', 'users:read', 'org_members:read', 'organizations:read', 'jobs:read', 'kgraph:admin', ...sliceConsolePermissions],
       pinned: true,
     },
   ],
-  destinationRoutes: { chat: ['/', '/chat'], overview: ['/overview'], inbox: ['/inbox'], tasks: ['/tasks'], runs: ['/runs'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
+  destinationRoutes: { chat: ['/', '/chat'], overview: ['/overview'], inbox: ['/inbox'], tasks: ['/tasks'], runs: ['/runs'], kgraph: ['/kgraph'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
   settingsSurfaces: [
     { sections: ADMIN_SECTIONS, hubPath: '/admin/settings', hubTitle: 'Administration' },
     { sections: USER_SETTINGS_SECTIONS, hubPath: '/settings', hubTitle: 'Settings' },

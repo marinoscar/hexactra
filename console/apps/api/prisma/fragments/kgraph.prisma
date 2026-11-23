@@ -1,0 +1,288 @@
+// The Knowledge Graph (epic E46, #770; console docs/decisions/knowledge-graph.md): per owner, the procedures the agent learned from the
+// owner's own saved-task runs, their versions and evidence, and the per-task and per-run settings. New tables only (prefix `kg_`): no
+// column of an existing table changes; the relation fields on Task, Run and User are virtual. No Secret Material: a version's graph holds
+// labels and references, never a typed value (the package's validator refuses one). Every row has `user_id` and is deleted with its user.
+// Registered in the user-owned data registry (src/kgraph/kgraph.ownership.ts).
+
+/// The Knowledge Graph mode of one saved task (`off` | `learn` | `reuse`). No row: `off`.
+model KgTaskSettings {
+  taskId    String   @id @map("task_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  mode      String   @default("off") @db.VarChar(8)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("kg_task_settings")
+}
+
+/// The Knowledge Graph facts of one run: its effective mode, whether the owner chose AI only, the version it replayed and how it ended.
+model KgRun {
+  runId              String   @id @map("run_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  mode               String   @default("off") @db.VarChar(8)
+  aiOnly             Boolean  @default(false) @map("ai_only")
+  procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
+  /// null while running; then `replayed` | `fell_back` | `learned` | `ai_only` | `failed` (a short code, never page text). An `everyday`
+  /// run (E46.28): `procedure_done` while every procedure it ran finished, `procedure_stopped` once one stopped.
+  outcome            String?  @db.VarChar(32)
+  /// `everyday` runs (E46.28): the procedure steps that ran without the model, across every `run_procedure` call of the run.
+  stepsReplayed      Int      @default(0) @map("steps_replayed")
+  /// The site facts the run was given in its "About these sites" block (E46.32): ids only.
+  offeredFactIds     String[] @default([]) @map("offered_fact_ids") @db.VarChar(200)
+  /// The site facts the run used (E46.32): read through `site_facts`, or given in the block and named by its steps. Ids only.
+  factIds            String[] @default([]) @map("fact_ids") @db.VarChar(200)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("kg_runs")
+}
+
+/// A node of the owner's graph (a site, a screen, an element, a tool, an account reference, ...), keyed by type and a stable key.
+model KgNode {
+  id        String   @id @db.VarChar(200)
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(32)
+  key       String   @db.VarChar(500)
+  label     String   @db.VarChar(200)
+  props     Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, key])
+  @@map("kg_nodes")
+}
+
+/// An edge of the owner's graph.
+model KgEdge {
+  id        String   @id @db.VarChar(200)
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(32)
+  fromId    String   @map("from_id") @db.VarChar(200)
+  toId      String   @map("to_id") @db.VarChar(200)
+  props     Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, fromId, type])
+  @@index([userId, toId, type])
+  @@map("kg_edges")
+}
+
+/// One saved task's learned procedure across versions.
+model KgProcedure {
+  id              String   @id @db.VarChar(200)
+  userId          String   @map("user_id") @db.Uuid
+  taskId          String   @map("task_id") @db.Uuid
+  name            String   @db.VarChar(200)
+  activeVersionId String?  @map("active_version_id") @db.VarChar(200)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task     Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  versions KgProcedureVersion[]
+
+  @@unique([userId, taskId])
+  @@map("kg_procedures")
+}
+
+/// One immutable version of a procedure: `graph` is the package's ProcedureVersion without its state and evidence (those are columns and
+/// kg_evidence rows). Only `state` changes after it is written.
+model KgProcedureVersion {
+  id              String   @id @db.VarChar(200)
+  userId          String   @map("user_id") @db.Uuid
+  procedureId     String   @map("procedure_id") @db.VarChar(200)
+  seq             Int
+  /// candidate | verified | active | suspended | retired
+  state           String   @db.VarChar(12)
+  graph           Json
+  /// initial | structural | sensitive
+  changeClass     String   @map("change_class") @db.VarChar(12)
+  /// The run it was compiled or repaired from: a plain id, kept when the run is deleted.
+  sourceRunId     String?  @map("source_run_id") @db.VarChar(200)
+  parentVersionId String?  @map("parent_version_id") @db.VarChar(200)
+  createdAt       DateTime @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  procedure KgProcedure  @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  evidence  KgEvidence[]
+
+  @@unique([procedureId, seq])
+  @@index([userId, procedureId])
+  @@map("kg_procedure_versions")
+}
+
+/// Counters of one version (`step_id` empty) or one of its steps.
+model KgEvidence {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  versionId     String    @map("version_id") @db.VarChar(200)
+  stepId        String    @default("") @map("step_id") @db.VarChar(200)
+  successes     Int       @default(0)
+  failures      Int       @default(0)
+  repairs       Int       @default(0)
+  lastSuccessAt DateTime? @map("last_success_at") @db.Timestamptz
+  lastFailureAt DateTime? @map("last_failure_at") @db.Timestamptz
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version KgProcedureVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, stepId])
+  @@index([userId, versionId])
+  @@map("kg_evidence")
+}
+
+/// A proposed sensitive change waiting for the owner (E46.17): the proposed version, a summary of what changes, and the question asked.
+model KgReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  versionId  String   @map("version_id") @db.VarChar(200)
+  /// Labels and kinds of what changes: never a typed value.
+  summary    Json     @default("[]")
+  /// pending | approved | declined | expired
+  status     String   @default("pending") @db.VarChar(12)
+  questionId String?  @map("question_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("kg_reviews")
+}
+
+/// One tool call of a learn- or reuse-mode run (E46.5): each argument's provenance (never its value unless a safe literal), the state after
+/// it (host and path, a view digest, a result shape) and whether it worked. Written outside the step transaction, best effort. Deleted with
+/// its run, and after the procedure compiled from it is verified (E46.24).
+model KgTrace {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  runId     String   @map("run_id") @db.Uuid
+  seq       Int
+  tool      String   @db.VarChar(64)
+  family    String   @db.VarChar(200)
+  commits   Boolean  @default(false)
+  bindings  Json     @default("{}")
+  post      Json     @default("{}")
+  ok        Boolean
+  /// ran | refused | asked
+  outcome   String   @db.VarChar(12)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([userId, runId, seq])
+  @@map("kg_traces")
+}
+
+/// The savings ledger (E46.6): one row per run whose effective mode was not `off`, written by a queue job after the run ended. Its own
+/// counters copied from the run (model calls, tokens, cost, active time), the steps by how they ran and the outcome. Deleted with its run.
+model KgLedger {
+  runId              String   @id @map("run_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  /// null for an `everyday` row (E46.28): a chat or one-off run has no task, and its row never enters a task's baseline.
+  taskId             String?  @map("task_id") @db.Uuid
+  /// learn | reuse | everyday
+  mode               String   @db.VarChar(8)
+  procedureVersionId String?  @map("procedure_version_id") @db.VarChar(200)
+  /// The run's terminal status (`succeeded` | `failed` | `cancelled`): the baseline reads succeeded runs only.
+  runStatus          String   @map("run_status") @db.VarChar(16)
+  stepsReplayed      Int      @default(0) @map("steps_replayed")
+  stepsRecovered     Int      @default(0) @map("steps_recovered")
+  stepsJudge         Int      @default(0) @map("steps_judge")
+  stepsAgent         Int      @default(0) @map("steps_agent")
+  modelCalls         Int      @default(0) @map("model_calls")
+  inputTokens        Int      @default(0) @map("input_tokens")
+  outputTokens       Int      @default(0) @map("output_tokens")
+  cachedInputTokens  Int      @default(0) @map("cached_input_tokens")
+  costUsd            Decimal  @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  costKnown          Boolean  @default(true) @map("cost_known")
+  activeMs           Int      @default(0) @map("active_ms")
+  /// replayed_clean | recovered | repaired | fell_back | ai_only
+  outcome            String   @db.VarChar(16)
+  /// Whether the procedure's outcome checks passed; null when no procedure ran.
+  checksPassed       Boolean? @map("checks_passed")
+  finishedAt         DateTime @map("finished_at") @db.Timestamptz
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run  Run  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, taskId, finishedAt])
+  @@map("kg_ledger")
+}
+
+/// A site fact (phase 5, E46.31): a short note about one site (registrable domain) that a later run reads as data, never as an instruction
+/// or a permission. Only the owner's own act makes one `active`; derived and agent proposals start `proposed` and wait in Reviews. One fact
+/// per owner and identity (site, kind and normalised text). No Secret Material: the text passed the memories secret check and the
+/// sensitive patterns before it was stored.
+model KgSiteFact {
+  id         String    @id @db.VarChar(200)
+  userId     String    @map("user_id") @db.Uuid
+  site       String    @db.VarChar(253)
+  /// navigation | sign_in | quirk | timing | other
+  kind       String    @db.VarChar(16)
+  text       String    @db.VarChar(300)
+  /// The package's `siteFactKey`: site, kind and normalised text.
+  identity   String
+  /// owner | derived | agent_proposed
+  source     String    @db.VarChar(16)
+  /// proposed | active | archived
+  status     String    @default("proposed") @db.VarChar(12)
+  /// For a proposal: the run, its calls and screens (ids only, never page text).
+  evidence   Json      @default("{}")
+  /// How an active fact was approved (E46.36): owner (approved, typed or restored by the owner) | auto (the owner's opt-in
+  /// `kgraph.autoApproveFacts`, for a fact derived from server records). Read only when the fact is not proposed or declined.
+  approvedBy String    @default("owner") @map("approved_by") @db.VarChar(8)
+  /// Set when the owner declined the proposal in Reviews: the same identity is not proposed again for 30 days.
+  declinedAt DateTime? @map("declined_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  createdAt  DateTime  @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, identity])
+  @@index([userId, site, status])
+  @@map("kg_site_facts")
+}
+
+extend model User {
+  kgSiteFacts        KgSiteFact[]
+  kgLedger           KgLedger[]
+  kgTraces           KgTrace[]
+  kgTaskSettings     KgTaskSettings[]
+  kgRuns             KgRun[]
+  kgNodes            KgNode[]
+  kgEdges            KgEdge[]
+  kgProcedures       KgProcedure[]
+  kgProcedureVersions KgProcedureVersion[]
+  kgEvidence         KgEvidence[]
+  kgReviews          KgReview[]
+}
+
+extend model Task {
+  kgSettings   KgTaskSettings?
+  kgProcedures KgProcedure[]
+  kgLedger     KgLedger[]
+}
+
+extend model Run {
+  kg       KgRun?
+  kgLedger KgLedger?
+  kgTraces KgTrace[]
+}

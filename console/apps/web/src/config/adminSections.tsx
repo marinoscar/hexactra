@@ -11,6 +11,7 @@ import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/head
 import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
@@ -155,6 +156,15 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: VideocamOutlinedIcon,
         path: '/admin/settings/run-recordings',
         permission: 'system_settings:read',
+      },
+      // The Knowledge Graph (E46.20): the deployment switch, off by default, and its audit, suspension and pacing rules.
+      // `kgraph:admin` is what GET and PUT /api/admin/kgraph/settings enforce.
+      {
+        title: 'Knowledge Graph',
+        description: "Allow saved tasks to learn their steps and repeat them without the model (off by default), how often they are checked with AI only, when one is suspended, and their pacing.",
+        Icon: AccountTreeOutlinedIcon,
+        path: '/admin/settings/kgraph',
+        permission: 'kgraph:admin',
       },
       // Benchmarks (E44.5, #743): `benchmarks:read` is what GET /api/benchmarks enforces; starting, cancelling and
       // deleting need `benchmarks:run`, checked in the pages.

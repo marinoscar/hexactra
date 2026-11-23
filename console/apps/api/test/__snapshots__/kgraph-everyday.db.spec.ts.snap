@@ -1,0 +1,81 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`the everyday switch: procedures in chats and one-off runs (E46.28) everyday on: the block names the matched procedure, the tools come last, and run_procedure walks it through executeTool 1`] = `
+[
+  {
+    "description": "List the owner's saved procedures you can run with run_procedure: each one's id, what it does, the parameters it takes and what it returns. With a query (a few words of what you need, or a site), only those that fit it, best first.",
+    "name": "procedures_list",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+      },
+      "required": [
+        "query",
+      ],
+      "type": "object",
+    },
+  },
+  {
+    "description": "Run one of the owner's saved procedures (from procedures_list) now, in this run, with its parameters. Each of its steps passes the same checks as your own actions. If it stops, look at the page and continue yourself. A procedure cannot run another one. Never pass a sensitive value: it comes from the run itself.",
+    "name": "run_procedure",
+    "parameters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "parameters": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "value": {
+                    "maxLength": 500,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "name",
+                  "value",
+                ],
+                "type": "object",
+              },
+              "maxItems": 50,
+              "type": "array",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "procedure_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "procedure_id",
+        "parameters",
+      ],
+      "type": "object",
+    },
+  },
+]
+`;

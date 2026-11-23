@@ -7,6 +7,10 @@ import type { CapabilityHub } from '../../connections/capability-hub';
 import type { McpRunService } from '../../connections/mcp/mcp-run.service';
 import type { ApprovalRulesService } from '../../approvals/approval-rules.service';
 import type { FabricClient } from '../../fabric/fabric.client';
+import type { KgraphAfterRun } from '../../kgraph/kgraph-compile.job';
+import type { KgraphEnabledService } from '../../kgraph/kgraph-enabled.service';
+import type { PrismaProcedureStore } from '../../kgraph/prisma-procedure-store';
+import type { KgraphSiteFactsService } from '../../kgraph/site-facts.service';
 import type { MemoryContext } from '../../memories/memory-context';
 import type { MemoryProposals } from '../../memories/memory-proposals.service';
 import type { ModelTiersService } from '../../policies/model-tiers.service';
@@ -45,6 +49,14 @@ export interface HostDeps {
   mcp?: Pick<McpRunService, 'toolsFor' | 'call' | 'check' | 'exactSecrets'>;
   /** The run's trace and PDF report (E35): `file_upload` hands the report to a connection. */
   traces?: Pick<RunTraceService, 'exportPdf'>;
+  /** The Knowledge Graph's gate (E46): absent, or `off` for the run, and nothing watches its tool calls. */
+  kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'> & Partial<Pick<KgraphEnabledService, 'everydayFor' | 'countError'>>;
+  /** The Knowledge Graph's store (E46.9): absent, and no run replays a procedure. */
+  kgraphStore?: PrismaProcedureStore;
+  /** The owner's site facts (E46.31, E46.32): absent, and no run is given site facts or offered `propose_site_fact` and `site_facts`. */
+  kgraphSiteFacts?: Pick<KgraphSiteFactsService, 'propose' | 'activeFor' | 'offeredTo' | 'recordOffered' | 'markUsed' | 'afterRun'>;
+  /** After a run's final transition (E46.7): enqueues the compile job when the run was captured. Best effort. */
+  kgraphAfterRun?: Pick<KgraphAfterRun, 'finished'>;
   /** The wall clock; tests replace it to pass time without waiting. */
   clock: () => number;
   log: Logger;

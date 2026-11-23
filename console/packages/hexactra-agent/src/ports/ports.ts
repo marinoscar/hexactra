@@ -3,6 +3,7 @@ import type { ClockPort, IdPort } from './clock';
 import type { ControlPort } from './control';
 import type { EventsPort } from './events';
 import type { ModelPort } from './model';
+import type { ObserverPort } from './observer';
 import type { PicturePort } from './picture';
 import type { PolicyPort } from './policy';
 import type { QuestionPort } from './questions';
@@ -24,4 +25,6 @@ export interface Ports {
   approvals?: ApprovalPort;
   /** Absent: no step carries a trace picture. */
   pictures?: PicturePort;
+  /** Absent: nothing watches tool calls (E46.5). */
+  observer?: ObserverPort;
 }

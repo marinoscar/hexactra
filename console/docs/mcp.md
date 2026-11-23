@@ -62,6 +62,10 @@ Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its s
 | `tasks:write` | Create and change tasks and schedules | low | yes | — | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
 | `inbox:read` | See questions your agent is waiting on | low | yes | — | `inbox_list`, `question_status` | `runs:read` |
 | `inbox:write` | Ask you questions and pass on answers you give in the chat | low | yes | — | `inbox_answer`, `ask_human`, `question_card_answer` | `runs:write`, `runs:read` |
+| `procedures:read` | See the procedures the agent learned | low | no | — | `procedures_list`, `procedure_get` | `kgraph:read` |
+| `procedures:run` | Run a learned procedure | low | no | — | `procedure_run` | `kgraph:read`, `runs:write`, `runs:read` |
+| `site_facts:read` | See the facts your agent keeps about sites | low | no | — | `site_facts_list` | `kgraph:read` |
+| `site_facts:write` | Propose facts about sites for you to review | low | no | — | `site_fact_propose` | `kgraph:write` |
 | `browser:drive` | Control a browser on your machines directly, step by step | elevated | no | — | `browser_open`, `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot`, `browser_click_at`, `browser_hover_at`, `browser_drag`, `browser_scroll_at`, `browser_type_keys`, `browser_key`, `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` | `runs:write`, `runs:read` |
 | `browser:evaluate` | Run JavaScript in pages you are signed in to | high | no | `browser:drive` | `browser_evaluate` | `runs:write` |
 | `desktop:control` | Control the whole desktop of your machines (mouse, keyboard, screen) | high | no | `browser:drive` | `browser_desktop_screenshot`, `browser_desktop_click`, `browser_desktop_type`, `browser_desktop_key`, `browser_desktop_scroll`, `browser_desktop_drag` | `runs:write`, `runs:read` |
@@ -322,6 +326,11 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `browser_handoff_status` | Check a help request | `browser:drive` | read | yes | yes | yes |
 | `browser_type_secret` | Type a secret the user gave | `browser:drive` | destructive | yes | no | no |
 | `browser_close` | Close a browser session | `browser:drive` | destructive | yes | yes | no |
+| `procedures_list` | List learned procedures | `procedures:read` | read | no | yes | yes |
+| `procedure_get` | Read a learned procedure | `procedures:read` | read | no | yes | yes |
+| `procedure_run` | Run a learned procedure | `procedures:run` | write | yes | no | yes |
+| `site_facts_list` | List site facts | `site_facts:read` | read | no | yes | yes |
+| `site_fact_propose` | Propose a site fact | `site_facts:write` | write | no | yes | yes |
 | `run_card_poll` | Refresh a run card | `runs:read` | read | no | yes | yes |
 | `question_card_answer` | Answer from the question card | `inbox:write` | write | no | no | yes |
 <!-- mcp-tools:end -->
@@ -404,6 +413,25 @@ Example (a task that runs on weekdays, checked first):
 { "name": "schedule_preview", "arguments": { "cron": "0 9 * * 1-5" } }
 { "name": "task_create", "arguments": { "name": "Morning report", "goal": "Read me the headline numbers", "schedules": [{ "cron": "0 9 * * 1-5", "policy_id": "builtin:economy" }] } }
 ```
+
+## Learned procedures (E46.22)
+
+When the Knowledge Graph is on for the deployment **and** for the caller's own account ([owner guide](knowledge-graph.md), [decision record](decisions/knowledge-graph.md), [threat model](security-kgraph.md); experimental and off by default at every level), three more tools are listed, built from the host-neutral descriptors of `@marinoscar/hexactra-kgraph/mcp` (its own [docs/mcp.md](../packages/hexactra-kgraph/docs/mcp.md) explains how any MCP server can expose them):
+
+- **`procedures_list`** (`procedures:read`): the caller's learned procedures with their id, the task's name, the parameters they take and the outputs they return, state and health. Filters `state` and `query`, `limit` up to 50.
+- **`procedure_get`** (`procedures:read`): one procedure's masked steps in order. Step labels can come from web pages: the result starts with the untrusted notice and sets `untrusted: true`.
+- **`procedure_run`** (`procedures:run`, `openWorld`): starts a run of an **active** procedure's task with `inputs` by parameter name, through `POST /api/tasks/{id}/runs` (the same policy, limits, gates and Inbox questions as any run) and returns `{ run_id, status, procedure_id, task_id, follow }` at once: follow it with `run_wait`. It refuses a procedure that is not active (`PROCEDURE_NOT_ACTIVE`), a task whose mode is not `reuse` (`PROCEDURE_NOT_REUSED`) and a sensitive parameter (`SENSITIVE_INPUT`).
+
+**Availability is per request** (`McpTool.feature` in the registry): while either switch is off the three tools are absent from `tools/list` for every caller, which is then exactly the list of before, and a direct call answers `TURNED_OFF`. Both scopes are opt-in (not ticked by default). **Never over MCP:** creating, editing, approving, declining, restoring, forgetting, exporting or importing a procedure, or changing a switch. With the deployment switch off, the consent screen a hosted client gets by default shows no Knowledge Graph scope and no step-up asks for one, but a client that explicitly asks for one still sees it (the platform shows the scopes a client asks for, and lists every registered scope in its metadata): [security-hosted-clients.md](security-hosted-clients.md#consent-with-the-knowledge-graph-off), `mcp-kgraph-consent.db.spec.ts`. The agent-framework recipes ([agent-frameworks.md](agent-frameworks.md)) connect with these tools in place: CI runs `agent-clients.db.spec.ts` against the real Hermes Agent, OpenClaw and Pi CLIs with `AGENT_CLIENTS_SMOKE=1`, where a missing CLI fails the suite.
+
+## Site facts (E46.35)
+
+Under the same two switches (`McpTool.feature`, as above), two more tools read the owner's site facts and propose one ([owner guide](knowledge-graph.md#site-facts)). A site fact is data about a site, never an instruction or a permission.
+
+- **`site_facts_list`** (`site_facts:read`): the caller's facts with their `site`, `kind`, `text`, `source`, `status` and `last_used_at`; optional `site` (a registrable domain) and `status` (default `active`, the ones runs read), at most 100 (`has_more`). Fact text can come from web pages: the result starts with the untrusted notice and sets `untrusted: true`.
+- **`site_fact_propose`** (`site_facts:write`): `site`, `kind` and `text`, through `POST /api/kgraph/sites/{site}/facts/proposals`. The fact is always stored `proposed` with source `agent_proposed`, never active; it returns `{ outcome, fact_id, status, review_url }`, where `outcome` is `proposed`, `known` (the owner already has it) or `suppressed` (declined in the last 30 days), and the summary tells the caller the owner approves it in Hexactra at `review_url`. A password, code, token or full number, a credential given in words ("The password is …", "PIN: 4821", E46.39), an instruction or another site is refused (`KGRAPH_SITE_FACT_REFUSED`) naming the rule, never echoing the text. The owner's opt-in auto-approve never applies to a proposal from MCP: it covers only facts the server derived from a run's records.
+
+Both scopes are opt-in. **Never over MCP:** approving, declining, editing, archiving, restoring or deleting a fact (approving is console-only, `KGRAPH_REVIEW_CONSOLE_ONLY`). Proven end to end in `apps/api/test/scenarios/kgraph/phase6-mcp.db.spec.ts`: a hosted client with both scopes lists facts under the untrusted notice, its proposal stays `proposed` with the owner's auto-approve on, and its token cannot approve.
 
 ## Asking the user
 

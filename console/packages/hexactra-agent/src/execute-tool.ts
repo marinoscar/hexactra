@@ -8,9 +8,11 @@
 //   4. A commit-class tool (`commits: true`) runs marked as one: the first action it sends is intent-recorded before it goes (E38.3).
 //   5. The tool runs through the context and returns the text the model reads. Recording the step, feeding the stall detector, the
 //      budget and the activity are the context's services (`ctx.record`, `ctx.setActivity`), applied once per step whoever calls them.
+//   6. An observer, when the host binds one (E46.5, the Knowledge Graph's capture), sees the call after it returned. Without one nothing
+//      changes; with one the call, its result and its steps are the same.
 import type { GatePipeline } from './gate-pipeline';
 import { runAsCommit } from './intent';
-import type { ModelTool, ToolCallMeta } from './ports';
+import type { ModelTool, ObservedStep, ToolCallMeta } from './ports';
 import type { AnyContext } from './run-context';
 import type { ToolRegistry } from './registry';
 import type { RunnerTool } from './tool-def';
@@ -29,19 +31,56 @@ export async function executeTool<C extends AnyContext>(ctx: C, tool: RunnerTool
     return PAUSED_TEXT;
   }
   const meta: ToolCallMeta = { family: toolFamilyOf(tool) };
+  const observer = ctx.ports.observer;
+  if (!observer) return telemetry.toolCall(tool.name, () => runGated(ctx, tool, args, pipeline, meta), meta);
+  // 6. An observer (E46.5) sees the call after it returned. It never changes the result: a throw is caught and counted.
   return telemetry.toolCall(tool.name, async () => {
-    // 3. The gates.
-    const verdict = await pipeline.run(ctx, tool, args);
-    if (verdict.kind === 'refuse') {
-      meta.outcome = 'refused';
-      if (verdict.step) await ctx.record('action', verdict.step.action, verdict.step.args, false, verdict.step.summary, Date.now(), verdict.step.reasoning);
-      return verdict.text;
+    const startedAt = Date.now();
+    const steps: ObservedStep[] = [];
+    const record = ctx.record;
+    ctx.record = (kind, action, recArgs, ok, summary, started, reasoning, extra, intentSeq) => {
+      steps.push({ ok, url: extra?.url ?? null, ...(extra?.contentHash ? { contentHash: extra.contentHash } : {}) });
+      return record(kind, action, recArgs, ok, summary, started, reasoning, extra, intentSeq);
+    };
+    const facts = { outcome: 'ran' as 'ran' | 'refused' | 'asked' };
+    try {
+      await observer.beforeToolCall?.({ tool: tool.name, family: meta.family, args });
+    } catch {
+      ctx.state.observerErrors = (ctx.state.observerErrors ?? 0) + 1;
     }
-    if (verdict.kind === 'ask') return (await ctx.askPerson(verdict.question, Date.now())) ? verdict.text : 'Could not reach a person right now.';
-    // 4 and 5. The tool.
-    const run = () => tool.execute(ctx, args, verdict.decision);
-    return tool.commits ? runAsCommit(run) : run();
+    let text: string;
+    try {
+      text = await runGated(ctx, tool, args, pipeline, meta, facts);
+    } finally {
+      ctx.record = record;
+    }
+    try {
+      const last = steps[steps.length - 1];
+      await observer.toolCall({ seq: ctx.state.seq, tool: tool.name, family: meta.family, commits: tool.commits === true, args, resultText: text, ok: last ? last.ok : facts.outcome === 'ran', outcome: facts.outcome, steps, startedAt, durationMs: Date.now() - startedAt });
+    } catch {
+      ctx.state.observerErrors = (ctx.state.observerErrors ?? 0) + 1;
+    }
+    return text;
   }, meta);
+}
+
+/** Steps 3 to 5: the gates, then the tool. */
+async function runGated<C extends AnyContext>(ctx: C, tool: RunnerTool<C>, args: unknown, pipeline: GatePipeline<C>, meta: ToolCallMeta, facts?: { outcome: 'ran' | 'refused' | 'asked' }): Promise<string> {
+  // 3. The gates.
+  const verdict = await pipeline.run(ctx, tool, args);
+  if (verdict.kind === 'refuse') {
+    meta.outcome = 'refused';
+    if (facts) facts.outcome = 'refused';
+    if (verdict.step) await ctx.record('action', verdict.step.action, verdict.step.args, false, verdict.step.summary, Date.now(), verdict.step.reasoning);
+    return verdict.text;
+  }
+  if (verdict.kind === 'ask') {
+    if (facts) facts.outcome = 'asked';
+    return (await ctx.askPerson(verdict.question, Date.now())) ? verdict.text : 'Could not reach a person right now.';
+  }
+  // 4 and 5. The tool.
+  const run = () => tool.execute(ctx, args, verdict.decision);
+  return tool.commits ? runAsCommit(run) : run();
 }
 
 /** The tools of this round as the model port takes them: each call goes through `executeTool`. */
