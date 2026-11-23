@@ -29,6 +29,7 @@ const fact = (over: Partial<KgSiteFact>): KgSiteFact => ({
   text: 'Invoices: Billing, then <b>History</b>',
   source: 'owner',
   status: 'active',
+  approvedBy: 'owner',
   evidence: { runId: null, steps: 0, screens: 0 },
   declinedAt: null,
   lastUsedAt: '2026-11-20T10:00:00.000Z',
@@ -39,7 +40,9 @@ const fact = (over: Partial<KgSiteFact>): KgSiteFact => ({
 const NAV = fact({});
 const SIGN_IN = fact({ id: 'kgsf-2', kind: 'sign_in', text: 'Sign-in asks for a one-time code', source: 'derived', evidence: { runId: RUN, steps: 2, screens: 0 }, lastUsedAt: null });
 const OLD = fact({ id: 'kgsf-3', kind: 'quirk', text: 'A cookie banner covers the footer', status: 'archived' });
-const PROPOSAL = fact({ id: 'kgsf-9', kind: 'timing', text: 'Reports take <i>a minute</i> to load', source: 'derived', status: 'proposed', evidence: { runId: RUN, steps: 3, screens: 1 }, lastUsedAt: null });
+const PROPOSAL = fact({ id: 'kgsf-9', kind: 'timing', text: 'Reports take <i>a minute</i> to load', source: 'derived', status: 'proposed', approvedBy: null, evidence: { runId: RUN, steps: 3, screens: 1 }, lastUsedAt: null });
+// E46.36: a derived fact the owner's auto-approve setting made active.
+const AUTO = fact({ id: 'kgsf-4', kind: 'navigation', text: 'Statements: Billing → Archive', source: 'derived', approvedBy: 'auto', evidence: { runId: RUN, steps: 2, screens: 2 }, lastUsedAt: null });
 const SITES = [
   { site: 'example.com', active: 2, proposed: 0, archived: 1 },
   { site: 'shop.example.org', active: 1, proposed: 1, archived: 0 },
@@ -110,6 +113,15 @@ describe('the Sites tab', () => {
     expect(within(region).getAllByText(/^Last used /).length).toBeGreaterThan(0);
     expect(within(region).getByRole('link', { name: 'The run it came from' })).toHaveAttribute('href', `/runs/${RUN}`);
     expect(within(region).getByText('Archived')).toBeInTheDocument();
+  });
+
+  it('labels a fact the auto-approve setting made active "Approved automatically", and no other (E46.36)', async () => {
+    renderAt('/kgraph?tab=sites&site=example.com', <KgraphPage />, { ...PAGE_BASE, 'GET /kgraph/sites/example.com/facts': [NAV, AUTO, SIGN_IN] });
+    const region = await screen.findByRole('region', { name: 'Facts about example.com' });
+    await within(region).findByText('Statements: Billing → Archive');
+    expect(within(region).getAllByText('Approved automatically')).toHaveLength(1);
+    const item = within(region).getByText('Statements: Billing → Archive').closest('li')!;
+    expect(within(item).getByText('Approved automatically')).toBeInTheDocument();
   });
 
   it('adds a fact (active at once) on the site', async () => {
@@ -286,6 +298,17 @@ describe('a site fact review', () => {
   it('without kgraph:write the buttons are not offered', () => {
     card(PROPOSAL, {}, ['kgraph:read']);
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  });
+
+  it('the Reviews tab lists the facts approved automatically, read only, not counted (E46.36)', async () => {
+    renderAt('/kgraph?tab=reviews', <KgraphPage />, { ...PAGE_BASE, 'GET /kgraph/reviews/site-facts': [PROPOSAL], 'GET /kgraph/reviews/site-facts?approvedBy=auto': [AUTO] });
+    const section = await screen.findByRole('region', { name: 'Approved automatically' });
+    const c = within(section).getByRole('article', { name: 'Site fact approved automatically' });
+    expect(within(c).getByText('Approved automatically')).toBeInTheDocument();
+    expect(within(c).getByTestId('site-fact-text')).toHaveTextContent('Statements: Billing → Archive');
+    expect(within(c).queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(within(c).getByRole('link', { name: 'The site’s facts' })).toHaveAttribute('href', '/kgraph?tab=sites&site=example.com');
+    expect(screen.getByRole('tab', { name: 'Reviews (1)' })).toBeInTheDocument();
   });
 
   it('is in the Reviews tab and counted', async () => {

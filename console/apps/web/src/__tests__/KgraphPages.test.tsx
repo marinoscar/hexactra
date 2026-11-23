@@ -31,9 +31,9 @@ configure({ asyncUtilTimeout: 5_000 });
 const TASK = '11111111-1111-4111-8111-111111111111';
 const RUN = '22222222-2222-4222-8222-222222222222';
 const REVIEW = '33333333-3333-4333-8333-333333333333';
-const ON = { deployment: true, user: true, available: true, everyday: false };
-const DEPLOYMENT_OFF = { deployment: false, user: true, available: false, everyday: false };
-const USER_OFF = { deployment: true, user: false, available: false, everyday: false };
+const ON = { deployment: true, user: true, available: true, everyday: false, autoApproveFacts: false };
+const DEPLOYMENT_OFF = { deployment: false, user: true, available: false, everyday: false, autoApproveFacts: false };
+const USER_OFF = { deployment: true, user: false, available: false, everyday: false, autoApproveFacts: false };
 const READ = ['kgraph:read', 'kgraph:write', 'runs:read'];
 
 const PROC: KgProcedureItem = {
@@ -398,6 +398,33 @@ describe('Settings, Knowledge Graph', () => {
     settings(DEPLOYMENT_OFF);
     expect(await everydaySwitch()).toBeDisabled();
     expect(screen.getByTestId('kgraph-everyday-reason')).toHaveTextContent(/administrator allows the Knowledge Graph/);
+  });
+
+  const autoSwitch = () => screen.findByRole('switch', { name: 'Approve facts from server records automatically' }).catch(() => screen.findByRole('checkbox', { name: 'Approve facts from server records automatically' }));
+
+  it('turns "Approve facts from server records automatically" on through kgraph.autoApproveFacts, and says what it covers (E46.36)', async () => {
+    const host = settings(ON);
+    const sw = await autoSwitch();
+    expect(sw).not.toBeChecked();
+    expect(sw).toBeEnabled();
+    expect(screen.getByText(/Covers only navigation, timing and quirk facts .* sign-in facts, the agent.s proposals and imported facts always wait for your review/)).toBeInTheDocument();
+    expect(screen.queryByTestId('kgraph-auto-approve-reason')).not.toBeInTheDocument();
+    fireEvent.click(sw);
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { kgraph: { autoApproveFacts: true } } }));
+  });
+
+  it('turns auto-approve off again', async () => {
+    const host = settings({ ...ON, autoApproveFacts: true });
+    const sw = await autoSwitch();
+    expect(sw).toBeChecked();
+    fireEvent.click(sw);
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { kgraph: { autoApproveFacts: false } } }));
+  });
+
+  it('auto-approve is disabled with the reason while the Knowledge Graph is off', async () => {
+    settings(USER_OFF);
+    expect(await autoSwitch()).toBeDisabled();
+    expect(screen.getByTestId('kgraph-auto-approve-reason')).toHaveTextContent('Turn on "Use the Knowledge Graph for my saved tasks" first.');
   });
 
   it('says when the administrator has not allowed it', async () => {
