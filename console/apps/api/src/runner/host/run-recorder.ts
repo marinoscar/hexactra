@@ -1,10 +1,11 @@
 // The run recording beside a job (epic #755, docs/recordings.md). A run whose owner switched Record video on keeps a video of its browser
-// tab: this recorder starts it once the run has a browser session, pulls the encoded bytes every 10 s into part objects, pauses it while a
-// secret or credentials request is open, and stops it when the run ends (the finalize job then makes the video).
+// tab: this recorder starts it once the run has a browser session, pulls the encoded bytes every 10 s into part objects, holds it while
+// the owner has paused the run, and stops it when the run ends (the finalize job then makes the video).
 //
 // Not an agent tool: it changes nothing on the page, is never offered to the model, takes no budget and does not go through `executeTool`
 // (the same footing as a trace screenshot). It never changes a run: every failure is caught, stored as a short code on the recording, and
-// the run goes on. THE VIDEO IS NOT MASKED; the extension keeps out the frames of typed secrets and focused sensitive fields.
+// the run goes on. THE VIDEO IS NOT MASKED AND WITHHOLDS NOTHING (the owner's decision, #882): it keeps every frame, also while a secret,
+// a code or a sign-in is asked for or typed.
 import { RecordingCallError, recordPause, recordPull, recordStart, recordStop, type RecordingChunk } from '@marinoscar/hexactra-browser-agent/recording';
 
 import { PART_CONTENT_TYPE, partKey } from '../../recordings/recording-keys';
@@ -53,6 +54,7 @@ export class RunRecorder {
   /** What the recorder last told the extension; unknown at the start of a job. */
   private paused: boolean | null = null;
   private done = false;
+  private lastNote: string | null = null;
 
   private constructor(
     private readonly d: Deps,
@@ -93,7 +95,7 @@ export class RunRecorder {
     return this.chain;
   }
 
-  /** The job is ending: a last pull, then stop the recording if the run ended, or hold it while the run waits or is paused. */
+  /** The job is ending: a last pull, then stop the recording if the run ended, or hold it while the owner has paused the run. */
   async endJob(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
@@ -105,7 +107,7 @@ export class RunRecorder {
       const sessionId = run.sessionId ?? '';
       if (isTerminal(run.status)) {
         await this.finish(sessionId, null);
-      } else if (run.status !== 'running' && sessionId && this.paused !== true) {
+      } else if (run.status === 'paused' && sessionId && this.paused !== true) {
         await this.calls.pause(sessionId, this.row.fabricId, true).catch(() => undefined);
         this.paused = true;
       }
@@ -145,16 +147,22 @@ export class RunRecorder {
         await this.db().runRecording.update({ where: { id: this.row.id }, data: { fabricId: id } });
       } catch (e) {
         if (e instanceof RecordingCallError && e.code === 'encoder_unavailable') await this.fail('encoder_unavailable');
-        // Anything else (a secret is being asked for, a busy host): the next tick tries again.
+        // The node's agent or extension predates the record actions (#900): say so, and stop asking.
+        else if (e instanceof RecordingCallError && e.code === 'unsupported') await this.fail('node_outdated');
+        // Anything else (a busy host, a page between loads): kept as the reason, and the next tick tries again.
+        else if (this.lastNote !== 'start_failed') {
+          this.lastNote = 'start_failed';
+          await this.db().runRecording.update({ where: { id: this.row.id }, data: { note: 'start_failed' } }).catch(() => undefined);
+        }
         return;
       }
     }
     this.recordingSession = sessionId;
     const recordingId = this.row.fabricId!;
-    // No frame while the owner is asked for a secret or a sign-in.
-    const secretOpen = (await this.db().question.count({ where: { runId: this.runId, status: 'pending', input: { in: ['secret', 'credentials'] } } })) > 0;
-    if (secretOpen !== this.paused) {
-      await this.calls.pause(sessionId, recordingId, secretOpen).then(() => (this.paused = secretOpen)).catch(() => undefined);
+    // A job works the run: the recording runs (it is held only while the owner has paused the run, see endJob). Nothing is withheld for a
+    // secret or a sign-in request (#882).
+    if (this.paused !== false) {
+      await this.calls.pause(sessionId, recordingId, false).then(() => (this.paused = false)).catch(() => undefined);
     }
     let chunk: RecordingChunk;
     try {

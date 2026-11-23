@@ -139,19 +139,25 @@ describe('the run recorder (#759)', () => {
     expect(handler).toBeDefined();
   });
 
-  it('pauses while a secret is asked for, and holds the recording when the job ends with the run waiting', async () => {
+  it('withholds nothing while a secret is asked for, keeps recording while the run waits, and holds only while the owner paused it (#882)', async () => {
     const r = await newRun();
-    const calls = fakeCalls([{ bytes: Buffer.concat([header(), frames(0, 1)]) }]);
+    const calls = fakeCalls([{ bytes: Buffer.concat([header(), frames(0, 1)]) }, { bytes: frames(100, 1) }]);
     const rec = (await RunRecorder.start(deps(memoryStore()), calls, r.runId, r.userId, { everyMs }))!;
     await rec.tick();
     await prisma.question.create({ data: { ownerUserId: r.userId, askedBy: `run:${r.runId}`, runId: r.runId, input: 'secret', kind: 'other', prompt: 'The code', status: 'pending', expiresAt: new Date(Date.now() + 3600_000) } as never });
     await rec.tick();
-    expect(calls.log).toContain('pause rec-1 true');
-    await prisma.question.updateMany({ where: { runId: r.runId }, data: { status: 'answered' } });
-    await rec.tick();
-    expect(calls.log).toContain('pause rec-1 false');
-    await prisma.run.update({ where: { id: r.runId }, data: { status: 'paused' } });
+    expect(calls.log).not.toContain('pause rec-1 true');
+    expect((await prisma.runRecording.findUniqueOrThrow({ where: { runId: r.runId } })).partCount).toBe(2);
+    // The job ends with the run waiting for the owner: the recording goes on.
+    await prisma.run.update({ where: { id: r.runId }, data: { status: 'waiting_human' } });
     await rec.endJob();
+    expect(calls.log).not.toContain('pause rec-1 true');
+
+    // A later job of a run the owner paused holds it.
+    const rec2 = (await RunRecorder.start(deps(memoryStore()), calls, r.runId, r.userId, { everyMs }))!;
+    await rec2.tick();
+    await prisma.run.update({ where: { id: r.runId }, data: { status: 'paused' } });
+    await rec2.endJob();
     expect(calls.log.at(-1)).toBe('pause rec-1 true');
     expect((await prisma.runRecording.findUniqueOrThrow({ where: { runId: r.runId } })).status).toBe('recording');
   });
@@ -196,6 +202,31 @@ describe('the run recorder (#759)', () => {
     await rec3.endJob();
     // None of it touched the runs.
     expect((await prisma.run.findMany({ where: { id: { in: [r.runId, noEncoder.runId, noStorage.runId] } } })).map((x) => x.status)).toEqual(['running', 'running', 'running']);
+  });
+
+  it('says the node is outdated, stops asking, and keeps a start failure as the reason (#900)', async () => {
+    const old = await newRun();
+    const c1 = fakeCalls([]);
+    c1.startError = new RecordingCallError('unsupported');
+    const rec1 = (await RunRecorder.start(deps(memoryStore()), c1, old.runId, old.userId, { everyMs }))!;
+    await rec1.tick();
+    await rec1.tick();
+    expect(c1.log.filter((l) => l.startsWith('start'))).toHaveLength(1);
+    expect(await prisma.runRecording.findUniqueOrThrow({ where: { runId: old.runId } })).toMatchObject({ status: 'failed', note: 'node_outdated' });
+    await rec1.endJob();
+
+    const flaky = await newRun();
+    const c2 = fakeCalls([]);
+    c2.startError = new RecordingCallError('unavailable');
+    const rec2 = (await RunRecorder.start(deps(memoryStore()), c2, flaky.runId, flaky.userId, { everyMs }))!;
+    await rec2.tick();
+    const row = await prisma.runRecording.findUniqueOrThrow({ where: { runId: flaky.runId } });
+    expect(row).toMatchObject({ status: 'recording', note: 'start_failed' });
+    await rec2.endJob();
+    // The run ends with nothing recorded: the finalize job keeps the reason.
+    await prisma.runRecording.update({ where: { id: row.id }, data: { status: 'processing' } });
+    expect(await new RecordingsService(prisma, memoryStore()).finalize(row.id)).toBe('failed');
+    expect(await prisma.runRecording.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'failed', note: 'start_failed' });
   });
 
   it('finalizes a recording whose run ended outside a job, and fails an empty one', async () => {

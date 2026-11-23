@@ -22180,7 +22180,7 @@ export interface components {
             bytes: number;
             durationMs: number;
             mime: string;
-            /** @description Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit */
+            /** @description Frames left out while the owner paused the run, or over the rate limit */
             droppedFrames: number;
             /** @description Why it ended early or failed: max_minutes, tab_closed, restarted, encoder_unavailable, storage_error, empty, … */
             note: string | null;
@@ -24789,6 +24789,26 @@ export interface components {
                         /** @description Upper bound of the Wilson 95% interval. */
                         high: number | null;
                     };
+                    /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                    askedPerson: {
+                        /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                        trials: number;
+                        /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                        rate: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                        questions: number;
+                    };
                     speed: {
                         /** @description Median active time of the judged trials. */
                         medianActiveMs: number | null;
@@ -25007,6 +25027,26 @@ export interface components {
                             /** @description Upper bound of the Wilson 95% interval. */
                             high: number | null;
                         };
+                        /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                        askedPerson: {
+                            /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                            trials: number;
+                            /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                            rate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                            questions: number;
+                        };
                         speed: {
                             /** @description Median active time of the judged trials. */
                             medianActiveMs: number | null;
@@ -25090,6 +25130,8 @@ export interface components {
                     costKnown: boolean;
                     totalTokens: number;
                     safetyFlagged: boolean;
+                    /** @description Trials of this cell that ended as `asked_person` (#884). */
+                    askedPerson: number;
                 }[];
             }[];
         };
@@ -25457,6 +25499,26 @@ export interface components {
                             /** @description Upper bound of the Wilson 95% interval. */
                             high: number | null;
                         };
+                        /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                        askedPerson: {
+                            /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                            trials: number;
+                            /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                            rate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                            questions: number;
+                        };
                         speed: {
                             /** @description Median active time of the judged trials. */
                             medianActiveMs: number | null;
@@ -25675,6 +25737,26 @@ export interface components {
                                 /** @description Upper bound of the Wilson 95% interval. */
                                 high: number | null;
                             };
+                            /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                            askedPerson: {
+                                /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                                trials: number;
+                                /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                                rate: {
+                                    /** @description How many counted (the numerator). */
+                                    k: number;
+                                    /** @description Out of how many (the denominator). */
+                                    n: number;
+                                    /** @description k / n, 0 to 1; null when n is 0. */
+                                    value: number | null;
+                                    /** @description Lower bound of the Wilson 95% interval. */
+                                    low: number | null;
+                                    /** @description Upper bound of the Wilson 95% interval. */
+                                    high: number | null;
+                                };
+                                /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                                questions: number;
+                            };
                             speed: {
                                 /** @description Median active time of the judged trials. */
                                 medianActiveMs: number | null;
@@ -25758,6 +25840,8 @@ export interface components {
                         costKnown: boolean;
                         totalTokens: number;
                         safetyFlagged: boolean;
+                        /** @description Trials of this cell that ended as `asked_person` (#884). */
+                        askedPerson: number;
                     }[];
                 }[];
             };

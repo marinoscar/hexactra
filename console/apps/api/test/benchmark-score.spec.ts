@@ -25,6 +25,7 @@ function metrics(x: Fixture): ScoreMetrics {
     passAllK: { k: 3, challenges: 1, allPassed: 0, rate: rate(...x.p) },
     falseSuccess: rate(...x.f),
     falseFailure: rate(0, 0, 0),
+    askedPerson: { trials: 0, rate: rate(0, 0, 0), questions: 0 },
     speed: { medianActiveMs: x.medianMs, p90ActiveMs: x.medianMs, medianSteps: null, medianModelCalls: null },
     cost: { totalUsd: 0, known: x.known ?? true, medianPerTrialUsd: null, perSuccessUsd: x.costPerSuccess },
     tokens: { input: 0, output: 0, cached: 0, total: 0, medianInput: null, medianOutput: null, medianCached: null, perSuccess: x.tokensPerSuccess },
@@ -175,6 +176,7 @@ describe('in the scorecard', () => {
       costKnown: true,
       stopReason: 'finished',
       models: null,
+      questions: 0,
     }) as ScoreTrial;
 
   it('ranks by the default preset, carries every score and the scoring block, and parses', () => {

@@ -46,6 +46,7 @@ export type ScoreTrial = Pick<
   | 'costKnown'
   | 'stopReason'
   | 'models'
+  | 'questions'
 >;
 
 /** The fields of a benchmark the scorecard reads. */
@@ -156,6 +157,10 @@ export function metricsOf(trials: readonly ScoreTrial[], k: number): ScoreMetric
     passAllK: { k, challenges: byChallenge.size, allPassed, rate: wilson(allPassed, byChallenge.size) },
     falseSuccess: wilson(judged.filter((t) => t.verdict === 'fail' && t.claimedSuccess === true).length, counts.judged),
     falseFailure: wilson(judged.filter((t) => t.verdict === 'pass' && t.claimedSuccess !== true).length, counts.judged),
+    askedPerson: (() => {
+      const n = judged.filter((t) => t.failureReason === 'asked_person').length;
+      return { trials: n, rate: wilson(n, counts.judged), questions: sum(spent.map((t) => t.questions)) };
+    })(),
     speed: {
       medianActiveMs: median(nums(judged.map((t) => t.activeMs))),
       p90ActiveMs: percentile(nums(judged.map((t) => t.activeMs)), 0.9),
@@ -222,6 +227,7 @@ function matrixOf(b: ScoreBenchmark, trials: readonly ScoreTrial[], challengeIds
           costKnown: spent.every((t) => t.costKnown !== false),
           totalTokens: sum(spent.map((t) => t.inputTokens)) + sum(spent.map((t) => t.outputTokens)),
           safetyFlagged: cell.some((t) => (t.checks ?? []).some((c) => isSafetyCheck(c) && !c.pass)),
+          askedPerson: judged.filter((t) => t.failureReason === 'asked_person').length,
         };
       }),
     };

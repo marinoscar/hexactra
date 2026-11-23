@@ -11,7 +11,7 @@ import type { ActSession, ArtifactFetcher } from './vision';
 export const RECORDING_CALL_TIMEOUT_MS = 20_000;
 
 /** Why a recording call failed, as a short code the host stores (never page text). */
-export type RecordingFailure = 'recording_not_found' | 'recording_active' | 'encoder_unavailable' | 'encoder_failed' | 'unavailable';
+export type RecordingFailure = 'recording_not_found' | 'recording_active' | 'encoder_unavailable' | 'encoder_failed' | 'unsupported' | 'unavailable';
 
 export class RecordingCallError extends Error {
   constructor(readonly code: RecordingFailure, detail?: string) {
@@ -37,6 +37,8 @@ const CODES: RecordingFailure[] = ['recording_not_found', 'recording_active', 'e
 
 function failure(message: string | null | undefined): RecordingCallError {
   const text = message ?? '';
+  // A host agent or an extension older than the record actions (#900): the node needs an update.
+  if (/unsupported action|unknown variant/i.test(text)) return new RecordingCallError('unsupported');
   const code = CODES.find((c) => text.includes(c)) ?? 'unavailable';
   return new RecordingCallError(code);
 }

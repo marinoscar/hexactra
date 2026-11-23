@@ -112,7 +112,7 @@ When a run opens its browser session for the first time, `openFabricSession` (`a
 A run whose owner switched **Record video** on (`runs.record_video`) gets a `RunRecorder` (`apps/api/src/runner/host/run-recorder.ts`) for each job, started and ended by `GoalRunnerService` around the loop. It is not a tool and not loop behaviour:
 - It calls the fabric's `record_*` actions (`@marinoscar/hexactra-browser-agent/recording`) beside the loop, like a trace screenshot.
 - It never goes through `executeTool`, is never offered to the model and takes no budget.
-- It starts once the run has a browser session, pulls every 10 s into part objects, pauses while a secret or credentials request is open, holds the recording when the job ends with the run waiting or paused, and stops it when the run ends.
+- It starts once the run has a browser session, pulls every 10 s into part objects, withholds nothing (no pause for a secret or sign-in request, #882), holds the recording only while the owner has paused the run, and stops it when the run ends.
 - Any failure is a short code on `run_recordings.note`; the run is never changed.
 - The job `browser.recordings.finalize` (every minute when one is due) muxes the parts into one WebM. Detail: [recordings.md](recordings.md).
 

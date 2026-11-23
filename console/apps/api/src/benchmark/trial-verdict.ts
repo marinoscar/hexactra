@@ -1,6 +1,6 @@
 // What a finished trial came to (E44.3, #741), as a plain function of how its run ended and what the grader said. No database.
 import type { TrialFailureReason, TrialStatus, TrialVerdict } from './benchmark.constants';
-import type { Check } from './suite/types';
+import type { AskedQuestion, Check } from './suite/types';
 
 export interface TrialOutcome {
   status: Extract<TrialStatus, 'graded' | 'skipped'>;
@@ -49,4 +49,19 @@ export function trialOutcome(i: TrialOutcomeInput): TrialOutcome {
   const stop = i.run.stopReason ?? '';
   const failureReason: TrialFailureReason = stop.startsWith('budget_') ? 'budget' : stop === 'stalled' ? 'stalled' : claimedSuccess ? 'wrong_result' : 'gave_up';
   return { status: 'graded', verdict: 'fail', failureReason, checks, claimedSuccess };
+}
+
+/** The name of the check that keeps the question that ended a trial as "asked a person" (#884). */
+export const ASKED_PERSON_CHECK = 'asked-person';
+
+/**
+ * A trial that ended as `asked_person` keeps the question nobody scripted (#884): a failed check `asked-person` whose detail is
+ * `<kind>: <masked prompt>`, so the trial list, the scorecard page, the reports and the CLI can show what the agent asked. The last
+ * unanswered question is the one that ended it. Any other outcome is returned as it is.
+ */
+export function withAskedQuestion(outcome: TrialOutcome, asked: readonly AskedQuestion[]): TrialOutcome {
+  if (outcome.failureReason !== 'asked_person') return outcome;
+  const q = [...asked].reverse().find((a) => a.answered === 'none');
+  const detail = q ? clip(`${q.kind}: ${q.prompt.replace(/\s+/g, ' ').trim()}`, 500) : 'The question was not recorded';
+  return { ...outcome, checks: [...(outcome.checks ?? []), { name: ASKED_PERSON_CHECK, pass: false, detail }] };
 }

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { cancelBenchmark, getBenchmark, getScorecard, listBenchmarks, listTrials } from '../benchmarks/api';
+import { AskedPersonSection } from '../benchmarks/AskedPerson';
 import { BenchmarkStatusChip } from '../benchmarks/BenchmarkChips';
 import { confirmAndDeleteBenchmarks } from '../benchmarks/DeleteBenchmarks';
 import { BenchmarkExportButton } from '../components/BenchmarkExportMenu';
@@ -249,6 +250,8 @@ export function BenchmarkPage() {
             </Stack>
           )}
         </Paper>
+
+        <AskedPersonSection trials={trials} />
 
         <Paper variant="outlined" component="section" aria-label="Trials" sx={{ p: { xs: 1.5, sm: 2 }, minWidth: 0 }}>
           <Typography variant="h6" component="h2" sx={{ mb: 1 }}>

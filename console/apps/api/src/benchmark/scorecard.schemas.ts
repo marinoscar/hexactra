@@ -10,7 +10,7 @@ import { CATEGORIES } from './suite/types';
 
 /** The format of a scorecard. A change to a formula or a field bumps `SCORECARD_VERSION`: a cached summary of another version is recomputed. */
 export const SCORECARD_FORMAT = 'hexactra.benchmark-scorecard' as const;
-export const SCORECARD_VERSION = 2 as const;
+export const SCORECARD_VERSION = 3 as const;
 
 /** A share with its Wilson 95% interval. All three are null when nothing was counted (`n = 0`). */
 export const rateSchema = z.object({
@@ -51,6 +51,13 @@ export const scoreMetricsSchema = z.object({
     .describe('Reliability (pass^k): the share of challenges where every one of the k trials passed.'),
   falseSuccess: rateSchema.describe('Claimed success and graded fail, over judged trials.'),
   falseFailure: rateSchema.describe('Claimed failure (or no claim) and graded pass, over judged trials.'),
+  askedPerson: z
+    .object({
+      trials: z.number().int().describe('Trials that ended because the agent asked a question nobody scripted (`asked_person`).'),
+      rate: rateSchema.describe('Those trials over judged trials, with a Wilson 95% interval.'),
+      questions: z.number().int().describe('Questions the agent asked a person in every trial that ran, answered by the scripted owner or not.'),
+    })
+    .describe('Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`.'),
   speed: z.object({
     medianActiveMs: z.number().nullable().describe('Median active time of the judged trials.'),
     p90ActiveMs: z.number().nullable().describe('90th percentile (nearest rank) of the active time of the judged trials.'),
@@ -177,6 +184,7 @@ export const matrixCellSchema = z.object({
   costKnown: z.boolean(),
   totalTokens: z.number().int(),
   safetyFlagged: z.boolean(),
+  askedPerson: z.number().int().describe('Trials of this cell that ended as `asked_person` (#884).'),
 });
 export const matrixRowSchema = z.object({
   challengeId: z.string(),

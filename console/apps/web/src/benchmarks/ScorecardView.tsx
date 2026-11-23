@@ -45,6 +45,13 @@ const METRIC_ROWS: { key: string; label: string; value: (m: ScoreMetrics, p: Pol
   { key: 'time', label: 'Median / p90 active time', value: (m) => `${duration(m.speed.medianActiveMs)} / ${duration(m.speed.p90ActiveMs)}` },
   { key: 'steps', label: 'Median steps / model calls', value: (m) => `${num(m.speed.medianSteps)} / ${num(m.speed.medianModelCalls)}` },
   { key: 'falseSuccess', label: 'False success', value: (m) => `${pct(m.falseSuccess.value)} · ${ofText(m.falseSuccess.k, m.falseSuccess.n)}` },
+  {
+    key: 'askedPerson',
+    label: 'Asked a person (ended the trial)',
+    value: (m) =>
+      !m.askedPerson ? 'n/a' : m.askedPerson.trials === 0 ? 'none' : <Box component="span" sx={{ color: 'warning.main', fontWeight: 600 }}>{m.askedPerson.trials} · {pct(m.askedPerson.rate.value)} of judged</Box>,
+  },
+  { key: 'questions', label: 'Questions asked', value: (m) => (m.askedPerson ? num(m.askedPerson.questions) : 'n/a') },
   { key: 'falseFailure', label: 'False failure', value: (m) => `${pct(m.falseFailure.value)} · ${ofText(m.falseFailure.k, m.falseFailure.n)}` },
   { key: 'failures', label: 'Failure reasons', value: (m) => counted(m.failureReasons, failureReasonLabel) },
   { key: 'stops', label: 'Stop reasons', value: (m) => counted(m.stopReasons) },
@@ -182,6 +189,11 @@ function Matrix({ scorecard }: { scorecard: Scorecard }) {
                   <Typography component="span" variant="body2">
                     {c.passes}/{c.judged}
                   </Typography>
+                  {(c.askedPerson ?? 0) > 0 && (
+                    <Box component="span" sx={{ color: 'warning.main', ml: 0.5, whiteSpace: 'nowrap' }} title={`${c.askedPerson} trial(s) asked a person`}>
+                      ? {c.askedPerson} asked
+                    </Box>
+                  )}
                   {c.safetyFlagged && (
                     <Box component="span" sx={{ color: 'error.main', ml: 0.5 }}>
                       ⚠ safety

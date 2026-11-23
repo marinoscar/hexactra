@@ -11,6 +11,7 @@ import { REPORT_FOOTER_NOTE, reportDate, reportDuration, type ReportDefinition }
 import type { BenchmarkReport, BenchmarkReportPaper } from './benchmark-report.schemas';
 import { SCORE_PRESETS, type MetricDelta, type PolicyScore, type Rate, type ScoreBadge, type ScoreDimension, type ScoreGrade, type ScoreMetrics, type ScorePreset } from './scorecard.schemas';
 import { CATEGORY_LABELS } from './suite/types';
+import { ASKED_PERSON_CHECK } from './trial-verdict';
 
 export interface BenchmarkReportOptions {
   /** A4 (the default) or US letter. */
@@ -433,7 +434,7 @@ function scorecardSection(r: BenchmarkReport): Content[] {
     heading(BENCHMARK_REPORT_SECTIONS.scorecard, 'scorecard', true),
     { text: `Rates are over judged trials (pass + fail), with a Wilson 95% interval. k = ${r.scorecard.k} trials per challenge.`, style: 'small' },
     grid(
-      ['Policy', 'Judged', 'Success rate', `Reliability (pass^${r.scorecard.k})`, 'False success', 'False failure', 'Median / p90 active', 'Median steps', 'Safety flags'],
+      ['Policy', 'Judged', 'Success rate', `Reliability (pass^${r.scorecard.k})`, 'False success', 'False failure', 'Asked a person', 'Median / p90 active', 'Median steps', 'Safety flags'],
       ps.map((p) => {
         const m = p.metrics;
         return [
@@ -443,12 +444,13 @@ function scorecardSection(r: BenchmarkReport): Content[] {
           rate(m.passAllK.rate),
           rate(m.falseSuccess),
           rate(m.falseFailure),
+          m.askedPerson ? `${m.askedPerson.trials} (${m.askedPerson.questions} asked)` : DASH,
           `${ms(m.speed.medianActiveMs)} / ${ms(m.speed.p90ActiveMs)}`,
           m.speed.medianSteps === null ? DASH : String(m.speed.medianSteps),
           m.safety.flaggedTrials ? { text: `${m.safety.flaggedTrials} flagged`, style: 'failed' } : 'None',
         ];
       }),
-      ['*', 34, 82, 82, 72, 72, 62, 34, 44],
+      ['*', 34, 76, 76, 66, 66, 48, 62, 34, 44],
     ),
     heading(BENCHMARK_REPORT_SECTIONS.cost, 'cost'),
     { text: 'Totals count every trial that ran (judged, error, or stopped part way); medians are per judged trial. Cached input tokens are part of input.', style: 'small' },
@@ -520,13 +522,26 @@ function failuresSection(r: BenchmarkReport): Content[] {
     rows.push([p.label, m.failureReasons.map((x) => `${x.key} (${x.count})`).join(', ') || 'None', m.stopReasons.map((x) => `${x.key} (${x.count})`).join(', ') || DASH, m.safety.checks.map((x) => `${x.key} (${x.count})`).join(', ') || 'None']);
   }
   out.push(grid(['Policy', 'Why trials did not pass', 'How runs stopped', 'Failed safety checks'], rows, [80, '*', 110, 110]));
-  const failed = r.trials.filter((t) => t.checks?.some((c) => !c.pass));
+  // The trials that ended because the agent asked a person (#884), with the question nobody scripted.
+  const asked = r.trials.filter((t) => t.failureReason === 'asked_person');
+  if (asked.length) {
+    out.push({ text: `Asked a person (${asked.length} trial${asked.length === 1 ? '' : 's'})`, style: 'boxTitle', margin: [0, 4, 0, 2] });
+    out.push({ text: "The agent asked a question the benchmark's scripted owner could not answer, so the trial ended as a fail.", style: 'small' });
+    out.push(
+      grid(
+        ['Challenge', 'Policy', 'Trial', 'Questions', 'The question that ended it'],
+        asked.map((t) => [t.challengeTitle, t.policyLabel, String(t.trialIndex + 1), t.questions === null || t.questions === undefined ? DASH : String(t.questions), t.checks?.find((c) => c.name === ASKED_PERSON_CHECK)?.detail ?? 'Not recorded']),
+        [100, 70, 26, 44, '*'],
+      ),
+    );
+  }
+  const failed = r.trials.filter((t) => t.checks?.some((c) => !c.pass && c.name !== ASKED_PERSON_CHECK));
   if (failed.length) {
     out.push({ text: 'Failed checks', style: 'boxTitle', margin: [0, 4, 0, 2] });
     out.push(
       grid(
         ['Challenge', 'Policy', 'Trial', 'Check', 'Note'],
-        failed.flatMap((t) => (t.checks ?? []).filter((c) => !c.pass).map((c) => [t.challengeTitle, t.policyLabel, String(t.trialIndex + 1), c.name, c.detail ?? ''])),
+        failed.flatMap((t) => (t.checks ?? []).filter((c) => !c.pass && c.name !== ASKED_PERSON_CHECK).map((c) => [t.challengeTitle, t.policyLabel, String(t.trialIndex + 1), c.name, c.detail ?? ''])),
         [100, 70, 26, 100, '*'],
       ),
     );

@@ -360,3 +360,30 @@ describe('compare', () => {
     expect(c.flipped).toEqual([]);
   });
 });
+
+describe('asking a person (#884)', () => {
+  // Economy: one trial ended because it asked a question nobody scripted (2 questions), one passed after a scripted one (1); a skipped
+  // trial asked nothing. Balanced asked nothing.
+  const asked = [
+    trial('nav-lookup', A, 0, { verdict: 'fail', failureReason: 'asked_person', claimedSuccess: false, questions: 2, costUsd: 0.01, inputTokens: 10, outputTokens: 1 }),
+    trial('nav-lookup', A, 1, { questions: 1, costUsd: 0.01, inputTokens: 10, outputTokens: 1 }),
+    trial('nav-lookup', A, 2, { verdict: 'skipped', failureReason: 'cap' }),
+    trial('nav-lookup', B, 0, { questions: 0, costUsd: 0.01, inputTokens: 10, outputTokens: 1 }),
+  ];
+
+  it('counts the trials that ended as asked_person over the judged ones, and every question asked', () => {
+    const card = computeScorecard({ ...bench, config: { ...bench.config, challengeIds: ['nav-lookup'] } }, asked, { live: false, now: NOW });
+    const eco = card.policies.find((p) => p.ref === A)!.metrics.askedPerson;
+    expect(eco.trials).toBe(1);
+    expect(eco.questions).toBe(3);
+    expect(eco.rate).toMatchObject({ k: 1, n: 2, value: 0.5 });
+    expect(card.policies.find((p) => p.ref === B)!.metrics.askedPerson).toMatchObject({ trials: 0, questions: 0, rate: { k: 0, n: 1 } });
+    expect(card.matrix[0]!.cells.map((c) => [c.policyRef, c.askedPerson])).toEqual([
+      [A, 1],
+      [B, 0],
+    ]);
+    // The failure reasons list it too.
+    expect(card.policies.find((p) => p.ref === A)!.metrics.failureReasons).toEqual(expect.arrayContaining([{ key: 'asked_person', count: 1 }]));
+    expect(scorecardSchema.safeParse(card).success).toBe(true);
+  });
+});

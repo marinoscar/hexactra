@@ -14,7 +14,7 @@
 
 import { applyAllowedDomains, currentAllowed, recordBlocked, takeBlocked, urlAllowed, urlHost, type BlockedNavigation } from './site-policy.js';
 import * as cdp from './cdp.js';
-import { recordPause, recordPull, recordStart, recordStop, withSensitiveTyping } from './recorder.js';
+import { recordPause, recordPull, recordStart, recordStop } from './recorder.js';
 import { MASK_ID, MASK_UNAVAILABLE, MAX_MASK_BOXES, loadSensitivePatterns, maskText, pageClearMask, pageMask, pageNextFrame, type MaskPattern } from './mask.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
@@ -631,8 +631,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       const tab = await resolveTab(action.tab_id);
       assertTabOrigin(tab, action.expect_origin);
       const typeIt = () => inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
-      // A sensitive value (a handoff secret, a provider's value) is never in a run recording (#755).
-      return action.sensitive ? withSensitiveTyping(typeIt) : typeIt();
+      return typeIt();
     }
     case 'press': {
       const tab = await resolveTab(action.tab_id);
@@ -698,7 +697,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       // navigates part-way stops the typing (the rest is not sent).
       const guard = expect === undefined ? undefined : async () => assertTabOrigin(await resolveTab(tab.id), expect);
       const typeIt = () => viaCdp(() => cdp.typeText(tab.id!, action.text, guard));
-      await (action.sensitive ? withSensitiveTyping(typeIt) : typeIt());
+      await typeIt();
       return {};
     }
     case 'key': {
