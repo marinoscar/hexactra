@@ -191,6 +191,18 @@ describe('a turn', () => {
     expect(model.outputs).toHaveLength(1);
   });
 
+  it('records the runs of a chat with Record video on, and not of one without (#906)', async () => {
+    const alice = await login('record');
+    const on = await chatWith(alice, 'Find a stroller', { recordVideo: true });
+    await engine(scriptedAi([[['start_run', { goal: 'Find a travel stroller.' }]]]).ai).run(on, alice.userId, null);
+    expect((await runsOf(on)).map((r) => r.recordVideo)).toEqual([true]);
+    const off = await chatWith(alice, 'Find a stroller');
+    await engine(scriptedAi([[['start_run', { goal: 'Find a travel stroller.' }]]]).ai).run(off, alice.userId, null);
+    expect((await runsOf(off)).map((r) => r.recordVideo)).toEqual([false]);
+    // The switch is a chat setting: shown, and changed with PATCH.
+    expect((await chats.update(alice.userId, off, { recordVideo: true })).recordVideo).toBe(true);
+  });
+
   it('refuses a second run while one is live, and says so to the model', async () => {
     const alice = await login('one-run');
     const id = await chatWith(alice, 'Order groceries');

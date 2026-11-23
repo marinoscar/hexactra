@@ -172,6 +172,20 @@ describe('creating a task', () => {
     expect(writes().map((r) => `${r.method} ${r.path}`)).toEqual(['POST /tasks']);
   });
 
+  it('has Record video in a Recording section of its own, off by default, and sends it when switched on (#906)', async () => {
+    const { sent } = mount('/tasks/new');
+    await fill();
+    const section = screen.getByRole('region', { name: 'Recording' });
+    const sw = within(section).getByRole('switch', { name: 'Record a video of each run' });
+    expect(sw).not.toBeChecked();
+    expect(within(screen.getByRole('region', { name: 'Safety' })).queryByRole('switch', { name: 'Record a video of each run' })).not.toBeInTheDocument();
+    fireEvent.click(sw);
+    await waitFor(() => expect(save()).toBeEnabled());
+    fireEvent.click(save());
+    await waitFor(() => expect(sent('POST', '/tasks')).toHaveLength(1));
+    expect((sent('POST', '/tasks')[0]!.body as { recordVideo?: boolean }).recordVideo).toBe(true);
+  });
+
   it('without agent_policies:read has no Model and budget section and sends no policyId', async () => {
     const { sent } = mount('/tasks/new', {}, ['tasks:read', 'tasks:write']);
     await fill();

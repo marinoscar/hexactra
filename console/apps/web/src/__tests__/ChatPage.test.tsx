@@ -393,8 +393,20 @@ describe('the chat menu', () => {
     expect(confirmSwitch).toBeChecked();
     fireEvent.click(confirmSwitch);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false }));
+    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, recordVideo: false }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chat settings' })).not.toBeInTheDocument());
+  });
+  it('is off by default, says the video is not masked, and is saved with the settings', async () => {
+    const host = mount();
+    await openMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Chat settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Chat settings' });
+    const sw = within(dialog).getByRole('switch', { name: "Record a video of this chat's runs" });
+    expect(sw).not.toBeChecked();
+    expect(within(dialog).getByText(/The video is not masked/)).toBeInTheDocument();
+    fireEvent.click(sw);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect((sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body as { recordVideo?: boolean })?.recordVideo).toBe(true));
   });
 });
 

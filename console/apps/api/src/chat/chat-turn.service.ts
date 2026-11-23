@@ -265,6 +265,8 @@ export class ChatTurnService {
               profile: c.profile,
               hostId: c.hostId,
               hostFallback: c.hostFallback,
+              // The chat's Record video switch (#906), fixed on the run as for a task.
+              recordVideo: c.recordVideo,
               trigger: 'chat',
               // A chat runs in the console (#464): the person typed it there.
               origin: 'web',

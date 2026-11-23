@@ -21474,6 +21474,8 @@ export interface components {
                 useSavedIdentity: boolean;
                 /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
                 useSavedCards: boolean;
+                /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
+                recordVideo: boolean;
                 /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
                 connections: {
                     /**
@@ -21548,6 +21550,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
+            /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
+            recordVideo: boolean;
             /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
             connections: {
                 /**
@@ -21593,6 +21597,8 @@ export interface components {
             useSavedIdentity?: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
             useSavedCards?: boolean;
+            /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
+            recordVideo?: boolean;
             /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
             connections?: {
                 /**
@@ -21634,6 +21640,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
+            /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
+            recordVideo: boolean;
             /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
             connections: {
                 /**
@@ -21713,6 +21721,8 @@ export interface components {
             useSavedIdentity?: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
             useSavedCards?: boolean;
+            /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
+            recordVideo?: boolean;
             /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
             connections?: {
                 /**
@@ -21769,6 +21779,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description The chat's saved-cards switch (E37.7), carried over to the task */
             useSavedCards: boolean;
+            /** @description The chat's Record video switch (#906), carried over to the task */
+            recordVideo: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */
@@ -22213,6 +22225,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description The chat's saved-cards switch (E37.7), carried over to the task */
             useSavedCards: boolean;
+            /** @description The chat's Record video switch (#906), carried over to the task */
+            recordVideo: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */
