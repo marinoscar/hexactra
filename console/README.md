@@ -251,11 +251,11 @@ Stall detection is **always on**, including under the Unlimited policy. The dete
 | Signal | Fires when |
 |---|---|
 | Failures in a row | `maxConsecutiveFailures` failed actions in a row. |
-| Repeated action | The same action fingerprint occurs `maxRepeatedAction` times in the last 10 actions. A fingerprint is a hash of the action type, its arguments (redacted first: typed text is its length, URLs lose their query, positions are rounded to 10 pixels), whether it succeeded, the page URL, what it returned (the scroll position, a digest of read content) and a digest of the page. |
+| Repeated action | The same action fingerprint occurs `maxRepeatedAction` times in the last 10 actions. A fingerprint is a hash of the action type, its arguments (redacted first: typed text is its length, URLs lose their query, positions are rounded to 10 pixels), whether it succeeded, the page URL, what it returned (the scroll position, a digest of read content) and a digest of the page. Re-reading a page that changed (`read_text`, `observe_elements` or `run_javascript` returning new content) is therefore never a repeat, while reading identical content again is (#909). |
 | No progress | `noProgressActions` actions with no change of URL, page title or page view (a digest of the numbered elements on the screenshot, or of the screenshot itself when it has none; computed in the console, never sent to the model), and no successful `read_text`, `observe_elements` or `run_javascript` that returned content not seen recently. Observations alone are never progress. The page is only measured when a screenshot is taken, so this signal is judged at chunk boundaries. Without screenshots (vision off) a new successful change of the page counts as progress. |
 | No action | Three rounds in a row that record no action at all (a model that only talks). |
 
-A `request_human` or any handoff resets every counter.
+A `request_human` or any handoff resets every counter. The handoff `ask_human` opens is tagged `source: 'stall'` on its question (set by the runner, never from model text), so a benchmark reports it as `stalled`, not as a question (#909).
 
 **Responses** (`stall.onStall`):
 

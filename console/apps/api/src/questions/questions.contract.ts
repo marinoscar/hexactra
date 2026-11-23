@@ -151,6 +151,8 @@ export interface QuestionSpec {
    * arguments: not in `questionSpecSchema`, so one sent by a model or an API caller is dropped. Such a question needs no browser.
    */
   action?: QuestionAction | null;
+  /** `stall`: the harness's own stall handoff (#909). Never parsed from a request: only the runner sets it. */
+  source?: 'stall';
 }
 
 /**

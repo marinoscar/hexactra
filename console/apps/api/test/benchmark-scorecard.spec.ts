@@ -386,4 +386,16 @@ describe('asking a person (#884)', () => {
     expect(card.policies.find((p) => p.ref === A)!.metrics.failureReasons).toEqual(expect.arrayContaining([{ key: 'asked_person', count: 1 }]));
     expect(scorecardSchema.safeParse(card).success).toBe(true);
   });
+
+  it('counts a stall handoff as stalled, apart from a question nobody scripted (#909)', () => {
+    const trials = [
+      trial('nav-lookup', A, 0, { verdict: 'fail', failureReason: 'stalled', claimedSuccess: false, questions: 1, costUsd: 0.01, inputTokens: 10, outputTokens: 1 }),
+      trial('nav-lookup', A, 1, { verdict: 'fail', failureReason: 'asked_person', claimedSuccess: false, questions: 1, costUsd: 0.01, inputTokens: 10, outputTokens: 1 }),
+    ];
+    const card = computeScorecard({ ...bench, config: { ...bench.config, challengeIds: ['nav-lookup'] } }, trials, { live: false, now: NOW });
+    const metrics = card.policies.find((p) => p.ref === A)!.metrics;
+    expect(metrics.failureReasons).toEqual(expect.arrayContaining([{ key: 'stalled', count: 1 }, { key: 'asked_person', count: 1 }]));
+    // Only the real question counts as asking a person.
+    expect(metrics.askedPerson.trials).toBe(1);
+  });
 });

@@ -32,7 +32,7 @@ An organization administrator starts one with `POST /api/benchmarks` (permission
 |---|---|---|
 | `pass` | every check of the grader passed, whatever the agent claimed | |
 | `fail` | a check failed | `wrong_result` (the agent claimed success), `gave_up` (it did not), `budget` or `stalled` (what stopped the run) |
-| `fail` | the trial ran past its timeout, or the agent asked a question no rule answers | `timeout`, `asked_person` |
+| `fail` | the trial ran past its timeout, the agent asked a question no rule answers, or the run stalled and its policy asked a person to take over | `timeout`, `asked_person`, `stalled` |
 | `error` | the trial could not be judged: the node was down, no model or a provider error, the grader threw, the run was deleted | `error`, `no_model` |
 | `skipped` | it never ran or was stopped: the benchmark was cancelled, the spend cap was reached, three errors in a row, somebody stopped the run | `cancelled`, `cap`, `error` |
 | `unsupported` | the challenge needs a capability the agent lacks | `unsupported` |
@@ -64,7 +64,8 @@ A benchmark runs unattended, so a challenge scripts its owner's answers (`Challe
 
 - A rule states any of the question's kind, its input and text its prompt contains (compared without case). The first rule that fits answers `approve`, `deny`, `text` or `credentials`. A rule answers once unless it says `repeat`.
 - The answer goes through the ordinary answer service as the administrator, on the channel `benchmark`.
-- A question no rule fits ends the trial: the run is stopped, the verdict is `fail`, the reason `asked_person`. An answer that does not suit the card (text for a yes/no card) counts as no rule.
+- A question no rule fits ends the trial: the run is stopped, the verdict is `fail`, the reason `asked_person`.
+- **A stall handoff is not a question** (#909). Under a policy with `onStall: 'ask_human'` (Thorough), a stuck run opens a takeover handoff; its question is tagged `source: 'stall'` when the runner creates it. No rule answers it, so the trial ends as `fail` with the reason **`stalled`**, and its last failed check is `stall-handoff` with the handoff's prompt (what the agent repeated). `asked_person` is kept for a question the agent itself asked that the scripted owner had no rule for. A run that stalls out on its own (no handoff, stop reason `stalled`) is also `stalled`. An answer that does not suit the card (text for a yes/no card) counts as no rule.
 - It answers questions and nothing else. It never ticks "remember" and cannot create or widen a saved approval. It never answers a suggested memory or an offer to save a sign-in; one left by a run is withdrawn when the trial is graded.
 - `credentials` are fixture values derived from the trial's seed, for the challenge site. The password goes to the fabric like any sign-in and is stored nowhere.
 - The grader receives every question the run asked (`asked`): its kind, its input, the masked prompt, when, and what the scripted owner answered (`none` when nobody did).
@@ -211,7 +212,7 @@ Each policy has them, and each policy within each category (`policies[].categori
 | Reliability (pass^k) | `passAllK` | The share of challenges, among those with at least one judged trial, whose k trials were all judged and all passed. A challenge with a trial that errored or was skipped is not "all passed". It has its own Wilson interval |
 | False success | `falseSuccess` | Claimed success and graded `fail`, over judged trials |
 | False failure | `falseFailure` | Graded `pass` without claiming success, over judged trials |
-| Asked a person | `askedPerson` | `trials`: judged trials that ended as `asked_person` (the agent asked a question the scripted owner could not answer); `rate`: those over judged trials, with a Wilson interval; `questions`: every question asked by the trials that ran, answered or not (#884) |
+| Asked a person | `askedPerson` | `trials`: judged trials that ended as `asked_person` (the agent asked a question the scripted owner could not answer; a stall handoff counts as `stalled` instead, #909); `rate`: those over judged trials, with a Wilson interval; `questions`: every question asked by the trials that ran, answered or not (#884) |
 | Speed | `speed` | Median and p90 `activeMs`, median steps and median model calls, of the judged trials |
 | Total cost | `cost.totalUsd` | The sum of the cost of every trial that ran |
 | Cost per trial | `cost.medianPerTrialUsd` | The median cost of a judged trial |

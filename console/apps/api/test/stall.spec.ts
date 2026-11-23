@@ -57,6 +57,55 @@ describe('repeated action', () => {
     for (const y of [400, 800, 1200, 1600]) expect(observeAction(s, th, act('scroll', { dy: 400 }, { resultKey: `y${y}` })).signal).toBeNull();
   });
 
+  // #909: a read returns what the page shows now. Re-reading a page that changed is an observe-act loop, not a repeat.
+  it('re-reading a page that changed is no repeat: text; click A; text; click B; text, same URL and view', () => {
+    const s = newStallState();
+    observePage(s, th, page('v1'));
+    expect(observeAction(s, th, act('text', {}, { contentHash: 'page-1' })).signal).toBeNull();
+    expect(observeAction(s, th, act('click', { selector: '#a' })).signal).toBeNull();
+    expect(observeAction(s, th, act('text', {}, { contentHash: 'page-2' })).signal).toBeNull();
+    expect(observeAction(s, th, act('click', { selector: '#b' })).signal).toBeNull();
+    expect(observeAction(s, th, act('text', {}, { contentHash: 'page-3' })).signal).toBeNull();
+    // Each new read reset the no-progress count.
+    expect(s.sinceProgress).toBe(0);
+  });
+
+  it('reading identical content 3 times is still a repeat: text; click A; text; click B; text', () => {
+    const s = newStallState();
+    observePage(s, th, page('v1'));
+    observeAction(s, th, act('text', {}, { contentHash: 'same' }));
+    observeAction(s, th, act('click', { selector: '#a' }));
+    observeAction(s, th, act('text', {}, { contentHash: 'same' }));
+    observeAction(s, th, act('click', { selector: '#b' }));
+    expect(observeAction(s, th, act('text', {}, { contentHash: 'same' })).signal).toMatchObject({ kind: 'repeat', reason: 'repeated text 3 times' });
+  });
+
+  it('evaluate 4 times: the same value is a repeat, four different values are not', () => {
+    const same = newStallState();
+    const signals = [0, 1, 2, 3].map(() => observeAction(same, th, act('evaluate', { script: 'loadMore()' }, { contentHash: 'v' })).signal);
+    expect(signals.slice(0, 2)).toEqual([null, null]);
+    expect(signals[2]).toMatchObject({ kind: 'repeat', reason: 'repeated evaluate 3 times' });
+    const fresh = newStallState();
+    for (const v of ['v1', 'v2', 'v3', 'v4']) expect(observeAction(fresh, th, act('evaluate', { script: 'loadMore()' }, { contentHash: v })).signal).toBeNull();
+  });
+
+  it('elements after each of 3 clicks in an SPA (same URL), with different content, is no repeat', () => {
+    const s = newStallState();
+    observePage(s, th, page('v1', 'https://app.example.test/#/settings'));
+    for (const tab of ['general', 'privacy', 'billing']) {
+      expect(observeAction(s, th, act('click', { selector: `#nav-${tab}` })).signal).toBeNull();
+      expect(observeAction(s, th, act('elements', {}, { contentHash: `elements-${tab}` })).signal).toBeNull();
+    }
+  });
+
+  it('a read keeps its result key when it has one (a scroll): the content digest does not replace it', () => {
+    const a = fingerprint(act('scroll', { dy: 400 }, { resultKey: 'y400', contentHash: 'c1' }), null);
+    const b = fingerprint(act('scroll', { dy: 400 }, { resultKey: 'y400', contentHash: 'c2' }), null);
+    expect(a).toBe(b);
+    // An action that changes the page is fingerprinted by what it did, not by any content it reported.
+    expect(fingerprint(act('click', { selector: '#x' }, { contentHash: 'c1' }), null)).toBe(fingerprint(act('click', { selector: '#x' }, { contentHash: 'c2' }), null));
+  });
+
   it('a URL differing only in its query is the same URL', () => {
     const s = newStallState();
     observeAction(s, th, act('navigate', { url: 'https://shop.example.test/a?token=1' }));
