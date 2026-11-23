@@ -123,7 +123,7 @@ export function actions(status: AgentStatus | null, node: UnattendedStatus | nul
   const nodeInstalled = !!node?.state;
   const anything = agent || nodeInstalled;
   const a: Action[] = [{ id: 'install', key: 'i', label: anything ? 'Install or repair…' : 'Install…', hint: 'pick a mode, review what it needs, install' }];
-  if (anything) a.push({ id: 'update', key: 'u', label: 'Update', hint: 'latest agent, missing packages, restart' });
+  if (anything) a.push({ id: 'update', key: 'u', label: 'Update', hint: 'agent, extension and Chrome, then checked' });
   if (agent && status?.state?.service) {
     const active = status.service?.active === 'active';
     a.push({ id: 'service', key: 's', label: active ? 'Stop the agent' : 'Start the agent' }, { id: 'restart', key: 'r', label: 'Restart the agent' });

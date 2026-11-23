@@ -74,6 +74,15 @@ To use it:
 
 Manage it with `hexactra agent status | logs | start | stop | restart | uninstall --mode unattended`. `hexactra agent update` updates it too.
 
+**Is a node current?** A console deploy updates the console and the fabric, never a node: run `hexactra agent update` on each node machine (or **Update** on the terminal UI's Agent screen, the same routine). It does everything, and nothing is left for you to restart:
+
+1. installs the latest agent and restarts the agent services (and the unattended node, with sudo);
+2. on an attended node, restarts your Google Chrome gracefully (`--restore-last-session`: your tabs come back), so Chrome fetches the new extension from its policy within seconds;
+3. waits for the extension to connect to the agent again and checks its version;
+4. prints what runs now, for example `Agent 0.2.0 (c278006)` and `Extension 0.2.0.81 connected`, or says what is wrong and how to fix it.
+
+An unattended node's browsers belong to its agent: the restart closes them and each starts with the new extension at its next run. Version **0.2.0** is the first with run recordings (epic #755); an older node records nothing. The extension's version is the agent's plus a build number.
+
 ### Attended mode and Wayland
 Ubuntu 22.04 and later log in to Wayland by default. Wayland blocks the tools that share a live desktop, so attended mode needs an X11 session for now.
 - **To switch:** on the login screen, choose your user, click the gear and pick **Ubuntu on Xorg**.

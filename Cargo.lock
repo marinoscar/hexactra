@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-agent"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1128,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.21.7",
  "hexactra-core",
@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-control"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1215,7 +1215,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1274,7 +1274,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-desktop-input"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1294,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-mcp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-native-host"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-otel"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "http",
@@ -1391,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-telemetry"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -1410,7 +1410,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-tests"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "hexactra-agent",
@@ -1422,7 +1422,7 @@ dependencies = [
 
 [[package]]
 name = "hexactra-worker"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",

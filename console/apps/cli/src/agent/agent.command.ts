@@ -11,7 +11,6 @@ import {
   unattendedControl,
   unattendedLogs,
   unattendedStatus,
-  updateUnattended,
   type UnattendedStatus,
   agentDoctor,
   agentLogs,
@@ -22,12 +21,9 @@ import {
   sandboxAgain,
   serviceControl,
   uninstallAgent,
-  updateAgent,
-  agentStatusInstalled,
-  updateTargets,
-  fetchAndActivate,
   type AgentStatus,
 } from './agent.js';
+import { updateEverything } from './update.js';
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
@@ -146,16 +142,12 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
 
   agent
     .command('update')
-    .description('Update the agent (and Chrome for Testing) to the latest release and restart it')
+    .description('Update everything on this node to the latest release: the agent, the extension (Chrome is restarted, its tabs restored) and the unattended node; then check what runs')
     .option('--bundle <file|url>', 'agent bundle to install')
     .option('--version <version>', 'agent release to install')
     .option('--force', 'reinstall even when up to date')
     .action(async (o: { bundle?: string; version?: string; force?: boolean }) => {
-      const d = deps();
-      const t = updateTargets(d);
-      if (t.attended) await updateAgent(d, o);
-      else if (t.unattended) await fetchAndActivate(d, o);
-      updateUnattended(d);
+      await updateEverything(deps(), o);
     });
 
   for (const action of ['start', 'stop', 'restart'] as const) {
