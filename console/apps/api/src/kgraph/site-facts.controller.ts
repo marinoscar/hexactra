@@ -33,6 +33,12 @@ const siteFactSchema = z.object({
   updatedAt: z.string(),
 });
 class SiteFactResponseDto extends createZodDto(siteFactSchema) {}
+class ProposeSiteFactResponseDto extends createZodDto(
+  z.object({
+    outcome: z.enum(['proposed', 'known', 'suppressed']).describe('`proposed`: stored, waiting for your review. `known`: you already have this fact. `suppressed`: you declined it in the last 30 days.'),
+    fact: siteFactSchema.nullable().describe('The stored proposal, or the fact you already have; null when suppressed.'),
+  }),
+) {}
 class SiteSummaryResponseDto extends createZodDto(z.object({ site: z.string(), active: z.number().int(), proposed: z.number().int(), archived: z.number().int() })) {}
 class FactsQueryDto extends createZodDto(z.object({ status: status.optional() }).strict()) {}
 class CreateSiteFactDto extends createZodDto(z.object({ kind, text: z.string().trim().min(1).max(SITE_FACT_MAX_TEXT) }).strict()) {}
@@ -52,7 +58,7 @@ class IdParamDto extends createZodDto(z.object({ id: idParam }).strict()) {}
 /**
  * Site facts (phase 5, E46.31): short notes about one site that a later run reads as data. Typing a fact makes it active; a proposal (derived
  * after a run, or the agent's) waits in Reviews. A secret, an instruction or a link to another site is refused with `422`. Another user's
- * fact answers `404`. No MCP tool reads or writes a site fact.
+ * fact answers `404`. Over MCP (E46.35), `site_facts_list` reads them and `site_fact_propose` proposes one; no tool approves, edits or deletes.
  */
 @ApiTags('Knowledge Graph')
 @Controller('kgraph')
@@ -81,6 +87,19 @@ export class KgraphSiteFactsController {
   @ApiOperation({ summary: 'Add a fact about a site (active at once)', description: 'Your own words, active at once. `422 KGRAPH_SITE_FACT_REFUSED` for a password, code, token or full number, an instruction, or a link to another site. `409 KGRAPH_OFF` while the Knowledge Graph is off.' })
   create(@CurrentUser('id') userId: string, @Param() p: SiteParamDto, @Body() body: CreateSiteFactDto) {
     return this.facts.create(userId, p.site, body);
+  }
+
+  @Post('sites/:site/facts/proposals')
+  @ApiDataResponse(ProposeSiteFactResponseDto, { status: 201 })
+  @Auth({ permissions: ['kgraph:write'] })
+  @ApiOperation({
+    summary: 'Propose a fact about a site (waits for your review)',
+    description:
+      "An agent's proposal (E46.35; the MCP tool `site_fact_propose` calls it): always stored `proposed` with source `agent_proposed`, never active; you approve it in Knowledge Graph reviews, signed in. `outcome` is `known` when you already have the fact (whatever its status) and `suppressed` when you declined it in the last 30 days. `422 KGRAPH_SITE_FACT_REFUSED` (with the rules broken, never the text) for a password, code, token or full number, an instruction, or a link to another site. `409 KGRAPH_OFF` while the Knowledge Graph is off.",
+  })
+  propose(@CurrentUser('id') userId: string, @Param() p: SiteParamDto, @Body() body: CreateSiteFactDto, @Req() req: RequestWithAuthCredential) {
+    const credential = authCredentialOf(req);
+    return this.facts.proposeByClient(userId, p.site, body, credential ? { kind: credential.kind, ...(credential.kind === 'oauth' ? { clientId: credential.clientId } : {}) } : null);
   }
 
   @Patch('site-facts/:id')

@@ -30611,6 +30611,104 @@
         }
       }
     },
+    "/api/kgraph/sites/{site}/facts/proposals": {
+      "post": {
+        "description": "An agent's proposal (E46.35; the MCP tool `site_fact_propose` calls it): always stored `proposed` with source `agent_proposed`, never active; you approve it in Knowledge Graph reviews, signed in. `outcome` is `known` when you already have the fact (whatever its status) and `suppressed` when you declined it in the last 30 days. `422 KGRAPH_SITE_FACT_REFUSED` (with the rules broken, never the text) for a password, code, token or full number, an instruction, or a link to another site. `409 KGRAPH_OFF` while the Knowledge Graph is off.\n\n**Requires:** authentication, plus permission `kgraph:write`.",
+        "operationId": "kgraphSiteFacts_propose",
+        "parameters": [
+          {
+            "name": "site",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 3,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSiteFactDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ProposeSiteFactResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Propose a fact about a site (waits for your review)",
+        "tags": [
+          "Knowledge Graph"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "kgraph:write"
+          ]
+        }
+      }
+    },
     "/api/kgraph/site-facts/{id}": {
       "patch": {
         "description": "`422 KGRAPH_SITE_FACT_REFUSED` for a refused text; `409 KGRAPH_SITE_FACT_EXISTS` when the edit equals another of your facts; `409 KGRAPH_SITE_FACT_STATUS` for a move that is not allowed (a proposal is approved in Reviews).\n\n**Requires:** authentication, plus permission `kgraph:write`.",
@@ -82469,6 +82567,131 @@
           "text"
         ],
         "additionalProperties": false
+      },
+      "ProposeSiteFactResponseDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "known",
+              "suppressed"
+            ],
+            "description": "`proposed`: stored, waiting for your review. `known`: you already have this fact. `suppressed`: you declined it in the last 30 days."
+          },
+          "fact": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "site": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "navigation",
+                      "sign_in",
+                      "quirk",
+                      "timing",
+                      "other"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "At most 300 characters, shown as text. Data about the site, never an instruction or a permission."
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "derived",
+                      "agent_proposed"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "proposed",
+                      "active",
+                      "archived"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "properties": {
+                      "runId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "steps": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "screens": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "runId",
+                      "steps",
+                      "screens"
+                    ],
+                    "description": "What a proposal came from: the run and how many of its calls and screens. Ids and counts only."
+                  },
+                  "declinedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "lastUsedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  },
+                  "updatedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "site",
+                  "kind",
+                  "text",
+                  "source",
+                  "status",
+                  "evidence",
+                  "declinedAt",
+                  "lastUsedAt",
+                  "createdAt",
+                  "updatedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The stored proposal, or the fact you already have; null when suppressed."
+          }
+        },
+        "required": [
+          "outcome",
+          "fact"
+        ]
       },
       "UpdateSiteFactDto": {
         "type": "object",

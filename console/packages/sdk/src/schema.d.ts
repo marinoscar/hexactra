@@ -6091,6 +6091,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kgraph/sites/{site}/facts/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose a fact about a site (waits for your review)
+         * @description An agent's proposal (E46.35; the MCP tool `site_fact_propose` calls it): always stored `proposed` with source `agent_proposed`, never active; you approve it in Knowledge Graph reviews, signed in. `outcome` is `known` when you already have the fact (whatever its status) and `suppressed` when you declined it in the last 30 days. `422 KGRAPH_SITE_FACT_REFUSED` (with the rules broken, never the text) for a password, code, token or full number, an instruction, or a link to another site. `409 KGRAPH_OFF` while the Knowledge Graph is off.
+         *
+         *     **Requires:** authentication, plus permission `kgraph:write`.
+         */
+        post: operations["kgraphSiteFacts_propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kgraph/site-facts/{id}": {
         parameters: {
             query?: never;
@@ -17285,6 +17307,36 @@ export interface components {
             /** @enum {string} */
             kind: "navigation" | "sign_in" | "quirk" | "timing" | "other";
             text: string;
+        };
+        ProposeSiteFactResponseDto: {
+            /**
+             * @description `proposed`: stored, waiting for your review. `known`: you already have this fact. `suppressed`: you declined it in the last 30 days.
+             * @enum {string}
+             */
+            outcome: "proposed" | "known" | "suppressed";
+            /** @description The stored proposal, or the fact you already have; null when suppressed. */
+            fact: {
+                id: string;
+                site: string;
+                /** @enum {string} */
+                kind: "navigation" | "sign_in" | "quirk" | "timing" | "other";
+                /** @description At most 300 characters, shown as text. Data about the site, never an instruction or a permission. */
+                text: string;
+                /** @enum {string} */
+                source: "owner" | "derived" | "agent_proposed";
+                /** @enum {string} */
+                status: "proposed" | "active" | "archived";
+                /** @description What a proposal came from: the run and how many of its calls and screens. Ids and counts only. */
+                evidence: {
+                    runId: string | null;
+                    steps: number;
+                    screens: number;
+                };
+                declinedAt: string | null;
+                lastUsedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+            } | null;
         };
         UpdateSiteFactDto: {
             /** @enum {string} */
@@ -45321,6 +45373,60 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["SiteFactResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    kgraphSiteFacts_propose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSiteFactDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProposeSiteFactResponseDto"];
                     };
                 };
             };
