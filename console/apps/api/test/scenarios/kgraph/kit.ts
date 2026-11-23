@@ -1,13 +1,19 @@
 // The kit of the E46 phase 5 acceptance scenarios (#856): the application over the real database, signed-in owners, the switches, a
 // scripted model that records what each round read and was offered, and a runner with the Knowledge Graph bound exactly as the
 // application binds it. Not a spec: the scenarios in this folder import it. Invented data only.
+import { randomUUID } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { AiService } from '@marinoscar/platform-api/ai';
+import { OAuthServerSettingsReader, PatService } from '@marinoscar/platform-api/identity';
+import { createOAuthTestClient, mintOAuthTestToken } from '@marinoscar/platform-api/identity/testing';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
 import { KgraphAfterRun } from '../../../src/kgraph/kgraph-compile.job';
 import { KgraphEnabledService } from '../../../src/kgraph/kgraph-enabled.service';
 import { PrismaProcedureStore } from '../../../src/kgraph/prisma-procedure-store';
+import { KgraphSiteFactsHandler } from '../../../src/kgraph/site-facts.job';
 import { KgraphSiteFactsService } from '../../../src/kgraph/site-facts.service';
 import { createApp } from '../../../src/main';
 import { MemoryContext } from '../../../src/memories/memory-context';
@@ -52,6 +58,11 @@ export async function login(app: NestFastifyApplication, email: string, role: 'c
 
 export function api(app: NestFastifyApplication) {
   return (token: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: object) => app.inject({ method, url: `/api${url}`, headers: { authorization: `Bearer ${token}` }, ...(payload ? { payload } : {}) });
+}
+
+/** The owner's opt-in auto-approve of derived facts (`kgraph.autoApproveFacts`, E46.36), with everyday as given. */
+export async function autoApprove(app: NestFastifyApplication, owner: Session, everyday: boolean, autoApproveFacts: boolean): Promise<void> {
+  expect((await api(app)(owner.token, 'PATCH', '/user-settings', { kgraph: { enabled: true, everyday, autoApproveFacts } })).statusCode).toBeLessThan(300);
 }
 
 /** The three levels of switches: the deployment's, the owner's and the owner's everyday switch (`null`: never set). */
@@ -152,3 +163,77 @@ export const schemaOf = (t: Round['tools'][number]) => ({ name: t.name, descript
 
 export const SITE_FACTS_BLOCK = 'About these sites (';
 export const PROCEDURES_BLOCK = 'Saved procedures that may fit';
+
+export type McpResult = { isError?: boolean; content: Array<{ type: string; text?: string }>; structuredContent?: Record<string, unknown> };
+
+/**
+ * A hosted MCP client (E46.39): an OAuth app registered on a test host, with the OAuth server on; `token(userId, scopes)` mints an access
+ * token as the consent screen would; `pat(userId)` a personal access token. `rpc` and `call` speak JSON-RPC to `POST /api/mcp`.
+ */
+export async function hostedClient(app: NestFastifyApplication, admin: Session) {
+  const prisma = app.get(PrismaService);
+  const host = `kg-scenario-${randomUUID().slice(0, 8)}.example.test`;
+  const appUrl = app.get(ConfigService).get<string>('appUrl')!.replace(/\/+$/, '');
+  const client = await createOAuthTestClient(prisma as never, { name: 'Scripted assistant', redirectUris: [`https://${host}/callback`], host, tokenEndpointAuthMethod: 'none' });
+  await app.get(SystemSettingsService).patchSettings({ oauthServer: { enabled: true, allowedClientHosts: [host], allowAnyClientHost: false } } as never, admin.userId);
+  app.get(OAuthServerSettingsReader).invalidate();
+  const rpc = async (token: string, body: unknown) => {
+    const res = await app.inject({ method: 'POST', url: '/api/mcp', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18' }, payload: JSON.stringify(body) });
+    return { status: res.statusCode, json: res.body ? JSON.parse(res.body) : null };
+  };
+  return {
+    client,
+    appUrl,
+    rpc,
+    names: async (token: string) => ((await rpc(token, { jsonrpc: '2.0', id: 1, method: 'tools/list' })).json.result.tools as Array<{ name: string }>).map((t) => t.name),
+    call: async (token: string, name: string, args: Record<string, unknown> = {}) => {
+      const r = await rpc(token, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
+      return { status: r.status, result: r.json?.result as McpResult };
+    },
+    token: async (userId: string, scopes: readonly string[]) => {
+      await prisma.oAuthGrant.updateMany({ where: { userId, clientId: client.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      return (await mintOAuthTestToken(prisma as never, { userId, resourceId: 'mcp', scopes, appUrl, client: { id: client.id } })).token;
+    },
+    pat: async (userId: string) => (await app.get(PatService).createToken(userId, { name: `kgs-${randomUUID().slice(0, 6)}`, durationValue: 1, durationUnit: 'days' } as never)).token,
+    close: async () => {
+      await app.get(SystemSettingsService).patchSettings({ oauthServer: { enabled: false, allowedClientHosts: [] } } as never, admin.userId);
+      await prisma.oAuthClient.deleteMany({ where: { id: client.id } });
+    },
+  };
+}
+
+export const PORTAL = 'portal.example.test';
+const link = (id: string, name: string) => ({ selector: `#${id}`, selectors: [`#${id}`, `nav a[data-nav="${id}"]`], role: 'link', name, tag: 'a', inputType: null, anchor: 'Main menu' });
+const ASK_CODE: Call = ['request_human', { kind: 'code', prompt: 'Enter the code', input: 'secret', choices: null, options: null, constraints: null, confirm_label: null, deny_label: null, risk: null, remember_label: null, topic: null }];
+
+/**
+ * An everyday chat on the portal (E46.39, after E46.36's spec): open it, click three links (`labels`), ask the owner for a one-time code
+ * and type it, run `extra` (say a `propose_site_fact`), finish. The invoices click is recorded as slow (9.4 s), so the derive step has a
+ * navigation, a sign-in and a timing fact to propose. Returns the run and what the second round's calls answered.
+ */
+export async function derivingChat(app: NestFastifyApplication, owner: Session, labels: [string, string, string] = ['Billing', 'History', 'Invoices'], extra: Call[] = []) {
+  const prisma = app.get(PrismaService);
+  const db = prisma.forUser({ userId: owner.userId });
+  const c = await db.conversation.create({ data: { userId: owner.userId, title: 'Chat', allowedDomains: [PORTAL], confirmRiskyActions: false } });
+  const runId = (await db.run.create({ data: { userId: owner.userId, conversationId: c.id, trigger: 'chat', goal: `Download the latest invoice from ${PORTAL}` } })).id;
+  const fabric = fakeSecretsFabric(`https://${PORTAL}/start`);
+  fabric.page.inputs = [{ selector: '#otp', tag: 'input' }];
+  fabric.surface.push(link('billing', labels[0]), link('history', labels[1]), link('invoices', labels[2]));
+  const first = scriptedAi([
+    [['navigate', { url: `https://${PORTAL}/`, reason: 'open the portal' }], ['click', { selector: '#billing', reason: 'billing' }], ['click', { selector: '#history', reason: 'history' }], ['click', { selector: '#invoices', reason: 'invoices' }], ASK_CODE],
+  ]);
+  const outcomes = [await runnerOf(app, fabric, first.ai).advance(runId, owner.userId, null)];
+  const code = [...fabric.handoffs.values()][0];
+  if (code) {
+    fabric.answer(code, { value_withheld: true });
+    Object.assign(code, { secret: 'otp-493817-zz' });
+  }
+  const second = scriptedAi([[['type_handoff_secret', { selector: '#otp', submit: true, parameter: null }], ...extra, ['finish', { success: true, result: 'Downloaded.' }]]]);
+  outcomes.push(await runnerOf(app, fabric, second.ai).advance(runId, owner.userId, null));
+  const slow = await prisma.runStep.findFirstOrThrow({ where: { runId, action: 'click' }, orderBy: { seq: 'desc' } });
+  await prisma.runStep.update({ where: { id: slow.id }, data: { durationMs: 9_400 } });
+  return { runId, outcomes, outputs: second.rounds[0]?.outputs ?? [] };
+}
+
+/** The `kgraph.site_facts` job's work for one run, run directly (the job worker is off in the scenarios). */
+export const deriveFacts = (app: NestFastifyApplication, owner: Session, runId: string) => app.get(KgraphSiteFactsHandler).process({ id: `job-${runId}`, payload: { userId: owner.userId, runId } } as never);

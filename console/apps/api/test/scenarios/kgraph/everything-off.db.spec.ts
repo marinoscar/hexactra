@@ -6,13 +6,19 @@
 //   - facts absent: a learn run on a site with no facts reads no site block, and an everyday chat of an owner with nothing learned reads no
 //     block either. Compared with phase 4's learn run and with an everyday-off chat, the only difference is the tools those modes add, last,
 //     and their family names in the instructions' and the input's tool lists.
-// runner-characterisation.db.spec.ts stays the canonical proof for the whole runner; this scenario covers the phase 5 switches.
+// Phase 6 (E46.39, #895) adds the owner's auto-approve (`kgraph.autoApproveFacts`) and the derive step after everyday runs:
+//   - auto-approve ON with everyday off, or with the feature off at the deployment: a chat run is still identical, and nothing is queued,
+//     derived or approved after it;
+//   - auto-approve off with everyday on: the run reads exactly what it reads with auto-approve on (the setting acts only after the run), and
+//     the derive step leaves every fact proposed.
+// runner-characterisation.db.spec.ts stays the canonical proof for the whole runner; this scenario covers the phase 5 and 6 switches.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { procedureVersionSchema } from '@marinoscar/hexactra-kgraph';
 
 import { PrismaProcedureStore } from '../../../src/kgraph/prisma-procedure-store';
+import { KGRAPH_SITE_FACTS_JOB } from '../../../src/kgraph/site-facts.job';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
-import { chatRun, fabricAt, login, ownerFact, runnerOf, schemaOf, scriptedAi, startApp, switches, taskRun, withoutIds, type Call, type Round, type Session } from './kit';
+import { autoApprove, chatRun, deriveFacts, fabricAt, login, ownerFact, runnerOf, schemaOf, scriptedAi, startApp, switches, taskRun, withoutIds, type Call, type Round, type Session } from './kit';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -29,6 +35,7 @@ const GOAL = 'Find blue pens on shop.example.test';
 const SCRIPT: Call[] = [['navigate', { url: 'https://shop.example.test/pens', reason: 'open' }], ['finish', { success: true, result: 'Done.' }]];
 
 interface Observed {
+  runId: string;
   round: Round;
   ids: string[];
   actions: unknown[];
@@ -44,7 +51,7 @@ async function observe(owner: Session, kind: 'chat' | 'task', bound: boolean, mo
   const runner = runnerOf(app, fabric, model.ai, bound);
   if (unbind === 'siteFacts') runner.kgraphSiteFacts = undefined;
   expect(await runner.advance(made.runId, owner.userId, null)).toBe('succeeded');
-  return { round: model.rounds[0]!, ids, actions: fabric.actions, kgRuns: await prisma.kgRun.count({ where: { runId: made.runId } }) };
+  return { runId: made.runId, round: model.rounds[0]!, ids, actions: fabric.actions, kgRuns: await prisma.kgRun.count({ where: { runId: made.runId } }) };
 }
 
 /** Takes out the names of the two phase 5 tool families from the instructions' and the input's tool lists (what offering the tools adds). */
@@ -122,5 +129,33 @@ describe('phase 5 acceptance: everything off is identical (E46.34)', () => {
     expect(everydayOn.round.tools.map((t) => t.name)).toEqual([...everydayOff.round.tools.map((t) => t.name), 'procedures_list', 'run_procedure', 'propose_site_fact', 'site_facts']);
     expect(everydayOn.round.tools.slice(0, -4).map(schemaOf)).toEqual(everydayOff.round.tools.map(schemaOf));
     expect(everydayOn.actions).toEqual(everydayOff.actions);
+  });
+  it('phase 6: auto-approve on with everyday off, or with the feature off, changes nothing; nothing is queued, derived or approved', async () => {
+    const before = await prisma.kgSiteFact.count({ where: { userId: owner.userId } });
+    for (const [deployment, everyday] of [[true, false], [false, true]] as const) {
+      await switches(app, admin, owner, deployment, true, everyday);
+      await autoApprove(app, owner, everyday, true);
+      const baseline = await observe(owner, 'chat', false);
+      const off = await observe(owner, 'chat', true);
+      expectIdentical(off, baseline);
+      expect(off.kgRuns).toBe(0);
+      expect(await prisma.job.count({ where: { type: KGRAPH_SITE_FACTS_JOB, subjectId: { in: [off.runId, baseline.runId] } } })).toBe(0);
+      // The derive step, run anyway, finds nothing recorded and writes nothing.
+      await deriveFacts(app, owner, off.runId);
+      expect(await prisma.kgSiteFact.count({ where: { userId: owner.userId } })).toBe(before);
+    }
+    expect(await prisma.auditEvent.count({ where: { actorUserId: owner.userId, action: 'kgraph.site_fact.auto_approved' } })).toBe(0);
+  });
+
+  it('phase 6: auto-approve off reads exactly what auto-approve on reads, and leaves every derived fact proposed', async () => {
+    const fresh = await login(app, `kgp6-off-auto-${stamp}@example.test`);
+    await switches(app, admin, fresh, true, true, true);
+    await autoApprove(app, fresh, true, true);
+    const on = await observe(fresh, 'chat', true);
+    await autoApprove(app, fresh, true, false);
+    const offAuto = await observe(fresh, 'chat', true);
+    expectIdentical(offAuto, on);
+    await deriveFacts(app, fresh, offAuto.runId);
+    expect(await prisma.kgSiteFact.count({ where: { userId: fresh.userId, status: 'active' } })).toBe(0);
   });
 });

@@ -231,9 +231,17 @@ Added on the owner's decision of 2026-11-23.
 - **How it was activated.** `kg_site_facts.approved_by` (`owner` or `auto`, default `owner`) is returned as `approvedBy`. Reviews lists the facts approved automatically in the last 30 days and the Sites tab labels them; the owner archives or deletes one as usual. Turning the setting off changes nothing already active.
 - **Threat and residual risk:** [security-kgraph.md](../security-kgraph.md), "Automated facts".
 
+### Phase 6: the rest (#890: E46.35 #891, E46.37 #893, E46.38 #894, E46.39 #895)
+
+- **MCP** (E46.35): `site_facts_list` and `site_fact_propose`, described under "What phase 5 does not change" above. The owner's auto-approve never applies to an MCP proposal: it covers only facts the derive step read from server records.
+- **Tests the earlier phases left open** (E46.37): the consent flow with the deployment switch off for every caller (`mcp-kgraph-consent.db.spec.ts`), and Delete everything learned emptying every Knowledge Graph page. A client that explicitly asks for a Knowledge Graph scope still sees it on the platform's consent screen; hiding it needs a platform seam (drafted in #893).
+- **Map bundle isolation** (E46.38): see "The Map", "Bundle cost". `npm run bundle:compare --workspace=web` runs in CI.
+- **A credential given in words** (E46.39, found in #891). The value patterns caught cards, tokens and account numbers, but not "The password is hunter2-Secret-9931". The package's `hasCredentialPhrase` refuses a credential word (password, passcode, passphrase, PIN, one-time or verification code, OTP, security answer, API key, token, secret, a bare "code" after "is" or ":") followed by a value. `validateSiteFact` applies it whatever `SecretCheckPort` the host binds, and the console's `consoleSecretCheck` calls it too. A plain mention without a value ("Sign-in asks for a one-time code", the derive step's own sign-in text) passes. Chosen over extending the memories secret rules, which read attribute names, not sentences.
+- **Acceptance** (E46.39): `apps/api/test/scenarios/kgraph/phase6-mcp.db.spec.ts`, `phase6-automated-facts.db.spec.ts`, `phase6-poisoning.db.spec.ts`, and two phase 6 cases in `everything-off.db.spec.ts`. The phase 6 migration (`20261201100000_kgraph_site_fact_approved_by`) is one statement on `kg_site_facts`; the MCP manifest against `main` is exactly E46.22's 3 tools and 2 scopes plus E46.35's 2 tools and 2 scopes.
+
 ## Out of scope
 
-Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database, embeddings or a vector store for matching, approving or editing site facts over MCP.
+Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database, embeddings or a vector store for matching, approving or editing site facts over MCP, auto-approving any fact that is not derived from server records.
 
 ## Load test, 2026-11-22
 
