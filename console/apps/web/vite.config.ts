@@ -7,6 +7,8 @@ import { build as viteBuild, defineConfig, type Plugin } from 'vite';
 
 // The OAuth server's well-known documents in the dev server (build-config/oauth-well-known.ts).
 import { openIdConfigurationNotFound, wellKnownProxy } from './build-config/oauth-well-known';
+// The Map's own copies of the modules it shares, so no other chunk changes for it (build-config/map-bundle.ts, #894).
+import { mapBundlePlugin } from './build-config/map-bundle';
 
 /** The identity fields the page shell and the manifest show (packages/shared/identity.json). */
 export interface WebIdentity {
@@ -137,7 +139,7 @@ function identityPlugin(): Plugin {
 const API_PROXY_TARGET = process.env.VITE_API_PROXY_TARGET || 'http://localhost:3000';
 
 export default defineConfig({
-  plugins: [react(), identityPlugin(), serviceWorkerPlugin(), openIdConfigurationNotFound()],
+  plugins: [react(), identityPlugin(), serviceWorkerPlugin(), openIdConfigurationNotFound(), mapBundlePlugin()],
   // The packaged pages are one chunk until the app splits its routes.
   build: { chunkSizeWarningLimit: 2000 },
   server: {
