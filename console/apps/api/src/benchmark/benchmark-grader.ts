@@ -81,7 +81,7 @@ export class BenchmarkGrader implements OnModuleInit, OnModuleDestroy {
         grade = { error: e instanceof Error ? e.message : String(e) };
       }
     }
-    const outcome = withAskedQuestion(trialOutcome({ preset: trial.failureReason, run: { status: run.status, stopReason: run.stopReason, error: run.error }, grade }), asked);
+    const outcome = withAskedQuestion(trialOutcome({ preset: trial.failureReason, run: { status: run.status, stopReason: run.stopReason, error: run.error }, grade }), asked, trial.failureReason);
     const finishedAt = run.finishedAt ?? new Date();
     const models = trialModels(run.policySnapshot, run.currentTier);
     const { count } = await this.prisma.benchmarkTrial.updateMany({

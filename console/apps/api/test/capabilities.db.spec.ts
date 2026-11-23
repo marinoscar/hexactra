@@ -15,7 +15,13 @@ const values = (s: CapabilitySurface): readonly string[] => (typeof s === 'strin
 let app: NestFastifyApplication;
 let operations: Set<string>;
 
+// No job worker (as #889 did for android-push): this spec only reads the OpenAPI document. With the worker on, the app picked up jobs
+// other specs left queued in the shared test database, and one still running when the app closed opened a database connection after
+// Jest had torn this file down ("You are trying to `require` a file after the Jest environment has been torn down"), failing the run
+// after every test had passed.
+const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
+  process.env.JOBS_WORKER_MODE = 'off';
   app = await createApp();
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -31,6 +37,8 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await app?.close();
+  if (workerMode === undefined) delete process.env.JOBS_WORKER_MODE;
+  else process.env.JOBS_WORKER_MODE = workerMode;
 });
 
 describe('capability parity (REST, MCP)', () => {

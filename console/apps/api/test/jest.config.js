@@ -8,4 +8,6 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src/', '<rootDir>/test/'],
   testTimeout: 30000,
+  // The db tier leaves no queued job for the next file's worker (see the file).
+  setupFilesAfterEnv: ['<rootDir>/test/db-tier-jobs.setup.ts'],
 };
