@@ -44957,7 +44957,10 @@ export interface operations {
     };
     kgraphSiteFactReviews_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `auto`: instead of the proposals, the facts your setting "Approve facts from server records automatically" made active in the last 30 days (still active), newest first (E46.36). */
+                approvedBy?: "auto";
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -284,6 +284,13 @@ export class KgraphSiteFactsService {
     return rows.map(siteFactView);
   }
 
+  /** The facts the owner's auto-approve made active in the last 30 days and still active (E46.36), newest first: what Reviews lists as "Approved automatically". */
+  async autoApproved(userId: string, now = new Date()) {
+    const since = new Date(now.getTime() - DECLINE_SUPPRESS_MS);
+    const rows = await this.db(userId).kgSiteFact.findMany({ where: { userId, status: 'active', approvedBy: 'auto', updatedAt: { gte: since } }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 50 });
+    return rows.map(siteFactView);
+  }
+
   /**
    * The owner's answer to a proposal, from a signed-in browser session only (no token, OAuth app, MCP or webhook). Approve makes it active,
    * optionally with the owner's own edit of its text or kind; decline archives it and suppresses the same identity for 30 days.

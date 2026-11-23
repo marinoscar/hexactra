@@ -201,6 +201,13 @@ describe('automated site facts (E46.36)', () => {
     const listed = data<{ text: string; approvedBy: string | null }[]>(await call(owner.token, 'GET', '/kgraph/sites/example.test/facts'));
     expect(listed.find((f) => f.text === 'Invoices: Billing → History')!.approvedBy).toBe('auto');
     expect(listed.find((f) => f.text === 'Sign-in asks for a one-time code')!.approvedBy).toBeNull();
+    // Reviews: the proposals as before, and (an added query) what was approved automatically.
+    const auto = data<{ text: string; approvedBy: string }[]>(await call(owner.token, 'GET', '/kgraph/reviews/site-facts?approvedBy=auto'));
+    expect(auto.map((f) => f.text).sort()).toEqual(['Invoices: Billing → History', 'Pages on this site load slowly (about 9 s)']);
+    expect(auto.every((f) => f.approvedBy === 'auto')).toBe(true);
+    const pending = data<{ status: string }[]>(await call(owner.token, 'GET', '/kgraph/reviews/site-facts'));
+    expect(pending.length).toBeGreaterThanOrEqual(3);
+    expect(pending.every((f) => f.status === 'proposed')).toBe(true);
     expect(await prisma.auditEvent.count({ where: { actorUserId: owner.userId, action: 'kgraph.site_fact.auto_approved' } })).toBe(2);
     // The owner approving the sign-in proposal (signed-in session) records owner.
     const signIn = by('Sign-in asks for a one-time code')!;
