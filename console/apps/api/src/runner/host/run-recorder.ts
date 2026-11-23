@@ -54,6 +54,7 @@ export class RunRecorder {
   /** What the recorder last told the extension; unknown at the start of a job. */
   private paused: boolean | null = null;
   private done = false;
+  private lastNote: string | null = null;
 
   private constructor(
     private readonly d: Deps,
@@ -146,7 +147,13 @@ export class RunRecorder {
         await this.db().runRecording.update({ where: { id: this.row.id }, data: { fabricId: id } });
       } catch (e) {
         if (e instanceof RecordingCallError && e.code === 'encoder_unavailable') await this.fail('encoder_unavailable');
-        // Anything else (a secret is being asked for, a busy host): the next tick tries again.
+        // The node's agent or extension predates the record actions (#900): say so, and stop asking.
+        else if (e instanceof RecordingCallError && e.code === 'unsupported') await this.fail('node_outdated');
+        // Anything else (a busy host, a page between loads): kept as the reason, and the next tick tries again.
+        else if (this.lastNote !== 'start_failed') {
+          this.lastNote = 'start_failed';
+          await this.db().runRecording.update({ where: { id: this.row.id }, data: { note: 'start_failed' } }).catch(() => undefined);
+        }
         return;
       }
     }

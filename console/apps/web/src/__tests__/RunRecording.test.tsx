@@ -56,6 +56,11 @@ describe('the Recording card', () => {
     expect(screen.queryByLabelText('Video of the run')).not.toBeInTheDocument();
   });
 
+  it('tells the owner to update an outdated node (#900)', async () => {
+    renderIt(<RunRecording runId="r1" />, { 'GET /runs/r1/recording': { ...READY, status: 'failed', note: 'node_outdated', bytes: 0, durationMs: 0 } });
+    expect(await screen.findByText(/run `hexactra agent update`, then restart its browser/)).toBeInTheDocument();
+  });
+
   it('shows nothing for a run without a recording', async () => {
     const host = renderIt(<RunRecording runId="r2" />, {});
     await waitFor(() => expect(host.requests.some((r: TestApiRequest) => r.path === '/runs/r2/recording')).toBe(true));

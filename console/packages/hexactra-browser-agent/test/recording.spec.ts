@@ -55,6 +55,10 @@ describe('run recording calls (#755)', () => {
     await expect(recordPull(failed, noFetch, 'sess', 'rec-1')).rejects.toMatchObject({ code: 'recording_not_found' });
     const thrown = fakeSession(() => new Error('encoder_unavailable: this Chrome has no offscreen documents'));
     await expect(recordStart(thrown, 'sess')).rejects.toMatchObject({ code: 'encoder_unavailable' });
+    const oldExtension = fakeSession(() => ({ state: 'failed', error: 'unsupported action record_start' }));
+    await expect(recordStart(oldExtension, 'sess')).rejects.toMatchObject({ code: 'unsupported' });
+    const oldAgent = fakeSession(() => new Error('invalid action: unknown variant `record_start`, expected one of `navigate`'));
+    await expect(recordStart(oldAgent, 'sess')).rejects.toMatchObject({ code: 'unsupported' });
     const hangs = fakeSession(() => 'hang');
     await expect(recordStart(hangs, 'sess', {}, 20)).rejects.toBeInstanceOf(RecordingCallError);
     await expect(recordStart(hangs, 'sess', {}, 20)).rejects.toMatchObject({ code: 'unavailable' });
