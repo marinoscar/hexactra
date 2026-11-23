@@ -205,7 +205,7 @@ A **site fact** is a short note about one site that helps a later run there: "In
 
 A fact's **identity** is its site, kind and normalised text (`siteFactKey`: lower case, digits as `#`, punctuation dropped). A store keeps one fact per identity and owner, so the same proposal is never made twice, and a fact the owner archived is not proposed again.
 
-`validateSiteFact` refuses text over 300 characters, a site that is not a registrable domain, Secret Material (through the host's `SecretCheckPort`) and instruction-shaped text (see [security.md](security.md)).
+`validateSiteFact` refuses text over 300 characters, a site that is not a registrable domain, Secret Material (through the host's `SecretCheckPort`, and always a credential given in words, `hasCredentialPhrase`: "PIN: 4821") and instruction-shaped text (see [security.md](security.md)).
 
 `deriveSiteFacts(trace, surface, handlers)` proposes facts with no model, from server-recorded facts only:
 
