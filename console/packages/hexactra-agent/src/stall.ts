@@ -7,7 +7,9 @@
  * What it keeps (`StallState`) lives in the run memory between chunks, jobs
  * and handoffs. It holds only short digests, normalised selectors and URLs
  * without a query: never typed text (only its length), never a secret value,
- * never an image. Secret typing is not fed to it at all.
+ * never an image. Secret typing is not fed to it at all. A read's `contentHash`
+ * (12 hex characters of a sha256) enters its fingerprint, and is already kept
+ * in `seen`: it stores no text.
  */
 import { createHash } from 'node:crypto';
 
@@ -160,10 +162,20 @@ export function normalizeArgs(type: string, args: Record<string, unknown>): Reco
   return out;
 }
 
-/** The fingerprint of an action: `hash(type, normalised args, ok, resulting URL, result key, page view)`. */
+/**
+ * What an action returned, as it enters its fingerprint: the result key (a scroll's position), else, for a read
+ * (`text`, `elements`, `evaluate`, …), the digest of what it read. Reading a page that changed is therefore a new
+ * action, and reading the same content again is the same one (#909). `page.view` is only measured once per chunk,
+ * and an SPA keeps its URL, so without this every read in a chunk looked alike whatever it returned.
+ */
+function resultOf(obs: ActionObservation): string {
+  return obs.resultKey ?? (OBSERVATION_TYPES.has(obs.type) ? obs.contentHash : null) ?? '';
+}
+
+/** The fingerprint of an action: `hash(type, normalised args, ok, resulting URL, result (key or read content), page view)`. */
 export function fingerprint(obs: ActionObservation, page: PageState | null): string {
   const resultingUrl = obs.url ?? page?.url ?? '';
-  return digest(JSON.stringify([obs.type, normalizeArgs(obs.type, obs.args), obs.ok, resultingUrl ? urlNoQuery(resultingUrl) : '', obs.resultKey ?? '', page?.view ?? '']));
+  return digest(JSON.stringify([obs.type, normalizeArgs(obs.type, obs.args), obs.ok, resultingUrl ? urlNoQuery(resultingUrl) : '', resultOf(obs), page?.view ?? '']));
 }
 
 /** A few words for an action: "click on #submit", "click at 120,300", "navigate to https://shop.example.test/cart". */

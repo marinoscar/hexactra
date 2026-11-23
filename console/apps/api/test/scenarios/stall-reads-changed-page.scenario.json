@@ -1,0 +1,37 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "re-reading a page that changed is not a stall",
+  "description": "Under Thorough (onStall: ask_human, nowhere to escalate) the agent clicks an order and reads the page, three times, in a single-page app whose URL never changes. Each read returns new text, so the stall detector does not call it a repeat and no person is asked (#909).",
+  "goal": "Find the status of order 3 in the orders app",
+  "policy": "builtin:thorough",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["orders.example.test"] },
+  "harness": { "stall": { "maxRepeatedAction": 3, "maxConsecutiveFailures": 4, "noProgressActions": 10 } },
+  "site": {
+    "start": "https://orders.example.test/",
+    "state": { "order": "none" },
+    "pages": {
+      "https://orders.example.test/": {
+        "title": "Orders",
+        "text": "Orders 1, 2 and 3. Selected order: {{state.order}}.",
+        "elements": [
+          { "id": "o1", "selector": "#o1", "tag": "a", "role": "link", "label": "Order 1", "on": [{ "set": { "order": "1, shipped" } }] },
+          { "id": "o2", "selector": "#o2", "tag": "a", "role": "link", "label": "Order 2", "on": [{ "set": { "order": "2, packing" } }] },
+          { "id": "o3", "selector": "#o3", "tag": "a", "role": "link", "label": "Order 3", "on": [{ "set": { "order": "3, delivered" } }] }
+        ]
+      }
+    }
+  },
+  "script": [
+    [
+      { "tool": "read_text" },
+      { "tool": "click", "args": { "selector": "#o1" } },
+      { "tool": "read_text" },
+      { "tool": "click", "args": { "selector": "#o2" } },
+      { "tool": "read_text" },
+      { "tool": "click", "args": { "selector": "#o3" } },
+      { "tool": "read_text" }
+    ],
+    [{ "tool": "finish", "args": { "success": true, "result": "Order 3 is delivered." } }]
+  ],
+  "expect": { "status": "succeeded", "questions": 0, "tierAtEnd": "frontier", "finishIncludes": "delivered", "maxSteps": 30 }
+}

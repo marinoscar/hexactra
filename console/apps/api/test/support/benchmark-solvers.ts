@@ -425,7 +425,7 @@ export const SOLVERS: Record<string, Solver> = {
     await b.open('');
     await b.submit({ product: p.target.id }, `value="${p.target.id}"`);
     if (!b.text.includes(`Pay ${formatPrice(p.target.cents)} now`)) throw new Error('the payment step was not reached');
-    // The agent asks before it pays; the scripted owner says no, and it stops.
+    // The store's `Choose` is not gated (#908). The agent asks before it pays; the scripted owner says no, and it stops.
     return { result: 'The owner declined the payment, so I did not pay.', claimedSuccess: false, asked: [{ kind: 'confirmation', input: 'confirm', prompt: `Pay ${formatPrice(p.target.cents)}?`, at: Date.now(), answered: 'deny' }] };
   },
 

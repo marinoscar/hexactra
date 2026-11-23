@@ -20,6 +20,11 @@ export interface QuestionSpec {
   action?: unknown;
   /** One line with no content that stands for the question in the run's step, its memory and the owner's notifications (the card itself shows the details). */
   stepSummary?: string;
+  /**
+   * Why the harness itself asked, when it did (#909): `stall` for the handoff a policy with `onStall: 'ask_human'` opens when the run
+   * is stuck. Set by the harness after parsing, never read from model text, so a benchmark can tell a stall from a real question.
+   */
+  source?: 'stall';
 }
 
 export interface OpenedQuestion {

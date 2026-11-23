@@ -10,8 +10,12 @@ import { QuestionsService } from '../questions/questions.service';
 import { BENCHMARK_ANSWER_CHANNEL, OWNER_CARD_INPUTS, brokerAnswer, scriptRules, type ScriptQuestion } from './owner-script';
 import { challengeById } from './suite/registry';
 
-/** `answered`: the run continues. `unscripted`: no rule fits, the trial ends as "asked a person". `idle`: nothing to answer now. */
-export type OwnerTurn = 'answered' | 'unscripted' | 'idle';
+/**
+ * `answered`: the run continues. `unscripted`: no rule fits, the trial ends as "asked a person". `stalled`: no rule fits the stall
+ * handoff the policy asked for (`onStall: 'ask_human'`, a question tagged `source: 'stall'`), the trial ends as `stalled` (#909).
+ * `idle`: nothing to answer now.
+ */
+export type OwnerTurn = 'answered' | 'unscripted' | 'stalled' | 'idle';
 
 @Injectable()
 export class BenchmarkOwner {
@@ -23,11 +27,11 @@ export class BenchmarkOwner {
   ) {}
 
   /** The questions of a run, oldest first, as the script reads them. */
-  async questionsOf(userId: string, runId: string): Promise<(ScriptQuestion & { blocking: boolean; handoffId: string | null })[]> {
+  async questionsOf(userId: string, runId: string): Promise<(ScriptQuestion & { blocking: boolean; handoffId: string | null; source: string | null })[]> {
     return this.prisma.question.findMany({
       where: { runId, ownerUserId: userId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, kind: true, input: true, prompt: true, status: true, answeredChannel: true, createdAt: true, options: true, blocking: true, handoffId: true },
+      select: { id: true, kind: true, input: true, prompt: true, status: true, answeredChannel: true, createdAt: true, options: true, blocking: true, handoffId: true, source: true },
     });
   }
 
@@ -39,7 +43,8 @@ export class BenchmarkOwner {
     const rules = challengeById(trial.challengeId)?.owner?.(trial.seed) ?? [];
     const rule = scriptRules(rules, all).get(waiting.id) ?? null;
     const input = rule ? brokerAnswer(rule.answer, waiting) : null;
-    if (!input) return 'unscripted';
+    const unanswerable: OwnerTurn = waiting.source === 'stall' ? 'stalled' : 'unscripted';
+    if (!input) return unanswerable;
     try {
       await this.questions.answer({ id: owner.userId, activeOrgId: owner.orgId }, waiting.id, input, { channel: BENCHMARK_ANSWER_CHANNEL, rememberAllowed: false });
       this.log.log(`trial ${trial.id}: answered a ${waiting.kind} question (${rule!.answer.type})`);
@@ -47,7 +52,7 @@ export class BenchmarkOwner {
     } catch (e) {
       // Somebody answered first, or it expired: nothing to do. An answer the card refuses is a question nobody scripted.
       if (e instanceof ConflictException) return 'idle';
-      if (e instanceof BadRequestException || e instanceof ForbiddenException) return 'unscripted';
+      if (e instanceof BadRequestException || e instanceof ForbiddenException) return unanswerable;
       throw e;
     }
   }
