@@ -1756,6 +1756,29 @@
       ]
     },
     {
+      "id": "kgraph.auto_facts",
+      "description": "Site facts derived automatically after every learn, reuse and everyday run, and your opt-in to approve facts from server records automatically (your user setting kgraph.autoApproveFacts, off by default; it covers derived navigation, timing and quirk facts only, while sign-in facts, the agent's proposals and imported facts always wait for you); see which facts it approved",
+      "rest": [
+        "GET /api/kgraph/status",
+        "PATCH /api/user-settings",
+        "GET /api/kgraph/reviews/site-facts",
+        "GET /api/kgraph/sites/{site}/facts"
+      ],
+      "cli": [
+        "kgraph auto-approve-facts"
+      ],
+      "mcp": {
+        "none": "Deliberate: the setting is the owner's, set in the console or the CLI; no hosted AI app turns it on, and a proposal from an MCP client always waits for the owner (docs/decisions/knowledge-graph.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
+      },
+      "web": [
+        "/settings/kgraph",
+        "/kgraph"
+      ]
+    },
+    {
       "id": "kgraph.ledger",
       "description": "See what the Knowledge Graph saved: a task's savings ledger (each run's model calls, cost and time) and a per-task summary against its AI-only baseline",
       "rest": [

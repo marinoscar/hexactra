@@ -10,6 +10,8 @@ export interface KgraphStatusView {
   available: boolean;
   /** "Use in chats and one-off runs" (`kgraph.everyday` of your settings); effective only while `available`. */
   everyday: boolean;
+  /** "Approve facts from server records automatically" (`kgraph.autoApproveFacts`, E46.36); effective only while `available`. */
+  autoApproveFacts?: boolean;
 }
 /** One row of `GET /api/kgraph/procedures`. */
 export interface ProcedureItemView {
@@ -68,6 +70,8 @@ export interface SiteFactView {
   text: string;
   source: string;
   status: string;
+  /** How it became active (E46.36): `owner` or `auto` (your auto-approve setting); null while proposed or declined. */
+  approvedBy?: 'owner' | 'auto' | null;
   evidence: { runId: string | null; steps: number; screens: number };
   lastUsedAt: string | null;
   createdAt: string;
@@ -85,7 +89,8 @@ const OFF_NOTE = 'The Knowledge Graph is off for you: this is what was learned, 
 export function statusText(s: KgraphStatusView): string {
   const why = s.available ? 'available: your saved tasks may choose learn or reuse' : !s.deployment ? 'off: turned off by your administrator' : 'off: run `hexactra kgraph on` to turn it on for yourself';
   const everyday = `everyday    ${onOff(s.everyday === true)}${s.everyday === true && !s.available ? ' (takes effect once the Knowledge Graph is available)' : ''}`;
-  return [`deployment  ${onOff(s.deployment)}`, `you         ${onOff(s.user)}`, everyday, `Knowledge Graph ${why}`].join('\n');
+  const auto = `auto-approve ${onOff(s.autoApproveFacts === true)} (facts derived from server records: navigation, timing, quirks)${s.autoApproveFacts === true && !s.available ? ' (takes effect once the Knowledge Graph is available)' : ''}`;
+  return [`deployment  ${onOff(s.deployment)}`, `you         ${onOff(s.user)}`, everyday, auto, `Knowledge Graph ${why}`].join('\n');
 }
 
 /** The list line: id, version and state, health, steps, name and task. */
@@ -116,14 +121,15 @@ export async function findProcedure(ref: string): Promise<ProcedureItemView> {
 /** A site's fact line: id, status, kind, source, last use and the text (data, printed as is). */
 export function siteFactLine(f: SiteFactView): string {
   const used = f.lastUsedAt ? `used ${f.lastUsedAt.slice(0, 10)}` : 'not used yet';
-  return `${f.id}  ${f.status.padEnd(8)}  ${f.kind.padEnd(10)}  ${f.source.padEnd(14)}  ${used.padEnd(15)}  ${f.text.replace(/\s+/g, ' ')}`;
+  const auto = f.approvedBy === 'auto' && f.status !== 'proposed' ? '[approved automatically] ' : '';
+  return `${f.id}  ${f.status.padEnd(8)}  ${f.kind.padEnd(10)}  ${f.source.padEnd(14)}  ${used.padEnd(15)}  ${auto}${f.text.replace(/\s+/g, ' ')}`;
 }
 
 export function siteLine(s: SiteSummaryView): string {
   return `${s.site.padEnd(32)}  ${String(s.active).padStart(3)} active  ${String(s.proposed).padStart(3)} proposed  ${String(s.archived).padStart(3)} archived`;
 }
 
-async function setSwitch(patch: { enabled: boolean } | { everyday: boolean }): Promise<void> {
+async function setSwitch(patch: { enabled: boolean } | { everyday: boolean } | { autoApproveFacts: boolean }): Promise<void> {
   await consoleApi().patch('/user-settings', { kgraph: patch });
   out(statusText(await consoleApi().get<KgraphStatusView>('/kgraph/status')));
 }
@@ -257,5 +263,12 @@ export const kgraphCommand: CliCommandRegistration = (program: Command) => {
       const v = value.trim().toLowerCase();
       if (v !== 'on' && v !== 'off') throw new Error('Use `hexactra kgraph everyday on` or `hexactra kgraph everyday off`.');
       await setSwitch({ everyday: v === 'on' });
+    });
+  kg.command('auto-approve-facts <on|off>')
+    .description('Approve facts derived from your runs\' server records automatically (on) or review each one (off). Covers navigation, timing and quirk facts only; sign-in facts, the agent\'s proposals and imported facts always wait for your review. Turning it off changes nothing already active')
+    .action(async (value: string) => {
+      const v = value.trim().toLowerCase();
+      if (v !== 'on' && v !== 'off') throw new Error('Use `hexactra kgraph auto-approve-facts on` or `hexactra kgraph auto-approve-facts off`.');
+      await setSwitch({ autoApproveFacts: v === 'on' });
     });
 };
