@@ -1,20 +1,22 @@
 // The console's binding of the Knowledge Graph's SiteFactStorePort (phase 5, E46.31): the `kg_site_facts` table through
 // `PrismaService.forUser`. Every read and write is scoped to one owner; another owner's id answers as not found. A proposal is always stored
 // `proposed`; one identity (site, kind, normalised text) per owner. It passes `runSiteFactStoreConformance` (test/kgraph-site-facts.db.spec.ts).
-// The secret check is the console's: the memories secret rules (`memory-secrets.ts`) and the sensitive-pattern table.
+// The secret check is the console's: the package's credential-phrase rule, the memories secret rules (`memory-secrets.ts`) and the
+// sensitive-pattern table.
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { canMoveSiteFact, siteFactKey, siteFactSchema, type NewSiteFact, type SecretCheckPort, type SiteFact, type SiteFactStatus, type SiteFactStorePort } from '@marinoscar/hexactra-kgraph';
+import { canMoveSiteFact, hasCredentialPhrase, siteFactKey, siteFactSchema, type NewSiteFact, type SecretCheckPort, type SiteFact, type SiteFactStatus, type SiteFactStorePort } from '@marinoscar/hexactra-kgraph';
 
 import { findMemorySecrets } from '../memories/memory-secrets';
 import { PrismaService } from '../prisma/prisma.service';
 import { consoleIsSensitive } from '../runner/host/kgraph/observer-port';
 
-/** The console's secret rules for a fact's text: a memory's note check, then the sensitive-pattern table. Never throws. */
+/** The console's secret rules for a fact's text: a credential given in words (the package's rule, E46.39), a memory's note check, then the
+ * sensitive-pattern table. Never throws. */
 export const consoleSecretCheck: SecretCheckPort = Object.freeze({
   hasSecret(text: string): boolean {
     try {
-      return findMemorySecrets({ note: text }).length > 0 || consoleIsSensitive(text);
+      return hasCredentialPhrase(text) || findMemorySecrets({ note: text }).length > 0 || consoleIsSensitive(text);
     } catch {
       return true;
     }

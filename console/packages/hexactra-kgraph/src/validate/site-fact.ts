@@ -3,6 +3,7 @@
 import { registrableDomain } from '../compile/compile';
 import { SITE_FACT_MAX_TEXT, siteFactEvidenceSchema, siteFactKindSchema, siteFactSourceSchema } from '../schema/site-fact';
 import { registrableDomainSchema } from '../schema/core';
+import { hasCredentialPhrase } from './credential-phrase';
 import { defaultIsSensitive } from './sensitive';
 
 /**
@@ -15,8 +16,8 @@ export interface SecretCheckPort {
   hasSecret(text: string): boolean;
 }
 
-/** The package's fallback: `defaultIsSensitive` over the whole text. */
-export const defaultSecretCheck: SecretCheckPort = Object.freeze({ hasSecret: (text: string) => defaultIsSensitive(text) });
+/** The package's fallback: `defaultIsSensitive` and `hasCredentialPhrase` over the whole text. */
+export const defaultSecretCheck: SecretCheckPort = Object.freeze({ hasSecret: (text: string) => defaultIsSensitive(text) || hasCredentialPhrase(text) });
 
 export const SITE_FACT_RULES = ['schema', 'length', 'domain', 'secret', 'instruction'] as const;
 export type SiteFactRule = (typeof SITE_FACT_RULES)[number];
@@ -79,10 +80,11 @@ export function validateSiteFact(input: unknown, options: ValidateSiteFactOption
   }
   const text = f.text;
   if (text.length > SITE_FACT_MAX_TEXT) out.push({ rule: 'length', message: `text: at most ${SITE_FACT_MAX_TEXT} characters (it has ${text.length})` });
-  // The secret check reads the whole text; nothing of it is echoed in the message.
+  // The secret check reads the whole text; nothing of it is echoed in the message. A credential given in words ("the password is ...") is
+  // refused whatever the host binds (E46.39).
   let secret = false;
   try {
-    secret = check.hasSecret(text);
+    secret = hasCredentialPhrase(text) || check.hasSecret(text);
   } catch {
     secret = true;
   }
