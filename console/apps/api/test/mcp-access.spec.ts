@@ -164,7 +164,9 @@ describe('call-time enforcement (#460)', () => {
 });
 
 describe('per-request availability: the learned-procedure tools (E46.22)', () => {
-  const KG = ['procedures_list', 'procedure_get', 'procedure_run'];
+  const PROC = ['procedures_list', 'procedure_get', 'procedure_run'];
+  // And the site-fact tools (E46.35), behind the same switches.
+  const KG = [...PROC, 'site_facts_list', 'site_fact_propose'];
   const KG_USER = [...CONTRIBUTOR, 'kgraph:read'];
   /** A dispatcher whose Knowledge Graph switches answer `available`, and the REST calls its tools made. */
   const dispatcher = (available: boolean | 'throws') => {
@@ -198,12 +200,12 @@ describe('per-request availability: the learned-procedure tools (E46.22)', () =>
     const { d, inject } = dispatcher(true);
     const pat = await list(d, { kind: 'pat', tokenId: 'p' });
     expect(pat).toEqual(MCP_TOOLS.filter((t) => !t.visibility).map((t) => t.name));
-    expect(pat.slice(-3)).toEqual(KG);
+    expect(pat.slice(-5)).toEqual(KG);
     // Granted procedures:run (and :read): listed. Without them: not listed (no step-up advertised) or marked as a step-up.
-    expect((await list(d, oauth([...DEFAULT_SCOPES, 'procedures:read', 'procedures:run']), KG_USER)).filter((n) => KG.includes(n))).toEqual(KG);
+    expect((await list(d, oauth([...DEFAULT_SCOPES, 'procedures:read', 'procedures:run']), KG_USER)).filter((n) => PROC.includes(n))).toEqual(PROC);
     // With procedures:run only, the read tools are advertised as step-ups (the default setting), marked so.
     const stepped = ((await d.dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, rctx(oauth(['runs:read', 'procedures:run'])), 'Bearer x', undefined, { userId: 'u1', userPermissions: KG_USER }))!.body.result as { tools: Array<{ name: string; description: string }> }).tools;
-    expect(stepped.filter((t) => KG.includes(t.name)).map((t) => [t.name, t.description.includes(STEP_UP_NOTE)])).toEqual([['procedures_list', true], ['procedure_get', true], ['procedure_run', false]]);
+    expect(stepped.filter((t) => PROC.includes(t.name)).map((t) => [t.name, t.description.includes(STEP_UP_NOTE)])).toEqual([['procedures_list', true], ['procedure_get', true], ['procedure_run', false]]);
     const out = await d.dispatch(call('procedures_list', {}), rctx({ kind: 'pat', tokenId: 'p' }), 'Bearer x', undefined, { userId: 'u1' });
     expect((out!.body.result as { isError?: boolean }).isError).toBeFalsy();
     expect(inject).toHaveBeenCalledTimes(1);
@@ -217,6 +219,17 @@ describe('per-request availability: the learned-procedure tools (E46.22)', () =>
     expect(toolAccess(tool('procedure_get'), oauth(['procedures:run']), user)).toBe('needs_scope');
     expect(toolAccess(tool('procedure_run'), oauth(MCP_SCOPE_IDS), { permissions: [...VIEWER, 'kgraph:read'] })).toBe('forbidden');
     expect(toolAccess(tool('procedures_list'), oauth(MCP_SCOPE_IDS), { permissions: CONTRIBUTOR })).toBe('forbidden');
+  });
+
+  it('scopes gate an OAuth app for the site-fact tools (E46.35): site_facts:read lists, site_facts:write proposes; neither alone does the other; a PAT has both', () => {
+    const user = { permissions: [...CONTRIBUTOR, 'kgraph:read', 'kgraph:write'] };
+    expect(toolAccess(tool('site_facts_list'), oauth(['site_facts:read']), user)).toBe('allowed');
+    expect(toolAccess(tool('site_facts_list'), oauth(DEFAULT_SCOPES), user)).toBe('needs_scope');
+    expect(toolAccess(tool('site_facts_list'), oauth(['site_facts:write']), user)).toBe('needs_scope');
+    expect(toolAccess(tool('site_fact_propose'), oauth(['site_facts:write']), user)).toBe('allowed');
+    expect(toolAccess(tool('site_fact_propose'), oauth(['site_facts:read', 'procedures:read', 'procedures:run']), user)).toBe('needs_scope');
+    expect(toolAccess(tool('site_fact_propose'), { kind: 'pat' }, user)).toBe('allowed');
+    expect(toolAccess(tool('site_fact_propose'), oauth(MCP_SCOPE_IDS), { permissions: [...CONTRIBUTOR, 'kgraph:read'] })).toBe('forbidden');
   });
 
   it('a turned-off tool is never a step-up: stepUpScopes skips it', () => {

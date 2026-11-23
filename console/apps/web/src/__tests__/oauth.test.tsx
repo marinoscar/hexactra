@@ -101,8 +101,8 @@ describe('OAuth routes (#459)', () => {
 
 describe('the consent page scope icons', () => {
   it('cover exactly the scopes the API registers', () => {
-    // The ten scopes of E33, plus procedures:read and procedures:run (E46.22).
-    expect(API_SCOPE_IDS).toHaveLength(12);
+    // The ten scopes of E33, plus procedures:read and procedures:run (E46.22), plus site_facts:read and site_facts:write (E46.35).
+    expect(API_SCOPE_IDS).toHaveLength(14);
     expect(Object.keys(MCP_SCOPE_ICONS).sort()).toEqual([...API_SCOPE_IDS].sort());
     expect(API_SCOPE_TITLES.map((s) => s.id)).toEqual(API_SCOPE_IDS);
   });

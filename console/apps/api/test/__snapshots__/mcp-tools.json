@@ -930,6 +930,36 @@
     "outputSchema": "56ece3dae3ac6e97"
   },
   {
+    "name": "site_facts_list",
+    "title": "List site facts",
+    "scope": "site_facts:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List site facts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "dd32d0d85bbbec41",
+    "outputSchema": "47ec0d305e52c549"
+  },
+  {
+    "name": "site_fact_propose",
+    "title": "Propose a site fact",
+    "scope": "site_facts:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Propose a site fact",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "59534e0f3abc8fe0",
+    "outputSchema": "b89c1dc7b32aea39"
+  },
+  {
     "name": "run_card_poll",
     "title": "Refresh a run card",
     "scope": "runs:read",
