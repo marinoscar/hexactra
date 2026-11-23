@@ -14,7 +14,12 @@ let app: NestFastifyApplication;
 
 // Generating the VAPID key pair stores it encrypted: a fixed test key (32 bytes, not a real secret).
 const savedKey = process.env.SECRETS_ENCRYPTION_KEY;
+// No job worker (#888): this spec only calls routes. With the worker on, the app picked up jobs other specs left queued in the shared
+// test database, and one still delivering notifications when the app closed opened a database connection after Jest had torn this
+// file down ("Cannot read properties of undefined (reading 'Socket')"), failing the suite after every test had passed.
+const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
+  process.env.JOBS_WORKER_MODE = 'off';
   process.env.SECRETS_ENCRYPTION_KEY ||= Buffer.alloc(32, 7).toString('base64');
   app = await createApp();
   await app.init();
@@ -22,6 +27,8 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await app?.close();
+  if (workerMode === undefined) delete process.env.JOBS_WORKER_MODE;
+  else process.env.JOBS_WORKER_MODE = workerMode;
   if (savedKey === undefined) delete process.env.SECRETS_ENCRYPTION_KEY;
   else process.env.SECRETS_ENCRYPTION_KEY = savedKey;
 });

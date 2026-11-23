@@ -145,6 +145,25 @@ async function createTrigger(s: Session, taskId: string, body: Record<string, un
 const row = (id: string) => prisma.mailTrigger.findUniqueOrThrow({ where: { id } });
 /** One poll of one trigger, as the job does it. */
 const poll = async (id: string, now = new Date()) => poller.pollOne(await row(id), now);
+
+const DAY_MS = 86_400_000;
+/**
+ * The daily caps and the once-a-day notices count from 00:00 UTC of the `now` a poll is given, while the event rows carry the
+ * database's own time. A test that moves `now` forward by `windowMs` (or simply runs close to midnight) would see the day roll over
+ * part way and the caps reset: it failed in CI at 23:55 UTC (#888). Before such a test, wait until just past midnight when the
+ * window, plus a minute, would cross it. Only then: at any other time of day this returns at once.
+ */
+async function inOneUtcDay(windowMs: number): Promise<void> {
+  const wait = waitForOneUtcDay(Date.now(), windowMs);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+}
+/** How long to wait at `nowMs` so a window of `windowMs` (plus a minute) does not cross 00:00 UTC: 0, or until 2 s past midnight. */
+function waitForOneUtcDay(nowMs: number, windowMs: number): number {
+  const left = DAY_MS - (nowMs % DAY_MS);
+  return left < windowMs + 60_000 ? left + 2_000 : 0;
+}
+/** The timeout of a test guarded by `inOneUtcDay(windowMs)`: the longest wait, plus the test's own time. */
+const dayGuardTimeout = (windowMs: number): number => windowMs + 60_000 + 2_000 + 60_000;
 const runsOf = (triggerId: string) => prisma.run.findMany({ where: { mailTriggerId: triggerId }, orderBy: { createdAt: 'asc' } });
 const eventsOf = (triggerId: string) => prisma.mailTriggerEvent.findMany({ where: { triggerId }, orderBy: { createdAt: 'asc' } });
 // A notification keeps what the owner was told (rendered at write time), so a kind is found by its title.
@@ -285,6 +304,7 @@ describe('what starts a run', () => {
   });
 
   it('a message whose sender fails the provider\'s check starts nothing, is recorded as skipped and tells the owner once a day', async () => {
+    await inOneUtcDay(60_000);
     const s = await login('unverified');
     const c = await connection(s);
     const t = await task(s);
@@ -308,11 +328,27 @@ describe('what starts a run', () => {
     box.addMessage({ from: BILLING, subject: 'Spoofed 4', senderAuth: 'fail', date: isoNow(20 * 3_600_000) });
     await poll(trig.id, new Date(Date.now() + 36 * 3_600_000));
     expect(await notes(s.userId, 'unverified')).toBe(2);
+  }, dayGuardTimeout(60_000));
+});
+
+describe('the UTC-day guard of these tests (#888)', () => {
+  it('waits past midnight only when the window would cross it', () => {
+    const midnight = Date.UTC(2026, 10, 23);
+    // 23:55:29, a window of 8 x 61 s: it would cross, so wait until 00:00:02.
+    expect(waitForOneUtcDay(midnight - 271_000, 8 * 61_000)).toBe(273_000);
+    // Noon: never.
+    expect(waitForOneUtcDay(midnight - 12 * 3_600_000, 8 * 61_000)).toBe(0);
+    // Just after midnight: a whole day ahead.
+    expect(waitForOneUtcDay(midnight + 1_000, 301_000)).toBe(0);
+    // The minute of margin: 89 s before midnight with a 30 s window still waits; 90 s does not.
+    expect(waitForOneUtcDay(midnight - 89_000, 30_000)).toBe(91_000);
+    expect(waitForOneUtcDay(midnight - 90_000, 30_000)).toBe(0);
   });
 });
 
 describe('fail closed on the sender check', () => {
   it('a sender the provider could not check starts nothing unless the trigger accepts unverified senders; a failed check never starts one', async () => {
+    await inOneUtcDay(301_000);
     const s = await login('closed');
     const c = await connection(s);
     const t = await task(s);
@@ -338,7 +374,7 @@ describe('fail closed on the sender check', () => {
     expect(await poll(strict.id, new Date(Date.now() + 301_000))).toMatchObject({ started: 1, skipped: 1 });
     expect(await runsOf(strict.id)).toHaveLength(2);
     expect(await notes(s.userId, 'unverified')).toBe(1);
-  });
+  }, dayGuardTimeout(301_000));
 });
 
 describe('the task\'s inputs from the message', () => {
@@ -425,6 +461,7 @@ describe('the task\'s inputs from the message', () => {
 
 describe('caps and loops', () => {
   it('stops at the trigger\'s daily limit, records the rest, and tells the owner once', async () => {
+    await inOneUtcDay(10_000);
     const s = await login('cap');
     const c = await connection(s);
     const t = await task(s);
@@ -435,9 +472,10 @@ describe('caps and loops', () => {
     expect(await runsOf(trig.id)).toHaveLength(2);
     expect((await eventsOf(trig.id)).filter((e) => e.outcome === 'skipped_limit').map((e) => e.reason)).toEqual(['TRIGGER_DAILY_LIMIT', 'TRIGGER_DAILY_LIMIT', 'TRIGGER_DAILY_LIMIT']);
     expect(await notes(s.userId, 'limit')).toBe(1);
-  });
+  }, dayGuardTimeout(10_000));
 
   it('stops at the owner\'s cap across all their triggers', async () => {
+    await inOneUtcDay(10_000);
     const s = await login('usercap');
     const c = await connection(s);
     const t = await task(s);
@@ -451,9 +489,10 @@ describe('caps and loops', () => {
     await poll(b.id);
     expect((await runsOf(a.id)).length + (await runsOf(b.id)).length).toBe(1);
     expect((await eventsOf(b.id)).map((e) => e.reason)).toEqual(['USER_DAILY_LIMIT']);
-  });
+  }, dayGuardTimeout(10_000));
 
   it('a mail loop (every run sends a mail that matches) stops at the cap; a run\'s mail to itself never starts one', async () => {
+    await inOneUtcDay(8 * 61_000);
     const s = await login('loop');
     const c = await connection(s);
     const t = await task(s);
@@ -477,7 +516,7 @@ describe('caps and loops', () => {
     expect(events.filter((e) => e.outcome === 'skipped_loop').every((e) => e.reason === 'OWN_MESSAGE')).toBe(true);
     expect(events.filter((e) => e.outcome === 'skipped_loop').length).toBeGreaterThan(0);
     expect(await notes(s.userId, 'limit')).toBe(1);
-  });
+  }, dayGuardTimeout(8 * 61_000));
 });
 
 describe('the poller', () => {
