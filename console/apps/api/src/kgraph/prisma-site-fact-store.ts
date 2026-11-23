@@ -21,7 +21,7 @@ export const consoleSecretCheck: SecretCheckPort = Object.freeze({
   },
 });
 
-export type SiteFactRow = { id: string; site: string; kind: string; text: string; source: string; status: string; evidence: Prisma.JsonValue; declinedAt: Date | null; lastUsedAt: Date | null; createdAt: Date; updatedAt: Date };
+export type SiteFactRow = { id: string; site: string; kind: string; text: string; source: string; status: string; evidence: Prisma.JsonValue; approvedBy?: string; declinedAt: Date | null; lastUsedAt: Date | null; createdAt: Date; updatedAt: Date };
 
 export const toSiteFact = (r: SiteFactRow): SiteFact =>
   siteFactSchema.parse({ id: r.id, site: r.site, kind: r.kind, text: r.text, source: r.source, status: r.status, evidence: r.evidence ?? {}, createdAt: r.createdAt.toISOString(), lastUsedAt: r.lastUsedAt?.toISOString() ?? null });

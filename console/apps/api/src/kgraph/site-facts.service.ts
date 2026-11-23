@@ -1,7 +1,8 @@
 // Site facts (phase 5, E46.31; docs/decisions/knowledge-graph.md, "Site facts"). A fact is DATA about one site, never an instruction or a
-// permission. Only the owner's own act makes one `active`: typing it (POST, active at once) or approving a proposal in Reviews, signed in, in
-// the console. Derived proposals (the `kgraph.compile` job, from server-recorded facts) and the agent's proposals (`propose_site_fact`) are
-// stored `proposed`. A declined proposal is archived and its identity is not proposed again for 30 days; one the owner archived is never
+// permission. Only the owner's own act makes one `active`: typing it (POST, active at once), approving a proposal in Reviews, signed in, in
+// the console, or their opt-in `kgraph.autoApproveFacts` (E46.36), which covers ONLY a newly derived fact (from server records) of kind
+// navigation, timing or quirk that passes the validator. Derived proposals (after a learn, reuse or everyday run, from server-recorded facts)
+// and the agent's proposals (`propose_site_fact`) are stored `proposed`; sign-in facts, agent proposals and imported facts always wait. A declined proposal is archived and its identity is not proposed again for 30 days; one the owner archived is never
 // proposed again. No fact holds Secret Material: `validateSiteFact` with the console's secret check refuses it (`422`).
 import { randomUUID } from 'node:crypto';
 
@@ -23,11 +24,13 @@ import {
   type SiteFactSource,
   type SiteTraceEvent,
   type TraceBinding,
+  hostAndPath,
 } from '@marinoscar/hexactra-kgraph';
 import type { SiteFactProposalOutcome } from '@marinoscar/hexactra-kgraph/harness';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { maskSensitive } from '../tasks/mask';
+import { RUN_SURFACE_NODE, type RunSurfaceProps } from '../runner/host/kgraph/observer-port';
 import { KgraphEnabledService } from './kgraph-enabled.service';
 import { consoleSecretCheck, PrismaSiteFactStore, type SiteFactRow } from './prisma-site-fact-store';
 import { DECLINE_SUPPRESS_MS } from './reviews.service';
@@ -37,6 +40,24 @@ export const INTERRUPT_FIRING_NODE = 'InterruptFiring';
 
 /** At most this many facts in an export or an import file. */
 export const SITE_FACT_TRANSFER_LIMIT = 500;
+
+/** The kinds the owner's opt-in auto-approve covers (E46.36). `sign_in` and `other` always wait for the owner. */
+export const AUTO_APPROVE_KINDS: ReadonlySet<SiteFactKind> = new Set<SiteFactKind>(['navigation', 'timing', 'quirk']);
+
+/**
+ * Whether a proposal may be made active by the owner's opt-in auto-approve (E46.36): its source is `derived` (read from server records,
+ * never the agent's, an MCP client's or an import file's text), its kind is navigation, timing or quirk, and it passes the validator (the
+ * secret and instruction rules). Only the derive step calls it; an import or an agent proposal never reaches it.
+ */
+export function autoApprovable(p: SiteFactProposal): boolean {
+  return p.source === 'derived' && AUTO_APPROVE_KINDS.has(p.kind) && validateSiteFact(p, { secretCheck: consoleSecretCheck }).length === 0;
+}
+
+/** How an active or archived fact was approved; null while it is a proposal or after the owner declined it. */
+export function approvedByOf(r: Pick<SiteFactRow, 'status' | 'declinedAt' | 'approvedBy'>): 'owner' | 'auto' | null {
+  if (r.status === 'proposed' || r.declinedAt) return null;
+  return r.approvedBy === 'auto' ? 'auto' : 'owner';
+}
 
 /** A fact as the routes show it. */
 export function siteFactView(r: SiteFactRow) {
@@ -48,6 +69,7 @@ export function siteFactView(r: SiteFactRow) {
     text: r.text,
     source: r.source,
     status: r.status,
+    approvedBy: approvedByOf(r),
     evidence: { runId: ev.runId ?? null, steps: ev.stepIds?.length ?? 0, screens: ev.screenIds?.length ?? 0 },
     declinedAt: r.declinedAt?.toISOString() ?? null,
     lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
@@ -111,16 +133,33 @@ export class KgraphSiteFactsService {
    * never proposed again). A decline older than 30 days lapses: the archived row goes and the identity may be proposed again.
    */
   async propose(userId: string, p: SiteFactProposal, now = new Date()): Promise<ProposeResult> {
-    if (validateSiteFact(p, { secretCheck: consoleSecretCheck }).length > 0) return 'refused';
+    return (await this.proposeRow(userId, p, now)).result;
+  }
+
+  /** `propose`, with the stored fact's id when a new proposal was created. */
+  private async proposeRow(userId: string, p: SiteFactProposal, now: Date): Promise<{ result: ProposeResult; id?: string }> {
+    if (validateSiteFact(p, { secretCheck: consoleSecretCheck }).length > 0) return { result: 'refused' };
     const identity = siteFactKey(p);
     const existing = await this.db(userId).kgSiteFact.findFirst({ where: { userId, identity } });
     if (existing) {
-      if (existing.status !== 'archived' || !existing.declinedAt) return 'known';
-      if (existing.declinedAt.getTime() > now.getTime() - DECLINE_SUPPRESS_MS) return 'suppressed';
+      if (existing.status !== 'archived' || !existing.declinedAt) return { result: 'known' };
+      if (existing.declinedAt.getTime() > now.getTime() - DECLINE_SUPPRESS_MS) return { result: 'suppressed' };
       await this.db(userId).kgSiteFact.deleteMany({ where: { id: existing.id, userId, status: 'archived' } });
     }
     const r = await this.store.proposeSiteFact(userId, { ...p, id: `kgsf-${randomUUID()}`, createdAt: now.toISOString() });
-    return r.created ? 'proposed' : 'known';
+    return r.created ? { result: 'proposed', id: r.fact.id } : { result: 'known' };
+  }
+
+  /**
+   * The owner's opt-in auto-approve (E46.36) for one proposal the derive step just created: `proposed` → `active`, `approvedBy: auto`, in one
+   * conditional write, audited. Only an `autoApprovable` proposal reaches it. Returns whether the fact moved.
+   */
+  private async autoApprove(userId: string, id: string, p: SiteFactProposal): Promise<boolean> {
+    if (!autoApprovable(p)) return false;
+    const moved = await this.db(userId).kgSiteFact.updateMany({ where: { id, userId, status: 'proposed', source: 'derived' }, data: { status: 'active', approvedBy: 'auto' } });
+    if (moved.count !== 1) return false;
+    await this.audit(userId, 'kgraph.site_fact.auto_approved', id, { site: p.site, kind: p.kind });
+    return true;
   }
 
   // ------------------------------------------------------------------ runs (E46.32)
@@ -200,7 +239,7 @@ export class KgraphSiteFactsService {
     const { fact } = await this.store.proposeSiteFact(userId, { ...p, id: `kgsf-${randomUUID()}`, createdAt: new Date().toISOString() });
     if (fact.status !== 'active') {
       await this.store.setSiteFactStatus(userId, fact.id, fact.status, 'active');
-      await this.db(userId).kgSiteFact.updateMany({ where: { id: fact.id, userId }, data: { declinedAt: null } });
+      await this.db(userId).kgSiteFact.updateMany({ where: { id: fact.id, userId }, data: { declinedAt: null, approvedBy: 'owner' } });
     }
     await this.audit(userId, 'kgraph.site_fact.created', fact.id, { site, kind: p.kind });
     return siteFactView(await this.own(userId, fact.id));
@@ -215,7 +254,7 @@ export class KgraphSiteFactsService {
       if (input.status === 'active' && r.status === 'proposed') throw new ConflictException({ code: 'KGRAPH_SITE_FACT_STATUS', message: 'A proposed fact is approved in Knowledge Graph reviews, signed in to the console' });
       const moved = await this.store.setSiteFactStatus(userId, id, r.status as 'active' | 'archived' | 'proposed', input.status);
       if (!moved) throw new ConflictException({ code: 'KGRAPH_SITE_FACT_STATUS', message: `A ${r.status} fact cannot become ${input.status}` });
-      if (input.status === 'active') await this.db(userId).kgSiteFact.updateMany({ where: { id, userId }, data: { declinedAt: null } });
+      if (input.status === 'active') await this.db(userId).kgSiteFact.updateMany({ where: { id, userId }, data: { declinedAt: null, approvedBy: 'owner' } });
       await this.audit(userId, input.status === 'active' ? 'kgraph.site_fact.restored' : 'kgraph.site_fact.archived', id, { site: r.site });
     }
     return siteFactView(await this.own(userId, id));
@@ -245,6 +284,13 @@ export class KgraphSiteFactsService {
     return rows.map(siteFactView);
   }
 
+  /** The facts the owner's auto-approve made active in the last 30 days and still active (E46.36), newest first: what Reviews lists as "Approved automatically". */
+  async autoApproved(userId: string, now = new Date()) {
+    const since = new Date(now.getTime() - DECLINE_SUPPRESS_MS);
+    const rows = await this.db(userId).kgSiteFact.findMany({ where: { userId, status: 'active', approvedBy: 'auto', updatedAt: { gte: since } }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 50 });
+    return rows.map(siteFactView);
+  }
+
   /**
    * The owner's answer to a proposal, from a signed-in browser session only (no token, OAuth app, MCP or webhook). Approve makes it active,
    * optionally with the owner's own edit of its text or kind; decline archives it and suppresses the same identity for 30 days.
@@ -256,6 +302,7 @@ export class KgraphSiteFactsService {
     if (input.approve) {
       if (input.text !== undefined || input.kind !== undefined) await this.edit(userId, r, input.kind ?? (r.kind as SiteFactKind), input.text ?? r.text);
       if (!(await this.store.setSiteFactStatus(userId, id, 'proposed', 'active'))) throw new ConflictException({ code: 'KGRAPH_REVIEW_ANSWERED', message: 'This proposal was already answered' });
+      await this.db(userId).kgSiteFact.updateMany({ where: { id, userId }, data: { approvedBy: 'owner' } });
     } else {
       const moved = await this.db(userId).kgSiteFact.updateMany({ where: { id, userId, status: 'proposed' }, data: { status: 'archived', declinedAt: new Date() } });
       if (moved.count !== 1) throw new ConflictException({ code: 'KGRAPH_REVIEW_ANSWERED', message: 'This proposal was already answered' });
@@ -267,24 +314,22 @@ export class KgraphSiteFactsService {
   // ------------------------------------------------------------------ derive
 
   /**
-   * Proposals from one finished run, read from server-recorded facts only: its `kg_traces` rows (with each call's duration from its step
-   * row), the owner's surface graph (masked labels) and the interrupt handlers that fired. Called by the `kgraph.compile` job after a
-   * `learn` or `reuse` run. `everyday` (the hook for #850's everyday runs) keeps only what comes from handoffs and handlers: `sign_in` and
-   * `quirk`. Best effort: an error is logged and nothing else changes.
+   * Proposals from one finished run, read from server-recorded facts only, never from model or page prose, and the owner's opt-in
+   * auto-approve (E46.36) for those it covers. Best effort: an error is logged and nothing else changes.
+   * - A `learn` or `reuse` run (the `kgraph.compile` job): its `kg_traces` rows (with each call's duration from its step row), the owner's
+   *   surface graph (masked labels) and the interrupt handlers that fired.
+   * - An `everyday` run (a chat or one-off run, the `kgraph.site_facts` job, `everyday: true`): its `run_steps` rows (the tool, its duration,
+   *   a handoff such as a one-time code) joined with the surface the everyday observer recorded for it (the host, path and masked element
+   *   fingerprint of each call). Never a procedure: nothing is compiled from such a run.
+   * With `kgraph.autoApproveFacts` on (and the Knowledge Graph available), a NEW proposal that `autoApprovable` accepts (source `derived`,
+   * kind navigation, timing or quirk, valid) becomes active with `approvedBy: auto`. Everything else stays `proposed`.
    */
   async deriveForRun(userId: string, runId: string, options: { everyday?: boolean } = {}): Promise<Record<ProposeResult, number>> {
     const counts: Record<ProposeResult, number> = { proposed: 0, known: 0, suppressed: 0, refused: 0 };
     try {
       const db = this.db(userId);
       if (!(await db.run.findFirst({ where: { id: runId, userId }, select: { id: true } }))) return counts;
-      const rows = await db.kgTrace.findMany({ where: { runId, userId }, orderBy: { seq: 'asc' } });
-      // The run is the owner's (read above through forUser); its steps are read by run id, for their durations only.
-      const steps = await this.prisma.runStep.findMany({ where: { runId, kind: 'action' }, select: { seq: true, durationMs: true } });
-      const duration = new Map(steps.map((s) => [s.seq, s.durationMs]));
-      const events: SiteTraceEvent[] = rows.map((r) => {
-        const ms = duration.get(r.seq);
-        return { seq: r.seq, tool: r.tool, family: r.family, commits: r.commits, ok: r.ok, outcome: r.outcome as SiteTraceEvent['outcome'], bindings: (r.bindings ?? {}) as Record<string, TraceBinding>, post: (r.post ?? {}) as SiteTraceEvent['post'], ...(typeof ms === 'number' ? { durationMs: ms } : {}) };
-      });
+      const events = options.everyday ? await this.everydayEvents(userId, runId) : await this.traceEvents(userId, runId);
       const firings = (await db.kgNode.findMany({ where: { userId, type: INTERRUPT_FIRING_NODE, key: { startsWith: `${runId}:` } }, select: { props: true } }))
         .map((n) => n.props as Partial<InterruptFiring> | null)
         .filter((f): f is InterruptFiring => !!f && typeof f.host === 'string' && ['consent', 'overlay', 'signed_out', 'blocked'].includes(String(f.kind)));
@@ -298,22 +343,85 @@ export class KgraphSiteFactsService {
           if (typeof site === 'string' && sites.has(site)) elements.push({ id: n.key, screen: 'sc:surface', label: maskSensitive(n.label).text.slice(0, 200), selectors: [] });
         }
       }
-      let proposals = deriveSiteFacts({ runId, events }, { screens: [], elements }, firings, { secretCheck: consoleSecretCheck });
-      if (options.everyday) proposals = proposals.filter((p) => p.kind === 'sign_in' || p.kind === 'quirk');
-      for (const p of proposals) counts[await this.propose(userId, p)]++;
+      const proposals = deriveSiteFacts({ runId, events }, { screens: [], elements }, firings, { secretCheck: consoleSecretCheck });
+      const status = proposals.length > 0 ? await this.enabled.status(userId).catch(() => null) : null;
+      const auto = status?.available === true && status.autoApproveFacts === true;
+      let approved = 0;
+      const now = new Date();
+      for (const p of proposals) {
+        const r = await this.proposeRow(userId, p, now);
+        counts[r.result]++;
+        if (auto && r.result === 'proposed' && r.id && (await this.autoApprove(userId, r.id, p))) approved++;
+      }
+      if (approved > 0) this.log.log(`run ${runId}: ${approved} site fact(s) approved automatically (the owner's setting)`);
     } catch (err) {
       this.log.warn(`run ${runId}: site facts not derived: ${err instanceof Error ? err.name : 'error'}`);
     }
     return counts;
   }
 
+  /** A learn or reuse run's calls: its `kg_traces` rows, each with its duration from its step row. */
+  private async traceEvents(userId: string, runId: string): Promise<SiteTraceEvent[]> {
+    const rows = await this.db(userId).kgTrace.findMany({ where: { runId, userId }, orderBy: { seq: 'asc' } });
+    // The run is the owner's (read through forUser by the caller); its steps are read by run id, for their durations only.
+    const steps = await this.prisma.runStep.findMany({ where: { runId, kind: 'action' }, select: { seq: true, durationMs: true } });
+    const duration = new Map(steps.map((s) => [s.seq, s.durationMs]));
+    return rows.map((r) => {
+      const ms = duration.get(r.seq);
+      return { seq: r.seq, tool: r.tool, family: r.family, commits: r.commits, ok: r.ok, outcome: r.outcome as SiteTraceEvent['outcome'], bindings: (r.bindings ?? {}) as Record<string, TraceBinding>, post: (r.post ?? {}) as SiteTraceEvent['post'], ...(typeof ms === 'number' ? { durationMs: ms } : {}) };
+    });
+  }
+
   /**
-   * The hook for an everyday run (#850, `kgraph.everyday`): after a chat or one-off run whose mode was `everyday`, propose only what its
-   * handoffs and interrupt handlers show (`sign_in`, `quirk`), from the same server-recorded rows. Nothing calls it until #850 marks those
-   * runs; it is safe to call for any run (another user's or an unrecorded run proposes nothing).
+   * An everyday run's calls (E46.36), from server records only: each finished `action` or `observe` step row (its tool, `ok` and duration)
+   * and each handoff the run asked (its kind, such as `code`), joined by sequence with the surface the everyday observer recorded (the
+   * page's host and path, and the masked fingerprint of the element a click acted on). A navigate step without a surface row is placed by
+   * its recorded URL. No argument value, page text or model text is read.
+   */
+  private async everydayEvents(userId: string, runId: string): Promise<SiteTraceEvent[]> {
+    const surface = new Map<number, RunSurfaceProps>();
+    for (const n of await this.db(userId).kgNode.findMany({ where: { userId, type: RUN_SURFACE_NODE, key: { startsWith: `${runId}:` } }, select: { key: true, props: true } })) {
+      const seq = Number(n.key.slice(runId.length + 1));
+      if (Number.isInteger(seq)) surface.set(seq, (n.props ?? {}) as RunSurfaceProps);
+    }
+    // The run is the owner's (read through forUser by the caller); its steps are read by run id.
+    const steps = await this.prisma.runStep.findMany({ where: { runId, kind: { in: ['action', 'observe', 'handoff'] } }, orderBy: { seq: 'asc' }, select: { seq: true, kind: true, action: true, args: true, ok: true, phase: true, durationMs: true } });
+    const events: SiteTraceEvent[] = [];
+    for (const s of steps) {
+      const args = (s.args ?? {}) as Record<string, unknown>;
+      if (s.kind === 'handoff') {
+        // The handoff the agent asked (`request_human`): only its kind is read. The owner's answer and pre-approved steps have an action.
+        if (s.action !== null || typeof args.kind !== 'string') continue;
+        events.push({ seq: s.seq, tool: 'request_human', family: 'human', commits: false, ok: s.ok, outcome: 'ran', bindings: { kind: { kind: 'literal', value: args.kind.slice(0, 32) } } as Record<string, TraceBinding>, post: {} });
+        continue;
+      }
+      if (s.phase !== 'done') continue;
+      const at = surface.get(s.seq);
+      const tool = typeof at?.tool === 'string' ? at.tool : (s.action ?? s.kind);
+      const post: SiteTraceEvent['post'] = {};
+      const navigated = tool === 'navigate' && typeof args.url === 'string' ? hostAndPath(args.url) : null;
+      const host = typeof at?.host === 'string' ? at.host : navigated?.host;
+      const path = typeof at?.path === 'string' ? at.path : navigated?.path;
+      if (host) post.host = host;
+      if (path) post.path = path;
+      if (at?.element) post.element = at.element;
+      events.push({ seq: s.seq, tool, family: typeof at?.family === 'string' ? at.family : 'browser', commits: false, ok: s.ok, outcome: 'ran', bindings: {}, post, ...(typeof s.durationMs === 'number' ? { durationMs: s.durationMs } : {}) });
+    }
+    return events;
+  }
+
+  /**
+   * The hook for an everyday run (E46.28, E46.36: the `kgraph.site_facts` job): after a chat or one-off run whose mode was `everyday`, propose
+   * what its steps, handoffs, surface and interrupt handlers show. Safe to call for any run (another user's or an unrecorded run proposes
+   * nothing).
    */
   deriveAfterEverydayRun(userId: string, runId: string): Promise<Record<ProposeResult, number>> {
     return this.deriveForRun(userId, runId, { everyday: true });
+  }
+
+  /** The surface an everyday run recorded for the derive step: removed once it was read (or when the run did not succeed). */
+  async dropRunSurface(userId: string, runId: string): Promise<number> {
+    return (await this.db(userId).kgNode.deleteMany({ where: { userId, type: RUN_SURFACE_NODE, key: { startsWith: `${runId}:` } } })).count;
   }
 
   // ------------------------------------------------------------------ transfer

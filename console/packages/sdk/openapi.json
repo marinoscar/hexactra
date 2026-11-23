@@ -29885,7 +29885,20 @@
       "get": {
         "description": "Proposals derived from your runs or written by the agent. None is used by a run until you approve it.\n\n**Requires:** authentication, plus permission `kgraph:read`.",
         "operationId": "kgraphSiteFactReviews_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "approvedBy",
+            "required": false,
+            "in": "query",
+            "description": "`auto`: instead of the proposals, the facts your setting \"Approve facts from server records automatically\" made active in the last 30 days (still active), newest first (E46.36).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -54005,6 +54018,10 @@
               "everyday": {
                 "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
                 "type": "boolean"
+              },
+              "autoApproveFacts": {
+                "description": "Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active.",
+                "type": "boolean"
               }
             },
             "required": [
@@ -54534,6 +54551,10 @@
               },
               "everyday": {
                 "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                "type": "boolean"
+              },
+              "autoApproveFacts": {
+                "description": "Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active.",
                 "type": "boolean"
               }
             },
@@ -55103,6 +55124,10 @@
                   },
                   "everyday": {
                     "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                    "type": "boolean"
+                  },
+                  "autoApproveFacts": {
+                    "description": "Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active.",
                     "type": "boolean"
                   }
                 }
@@ -61356,6 +61381,10 @@
                   },
                   "everyday": {
                     "description": "Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run.",
+                    "type": "boolean"
+                  },
+                  "autoApproveFacts": {
+                    "description": "Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active.",
                     "type": "boolean"
                   }
                 },
@@ -82050,13 +82079,18 @@
           "everyday": {
             "type": "boolean",
             "description": "You turned on \"Use what was learned in chats and one-off runs\" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected."
+          },
+          "autoApproveFacts": {
+            "type": "boolean",
+            "description": "You turned on \"Approve facts from server records automatically\" (your setting `kgraph.autoApproveFacts`, E46.36). Effective only while `available`: a newly derived navigation, timing or quirk fact becomes active without a review. Sign-in facts, agent proposals and imported facts always wait for you."
           }
         },
         "required": [
           "deployment",
           "user",
           "available",
-          "everyday"
+          "everyday",
+          "autoApproveFacts"
         ]
       },
       "KgraphPurgeResponseDto": {
@@ -82253,6 +82287,21 @@
               "archived"
             ]
           },
+          "approvedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner",
+                  "auto"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the fact became active (E46.36): `owner` (you approved, typed or restored it) or `auto` (your setting \"Approve facts from server records automatically\", for a derived navigation, timing or quirk fact). Null while it is a proposal or after you declined it."
+          },
           "evidence": {
             "type": "object",
             "properties": {
@@ -82306,6 +82355,7 @@
           "text",
           "source",
           "status",
+          "approvedBy",
           "evidence",
           "declinedAt",
           "lastUsedAt",

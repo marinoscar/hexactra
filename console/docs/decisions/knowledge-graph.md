@@ -222,6 +222,15 @@ The no-impact contract holds for everything off, and for chats with only `everyd
 - new routes only;
 - no MCP tool or scope. Site facts are not exposed over Hexactra's MCP server in this phase, and `docs/parity.md` says so.
 
+### Phase 6: automated facts (#890, E46.36 #892)
+
+Added on the owner's decision of 2026-11-23.
+
+- **Derived after every run.** A `learn` or `reuse` run derives in the `kgraph.compile` job, as before. With `kgraph.everyday` on, a chat or one-off run records its surface (shared elements with masked labels, one `RunSurface` node per call, no trace row); its end queues `kgraph.site_facts`, which builds the trace from the run's `run_steps` (tool, duration, a one-time-code handoff) joined with that surface, proposes facts and removes the surface rows. **No procedure is ever compiled from an everyday run.** With everyday off nothing is recorded.
+- **Opt-in auto-approve.** The user setting `kgraph.autoApproveFacts` ("Approve facts from server records automatically") is **off** by default. When on, a newly derived fact is made `active` only if its source is `derived`, its kind is `navigation`, `timing` or `quirk`, and it passes `validateSiteFact`. A `sign_in` fact, an agent or MCP proposal, an imported fact and anything a rule refuses always wait for the owner. This is the owner's own act: their setting, for facts read from server records only.
+- **How it was activated.** `kg_site_facts.approved_by` (`owner` or `auto`, default `owner`) is returned as `approvedBy`. Reviews lists the facts approved automatically in the last 30 days and the Sites tab labels them; the owner archives or deletes one as usual. Turning the setting off changes nothing already active.
+- **Threat and residual risk:** [security-kgraph.md](../security-kgraph.md), "Automated facts".
+
 ## Out of scope
 
 Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database, embeddings or a vector store for matching, site facts over MCP.
