@@ -82,8 +82,9 @@ export class RecordingsService {
     return 'ready';
   }
 
-  private async markFailed(id: string, note: string, rec?: { userId: string; runId: string; partCount: number }): Promise<FinalizeResult> {
-    await this.prisma.runRecording.updateMany({ where: { id }, data: { status: 'failed', note, fabricId: null } });
+  private async markFailed(id: string, note: string, rec?: { userId: string; runId: string; partCount: number; note?: string | null }): Promise<FinalizeResult> {
+    // A reason the recorder already gave (an outdated node, a start that kept failing) explains an empty recording better than `empty` (#900).
+    await this.prisma.runRecording.updateMany({ where: { id }, data: { status: 'failed', note: rec?.note ?? note, fabricId: null } });
     if (rec) await this.removeParts(rec);
     return 'failed';
   }

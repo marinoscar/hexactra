@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetCdp } from '../src/cdp';
-import { MAX_FPS, SENSITIVE_TAIL_MS, recordPause, recordPull, recordStart, recordStop, resetRecorder, withSensitiveTyping } from '../src/recorder';
+import { MAX_FPS, recordPause, recordPull, recordStart, recordStop, resetRecorder } from '../src/recorder';
 import { RECORDING_MIME, RecordQueue, encodeFrame, encodeHeader, toBase64 } from '../src/recording-format';
 import { handleRequest } from '../src/remote';
 
@@ -101,33 +101,25 @@ describe('run recordings (#755)', () => {
     expect((await recordPull(recording_id)).dropped).toBe(1);
   });
 
-  it('keeps no frame while a sensitive value is typed, nor just after', async () => {
+  it('keeps every frame while a sensitive value is typed: the recording withholds nothing (#882)', async () => {
     await recordStart(1);
-    let release!: () => void;
-    const typing = withSensitiveTyping(() => new Promise<void>((r) => (release = r)));
-    c.frame(1, 'secret');
+    const typing = handleRequest({ type: 'request', id: 't', action: { type: 'type_keys', text: '424242', sensitive: true }, deadline_ms: Date.now() + 10_000 });
+    c.frame(1, 'while-typing');
     await tick();
-    release();
     await typing;
     c.frame(1, 'right-after');
     await tick();
-    await tick(SENSITIVE_TAIL_MS);
-    c.frame(1, 'later');
-    await tick();
-    expect(c.received.map((r) => r.data)).toEqual(['later']);
+    expect(c.received.map((r) => r.data)).toEqual(['while-typing', 'right-after']);
   });
 
-  it('keeps no frame while a sensitive field has focus', async () => {
-    let focused = true;
-    c = makeChrome({ focusSensitive: () => focused });
+  it('keeps every frame while a password field has focus, and never asks the page (#882)', async () => {
+    c = makeChrome({ focusSensitive: () => true });
     vi.stubGlobal('chrome', c.api);
     await recordStart(1);
     c.frame(1, 'password-field');
     await tick();
-    focused = false;
-    c.frame(1, 'page');
-    await tick();
-    expect(c.received.map((r) => r.data)).toEqual(['page']);
+    expect(c.received.map((r) => r.data)).toEqual(['password-field']);
+    expect(c.commands.some((x) => x.method === 'Runtime.evaluate')).toBe(false);
   });
 
   it('keeps no frame while paused', async () => {

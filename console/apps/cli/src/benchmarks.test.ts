@@ -534,6 +534,20 @@ describe('hexactra benchmarks', () => {
     expect(urls[1]).toBe(`/api/benchmarks/${ID}/export?format=csv`);
   });
 
+  it('prints how many trials ended asking a person, and the question under each such trial (#884)', () => {
+    const base = scorecard();
+    const withAsked = scorecard({ policies: base.policies.map((p, i) => ({ ...p, metrics: { ...p.metrics, askedPerson: { trials: i === 0 ? 2 : 0, rate: { k: i === 0 ? 2 : 0, n: 6, value: null, low: null, high: null }, questions: i === 0 ? 5 : 0 } } })) });
+    const text = scorecardText(benchmark(), withAsked).join('\n');
+    expect(text).toMatch(/#2 Economy[\s\S]*asked\s+2 of 6 judged trials ended asking a person; 5 questions asked in all/);
+    expect(text).toContain('asked       0 of 6 judged trials ended asking a person; 0 questions asked in all');
+    // An older console has no askedPerson: no line.
+    expect(scorecardText(benchmark(), base).join('\n')).not.toContain('ended asking a person');
+    const lines = trialLines([trial({ verdict: 'fail', failureReason: 'asked_person', checks: [{ name: 'answer', pass: false }, { name: 'asked-person', pass: false, detail: 'other: Which customer?' }] })]);
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe('      asked: other: Which customer?');
+    expect(trialLines([trial({ verdict: 'fail', failureReason: 'asked_person', checks: null })])).toHaveLength(1);
+  });
+
   it('delete removes benchmarks with their runs, or keeps the runs with --keep-runs, and says what it skipped (#873)', async () => {
     const { seen } = fakeConsole((url, init) =>
       init?.method === 'POST' && url.pathname === '/api/benchmarks/delete' ? { body: { deleted: [ID], skippedRunning: [BASE], notFound: [], runsDeleted: 12 } } : undefined,

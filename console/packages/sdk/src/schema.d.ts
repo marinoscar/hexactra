@@ -22180,7 +22180,7 @@ export interface components {
             bytes: number;
             durationMs: number;
             mime: string;
-            /** @description Frames kept out (a sensitive value typed, a sensitive field focused, paused) or over the rate limit */
+            /** @description Frames left out while the owner paused the run, or over the rate limit */
             droppedFrames: number;
             /** @description Why it ended early or failed: max_minutes, tab_closed, restarted, encoder_unavailable, storage_error, empty, … */
             note: string | null;
@@ -22853,6 +22853,8 @@ export interface components {
                 useSavedIdentity: boolean;
                 /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
                 useSavedCards: boolean;
+                /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
+                recordVideo: boolean;
                 /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
                 connections: {
                     /**
@@ -22927,6 +22929,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
+            /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
+            recordVideo: boolean;
             /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
             connections: {
                 /**
@@ -22972,6 +22976,8 @@ export interface components {
             useSavedIdentity?: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
             useSavedCards?: boolean;
+            /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
+            recordVideo?: boolean;
             /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
             connections?: {
                 /**
@@ -23013,6 +23019,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
+            /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
+            recordVideo: boolean;
             /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
             connections: {
                 /**
@@ -23092,6 +23100,8 @@ export interface components {
             useSavedIdentity?: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
             useSavedCards?: boolean;
+            /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
+            recordVideo?: boolean;
             /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
             connections?: {
                 /**
@@ -23148,6 +23158,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description The chat's saved-cards switch (E37.7), carried over to the task */
             useSavedCards: boolean;
+            /** @description The chat's Record video switch (#906), carried over to the task */
+            recordVideo: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */
@@ -23592,6 +23604,8 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description The chat's saved-cards switch (E37.7), carried over to the task */
             useSavedCards: boolean;
+            /** @description The chat's Record video switch (#906), carried over to the task */
+            recordVideo: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */
@@ -24789,6 +24803,26 @@ export interface components {
                         /** @description Upper bound of the Wilson 95% interval. */
                         high: number | null;
                     };
+                    /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                    askedPerson: {
+                        /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                        trials: number;
+                        /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                        rate: {
+                            /** @description How many counted (the numerator). */
+                            k: number;
+                            /** @description Out of how many (the denominator). */
+                            n: number;
+                            /** @description k / n, 0 to 1; null when n is 0. */
+                            value: number | null;
+                            /** @description Lower bound of the Wilson 95% interval. */
+                            low: number | null;
+                            /** @description Upper bound of the Wilson 95% interval. */
+                            high: number | null;
+                        };
+                        /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                        questions: number;
+                    };
                     speed: {
                         /** @description Median active time of the judged trials. */
                         medianActiveMs: number | null;
@@ -25007,6 +25041,26 @@ export interface components {
                             /** @description Upper bound of the Wilson 95% interval. */
                             high: number | null;
                         };
+                        /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                        askedPerson: {
+                            /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                            trials: number;
+                            /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                            rate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                            questions: number;
+                        };
                         speed: {
                             /** @description Median active time of the judged trials. */
                             medianActiveMs: number | null;
@@ -25090,6 +25144,8 @@ export interface components {
                     costKnown: boolean;
                     totalTokens: number;
                     safetyFlagged: boolean;
+                    /** @description Trials of this cell that ended as `asked_person` (#884). */
+                    askedPerson: number;
                 }[];
             }[];
         };
@@ -25457,6 +25513,26 @@ export interface components {
                             /** @description Upper bound of the Wilson 95% interval. */
                             high: number | null;
                         };
+                        /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                        askedPerson: {
+                            /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                            trials: number;
+                            /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                            rate: {
+                                /** @description How many counted (the numerator). */
+                                k: number;
+                                /** @description Out of how many (the denominator). */
+                                n: number;
+                                /** @description k / n, 0 to 1; null when n is 0. */
+                                value: number | null;
+                                /** @description Lower bound of the Wilson 95% interval. */
+                                low: number | null;
+                                /** @description Upper bound of the Wilson 95% interval. */
+                                high: number | null;
+                            };
+                            /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                            questions: number;
+                        };
                         speed: {
                             /** @description Median active time of the judged trials. */
                             medianActiveMs: number | null;
@@ -25675,6 +25751,26 @@ export interface components {
                                 /** @description Upper bound of the Wilson 95% interval. */
                                 high: number | null;
                             };
+                            /** @description Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`. */
+                            askedPerson: {
+                                /** @description Trials that ended because the agent asked a question nobody scripted (`asked_person`). */
+                                trials: number;
+                                /** @description Those trials over judged trials, with a Wilson 95% interval. */
+                                rate: {
+                                    /** @description How many counted (the numerator). */
+                                    k: number;
+                                    /** @description Out of how many (the denominator). */
+                                    n: number;
+                                    /** @description k / n, 0 to 1; null when n is 0. */
+                                    value: number | null;
+                                    /** @description Lower bound of the Wilson 95% interval. */
+                                    low: number | null;
+                                    /** @description Upper bound of the Wilson 95% interval. */
+                                    high: number | null;
+                                };
+                                /** @description Questions the agent asked a person in every trial that ran, answered by the scripted owner or not. */
+                                questions: number;
+                            };
                             speed: {
                                 /** @description Median active time of the judged trials. */
                                 medianActiveMs: number | null;
@@ -25758,6 +25854,8 @@ export interface components {
                         costKnown: boolean;
                         totalTokens: number;
                         safetyFlagged: boolean;
+                        /** @description Trials of this cell that ended as `asked_person` (#884). */
+                        askedPerson: number;
                     }[];
                 }[];
             };

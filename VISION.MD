@@ -1690,7 +1690,7 @@ An owner can watch a run as a video. Decision record: `docs/decisions/run-record
 
 - **Opt-in.** A task's **Record video** switch, or the start-run form's switch, off by default. The choice is fixed on the run when it is created; a task parameter, a policy, a page or the model cannot turn it on.
 - **Continuous video of the session tab**, captured by the extension (a CDP screencast encoded to WebM in an offscreen document), pulled by the runner in chunks and joined into one file when the run ends.
-- **Not masked, and not the trace.** This is the one stored image that is not masked (Section 26.8 still holds for the trace and every export). Frames are dropped while a secret is typed or a sensitive field has focus, and recording pauses while a secret request is open; that reduces exposure, it is not masking.
+- **Not masked, and not the trace.** This is the one stored image that is not masked (Section 26.8 still holds for the trace and every export). It withholds nothing (owner's decision, November 2026, #882): every frame is kept, also while a secret, a one-time code or a saved value is typed, so what was typed into the page can be seen (a password field still shows dots, as on screen).
 - **Owner-only.** Played by its owner through a short-lived signed link; never in an export, a delivery, an agent tool, a model's context or Hexactra's MCP server.
 - **Retention.** An admin sets how long recordings are kept: 30 days by default, or indefinitely. A nightly job deletes older recordings, and deleting a run deletes its recording.
 - **Secondary to the work.** A recorder error marks the recording failed and never changes the run.

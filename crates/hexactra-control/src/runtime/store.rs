@@ -932,22 +932,20 @@ impl RuntimeStore {
         // A marked screenshot draws on the page for a moment, so it is not one of them.
         // `mask` (#539) does not change this: a masked plain screenshot is
         // still a look, and the secret-handoff refusal applies to it too.
-        // A run recording (epic #755) changes nothing on the page either. Its
-        // pull, pause and stop always pass, so the runner can pause it while a
-        // secret is asked for and end it with its run; a new recording does
-        // not start while a secret is asked for or typed.
+        // A run recording (epic #755) changes nothing on the page either. It
+        // withholds nothing (the owner's decision, #882): every record action
+        // passes, also while a secret is asked for or typed.
         let recording_control = matches!(
             action,
-            RemoteAction::RecordPull { .. }
+            RemoteAction::RecordStart { .. }
+                | RemoteAction::RecordPull { .. }
                 | RemoteAction::RecordPause { .. }
                 | RemoteAction::RecordStop { .. }
         );
         let looks_only = recording_control
             || matches!(
                 action,
-                RemoteAction::Screenshot { marks: false, .. }
-                    | RemoteAction::DesktopScreenshot
-                    | RemoteAction::RecordStart { .. }
+                RemoteAction::Screenshot { marks: false, .. } | RemoteAction::DesktopScreenshot
             );
         if let Some(h) = Self::pending_handoff(&inner, session_id) {
             if !looks_only || (!recording_control && Self::handoff_asks_secret(&inner, h)) {
@@ -960,9 +958,7 @@ impl RuntimeStore {
         if inner.secret_in_flight.contains_key(&session_id)
             && matches!(
                 action,
-                RemoteAction::Screenshot { .. }
-                    | RemoteAction::DesktopScreenshot
-                    | RemoteAction::RecordStart { .. }
+                RemoteAction::Screenshot { .. } | RemoteAction::DesktopScreenshot
             )
         {
             return Err(StoreError::Conflict(

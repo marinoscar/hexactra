@@ -5,6 +5,7 @@ import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { QUESTION_ASKED_EVENT } from '../../platform/notifications/hexactra.notifications';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUESTION_ACTIONS, RunActionTokens } from '../../tasks/run-action-token';
+import { isQuietRun } from '../../tasks/run-notifier';
 import { isOwnerCardInput, type QuestionView } from '../questions.service';
 import { quickAnswers } from './channel-rules';
 import { QuestionChannelRegistry, type QuestionChannel, type QuestionChannelContext } from './question-channel';
@@ -66,6 +67,8 @@ export class NotificationsQuestionChannel implements QuestionChannel, OnModuleIn
   async deliver(q: QuestionView, ctx: QuestionChannelContext): Promise<void> {
     // A run's own requests are notified by the run (run-notifier.ts); a memory proposal (#553) and a "Save this login?" card (E37.4b) never pause their run, so they are notified here, without values.
     if (!this.notifications || (q.runId && !isOwnerCardInput(q.input))) return;
+    // An owner card of a benchmark's trial run (#883): nobody reads it one by one, and the grader withdraws it.
+    if (q.runId && isQuietRun(await this.prisma.run.findUnique({ where: { id: q.runId }, select: { trigger: true } }))) return;
     await this.notifications.notify(QUESTION_ASKED_EVENT, ctx.ownerUserId, this.payload(q, ctx.ownerUserId));
   }
 

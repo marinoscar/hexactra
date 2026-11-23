@@ -5,6 +5,7 @@
 //
 // The job worker is off for this spec (`JOBS_WORKER_MODE=off`): the spec plays the worker, one pass at a time, which is also how it
 // proves that a pass may run twice.
+import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { AiService } from '@marinoscar/platform-api/ai';
 import type { Job } from '@marinoscar/platform-api/jobs';
@@ -26,6 +27,7 @@ import { PolicyResolver } from '../src/policies';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { GoalRunnerService } from '../src/runner/goal-runner.service';
+import { RunNotifier } from '../src/tasks/run-notifier';
 import { TasksService } from '../src/tasks/tasks.service';
 import { fakeFabric as kitFakeFabric } from './replay/fake-fabric';
 import { createGradedBenchmark } from './support/benchmark-fixtures';
@@ -35,6 +37,8 @@ const SITE_BASE = 'https://bench.example.test/benchmark';
 const SITE_HOST = 'bench.example.test';
 const HOST_ID = '00000000-0000-4000-8000-0000000000c1';
 const stamp = `${Date.now()}`;
+/** The notifications the trial runs sent, by event and owner (#883). */
+const notified: { event: string; userId: string }[] = [];
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -173,7 +177,8 @@ beforeAll(async () => {
   // A deployment whose nodes reach the console at a public name: the default of a test process is localhost, which is refused.
   jest.spyOn(app.get(BenchmarkSiteAddress), 'settingsNow').mockResolvedValue({ ...DEFAULT_BENCHMARK_SETTINGS, siteBaseUrl: SITE_BASE });
 
-  const notifier = { needsYou: async () => undefined, finished: async () => undefined };
+  // The real notifier, with the notifications recorded: a benchmark's trial runs must send none (#883).
+  const notifier = new RunNotifier(app.get(ConfigService), { notify: async (event: string, userId: string) => void notified.push({ event, userId }) } as never);
   goal = new GoalRunnerService(prisma, app.get(TasksService), client, { forUser: () => ({ runTools }) } as unknown as AiService, notifier as never, app.get(QuestionsService), undefined, app.get(PolicyResolver));
 });
 afterEach(() => {
@@ -333,6 +338,7 @@ describe('the scripted owner', () => {
   it('answers a scripted question as the owner and the run continues; a question nobody scripted ends the trial as asked_person; nothing is saved', async () => {
     const admin = await login('bench-owner');
     const restore = withOwner('nav-lookup', [{ kind: 'confirmation', input: 'confirm', match: 'open the customer list', answer: { type: 'approve' } }]);
+    // A benchmark's trial runs notify nobody (#883): not their questions, not their end.
     try {
       play = async (call, scene) => {
         if (scene.trial.trialIndex === 0) {
@@ -353,6 +359,10 @@ describe('the scripted owner', () => {
       const [first, second] = await trialsOf(b.id);
       expect(first).toMatchObject({ status: 'graded', verdict: 'pass', failureReason: null, questions: 1, claimedSuccess: true });
       expect(second).toMatchObject({ status: 'graded', verdict: 'fail', failureReason: 'asked_person', questions: 2, claimedSuccess: false, stopReason: 'cancelled' });
+      // The question nobody scripted is kept on the trial (#884), masked, as the last failed check.
+      const checksOf = (t: { checks: unknown }) => t.checks as { name: string; pass: boolean; detail?: string }[];
+      expect(checksOf(second!).at(-1)).toEqual({ name: 'asked-person', pass: false, detail: 'other: Which customer did you mean?' });
+      expect(checksOf(first!).some((c) => c.name === 'asked-person')).toBe(false);
       expect((await benchmarkRow(b.id)).status).toBe('completed');
       expect(await prisma.run.findUnique({ where: { id: second!.runId! }, select: { status: true, stopReason: true } })).toEqual({ status: 'cancelled', stopReason: 'cancelled' });
 
@@ -376,6 +386,7 @@ describe('the scripted owner', () => {
       expect(await prisma.secretsConnection.count({ where: { userId: admin.id } })).toBe(0);
       expect(await prisma.secretsActivity.count({ where: { userId: admin.id } })).toBe(0);
       expect(await prisma.auditEvent.count({ where: { actorUserId: admin.id, action: { startsWith: 'approval' } } })).toBe(0);
+      expect(notified.filter((n) => n.userId === admin.id)).toEqual([]);
     } finally {
       restore();
     }

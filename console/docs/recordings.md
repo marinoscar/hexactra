@@ -4,7 +4,7 @@ A run can keep a **video** of its browser tab. The owner switches it on per task
 
 In short:
 
-- **Off by default.** Task form → **Record video**, the start-run form's switch, or a benchmark's **Record video** tick per policy and **Record all** (the trial runs of the ticked policies, #845; the benchmark-wide `recordVideo: true` of #841 records every policy). The choice is fixed on the run when it is created (`runs.record_video`, from the task's `recordVideo` or the start request's `record`); a task parameter, an agent policy, a page or the model cannot turn it on. MCP tools neither show nor set it.
+- **Off by default.** Task form → **Recording** section → **Record a video of each run**; New run → **Record a video of this run**; a chat's settings (⋮ → Chat settings) → **Record a video of this chat's runs** (#906); or a benchmark's **Record video** tick per policy and **Record all** (the trial runs of the ticked policies, #845; the benchmark-wide `recordVideo: true` of #841 records every policy). The choice is fixed on the run when it is created (`runs.record_video`, from the task's `recordVideo` or the start request's `record`); a task parameter, an agent policy, a page or the model cannot turn it on. MCP tools neither show nor set it.
 - **Continuous, not masked.** The extension records the session tab with a CDP screencast and encodes it to VP8; the console turns it into a WebM file. **The video is not masked**: a card number or an address on the page is visible. Typed passwords show as dots, as on screen. This is the one exception to "every stored image is masked" ([runs.md](runs.md#what-is-masked)), and the recording is **not part of the trace**.
 - **Owner-only.** Played on the run page through a 15-minute signed link. Never in a JSON or PDF export, a delivery, run files, an agent tool, the model's context or the MCP server.
 - **Retention.** Admin → Browser agent → **Run recordings**: delete after N days (default **30**) or keep indefinitely. A nightly job enforces it. Deleting a run deletes its recording.
@@ -22,17 +22,24 @@ In short:
 
 The recorder's fabric calls are read-only and made by the runner host, like trace screenshots; they are not agent tools, take no budget and are not seen by the stall detector.
 
-### What is kept out of a recording
+### Nothing is kept out of a recording
 
-These reduce exposure; they are not masking.
+A recording withholds nothing (the owner's decision, #882). Every frame of the tab is kept, also while the fabric types a secret or a saved value, while a password or card field has focus, and while a secret or sign-in request is open. What is typed into the page can be seen: a one-time code, a username, a card number. A password field shows dots, as on screen. Everything else on the page is in it too: names, addresses, balances, a document the agent opened.
 
-- No frame while the fabric types a secret (`type_secret`).
-- No frame while a field that matches the sensitive-pattern table has focus (cards, IBANs, SSNs, one-time codes, passwords).
-- Recording pauses while a secret or credentials request is open, and resumes when it is answered.
-
-Anything else on the page is in the video: names, addresses, balances, a document the agent opened.
+The recording is held (no frame kept) only while the owner has paused the run; it goes on while the run waits for the owner's answer.
 
 **Limits.** The recording follows the tab that was active when it started; a page the agent opens in a new tab is not in the video. A run whose browser restarted (a new session) continues in a new recording, and the video skips the time in between (`note: restarted`).
+
+### When there is no video
+
+The recording is made on the browser node, so the node must be as new as the console: the console's deploy updates the console and the fabric, **not** the node's agent and extension.
+
+| The card says | Why | Fix |
+|---|---|---|
+| "can't record video yet … older than this console" (`node_outdated`) | The node's host agent or extension does not know the record actions | On the node: `hexactra agent update`, then restart its browser (Chrome also updates the policy-installed extension by itself within a few hours). Run again. |
+| "did not start recording" (`start_failed`) | The node answered the start with an error and the recorder kept trying | `hexactra agent doctor` on the node; then as above |
+| "This browser can't record video" (`encoder_unavailable`) | The browser has no offscreen documents or no WebCodecs | Update Chrome on the node |
+| "Nothing was recorded" (`empty`) | The run had no browser session, or ended before the first frame | — |
 
 ## Statuses
 

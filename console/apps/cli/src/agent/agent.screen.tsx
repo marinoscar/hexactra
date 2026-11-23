@@ -8,21 +8,18 @@ import {
   agentDoctor,
   agentLogs,
   agentStatus,
-  agentStatusInstalled,
   defaultDeps,
-  fetchAndActivate,
   readState,
   serviceControl,
   unattendedControl,
   unattendedLogs,
   unattendedStatus,
-  updateAgent,
-  updateUnattended,
   type AgentDeps,
   type AgentStatus,
   type DoctorCheck,
   type UnattendedStatus,
 } from './agent.js';
+import { updateEverything } from './update.js';
 import {
   MODE_DESCRIPTIONS,
   MODE_LABELS,
@@ -220,12 +217,8 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
         return start({
           title: 'Updating',
           privileged: true,
-          work: async (deps) => {
-            if (agentStatusInstalled(deps)) await updateAgent(deps, {});
-            else if (readUnattended(deps.paths.agentDir)) await fetchAndActivate(deps, {});
-            updateUnattended(deps, false);
-            return ['The agent is up to date.'];
-          },
+          // The same routine as `hexactra agent update` (#902): the agent, Chrome and its extension, checked.
+          work: (deps) => updateEverything(deps, { interactive: false }),
         });
       case 'service': {
         const active = status?.service?.active === 'active';

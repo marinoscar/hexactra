@@ -1166,6 +1166,10 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
             },
             {
               "style": "th",
+              "text": "Asked a person",
+            },
+            {
+              "style": "th",
               "text": "Median / p90 active",
             },
             {
@@ -1201,6 +1205,10 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
             {
               "style": "td",
               "text": "0% (0%–39%), 0 of 6",
+            },
+            {
+              "style": "td",
+              "text": "0 (0 asked)",
             },
             {
               "style": "td",
@@ -1242,6 +1250,10 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
             },
             {
               "style": "td",
+              "text": "0 (0 asked)",
+            },
+            {
+              "style": "td",
               "text": "27.0 s / 32.0 s",
             },
             {
@@ -1259,10 +1271,11 @@ exports[`buildBenchmarkReportDefinition matches the snapshot 1`] = `
         "widths": [
           "*",
           34,
-          82,
-          82,
-          72,
-          72,
+          76,
+          76,
+          66,
+          66,
+          48,
           62,
           34,
           44,

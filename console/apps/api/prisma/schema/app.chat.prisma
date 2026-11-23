@@ -74,6 +74,8 @@ model Conversation {
   useSavedIdentity Boolean         @default(false) @map("use_saved_identity")
   /// Let the chat's runs pay with a saved card (E37.7): off by default.
   useSavedCards Boolean            @default(false) @map("use_saved_cards")
+  /// Record a video of the chat's runs (epic #755, #906): off by default. The video is not masked and is owner-only.
+  recordVideo   Boolean            @default(false) @map("record_video")
   /// The highest `seq` of an owner message the turn engine has taken up (#484).
   answeredSeq   Int                @default(0) @map("answered_seq")
   /// Held while a turn is working on this chat, so two turns never run at once; a crashed turn's lease expires.
