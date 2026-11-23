@@ -218,11 +218,11 @@ A **site fact** is a short sentence about one site that the agent reads before i
 The no-impact contract holds for everything off, and for chats with only `everyday` off. Phase 5 adds:
 - one `kg_` table (`kg_site_facts`) and one ledger mode;
 - new routes only;
-- no MCP tool or scope. Site facts are not exposed over Hexactra's MCP server in this phase, and `docs/parity.md` says so.
+- no MCP tool or scope. Site facts were not exposed over Hexactra's MCP server in this phase. Phase 6 (E46.35, #891) adds `site_facts_list` (`site_facts:read`) and `site_fact_propose` (`site_facts:write`), under the same switches as the procedure tools: a proposal is always stored `proposed` and only the owner, signed in, approves it; no tool approves, edits or deletes a fact.
 
 ## Out of scope
 
-Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database, embeddings or a vector store for matching, site facts over MCP.
+Teaching by demonstration, dry run, a hand editor, a shared marketplace, a cross-owner ontology, a graph database, embeddings or a vector store for matching, approving or editing site facts over MCP.
 
 ## Load test, 2026-11-22
 
