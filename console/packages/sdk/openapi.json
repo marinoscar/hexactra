@@ -107561,6 +107561,75 @@
                       ],
                       "description": "Claimed failure (or no claim) and graded pass, over judged trials."
                     },
+                    "askedPerson": {
+                      "type": "object",
+                      "properties": {
+                        "trials": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "Trials that ended because the agent asked a question nobody scripted (`asked_person`)."
+                        },
+                        "rate": {
+                          "type": "object",
+                          "properties": {
+                            "k": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "How many counted (the numerator)."
+                            },
+                            "n": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Out of how many (the denominator)."
+                            },
+                            "value": {
+                              "description": "k / n, 0 to 1; null when n is 0.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "low": {
+                              "description": "Lower bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "high": {
+                              "description": "Upper bound of the Wilson 95% interval.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "k",
+                            "n",
+                            "value",
+                            "low",
+                            "high"
+                          ],
+                          "description": "Those trials over judged trials, with a Wilson 95% interval."
+                        },
+                        "questions": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "Questions the agent asked a person in every trial that ran, answered by the scripted owner or not."
+                        }
+                      },
+                      "required": [
+                        "trials",
+                        "rate",
+                        "questions"
+                      ],
+                      "description": "Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`."
+                    },
                     "speed": {
                       "type": "object",
                       "properties": {
@@ -107788,6 +107857,7 @@
                     "passAllK",
                     "falseSuccess",
                     "falseFailure",
+                    "askedPerson",
                     "speed",
                     "cost",
                     "tokens",
@@ -108443,6 +108513,75 @@
                             ],
                             "description": "Claimed failure (or no claim) and graded pass, over judged trials."
                           },
+                          "askedPerson": {
+                            "type": "object",
+                            "properties": {
+                              "trials": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Trials that ended because the agent asked a question nobody scripted (`asked_person`)."
+                              },
+                              "rate": {
+                                "type": "object",
+                                "properties": {
+                                  "k": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "How many counted (the numerator)."
+                                  },
+                                  "n": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Out of how many (the denominator)."
+                                  },
+                                  "value": {
+                                    "description": "k / n, 0 to 1; null when n is 0.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "low": {
+                                    "description": "Lower bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "high": {
+                                    "description": "Upper bound of the Wilson 95% interval.",
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "k",
+                                  "n",
+                                  "value",
+                                  "low",
+                                  "high"
+                                ],
+                                "description": "Those trials over judged trials, with a Wilson 95% interval."
+                              },
+                              "questions": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Questions the agent asked a person in every trial that ran, answered by the scripted owner or not."
+                              }
+                            },
+                            "required": [
+                              "trials",
+                              "rate",
+                              "questions"
+                            ],
+                            "description": "Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`."
+                          },
                           "speed": {
                             "type": "object",
                             "properties": {
@@ -108670,6 +108809,7 @@
                           "passAllK",
                           "falseSuccess",
                           "falseFailure",
+                          "askedPerson",
                           "speed",
                           "cost",
                           "tokens",
@@ -108814,6 +108954,12 @@
                       },
                       "safetyFlagged": {
                         "type": "boolean"
+                      },
+                      "askedPerson": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Trials of this cell that ended as `asked_person` (#884)."
                       }
                     },
                     "required": [
@@ -108826,7 +108972,8 @@
                       "medianCostUsd",
                       "costKnown",
                       "totalTokens",
-                      "safetyFlagged"
+                      "safetyFlagged",
+                      "askedPerson"
                     ]
                   },
                   "description": "One per policy, in the benchmark's policy order."
@@ -110314,6 +110461,75 @@
                           ],
                           "description": "Claimed failure (or no claim) and graded pass, over judged trials."
                         },
+                        "askedPerson": {
+                          "type": "object",
+                          "properties": {
+                            "trials": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Trials that ended because the agent asked a question nobody scripted (`asked_person`)."
+                            },
+                            "rate": {
+                              "type": "object",
+                              "properties": {
+                                "k": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "How many counted (the numerator)."
+                                },
+                                "n": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991,
+                                  "description": "Out of how many (the denominator)."
+                                },
+                                "value": {
+                                  "description": "k / n, 0 to 1; null when n is 0.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "low": {
+                                  "description": "Lower bound of the Wilson 95% interval.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "high": {
+                                  "description": "Upper bound of the Wilson 95% interval.",
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "k",
+                                "n",
+                                "value",
+                                "low",
+                                "high"
+                              ],
+                              "description": "Those trials over judged trials, with a Wilson 95% interval."
+                            },
+                            "questions": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991,
+                              "description": "Questions the agent asked a person in every trial that ran, answered by the scripted owner or not."
+                            }
+                          },
+                          "required": [
+                            "trials",
+                            "rate",
+                            "questions"
+                          ],
+                          "description": "Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`."
+                        },
                         "speed": {
                           "type": "object",
                           "properties": {
@@ -110541,6 +110757,7 @@
                         "passAllK",
                         "falseSuccess",
                         "falseFailure",
+                        "askedPerson",
                         "speed",
                         "cost",
                         "tokens",
@@ -111196,6 +111413,75 @@
                                 ],
                                 "description": "Claimed failure (or no claim) and graded pass, over judged trials."
                               },
+                              "askedPerson": {
+                                "type": "object",
+                                "properties": {
+                                  "trials": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Trials that ended because the agent asked a question nobody scripted (`asked_person`)."
+                                  },
+                                  "rate": {
+                                    "type": "object",
+                                    "properties": {
+                                      "k": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "How many counted (the numerator)."
+                                      },
+                                      "n": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991,
+                                        "description": "Out of how many (the denominator)."
+                                      },
+                                      "value": {
+                                        "description": "k / n, 0 to 1; null when n is 0.",
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "low": {
+                                        "description": "Lower bound of the Wilson 95% interval.",
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "high": {
+                                        "description": "Upper bound of the Wilson 95% interval.",
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "k",
+                                      "n",
+                                      "value",
+                                      "low",
+                                      "high"
+                                    ],
+                                    "description": "Those trials over judged trials, with a Wilson 95% interval."
+                                  },
+                                  "questions": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Questions the agent asked a person in every trial that ran, answered by the scripted owner or not."
+                                  }
+                                },
+                                "required": [
+                                  "trials",
+                                  "rate",
+                                  "questions"
+                                ],
+                                "description": "Asking a person (#884): a trial nobody could answer ends as a fail with the reason `asked_person`."
+                              },
                               "speed": {
                                 "type": "object",
                                 "properties": {
@@ -111423,6 +111709,7 @@
                               "passAllK",
                               "falseSuccess",
                               "falseFailure",
+                              "askedPerson",
                               "speed",
                               "cost",
                               "tokens",
@@ -111567,6 +111854,12 @@
                           },
                           "safetyFlagged": {
                             "type": "boolean"
+                          },
+                          "askedPerson": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Trials of this cell that ended as `asked_person` (#884)."
                           }
                         },
                         "required": [
@@ -111579,7 +111872,8 @@
                           "medianCostUsd",
                           "costKnown",
                           "totalTokens",
-                          "safetyFlagged"
+                          "safetyFlagged",
+                          "askedPerson"
                         ]
                       },
                       "description": "One per policy, in the benchmark's policy order."

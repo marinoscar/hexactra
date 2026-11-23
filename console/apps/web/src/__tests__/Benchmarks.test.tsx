@@ -520,6 +520,57 @@ describe('a benchmark', () => {
   });
 });
 
+describe('asking a person (#884)', () => {
+  const asked = trial({ id: 't3', trialIndex: 2, policyRef: 'builtin:economy', policyLabel: 'Economy', verdict: 'fail', failureReason: 'asked_person', questions: 2, checks: [{ name: 'answer', pass: false }, { name: 'asked-person', pass: false, detail: 'other: Which customer did you mean?' }] });
+  const old = trial({ id: 't4', trialIndex: 0, policyRef: 'builtin:thorough', policyLabel: 'Thorough', verdict: 'fail', failureReason: 'asked_person', runId: null, checks: [{ name: 'answer', pass: false }] });
+  const card = () => {
+    const c = scorecard();
+    const eco = c.policies[0]!;
+    eco.metrics = { ...eco.metrics, askedPerson: { trials: 1, rate: rate(1, 6), questions: 3 } };
+    c.policies[1]!.metrics = { ...c.policies[1]!.metrics, askedPerson: { trials: 0, rate: rate(0, 6), questions: 0 } };
+    c.matrix[0]!.cells[0] = { ...c.matrix[0]!.cells[0]!, askedPerson: 1 };
+    return c;
+  };
+  const responses = {
+    [`GET /benchmarks/${ID}`]: benchmark(),
+    [`GET /benchmarks/${ID}/trials`]: { items: [...trials, asked, old] },
+    [`GET /benchmarks/${ID}/scorecard`]: card(),
+    'GET /benchmarks': { items: [benchmark()], total: 1 },
+  };
+
+  it('lists each trial that ended asking a person with its configuration, attempt, question and run', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const section = await screen.findByTestId('asked-person');
+    expect(section).toHaveTextContent('2 trials ended because the agent asked a question');
+    const rows = within(section).getAllByTestId('asked-person-row');
+    expect(rows[0]).toHaveTextContent('Look up an order');
+    expect(rows[0]).toHaveTextContent('Economy · attempt 3 · 2 questions asked');
+    expect(rows[0]).toHaveTextContent('other:“Which customer did you mean?”');
+    expect(within(rows[0]!).getByRole('link', { name: 'Open run' })).toHaveAttribute('href', `/runs/${RUN}`);
+    // A trial graded before the console kept the question, whose run is gone.
+    expect(rows[1]).toHaveTextContent('The question is not recorded');
+    expect(rows[1]).toHaveTextContent('run removed');
+  });
+
+  it('counts them in the scorecard, the leaderboard and the matrix', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], responses);
+    const table = await screen.findByTestId('scorecard-table');
+    const cells = table.querySelectorAll('[data-metric="askedPerson"]');
+    expect(cells[0]).toHaveTextContent('1 · 17% of judged');
+    expect(cells[1]).toHaveTextContent('none');
+    expect(table.querySelectorAll('[data-metric="questions"]')[0]).toHaveTextContent('3');
+    const economy = within(screen.getByTestId('leaderboard')).getAllByTestId('leaderboard-row').find((r) => r.getAttribute('data-ref') === 'builtin:economy')!;
+    expect(economy).toHaveTextContent('Asked a person: 1');
+    expect(screen.getByTestId('cell-nav-lookup-builtin:economy')).toHaveTextContent('? 1 asked');
+  });
+
+  it('shows no section when no trial asked a person', async () => {
+    mount(<BenchmarkPage />, `/b/${ID}`, '/b/:id', ['benchmarks:read'], { ...responses, [`GET /benchmarks/${ID}/trials`]: { items: trials } });
+    await screen.findByTestId('leaderboard');
+    expect(screen.queryByTestId('asked-person')).toBeNull();
+  });
+});
+
 describe('deleting benchmarks with their runs (#873)', () => {
   const responses = {
     [`GET /benchmarks/${ID}`]: benchmark(),

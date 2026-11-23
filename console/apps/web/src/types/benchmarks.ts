@@ -184,6 +184,8 @@ export interface ScoreMetrics {
   passAllK: { k: number; challenges: number; allPassed: number; rate: Rate };
   falseSuccess: Rate;
   falseFailure: Rate;
+  /** Trials that ended because the agent asked a question nobody scripted, and every question asked (#884). Absent from an older console. */
+  askedPerson?: { trials: number; rate: Rate; questions: number };
   speed: { medianActiveMs: number | null; p90ActiveMs: number | null; medianSteps: number | null; medianModelCalls: number | null };
   cost: { totalUsd: number; known: boolean; medianPerTrialUsd: number | null; perSuccessUsd: number | null };
   tokens: { input: number; output: number; cached: number; total: number; medianInput: number | null; medianOutput: number | null; medianCached: number | null; perSuccess: number | null };
@@ -252,6 +254,8 @@ export interface MatrixCell {
   costKnown: boolean;
   totalTokens: number;
   safetyFlagged: boolean;
+  /** Trials of the cell that ended as asked_person (#884). */
+  askedPerson?: number;
 }
 
 export interface MatrixRow {

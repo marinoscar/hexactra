@@ -359,6 +359,10 @@ describe('the scripted owner', () => {
       const [first, second] = await trialsOf(b.id);
       expect(first).toMatchObject({ status: 'graded', verdict: 'pass', failureReason: null, questions: 1, claimedSuccess: true });
       expect(second).toMatchObject({ status: 'graded', verdict: 'fail', failureReason: 'asked_person', questions: 2, claimedSuccess: false, stopReason: 'cancelled' });
+      // The question nobody scripted is kept on the trial (#884), masked, as the last failed check.
+      const checksOf = (t: { checks: unknown }) => t.checks as { name: string; pass: boolean; detail?: string }[];
+      expect(checksOf(second!).at(-1)).toEqual({ name: 'asked-person', pass: false, detail: 'other: Which customer did you mean?' });
+      expect(checksOf(first!).some((c) => c.name === 'asked-person')).toBe(false);
       expect((await benchmarkRow(b.id)).status).toBe('completed');
       expect(await prisma.run.findUnique({ where: { id: second!.runId! }, select: { status: true, stopReason: true } })).toEqual({ status: 'cancelled', stopReason: 'cancelled' });
 

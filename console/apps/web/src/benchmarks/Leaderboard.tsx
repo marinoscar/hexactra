@@ -102,6 +102,11 @@ function Flags({ p, preset }: { p: PolicyScore; preset: ScorePreset }) {
           <Chip size="small" variant="outlined" color="warning" label="Provisional" />
         </Tooltip>
       )}
+      {(p.metrics.askedPerson?.trials ?? 0) > 0 && (
+        <Tooltip title="Trials that ended because the agent asked a question the benchmark's scripted owner could not answer. Listed under Asked a person below.">
+          <Chip size="small" variant="outlined" color="warning" label={`Asked a person: ${p.metrics.askedPerson!.trials}`} />
+        </Tooltip>
+      )}
       {flags > 0 && <Chip size="small" color="error" label={`Safety: ${flags} flagged`} />}
     </Stack>
   );

@@ -17,6 +17,7 @@ import { enqueueBenchmarkAdvance } from './benchmark.jobs.enqueue';
 import { BenchmarkMetrics } from './benchmark.metrics';
 import { BenchmarkOwner } from './benchmark-owner';
 import { OWNER_CARD_INPUTS, askedQuestions } from './owner-script';
+import { withAskedQuestion } from './trial-verdict';
 import { TrialStateService } from './site/trial-state.service';
 import { challengeById } from './suite/registry';
 import type { Check } from './suite/types';
@@ -67,19 +68,20 @@ export class BenchmarkGrader implements OnModuleInit, OnModuleDestroy {
     await this.prisma.question.updateMany({ where: { runId: run.id, status: 'pending' }, data: { status: 'cancelled' } });
 
     const challenge = challengeById(trial.challengeId);
+    // Every question the run asked, masked, with what the scripted owner answered (`none`: nobody did).
+    const asked = askedQuestions(challenge?.owner?.(trial.seed) ?? [], questions, (text) => maskSensitive(text).text);
     let grade: TrialOutcomeInput['grade'];
     if (!challenge) grade = { error: `The suite has no challenge ${trial.challengeId}` };
     else {
       try {
         const stored = await this.trials.read(trialId);
-        const asked = askedQuestions(challenge.owner?.(trial.seed) ?? [], questions, (text) => maskSensitive(text).text);
         const checks: Check[] = challenge.grade({ seed: trial.seed, state: stored?.state ?? {}, result: run.result ?? '', outputs: run.outputs ?? null, asked, claimedSuccess: run.status === 'succeeded' });
         grade = { checks: Array.isArray(checks) ? checks : [] };
       } catch (e) {
         grade = { error: e instanceof Error ? e.message : String(e) };
       }
     }
-    const outcome = trialOutcome({ preset: trial.failureReason, run: { status: run.status, stopReason: run.stopReason, error: run.error }, grade });
+    const outcome = withAskedQuestion(trialOutcome({ preset: trial.failureReason, run: { status: run.status, stopReason: run.stopReason, error: run.error }, grade }), asked);
     const finishedAt = run.finishedAt ?? new Date();
     const models = trialModels(run.policySnapshot, run.currentTier);
     const { count } = await this.prisma.benchmarkTrial.updateMany({
