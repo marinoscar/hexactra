@@ -23,6 +23,8 @@ export interface KgraphStatus {
   available: boolean;
   /** The user's own everyday switch (E46.28): effective for chats and one-off runs only while `available`. */
   everyday: boolean;
+  /** The user's "Approve facts from server records automatically" (E46.36): effective only while `available`. */
+  autoApproveFacts: boolean;
 }
 
 /**
@@ -48,7 +50,7 @@ export class KgraphEnabledService {
     const deployment = (await this.systemSettingsOf()).enabled;
     const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
     const own = readKgraphUserSettings(row?.value);
-    return { deployment, user: own.enabled, available: deployment && own.enabled, everyday: own.everyday };
+    return { deployment, user: own.enabled, available: deployment && own.enabled, everyday: own.everyday, autoApproveFacts: own.autoApproveFacts };
   }
 
   /** The task's stored mode (`off` without a row). */

@@ -245,6 +245,9 @@ model KgSiteFact {
   status     String    @default("proposed") @db.VarChar(12)
   /// For a proposal: the run, its calls and screens (ids only, never page text).
   evidence   Json      @default("{}")
+  /// How an active fact was approved (E46.36): owner (approved, typed or restored by the owner) | auto (the owner's opt-in
+  /// `kgraph.autoApproveFacts`, for a fact derived from server records). Read only when the fact is not proposed or declined.
+  approvedBy String    @default("owner") @map("approved_by") @db.VarChar(8)
   /// Set when the owner declined the proposal in Reviews: the same identity is not proposed again for 30 days.
   declinedAt DateTime? @map("declined_at") @db.Timestamptz
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz

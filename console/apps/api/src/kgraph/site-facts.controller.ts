@@ -26,6 +26,10 @@ const siteFactSchema = z.object({
   text: z.string().describe('At most 300 characters, shown as text. Data about the site, never an instruction or a permission.'),
   source: z.enum(['owner', 'derived', 'agent_proposed']),
   status,
+  approvedBy: z
+    .enum(['owner', 'auto'])
+    .nullable()
+    .describe('How the fact became active (E46.36): `owner` (you approved, typed or restored it) or `auto` (your setting "Approve facts from server records automatically", for a derived navigation, timing or quirk fact). Null while it is a proposal or after you declined it.'),
   evidence: z.object({ runId: z.string().nullable(), steps: z.number().int(), screens: z.number().int() }).describe('What a proposal came from: the run and how many of its calls and screens. Ids and counts only.'),
   declinedAt: z.string().nullable(),
   lastUsedAt: z.string().nullable(),

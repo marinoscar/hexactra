@@ -156,7 +156,7 @@ describe('the everyday switch: procedures in chats and one-off runs (E46.28)', (
     await switches(true, true, null);
     const res = await get(owner.token, '/kgraph/status');
     expect(res.statusCode).toBe(200);
-    expect(res.json<{ data: unknown }>().data).toEqual({ deployment: true, user: true, available: true, everyday: false });
+    expect(res.json<{ data: unknown }>().data).toEqual({ deployment: true, user: true, available: true, everyday: false, autoApproveFacts: false });
     await switches(true, true, true);
     expect((await get(owner.token, '/kgraph/status')).json<{ data: { everyday: boolean } }>().data.everyday).toBe(true);
   });
