@@ -12,6 +12,7 @@ import { KgraphCompileService } from './kgraph-compile.service';
 import { declaredOutputs, readShapes } from './output-shapes';
 import { PrismaProcedureStore } from './prisma-procedure-store';
 import { KgraphSiteFactsService } from './site-facts.service';
+import { KGRAPH_SITE_FACTS_JOB, KGRAPH_SITE_FACTS_REASON } from './site-facts.job';
 
 /** The job type that compiles a run's trace (E46.7). Permanent once jobs of this type exist: never rename it. */
 export const KGRAPH_COMPILE_JOB = 'kgraph.compile';
@@ -52,8 +53,9 @@ export class KgraphCompileHandler implements JobHandler, OnModuleInit {
 }
 
 /**
- * What the runner calls when a run finished (E46.7). With the feature off the run has no trace rows and nothing is enqueued. A failure is
- * logged and never changes the run.
+ * What the runner calls when a run finished (E46.7). With the feature off the run has no trace rows and no `kg_runs` row, and nothing is
+ * enqueued. A learn or reuse run that succeeded is compiled (and its site facts derived); an everyday run's site facts are derived by the
+ * `kgraph.site_facts` job (E46.36). A failure is logged and never changes the run.
  */
 @Injectable()
 export class KgraphAfterRun {
@@ -68,9 +70,15 @@ export class KgraphAfterRun {
   async finished(userId: string, runId: string, to: 'succeeded' | 'failed' | 'cancelled'): Promise<void> {
     await this.compareAudit(userId, runId, to);
     try {
-      if (to !== 'succeeded' || !this.jobs) return;
-      if ((await this.prisma.forUser({ userId }).kgTrace.count({ where: { runId, userId } })) === 0) return;
-      await this.jobs.enqueue({ type: KGRAPH_COMPILE_JOB, reason: KGRAPH_COMPILE_REASON.id, subjectType: 'run', subjectId: runId, orgId: null, payload: { userId, runId } });
+      if (!this.jobs) return;
+      if (to === 'succeeded' && (await this.prisma.forUser({ userId }).kgTrace.count({ where: { runId, userId } })) > 0) {
+        await this.jobs.enqueue({ type: KGRAPH_COMPILE_JOB, reason: KGRAPH_COMPILE_REASON.id, subjectType: 'run', subjectId: runId, orgId: null, payload: { userId, runId } });
+        return;
+      }
+      // An everyday run (E46.36): its site facts are derived by their own job (never a compile). Its surface rows are removed by it too, so
+      // the job is queued whatever the run's outcome; it derives only from a succeeded run.
+      const kg = await this.prisma.forUser({ userId }).kgRun.findFirst({ where: { runId, userId }, select: { mode: true } });
+      if (kg?.mode === 'everyday') await this.jobs.enqueue({ type: KGRAPH_SITE_FACTS_JOB, reason: KGRAPH_SITE_FACTS_REASON.id, subjectType: 'run', subjectId: runId, orgId: null, payload: { userId, runId } });
     } catch (err) {
       this.log.warn(`run ${runId}: kgraph after-run failed: ${err instanceof Error ? err.name : 'error'}`);
     }

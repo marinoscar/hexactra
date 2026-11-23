@@ -3,7 +3,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { getKgStatus, purgeKgraph, setKgEverydaySwitch, setKgUserSwitch, type KgStatus } from '../kgraph/api';
+import { getKgStatus, purgeKgraph, setKgAutoApproveFacts, setKgEverydaySwitch, setKgUserSwitch, type KgStatus } from '../kgraph/api';
 import { useKgraphStatus } from '../kgraph/KgraphStatusProvider';
 import { everydayDisabledReason } from '../kgraph/labels';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiAction, useConfirm } from '../ui';
@@ -12,7 +12,8 @@ import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiActi
  * `/settings/kgraph` (E46.20): the owner's own Knowledge Graph switch (`kgraph.enabled` of the user settings, off by default), a link
  * to what was learned, and Delete everything learned (`DELETE /api/kgraph`) behind a confirmation. Turning the switch off deletes
  * nothing; the delete does. Changing needs `kgraph:write`. E46.29: "Use in chats and one-off runs" (`kgraph.everyday`), disabled with
- * the reason while the user or the deployment switch is off.
+ * the reason while the user or the deployment switch is off. E46.36: "Approve facts from server records automatically"
+ * (`kgraph.autoApproveFacts`), disabled with the same reason; one line says what it covers and what it never covers.
  */
 export function KgraphSettingsPage() {
   const { api, viewer } = usePlatformHost();
@@ -48,6 +49,13 @@ export function KgraphSettingsPage() {
     toast(everyday ? 'Saved procedures are now offered in chats and one-off runs' : 'Saved procedures are no longer offered in chats and one-off runs');
     await load();
     await shell.refresh();
+  };
+
+  const toggleAutoApprove = async (autoApproveFacts: boolean) => {
+    const done = await action.run('autoApproveFacts', () => setKgAutoApproveFacts(api, autoApproveFacts), 'Could not change the setting');
+    if (done === undefined) return;
+    toast(autoApproveFacts ? 'Facts from server records are now approved automatically' : 'Facts now wait for your review; facts already active stay active');
+    await load();
   };
 
   const purge = async () => {
@@ -95,6 +103,21 @@ export function KgraphSettingsPage() {
               </Typography>
               {everydayDisabledReason(status) && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }} data-testid="kgraph-everyday-reason">
+                  {everydayDisabledReason(status)}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              <FormControlLabel
+                control={<Switch checked={status.autoApproveFacts} disabled={!canWrite || action.busy !== null || everydayDisabledReason(status) !== null} onChange={(e) => void toggleAutoApprove(e.target.checked)} />}
+                label="Approve facts from server records automatically"
+                sx={{ minHeight: 44 }}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Covers only navigation, timing and quirk facts derived from your runs&apos; recorded steps; sign-in facts, the agent&apos;s proposals and imported facts always wait for your review.
+              </Typography>
+              {everydayDisabledReason(status) && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }} data-testid="kgraph-auto-approve-reason">
                   {everydayDisabledReason(status)}
                 </Typography>
               )}

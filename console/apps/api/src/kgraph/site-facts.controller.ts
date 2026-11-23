@@ -26,6 +26,10 @@ const siteFactSchema = z.object({
   text: z.string().describe('At most 300 characters, shown as text. Data about the site, never an instruction or a permission.'),
   source: z.enum(['owner', 'derived', 'agent_proposed']),
   status,
+  approvedBy: z
+    .enum(['owner', 'auto'])
+    .nullable()
+    .describe('How the fact became active (E46.36): `owner` (you approved, typed or restored it) or `auto` (your setting "Approve facts from server records automatically", for a derived navigation, timing or quirk fact). Null while it is a proposal or after you declined it.'),
   evidence: z.object({ runId: z.string().nullable(), steps: z.number().int(), screens: z.number().int() }).describe('What a proposal came from: the run and how many of its calls and screens. Ids and counts only.'),
   declinedAt: z.string().nullable(),
   lastUsedAt: z.string().nullable(),
@@ -40,6 +44,11 @@ class ProposeSiteFactResponseDto extends createZodDto(
   }),
 ) {}
 class SiteSummaryResponseDto extends createZodDto(z.object({ site: z.string(), active: z.number().int(), proposed: z.number().int(), archived: z.number().int() })) {}
+class ReviewsQueryDto extends createZodDto(
+  z
+    .object({ approvedBy: z.enum(['auto']).optional().describe('`auto`: instead of the proposals, the facts your setting "Approve facts from server records automatically" made active in the last 30 days (still active), newest first (E46.36).') })
+    .strict(),
+) {}
 class FactsQueryDto extends createZodDto(z.object({ status: status.optional() }).strict()) {}
 class CreateSiteFactDto extends createZodDto(z.object({ kind, text: z.string().trim().min(1).max(SITE_FACT_MAX_TEXT) }).strict()) {}
 class UpdateSiteFactDto extends createZodDto(
@@ -129,8 +138,8 @@ export class KgraphSiteFactReviewsController {
   @ApiDataResponse(SiteFactResponseDto, { isArray: true })
   @Auth({ permissions: ['kgraph:read'] })
   @ApiOperation({ summary: 'Site facts waiting for your review', description: 'Proposals derived from your runs or written by the agent. None is used by a run until you approve it.' })
-  list(@CurrentUser('id') userId: string) {
-    return this.facts.proposals(userId);
+  list(@CurrentUser('id') userId: string, @Query() q: ReviewsQueryDto) {
+    return q.approvedBy === 'auto' ? this.facts.autoApproved(userId) : this.facts.proposals(userId);
   }
 
   @Post(':id/answer')

@@ -5,8 +5,8 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
-import { answerSiteFactReview, listSiteFactReviews, sitesTabPath, type KgSiteFact, type KgSiteFactKind } from './api';
-import { FactFields, factKindLabel, factRefusal, factSourceLabel } from './siteFacts';
+import { answerSiteFactReview, listAutoApprovedSiteFacts, listSiteFactReviews, sitesTabPath, type KgSiteFact, type KgSiteFactKind } from './api';
+import { AutoApprovedChip, FactFields, factKindLabel, factRefusal, factSourceLabel } from './siteFacts';
 import { ErrorBanner, RelativeTime, toast } from '../ui';
 
 /** "From 3 steps of a run", or "From a run", or nothing for a fact without a run. */
@@ -118,6 +118,62 @@ export function SiteFactReviewCard({ fact, onAnswered }: { fact: KgSiteFact; onA
       </Stack>
     </Paper>
   );
+}
+
+/**
+ * A fact your setting "Approve facts from server records automatically" made active (E46.36): shown in Reviews, read only, labelled
+ * "Approved automatically", with the run it came from and the site's facts, where it can be archived or deleted as usual.
+ */
+export function AutoApprovedFactCard({ fact }: { fact: KgSiteFact }) {
+  const evidence = evidenceText(fact);
+  return (
+    <Paper variant="outlined" component="article" aria-label="Site fact approved automatically" sx={{ p: 2, mb: 1.5, minWidth: 0 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mb: 0.5 }}>
+        <Chip size="small" color="info" variant="outlined" label={factKindLabel(fact.kind)} />
+        <AutoApprovedChip approvedBy={fact.approvedBy} />
+      </Stack>
+      <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>
+        A fact about {fact.site}
+      </Typography>
+      <Typography variant="body1" sx={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', my: 1 }} data-testid="site-fact-text">
+        {fact.text}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Your setting approved it because it came from your run&apos;s recorded steps. <RelativeTime iso={fact.updatedAt} prefix="Approved " />
+      </Typography>
+      {evidence && fact.evidence.runId && (
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
+          {evidence}:{' '}
+          <Link component={RouterLink} to={`/runs/${encodeURIComponent(fact.evidence.runId)}`}>
+            open the run
+          </Link>
+        </Typography>
+      )}
+      <Button component={RouterLink} to={sitesTabPath(fact.site)} sx={{ minHeight: 44 }}>
+        The site’s facts
+      </Button>
+    </Paper>
+  );
+}
+
+/** The facts approved automatically in the last 30 days (E46.36), for a viewer who may read them; empty otherwise, with no request. */
+export function useAutoApprovedSiteFacts(): { facts: KgSiteFact[] | null } {
+  const { api, viewer } = usePlatformHost();
+  const canRead = viewer.hasPermission('kgraph:read');
+  const [facts, setFacts] = useState<KgSiteFact[] | null>(canRead ? null : []);
+  useEffect(() => {
+    if (!canRead) return;
+    let live = true;
+    // A nice-to-have next to the reviews: a failure shows nothing.
+    listAutoApprovedSiteFacts(api).then(
+      (fs) => live && setFacts(Array.isArray(fs) ? fs : []),
+      () => live && setFacts([]),
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, canRead]);
+  return { facts };
 }
 
 /** The site fact proposals, for a viewer who may read them (`kgraph:read`); empty otherwise, with no request. */

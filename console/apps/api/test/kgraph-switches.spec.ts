@@ -74,10 +74,13 @@ describe('the kgraph settings', () => {
     expect(KGRAPH_USER_DEFAULTS).toEqual({ enabled: false });
     expect(readKgraphSystemSettings(undefined).enabled).toBe(false);
     expect(readKgraphSystemSettings({ enabled: 'yes', auditEvery: -1 })).toEqual(KGRAPH_SYSTEM_DEFAULTS);
-    expect(readKgraphUserSettings(null)).toEqual({ enabled: false, everyday: false });
-    expect(readKgraphUserSettings({ kgraph: { enabled: true } })).toEqual({ enabled: true, everyday: false });
-    expect(readKgraphUserSettings({ kgraph: { enabled: true, everyday: true } })).toEqual({ enabled: true, everyday: true });
-    expect(readKgraphUserSettings({ kgraph: { enabled: true, everyday: 'yes' } })).toEqual({ enabled: false, everyday: false });
+    expect(readKgraphUserSettings(null)).toEqual({ enabled: false, everyday: false, autoApproveFacts: false });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true } })).toEqual({ enabled: true, everyday: false, autoApproveFacts: false });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true, everyday: true } })).toEqual({ enabled: true, everyday: true, autoApproveFacts: false });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true, everyday: 'yes' } })).toEqual({ enabled: false, everyday: false, autoApproveFacts: false });
+    // E46.36: the opt-in auto-approve for facts derived from server records, off by default.
+    expect(readKgraphUserSettings({ kgraph: { enabled: true, autoApproveFacts: true } })).toEqual({ enabled: true, everyday: false, autoApproveFacts: true });
+    expect(readKgraphUserSettings({ kgraph: { enabled: true, autoApproveFacts: 1 } })).toEqual({ enabled: false, everyday: false, autoApproveFacts: false });
   });
 });
 

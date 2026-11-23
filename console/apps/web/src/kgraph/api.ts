@@ -18,6 +18,8 @@ export interface KgStatus {
   available: boolean;
   /** The owner's "Use in chats and one-off runs" setting (`kgraph.everyday`); effective only while `available`. */
   everyday: boolean;
+  /** "Approve facts from server records automatically" (`kgraph.autoApproveFacts`, E46.36); effective only while `available`. */
+  autoApproveFacts: boolean;
 }
 
 /** `GET|PUT /api/tasks/{id}/kgraph`. */
@@ -234,6 +236,8 @@ export const putKgAdminSettings = (api: PlatformApiClient, body: Partial<KgAdmin
 export const setKgUserSwitch = (api: PlatformApiClient, enabled: boolean) => api.patch<unknown>('/user-settings', { kgraph: { enabled } });
 /** "Use in chats and one-off runs": `kgraph.everyday` of the user settings (the CLI's `kgraph everyday on|off` does the same). */
 export const setKgEverydaySwitch = (api: PlatformApiClient, everyday: boolean) => api.patch<unknown>('/user-settings', { kgraph: { everyday } });
+/** "Approve facts from server records automatically": `kgraph.autoApproveFacts` of the user settings (the CLI's `kgraph auto-approve-facts on|off`). */
+export const setKgAutoApproveFacts = (api: PlatformApiClient, autoApproveFacts: boolean) => api.patch<unknown>('/user-settings', { kgraph: { autoApproveFacts } });
 
 // ---------------------------------------------------------------- site facts (phase 5, E46.31 and E46.33)
 
@@ -253,6 +257,8 @@ export interface KgSiteFact {
   text: string;
   source: KgSiteFactSource;
   status: KgSiteFactStatus;
+  /** How it became active (E46.36): `owner` (approved, typed or restored by you) or `auto` (your auto-approve setting); null while proposed or declined. */
+  approvedBy: 'owner' | 'auto' | null;
   /** What a proposal came from: the run and how many of its calls and screens. */
   evidence: { runId: string | null; steps: number; screens: number };
   declinedAt: string | null;
@@ -276,6 +282,8 @@ export const createSiteFact = (api: PlatformApiClient, site: string, body: { kin
 export const updateSiteFact = (api: PlatformApiClient, id: string, body: { kind?: KgSiteFactKind; text?: string; status?: 'active' | 'archived' }) => api.patch<KgSiteFact>(`/kgraph/site-facts/${encodeURIComponent(id)}`, body);
 export const deleteSiteFact = (api: PlatformApiClient, id: string) => api.delete<void>(`/kgraph/site-facts/${encodeURIComponent(id)}`);
 export const listSiteFactReviews = (api: PlatformApiClient) => api.get<KgSiteFact[]>('/kgraph/reviews/site-facts');
+/** The facts your auto-approve made active in the last 30 days (E46.36): Reviews lists them as "Approved automatically". */
+export const listAutoApprovedSiteFacts = (api: PlatformApiClient) => api.get<KgSiteFact[]>('/kgraph/reviews/site-facts?approvedBy=auto');
 /** Answered only from a signed-in browser session (`403 KGRAPH_REVIEW_CONSOLE_ONLY` otherwise). `kind` and `text` approve with the owner's edit. */
 export const answerSiteFactReview = (api: PlatformApiClient, id: string, body: { approve: boolean; kind?: KgSiteFactKind; text?: string }) =>
   api.post<KgSiteFact>(`/kgraph/reviews/site-facts/${encodeURIComponent(id)}/answer`, body);

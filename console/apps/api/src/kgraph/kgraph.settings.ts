@@ -35,6 +35,10 @@ export const kgraphUserSettingsSchema = z.object({
     .boolean()
     .optional()
     .describe('Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task\'s run.'),
+  autoApproveFacts: z
+    .boolean()
+    .optional()
+    .describe('Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent\'s proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active.'),
 });
 export type KgraphUserSettings = z.infer<typeof kgraphUserSettingsSchema>;
 export const kgraphUserSettingsPatchSchema = kgraphUserSettingsSchema.partial();
@@ -78,9 +82,9 @@ export function readKgraphSystemSettings(raw: unknown): KgraphSystemSettings {
 }
 
 /** The user namespace as stored in a user's settings document, with the defaults for what was never saved. */
-export function readKgraphUserSettings(doc: unknown): KgraphUserSettings & { everyday: boolean } {
+export function readKgraphUserSettings(doc: unknown): KgraphUserSettings & { everyday: boolean; autoApproveFacts: boolean } {
   const raw = (doc as { kgraph?: unknown } | null | undefined)?.kgraph;
   const parsed = kgraphUserSettingsPatchSchema.safeParse(raw ?? {});
   const out = { ...KGRAPH_USER_DEFAULTS, ...(parsed.success ? parsed.data : {}) };
-  return { ...out, everyday: out.everyday === true };
+  return { ...out, everyday: out.everyday === true, autoApproveFacts: out.autoApproveFacts === true };
 }

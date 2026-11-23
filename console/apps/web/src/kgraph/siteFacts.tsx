@@ -17,6 +17,13 @@ export function FactStatusChip({ status }: { status: KgSiteFactStatus }) {
   return <Chip size="small" variant={status === 'active' ? 'filled' : 'outlined'} color={STATUS_COLOR[status] ?? 'default'} label={STATUS_LABEL[status] ?? status} />;
 }
 
+/** "Approved automatically" (E46.36): an active or archived fact your auto-approve setting made active. Nothing for any other fact. */
+export const AUTO_APPROVED_LABEL = 'Approved automatically';
+export function AutoApprovedChip({ approvedBy }: { approvedBy: 'owner' | 'auto' | null | undefined }) {
+  if (approvedBy !== 'auto') return null;
+  return <Chip size="small" variant="outlined" color="success" label={AUTO_APPROVED_LABEL} />;
+}
+
 /** Each rule of `validateSiteFact`, in words. Never the text that broke it. */
 export const FACT_RULE_TEXT: Record<string, string> = {
   secret: 'It looks like a password, code, token or full card, account or ID number. A fact never holds one.',

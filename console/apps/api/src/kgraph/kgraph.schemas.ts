@@ -12,6 +12,7 @@ export const kgraphStatusSchema = z.object({
   user: z.boolean().describe('You turned it on (your setting `kgraph.enabled`).'),
   available: z.boolean().describe('Both are on.'),
   everyday: z.boolean().describe('You turned on "Use what was learned in chats and one-off runs" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected.'),
+  autoApproveFacts: z.boolean().describe('You turned on "Approve facts from server records automatically" (your setting `kgraph.autoApproveFacts`, E46.36). Effective only while `available`: a newly derived navigation, timing or quirk fact becomes active without a review. Sign-in facts, agent proposals and imported facts always wait for you.'),
 });
 export const kgraphPurgeSchema = z.object({
   deleted: z.object({ procedures: z.number(), versions: z.number(), nodes: z.number(), edges: z.number(), tasks: z.number(), runs: z.number(), reviews: z.number(), evidence: z.number(), traces: z.number(), ledger: z.number(), siteFacts: z.number() }),

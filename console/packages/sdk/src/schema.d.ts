@@ -11191,6 +11191,8 @@ export interface components {
                 enabled: boolean;
                 /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
                 everyday?: boolean;
+                /** @description Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active. */
+                autoApproveFacts?: boolean;
             };
             agentPricing?: {
                 /** @constant */
@@ -11313,6 +11315,8 @@ export interface components {
                 enabled: boolean;
                 /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
                 everyday?: boolean;
+                /** @description Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active. */
+                autoApproveFacts?: boolean;
             };
             agentPricing?: {
                 /** @constant */
@@ -11431,6 +11435,8 @@ export interface components {
                 enabled?: boolean;
                 /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
                 everyday?: boolean;
+                /** @description Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active. */
+                autoApproveFacts?: boolean;
             } | null;
             agentPricing?: ({
                 /** @constant */
@@ -12790,6 +12796,8 @@ export interface components {
                     enabled: boolean;
                     /** @description Use what was learned in chats and one-off runs (E46.28): such a run is offered your saved procedures that fit its goal. Off by default; effective only while `enabled` and the deployment switch are on. Never applies to a saved task's run. */
                     everyday?: boolean;
+                    /** @description Approve site facts derived from server records automatically (E46.36): a new fact whose source is `derived` and whose kind is navigation, timing or quirk becomes active without a review. Sign-in facts, the agent's proposals and imported facts always wait for you. Off by default; effective only while `enabled` and the deployment switch are on. Turning it off changes nothing already active. */
+                    autoApproveFacts?: boolean;
                 };
                 agentPricing?: {
                     /** @constant */
@@ -17201,6 +17209,8 @@ export interface components {
             available: boolean;
             /** @description You turned on "Use what was learned in chats and one-off runs" (your setting `kgraph.everyday`). Effective only while `available`: such a run is offered your saved procedures that fit its goal; a saved task is unaffected. */
             everyday: boolean;
+            /** @description You turned on "Approve facts from server records automatically" (your setting `kgraph.autoApproveFacts`, E46.36). Effective only while `available`: a newly derived navigation, timing or quirk fact becomes active without a review. Sign-in facts, agent proposals and imported facts always wait for you. */
+            autoApproveFacts: boolean;
         };
         KgraphPurgeResponseDto: {
             deleted: {
@@ -17258,6 +17268,8 @@ export interface components {
             source: "owner" | "derived" | "agent_proposed";
             /** @enum {string} */
             status: "proposed" | "active" | "archived";
+            /** @description How the fact became active (E46.36): `owner` (you approved, typed or restored it) or `auto` (your setting "Approve facts from server records automatically", for a derived navigation, timing or quirk fact). Null while it is a proposal or after you declined it. */
+            approvedBy: ("owner" | "auto") | null;
             /** @description What a proposal came from: the run and how many of its calls and screens. Ids and counts only. */
             evidence: {
                 runId: string | null;
@@ -17326,6 +17338,8 @@ export interface components {
                 source: "owner" | "derived" | "agent_proposed";
                 /** @enum {string} */
                 status: "proposed" | "active" | "archived";
+                /** @description How the fact became active (E46.36): `owner` (you approved, typed or restored it) or `auto` (your setting "Approve facts from server records automatically", for a derived navigation, timing or quirk fact). Null while it is a proposal or after you declined it. */
+                approvedBy: ("owner" | "auto") | null;
                 /** @description What a proposal came from: the run and how many of its calls and screens. Ids and counts only. */
                 evidence: {
                     runId: string | null;
@@ -44997,7 +45011,10 @@ export interface operations {
     };
     kgraphSiteFactReviews_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `auto`: instead of the proposals, the facts your setting "Approve facts from server records automatically" made active in the last 30 days (still active), newest first (E46.36). */
+                approvedBy?: "auto";
+            };
             header?: never;
             path?: never;
             cookie?: never;

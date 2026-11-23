@@ -870,7 +870,7 @@ const kgSteps = [
 const kgVersion = (number, state, changeClass, parentId, ageMs) => ({ id: `kgv-ui-${number}`, number, state, changeClass, parentId, sourceRunId: IDS.finishedRun, createdAt: iso(-ageMs), health: state === 'active' ? 'healthy' : 'unknown', counts: kgCounts(number * 3, 1, number - 1), steps: 6 });
 const kgVersions = [kgVersion(3, 'active', 'structural', 'kgv-ui-2', 3_600_000), kgVersion(2, 'retired', 'structural', 'kgv-ui-1', 5 * 86_400_000), kgVersion(1, 'retired', 'initial', null, 12 * 86_400_000)];
 const kgReview = { id: '7e000000-0000-4000-8000-000000000001', versionId: 'kgv-ui-4', procedureId: KG_PROC, status: 'pending', changes: [{ reason: 'recipient', text: 'Step 5 would send the spreadsheet to a new recipient: p***@example.test' }, { reason: 'new_site', text: 'Step 2 would open a site it did not use before: billing.example.test' }], createdAt: iso(-7_200_000), expiresAt: iso(28 * 86_400_000) };
-RESPONSES['GET /kgraph/status'] = { deployment: true, user: true, available: true, everyday: true };
+RESPONSES['GET /kgraph/status'] = { deployment: true, user: true, available: true, everyday: true, autoApproveFacts: true };
 RESPONSES['GET /kgraph/procedures'] = { enabled: true, procedures: kgProcedures };
 RESPONSES[`GET /kgraph/procedures/${KG_PROC}`] = { ...kgProcedures[0], enabled: true, versions: 3, activeVersion: { ...kgVersion(3, 'active', 'structural', 'kgv-ui-2', 3_600_000), steps: kgSteps, parameters: [{ name: 'week', type: 'string', sensitive: false, required: true }], outputs: [{ name: 'due', sensitive: false }], sites: ['portal.example.test'], accounts: [], savedLogins: [{ kind: 'login', label: 'Supplier portal' }] } };
 RESPONSES[`GET /kgraph/procedures/${KG_PROC}/versions`] = { enabled: true, procedureId: KG_PROC, versions: kgVersions };
@@ -937,16 +937,19 @@ RESPONSES['GET /kgraph/graph'] = {
 };
 // Site facts (E46.33, #855): two sites, one with facts of three kinds (one long, one archived, one with HTML-like text shown as text), a
 // derived proposal waiting in Reviews, and the Map's Site node portal.example.test matching example.test.
-const kgFact = (id, site, kind, text, over = {}) => ({ id, site, kind, text, source: 'owner', status: 'active', evidence: { runId: null, steps: 0, screens: 0 }, declinedAt: null, lastUsedAt: iso(-86_400_000), createdAt: iso(-20 * 86_400_000), updatedAt: iso(-20 * 86_400_000), ...over });
+const kgFact = (id, site, kind, text, over = {}) => ({ id, site, kind, text, source: 'owner', status: 'active', approvedBy: 'owner', evidence: { runId: null, steps: 0, screens: 0 }, declinedAt: null, lastUsedAt: iso(-86_400_000), createdAt: iso(-20 * 86_400_000), updatedAt: iso(-20 * 86_400_000), ...over });
 const kgFacts = [
   kgFact('kgsf-ui-1', 'example.test', 'navigation', 'Open orders are under Orders, then Open; the export button is at the bottom of the list, below the totals and the page size picker, which can be easy to miss on a small screen'),
   kgFact('kgsf-ui-2', 'example.test', 'sign_in', 'Sign-in asks for a one-time code sent by text message', { source: 'derived', evidence: { runId: IDS.finishedRun, steps: 2, screens: 1 }, lastUsedAt: null }),
   kgFact('kgsf-ui-3', 'example.test', 'quirk', 'A <b>cookie banner</b> covers the footer until it is closed'),
   kgFact('kgsf-ui-4', 'example.test', 'timing', 'Reports take about a minute to load', { status: 'archived', lastUsedAt: null }),
 ];
-const kgFactProposal = kgFact('kgsf-ui-9', 'example.test', 'timing', 'The orders export takes up to 30 seconds after pressing Export', { source: 'derived', status: 'proposed', evidence: { runId: IDS.finishedRun, steps: 3, screens: 0 }, lastUsedAt: null, createdAt: iso(-3_600_000) });
+// E46.36 (#892): a derived navigation fact the owner's "Approve facts from server records automatically" made active.
+const kgFactAuto = kgFact('kgsf-ui-6', 'example.test', 'navigation', 'Invoices: Billing → History', { source: 'derived', approvedBy: 'auto', evidence: { runId: IDS.chatRun, steps: 3, screens: 2 }, lastUsedAt: null, updatedAt: iso(-7_200_000) });
+kgFacts.push(kgFactAuto);
+const kgFactProposal = kgFact('kgsf-ui-9', 'example.test', 'timing', 'The orders export takes up to 30 seconds after pressing Export', { source: 'derived', status: 'proposed', approvedBy: null, evidence: { runId: IDS.finishedRun, steps: 3, screens: 0 }, lastUsedAt: null, createdAt: iso(-3_600_000) });
 RESPONSES['GET /kgraph/sites'] = [
-  { site: 'example.test', active: 3, proposed: 1, archived: 1 },
+  { site: 'example.test', active: 4, proposed: 1, archived: 1 },
   { site: 'a-very-long-registrable-domain-name-for-a-supplier.example', active: 1, proposed: 0, archived: 0 },
 ];
 RESPONSES['GET /kgraph/sites/example.test/facts'] = (url) => {
@@ -954,7 +957,7 @@ RESPONSES['GET /kgraph/sites/example.test/facts'] = (url) => {
   const status = url.searchParams.get('status');
   return status ? all.filter((f) => f.status === status) : all;
 };
-RESPONSES['GET /kgraph/reviews/site-facts'] = [kgFactProposal];
+RESPONSES['GET /kgraph/reviews/site-facts'] = (url) => (url.searchParams.get('approvedBy') === 'auto' ? [kgFactAuto] : [kgFactProposal]);
 RESPONSES['GET /kgraph/sites/a-very-long-registrable-domain-name-for-a-supplier.example/facts'] = [kgFact('kgsf-ui-5', 'a-very-long-registrable-domain-name-for-a-supplier.example', 'other', 'Closed on public holidays')];
 RESPONSES['GET /admin/kgraph/settings'] ={ enabled: true, auditEvery: 10, suspendAfterFailures: 3, retentionDays: null, pacing: 'human' };
 

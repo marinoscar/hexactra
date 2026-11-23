@@ -7,7 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getKgStatus, getKgSummary, listProcedures, type KgProcedureItem, type KgStatus, type KgTaskSummary } from '../kgraph/api';
 import { HealthChip, KgraphOffNotice, StateChip, savingText } from '../kgraph/labels';
 import { KgReviewCard, usePendingKgReviews } from '../kgraph/ReviewCard';
-import { SiteFactReviewCard, usePendingSiteFactReviews } from '../kgraph/SiteFactReviewCard';
+import { AutoApprovedFactCard, SiteFactReviewCard, useAutoApprovedSiteFacts, usePendingSiteFactReviews } from '../kgraph/SiteFactReviewCard';
 import { SitesTab } from '../kgraph/SitesTab';
 import { VersionHistory } from '../kgraph/VersionHistory';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, type Column } from '../ui';
@@ -133,6 +133,7 @@ export function KgraphPage() {
   const [error, setError] = useState<string | null>(null);
   const reviews = usePendingKgReviews();
   const factReviews = usePendingSiteFactReviews();
+  const autoFacts = useAutoApprovedSiteFacts();
   const setSite = (site: string | null) => {
     const p = new URLSearchParams(params);
     p.set('tab', 'sites');
@@ -188,6 +189,19 @@ export function KgraphPage() {
           )}
           {reviews.reviews?.map((r) => <KgReviewCard key={r.id} review={r} onAnswered={() => reviews.drop(r.id)} />)}
           {factReviews.facts?.map((f) => <SiteFactReviewCard key={f.id} fact={f} onAnswered={() => factReviews.drop(f.id)} />)}
+          {!!autoFacts.facts?.length && (
+            <Box component="section" aria-label="Approved automatically" sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 500, mb: 1 }}>
+                Approved automatically
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Facts from your runs&apos; recorded steps that your setting approved in the last 30 days. Archive or delete one on the site&apos;s facts.
+              </Typography>
+              {autoFacts.facts.map((f) => (
+                <AutoApprovedFactCard key={f.id} fact={f} />
+              ))}
+            </Box>
+          )}
         </Box>
       )}
       {(tab === 'procedures' || tab === 'history') && procedures === null && <ListSkeleton />}

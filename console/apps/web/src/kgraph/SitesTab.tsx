@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { createSiteFact, deleteSiteFact, listKgSites, listSiteFacts, SITE_FACT_KINDS, updateSiteFact, type KgSiteFact, type KgSiteFactKind, type KgSiteSummary } from './api';
-import { FactFields, FactStatusChip, factKindLabel, factRefusal, factSourceLabel, type FactRefusal } from './siteFacts';
+import { AutoApprovedChip, FactFields, FactStatusChip, factKindLabel, factRefusal, factSourceLabel, type FactRefusal } from './siteFacts';
 import { EmptyState, ErrorBanner, ListSkeleton, RelativeTime, ResponsiveList, toast, useApiAction, useConfirm, type Column } from '../ui';
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
@@ -147,6 +147,7 @@ function FactCard({ fact, canWrite, onChanged, onDeleted }: { fact: KgSiteFact; 
           </Typography>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mt: 0.75 }}>
             <FactStatusChip status={fact.status} />
+            {fact.status !== 'proposed' && <AutoApprovedChip approvedBy={fact.approvedBy} />}
             <Chip size="small" variant="outlined" label={factSourceLabel(fact.source)} />
             <Typography variant="caption" color="text.secondary">
               {fact.lastUsedAt ? <RelativeTime iso={fact.lastUsedAt} prefix="Last used " /> : 'Not used by a run yet'}

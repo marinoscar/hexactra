@@ -200,7 +200,7 @@ A **site fact** is a short note about one site that helps a later run there: "In
 | `kind` | `navigation`, `sign_in`, `quirk`, `timing` or `other`. |
 | `text` | At most 300 characters. |
 | `source` | `owner` (typed by the owner), `derived` (`deriveSiteFacts`) or `agent_proposed` (the agent's free text, reviewed like a memory proposal). |
-| `status` | `proposed` → `active` → `archived` (an archived fact can be restored to `active`). Only the owner's own act makes a fact `active`. |
+| `status` | `proposed` → `active` → `archived` (an archived fact can be restored to `active`). Only the owner's own act makes a fact `active`: approving it, or a host's owner opt-in that auto-approves only `derived` navigation, timing and quirk facts that pass `validateSiteFact` (the console's `kgraph.autoApproveFacts`, E46.36). |
 | `evidence` | What a derived fact was read from: `runId`, `stepIds` (`s<seq>`), `screenIds`. Ids only. |
 
 A fact's **identity** is its site, kind and normalised text (`siteFactKey`: lower case, digits as `#`, punctuation dropped). A store keeps one fact per identity and owner, so the same proposal is never made twice, and a fact the owner archived is not proposed again.

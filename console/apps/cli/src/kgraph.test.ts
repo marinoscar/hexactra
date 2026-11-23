@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { setConsoleApiFactory } from './console-api.js';
-import { FACTS_APPROVE_NOTE, kgraphCommand, procedureLine, statusText, stepLine, type ProcedureDetailView, type ProcedureItemView, type SiteFactView } from './kgraph.command.js';
+import { FACTS_APPROVE_NOTE, kgraphCommand, procedureLine, siteFactLine, statusText, stepLine, type ProcedureDetailView, type ProcedureItemView, type SiteFactView } from './kgraph.command.js';
 
 resetCliForTests();
 createCli(APP_CLI_OPTIONS);
@@ -159,6 +159,24 @@ describe('hexactra kgraph', () => {
     ]);
     await expect(run('kgraph', 'everyday', 'maybe')).rejects.toThrow(/kgraph everyday on/);
     expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2);
+  });
+
+  it('auto-approve-facts on and off write kgraph.autoApproveFacts only, and status shows it (E46.36)', async () => {
+    const calls = fakeApi({ 'PATCH /user-settings': {}, 'GET /kgraph/status': { deployment: true, user: true, available: true, everyday: false, autoApproveFacts: true } });
+    expect(await run('kgraph', 'auto-approve-facts', 'on')).toContain('auto-approve on');
+    await run('kgraph', 'auto-approve-facts', 'Off');
+    expect(calls.filter((c) => c.method === 'PATCH').map((c) => ({ path: c.path, body: c.body }))).toEqual([
+      { path: '/user-settings', body: { kgraph: { autoApproveFacts: true } } },
+      { path: '/user-settings', body: { kgraph: { autoApproveFacts: false } } },
+    ]);
+    await expect(run('kgraph', 'auto-approve-facts', 'yes')).rejects.toThrow(/auto-approve-facts on/);
+    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(2);
+    expect(statusText({ deployment: true, user: true, available: true, everyday: false, autoApproveFacts: false })).toContain('auto-approve off');
+    expect(statusText({ deployment: true, user: false, available: false, everyday: false, autoApproveFacts: true })).toMatch(/auto-approve on .*takes effect once the Knowledge Graph is available/);
+    // A fact the setting made active is marked; one the owner approved is not.
+    const base: SiteFactView = { id: 'kgsf-a', site: 'example.com', kind: 'navigation', text: 'Statements: Billing → Archive', source: 'derived', status: 'active', evidence: { runId: null, steps: 0, screens: 0 }, lastUsedAt: null, createdAt: '2026-11-01T00:00:00.000Z' };
+    expect(siteFactLine({ ...base, approvedBy: 'auto' })).toContain('[approved automatically] Statements');
+    expect(siteFactLine({ ...base, approvedBy: 'owner' })).not.toContain('approved automatically');
   });
 
   const FACT: SiteFactView = { id: 'kgsf-1', site: 'example.com', kind: 'navigation', text: 'Invoices: Billing, then History', source: 'owner', status: 'active', evidence: { runId: null, steps: 0, screens: 0 }, lastUsedAt: '2026-11-20T10:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z' };
