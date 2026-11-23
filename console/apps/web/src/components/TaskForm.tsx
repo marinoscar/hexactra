@@ -698,6 +698,9 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             />
             <FormHelperText sx={{ mt: 0 }}>The agent pauses and asks in your Inbox.</FormHelperText>
           </Box>
+        </Section>
+
+        <Section title="Recording" id={`${uid}-recording`}>
           <Box data-field="recordVideo">
             <FormControlLabel
               control={<Switch checked={fields.recordVideo} disabled={busy} onChange={(e) => setFields({ recordVideo: e.target.checked })} slotProps={{ input: { 'aria-describedby': `${uid}-record-help` } }} />}

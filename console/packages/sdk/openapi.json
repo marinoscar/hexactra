@@ -105314,6 +105314,10 @@
                   "type": "boolean",
                   "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
                 },
+                "recordVideo": {
+                  "type": "boolean",
+                  "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
+                },
                 "connections": {
                   "type": "array",
                   "items": {
@@ -105458,6 +105462,7 @@
                 "useSavedLogins",
                 "useSavedIdentity",
                 "useSavedCards",
+                "recordVideo",
                 "connections",
                 "lastMessageAt",
                 "createdAt",
@@ -105550,6 +105555,10 @@
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
           },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -105620,6 +105629,7 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
+          "recordVideo",
           "connections",
           "lastMessageAt",
           "createdAt",
@@ -105693,6 +105703,10 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it."
           },
           "connections": {
             "maxItems": 25,
@@ -105793,6 +105807,10 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
           },
           "connections": {
             "type": "array",
@@ -105983,6 +106001,7 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
+          "recordVideo",
           "connections",
           "lastMessageAt",
           "createdAt",
@@ -106068,6 +106087,10 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it."
           },
           "connections": {
             "maxItems": 25,
@@ -106245,6 +106268,10 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "The chat's saved-cards switch (E37.7), carried over to the task"
+          },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "The chat's Record video switch (#906), carried over to the task"
           },
           "parameters": {
             "type": "array",
@@ -106448,6 +106475,7 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
+          "recordVideo",
           "parameters",
           "outputs",
           "connections"
@@ -107983,6 +108011,10 @@
             "type": "boolean",
             "description": "The chat's saved-cards switch (E37.7), carried over to the task"
           },
+          "recordVideo": {
+            "type": "boolean",
+            "description": "The chat's Record video switch (#906), carried over to the task"
+          },
           "parameters": {
             "type": "array",
             "items": {
@@ -108252,6 +108284,7 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
+          "recordVideo",
           "parameters",
           "outputs",
           "connections",

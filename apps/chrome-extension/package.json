@@ -1,6 +1,6 @@
 {
   "name": "@hexactra/chrome-extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hexactra Chrome extension for AI browser assistant - Standalone Chrome driver and browser automation",
   "scripts": {
     "build": "node build.js",

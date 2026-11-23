@@ -7,13 +7,22 @@ import { join } from 'node:path';
 import { createCli } from '@marinoscar/platform-cli';
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { renderTuiScreen, stripAnsi, type TuiTestHandle } from '@marinoscar/platform-cli/tui/testing';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from '../app.js';
 
 import type { AgentDeps, ExecResult } from './agent.js';
 import { AgentScreen } from './agent.screen.js';
 import { agentPaths } from './paths.js';
+
+// The Update action runs the same routine as `hexactra agent update` (#902); its own tests are in update.test.ts.
+const updates = vi.hoisted(() => ({ calls: [] as unknown[] }));
+vi.mock('./update.js', () => ({
+  updateEverything: vi.fn(async (_d: unknown, o: unknown) => {
+    updates.calls.push(o);
+    return ['Agent 0.2.0 (bbbbbbb)', 'Extension 0.2.0.81 connected'];
+  }),
+}));
 
 // The frame names the CLI: give the screen the app's identity, as the TUI does.
 resetCliForTests();
@@ -121,6 +130,17 @@ describe('the Agent screen', () => {
     expect(frame).toMatch(/active[\s│]*\(running\)/);
     expect(frame).toContain('Stop the agent');
     expect(frame).toContain('Uninstall…');
+  });
+
+  it('Update runs the whole update (agent, Chrome, extension) and shows what runs now (#902)', async () => {
+    const f = fake({ installed: true });
+    f.state.sudo = true;
+    const s = await open(f);
+    await s.waitForFrame((fr) => fr.includes('Update'));
+    await s.press('u');
+    const frame = await s.waitForFrame((fr) => fr.includes('Extension 0.2.0.81 connected'));
+    expect(frame).toContain('Agent 0.2.0 (bbbbbbb)');
+    expect(updates.calls).toEqual([{ interactive: false }]);
   });
 
   it('doctor lists the dependencies, asks for sudo in the TUI and installs the missing ones; the password is never shown', async () => {

@@ -30,6 +30,8 @@ export interface Chat {
   useSavedIdentity?: boolean;
   /** Let the chat's runs pay with a saved card (E37.7); absent from an older console: off. */
   useSavedCards?: boolean;
+  /** Record a video of the chat's runs (#906); absent from an older console: off. Not masked. */
+  recordVideo?: boolean;
   /** The accounts the chat may use, and how (E39.7, #604); absent from an older console: none. */
   connections?: ConnectionSelectionView[];
   lastMessageAt: string;
@@ -116,6 +118,8 @@ export interface ChatTaskDraft {
   useSavedLogins?: boolean;
   /** The chat's saved-details switch (E37.6), carried over to the task. */
   useSavedIdentity?: boolean;
+  /** The chat's Record video switch (#906), carried over to the task. */
+  recordVideo?: boolean;
   /** The chat's saved-cards switch (E37.7), carried over to the task. */
   useSavedCards?: boolean;
   /** The goal's parameters the draft proposes (#556); absent in drafts from before. */
@@ -131,7 +135,7 @@ export interface ChatDraftState {
 }
 
 /** What a chat's run settings dialog edits. */
-export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean; useSavedCards: boolean; /** Sent only when the owner changed it (E39.10). */ connections?: ConnectionSelection[] };
+export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean; useSavedCards: boolean; recordVideo: boolean; /** Sent only when the owner changed it (E39.10). */ connections?: ConnectionSelection[] };
 
 /** What became of an owner message passed to a run as guidance (#490): waiting for the agent's next step, read by it, or the run ended first. */
 export type ChatGuidanceState = 'queued' | 'delivered' | 'missed';
