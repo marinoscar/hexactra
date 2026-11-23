@@ -175,16 +175,18 @@ A site fact is a short note about one site (its registrable domain, such as `exa
 - **The Sites tab** (`/kgraph?tab=sites`) lists your sites with their counts (active, proposed, archived). A site shows its facts grouped by kind, each with where it came from and when a run last used it. You add a fact (active at once), edit, archive, restore or delete one there; a proposal is answered in Reviews, not here. The Map's side panel shows a site's active facts, and a run's Knowledge Graph panel lists the facts it used, with a link to the site.
 - **The CLI**: `hexactra kgraph sites`, `hexactra kgraph facts <site> [--status <status>]` and `hexactra kgraph facts add <site> --kind <kind> --text <text>`. The CLI cannot approve or decline a proposal.
 - **Delete everything learned** removes your facts. An **export** carries your active facts (site, kind, text, source); an **import** stores every fact as a proposal for your review.
-- Site facts are not exposed over MCP.
+- **Over MCP** (E46.35), an agent or AI app can list your facts (`site_facts_list`) and propose one (`site_fact_propose`): a proposal always waits for you in Reviews. See [For other agents: MCP](#for-other-agents-mcp).
 
 ## For other agents: MCP
 
-While the deployment's switch and yours are both on, the console's MCP server lists three more tools ([mcp.md](mcp.md), "Learned procedures"):
+While the deployment's switch and yours are both on, the console's MCP server lists five more tools ([mcp.md](mcp.md), "Learned procedures" and "Site facts"):
 
 - `procedures_list` and `procedure_get` (scope `procedures:read`);
-- `procedure_run` (scope `procedures:run`): it starts an ordinary run of an active procedure's task, which must be in `reuse` mode, and returns the run id at once. A sensitive parameter is never accepted from the caller.
+- `procedure_run` (scope `procedures:run`): it starts an ordinary run of an active procedure's task, which must be in `reuse` mode, and returns the run id at once. A sensitive parameter is never accepted from the caller;
+- `site_facts_list` (scope `site_facts:read`): your facts, optionally of one `site`, in one `status` (default `active`). Fact text can come from web pages, so the result starts with the untrusted notice and is marked `untrusted`;
+- `site_fact_propose` (scope `site_facts:write`): a fact about a site, always stored `proposed` with source `agent_proposed`, never active. You approve or decline it in Reviews, signed in; the result links there. A secret, an instruction or another site is refused, naming the rule without echoing the text (E46.35).
 
-While either switch is off, the tools are not listed. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, or changes a switch.
+While either switch is off, the tools are not listed. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, approves, edits, archives or deletes a site fact, or changes a switch.
 
 **Verified:** CI runs the Hermes, OpenClaw and Pi recipes against these tools (`agent-clients.db.spec.ts` with `AGENT_CLIENTS_SMOKE=1`). With the switch off, `tools/list` and the consent flow are tested for every caller (`mcp-kgraph-consent.db.spec.ts`, #893). One platform behaviour remains: a client that explicitly asks for a Knowledge Graph scope still sees it on consent, though the grant does nothing ([security-hosted-clients.md](security-hosted-clients.md)).
 
@@ -236,6 +238,7 @@ From the controllers in `apps/api/src/kgraph/`. While the deployment's switch or
 | `GET /api/kgraph/sites` | `kgraph:read` | Your sites with facts, and their counts by status. |
 | `GET /api/kgraph/sites/{site}/facts?status=` | `kgraph:read` | A site's facts. |
 | `POST /api/kgraph/sites/{site}/facts` | `kgraph:write` | Add a fact in your own words, active at once: `{ "kind": "navigation", "text": "…" }`. |
+| `POST /api/kgraph/sites/{site}/facts/proposals` | `kgraph:write` | Propose a fact (an agent's; `site_fact_propose` calls it): `{ "kind": "navigation", "text": "…" }`, always stored `proposed` with source `agent_proposed`. Answers `{ outcome, fact }`, `outcome` being `proposed`, `known` (you already have it) or `suppressed` (you declined it in the last 30 days). |
 | `PATCH /api/kgraph/site-facts/{id}` | `kgraph:write` | Edit `kind` or `text`, archive (`"status": "archived"`) or restore (`"status": "active"`). |
 | `DELETE /api/kgraph/site-facts/{id}` | `kgraph:write` | Delete a fact (`204`). |
 | `GET /api/kgraph/ledger?taskId=` | `kgraph:read` | A task's ledger rows and its AI-only baseline. |
@@ -259,5 +262,4 @@ Your own switch is the user setting `kgraph.enabled` (`PATCH /api/user-settings`
 - **The live AI-only vs reuse comparison** is not measured.
 - **Site fact proposals show in the Knowledge Graph page's Reviews tab, not in the Inbox**, and nothing notifies you of a new one.
 - **`hexactra kgraph facts <site> extra`** accepts extra arguments and ignores them (they are allowed so that `facts approve <id>` can say where proposals are answered).
-- **Site facts are not exposed over MCP**, by design in this phase: a hosted AI app cannot read or propose one.
 - **The E46.4 heavy-owner Map query** missed its bar (2,104 ms against 2,000 ms warm p95). The owner accepted it; the Map's view folds and pages above 2,000 nodes.

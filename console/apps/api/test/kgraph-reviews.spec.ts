@@ -14,9 +14,12 @@ describe('answering a review', () => {
   });
   it('no MCP tool names a Knowledge Graph review', () => {
     const tools = readFileSync(join(__dirname, '..', 'src', 'mcp', 'mcp.tools.ts'), 'utf8');
-    // The learned-procedure tools (E46.22) read /kgraph/procedures; nothing reaches a review, its answer, or another Knowledge Graph route.
-    expect(tools).not.toMatch(/kg_?review|kgraph\/reviews/i);
-    expect([...tools.matchAll(/\/kgraph\/([a-z]+)/g)].map((m) => m[1]).filter((r) => r !== 'procedures')).toEqual([]);
+    // The learned-procedure tools (E46.22) read /kgraph/procedures; the site-fact tools (E46.35) read /kgraph/sites and propose through
+    // /kgraph/sites/:site/facts/proposals; nothing reaches a review, its answer, or another Knowledge Graph route.
+    expect(tools).not.toMatch(/kg_?review|kgraph\/reviews|site-facts\//i);
+    expect([...tools.matchAll(/\/kgraph\/([a-z]+)/g)].map((m) => m[1]).filter((r) => r !== 'procedures' && r !== 'sites')).toEqual([]);
+    const allowed = ['/kgraph/sites', '/kgraph/sites/:site/facts', '/kgraph/sites/${encodeURIComponent(site)}/facts?status=${status}', '/kgraph/sites/${encodeURIComponent(String(a.site))}/facts/proposals'];
+    expect([...tools.matchAll(/\/kgraph\/sites[^'`" ]*/g)].map((m) => m[0]).filter((p) => !allowed.includes(p))).toEqual([]);
   });
 });
 

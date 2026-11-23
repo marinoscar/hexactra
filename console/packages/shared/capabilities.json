@@ -1644,7 +1644,7 @@
       ],
       "cli": "kgraph status",
       "mcp": {
-        "none": "Deliberate: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); the procedure tools (procedures_list, procedure_get, procedure_run) are offered only while both are on"
+        "none": "Deliberate: the switches are the owner's, set in the console (docs/decisions/knowledge-graph.md); the procedure tools (procedures_list, procedure_get, procedure_run) and the site-fact tools (site_facts_list, site_fact_propose) are offered only while both are on"
       },
       "tui": {
         "none": "The TUI is for watching and answering; the Knowledge Graph is set in the web app"
@@ -1732,11 +1732,12 @@
     },
     {
       "id": "kgraph.site_facts",
-      "description": "See, add, edit, archive, restore and delete short facts about a site that a later run reads as data (Knowledge Graph phase 5); a fact you type is active at once, a proposal waits in your reviews",
+      "description": "See, add, edit, archive, restore and delete short facts about a site that a later run reads as data (Knowledge Graph phase 5); a fact you type is active at once, a proposal waits in your reviews; an agent or AI app connected over MCP can read them and propose one, never approve it",
       "rest": [
         "GET /api/kgraph/sites",
         "GET /api/kgraph/sites/{site}/facts",
         "POST /api/kgraph/sites/{site}/facts",
+        "POST /api/kgraph/sites/{site}/facts/proposals",
         "PATCH /api/kgraph/site-facts/{id}",
         "DELETE /api/kgraph/site-facts/{id}"
       ],
@@ -1745,9 +1746,10 @@
         "kgraph facts",
         "kgraph facts add"
       ],
-      "mcp": {
-        "none": "Deliberate: site facts are not exposed over Hexactra's MCP server in phase 5 (docs/decisions/knowledge-graph.md)"
-      },
+      "mcp": [
+        "site_facts_list",
+        "site_fact_propose"
+      ],
       "tui": {
         "none": "Deliberate: the TUI is for watching and answering"
       },

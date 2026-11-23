@@ -13,6 +13,8 @@ import EditCalendarOutlinedIcon from '@mui/icons-material/EditCalendarOutlined';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import MouseOutlinedIcon from '@mui/icons-material/MouseOutlined';
+import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import PlayCircleOutlinedIcon from '@mui/icons-material/PlayCircleOutlined';
 import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined';
 import RepeatOutlinedIcon from '@mui/icons-material/RepeatOutlined';
@@ -29,6 +31,8 @@ export const MCP_SCOPE_ICONS: Readonly<Record<string, { Icon: SvgIconComponent }
   'inbox:write': { Icon: QuestionAnswerOutlinedIcon },
   'procedures:read': { Icon: AccountTreeOutlinedIcon },
   'procedures:run': { Icon: RepeatOutlinedIcon },
+  'site_facts:read': { Icon: PlaceOutlinedIcon },
+  'site_facts:write': { Icon: AddLocationAltOutlinedIcon },
   'browser:drive': { Icon: MouseOutlinedIcon },
   'browser:evaluate': { Icon: CodeOutlinedIcon },
   'desktop:control': { Icon: DesktopWindowsOutlinedIcon },

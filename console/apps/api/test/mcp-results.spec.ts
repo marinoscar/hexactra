@@ -109,6 +109,10 @@ describe('every tool stays within the limits with the largest plausible answer',
       return { id: 'kgp-1', taskId: RID, taskName: big, name: big, state: 'active', health: 'healthy', activeVersion: { steps, parameters: Array.from({ length: 50 }, (_, i) => ({ name: `${i}${big}`, type: 'string', sensitive: false, required: true })), outputs: Array.from({ length: 50 }, () => ({ name: big, sensitive: false })) } };
     }
     if (method === 'GET' && path.startsWith('/kgraph/procedures')) return { enabled: true, procedures: Array.from({ length: 200 }, (_, i) => ({ id: `kgp-${i}` })) };
+    // Site facts (E46.35): 500 sites, each with 300 facts of the longest text.
+    if (method === 'GET' && path === '/kgraph/sites') return Array.from({ length: 500 }, (_, i) => ({ site: `site${i}.example`, active: 300, proposed: 300, archived: 300 }));
+    if (method === 'GET' && path.startsWith('/kgraph/sites/')) return Array.from({ length: 300 }, (_, i) => ({ id: `kgsf-${i}`, site: 'site.example', kind: 'navigation', text: 'f'.repeat(300), source: 'derived', status: 'active', lastUsedAt: null }));
+    if (method === 'POST' && path.startsWith('/kgraph/sites/')) return { outcome: 'proposed', fact: { id: 'kgsf-1', site: 'example.com', kind: 'navigation', text: 'f'.repeat(300), source: 'agent_proposed', status: 'proposed', lastUsedAt: null } };
     if (method === 'GET' && path.startsWith('/tasks/') && path.endsWith('/kgraph')) return { taskId: RID, mode: 'reuse', available: true };
     if (path.startsWith('/browser/sessions/') && path.endsWith('/actions')) {
       return {
@@ -139,6 +143,7 @@ describe('every tool stays within the limits with the largest plausible answer',
     inbox_answer: { question_id: RID, outcome: 'completed', value: 'x' }, question_card_answer: { question_id: RID, outcome: 'completed', value: 'x' }, ask_human: { prompt: 'p', input: 'text' }, question_status: { question_id: RID }, policies_list: {}, policy_get: { policy_id: 'builtin:balanced' },
     policy_create: { name: 'n', spec: {} }, policy_update: { policy_id: 'builtin:balanced' }, policy_set_default: { policy_id: null }, policies_export: {}, policies_import: { file: {} }, hosts_list: {}, browser_open: { goal: 'g' },
     procedures_list: { limit: 50 }, procedure_get: { procedure_id: 'kgp-1' }, procedure_run: { procedure_id: 'kgp-1', inputs: { Customer: 'ACME' } },
+    site_facts_list: {}, site_fact_propose: { site: 'example.com', kind: 'navigation', text: 'Invoices are under Billing' },
     browser_request_human: { session_id: SID, kind: 'other', prompt: 'p' }, browser_handoff_status: { session_id: SID, handoff_id: RID }, browser_close: { session_id: SID },
   };
   const args = (t: McpTool): Record<string, unknown> => {

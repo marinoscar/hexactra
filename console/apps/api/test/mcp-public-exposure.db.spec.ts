@@ -427,7 +427,8 @@ describe('secret egress over every tool (#465)', () => {
       await store.putProcedure({ id: procedureId, owner: u.id, task: taskId, name: 'Egress', activeVersion: null, createdAt: at, updatedAt: at });
       await store.putVersion(u.id, procedureVersionSchema.parse({ id: `kgv-egress-${stamp}`, procedure: procedureId, number: 1, state: 'active', changeClass: 'initial', sourceRun: null, parent: null, createdAt: at, entry: 's1', sites: [{ id: 'site1', domain: 'shop.example.test' }], steps: [{ id: 's1', kind: 'call', label: `Open ${fabricToken}`, tool: 'navigate', sites: ['site1'], args: { url: { kind: 'literal', value: `https://shop.example.test/?t=${p}` } } }], edges: [] }));
       await store.putProcedure({ id: procedureId, owner: u.id, task: taskId, name: 'Egress', activeVersion: `kgv-egress-${stamp}`, createdAt: at, updatedAt: at });
-      const ids = { run_id: runId, task_id: taskId, question_id: questionId, session_id: sessionId, policy_id: 'builtin:balanced', script: 'document.body.innerText', procedure_id: procedureId };
+      // The site-fact tools (E46.35) are walked too: site_facts_list over the owner's site, site_fact_propose with a plain fact about it.
+      const ids = { run_id: runId, task_id: taskId, question_id: questionId, session_id: sessionId, policy_id: 'builtin:balanced', script: 'document.body.innerText', procedure_id: procedureId, site: 'example.test' };
       const secrets = [p, oat, fabricToken, 'handoff-secret-value-4242', ...planted.split(' ').filter((s) => s.startsWith('ort_') || s.startsWith('whsec_'))];
       // The walk is meaningful: every tool's generated arguments pass its schema (the call reaches the tool), except
       // policy_create, whose full policy spec is not generated (its invalid-arguments answer is still checked).
@@ -458,6 +459,13 @@ describe('secret egress over every tool (#465)', () => {
       const got = (await call(p, 'procedure_get', { procedure_id: procedureId })).json.result as ToolResult;
       expect(got.isError).toBeFalsy();
       for (const s of secrets) expect(JSON.stringify(got).includes(s)).toBe(false);
+      // And the site-fact tools (E46.35): a proposal is stored, proposed; the list answers (not "turned off").
+      const proposed = (await call(p, 'site_fact_propose', { site: 'example.test', kind: 'navigation', text: 'Reports are under Account, then Exports' })).json.result as ToolResult;
+      expect([proposed.isError, proposed.content[0]!.text]).toEqual([undefined, expect.stringContaining('Proposed')]);
+      const facts = (await call(p, 'site_facts_list', { site: 'example.test', status: 'proposed' })).json.result as ToolResult;
+      expect(facts.isError).toBeFalsy();
+      expect(JSON.stringify(facts)).toContain('agent_proposed');
+      for (const s of secrets) expect(JSON.stringify(facts).includes(s)).toBe(false);
     } finally {
       await app.get(SystemSettingsService).patchSettings({ kgraph: { enabled: false } } as never, adminId);
       jest.restoreAllMocks();

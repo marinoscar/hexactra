@@ -193,6 +193,9 @@ describe('structured results validate against the output schemas (real REST answ
       expect(await call(t, 'procedures_list', {})).toMatchObject({ procedures: [{ id: pid, state: 'active', outputs: [{ name: 'file' }] }], has_more: false });
       expect(await call(t, 'procedure_get', { procedure_id: pid })).toMatchObject({ id: pid, steps: [{ id: 's1' }], untrusted: true });
       expect(await call(t, 'procedure_run', { procedure_id: pid })).toMatchObject({ procedure_id: pid, task_id: taskId, status: 'queued' });
+      // The site-fact tools (E46.35).
+      expect(await call(t, 'site_fact_propose', { site: 'example.test', kind: 'navigation', text: 'Reports are under Account, then Exports' })).toMatchObject({ outcome: 'proposed', status: 'proposed' });
+      expect(await call(t, 'site_facts_list', { status: 'proposed' })).toMatchObject({ facts: [{ site: 'example.test', source: 'agent_proposed', status: 'proposed' }], has_more: false, untrusted: true });
     } finally {
       await settings.patchSettings({ kgraph: { enabled: false } } as never, userId);
     }

@@ -245,6 +245,23 @@ export class KgraphSiteFactsService {
     return siteFactView(await this.own(userId, fact.id));
   }
 
+  /**
+   * A proposal from a caller of the API (E46.35: an MCP client's `site_fact_propose`, or a token's REST call): stored `proposed` with source
+   * `agent_proposed`, never active, whatever the caller sends. The secret and instruction rules refuse it with `422` naming the rule, never its
+   * text. `known` when the owner already has the same fact (any status); `suppressed` when the owner declined it in the last 30 days. Who
+   * proposed it (the credential kind and, for an OAuth app, its client id) is kept in the audit row: a fact's evidence holds run ids only.
+   */
+  async proposeByClient(userId: string, site: string, input: { kind: SiteFactKind; text: string }, client: { kind: string; clientId?: string } | null) {
+    await this.requireOn(userId);
+    const p: SiteFactProposal = { site, kind: input.kind, text: input.text.trim(), source: 'agent_proposed', evidence: {} };
+    this.validate(p);
+    const outcome = await this.propose(userId, p);
+    if (outcome === 'refused') this.validate(p);
+    const row = outcome === 'suppressed' ? null : await this.db(userId).kgSiteFact.findFirst({ where: { userId, identity: siteFactKey(p) } });
+    if (outcome === 'proposed' && row) await this.audit(userId, 'kgraph.site_fact.proposed', row.id, { site, kind: p.kind, via: client?.kind ?? null, ...(client?.clientId ? { clientId: client.clientId } : {}) });
+    return { outcome: outcome as 'proposed' | 'known' | 'suppressed', fact: row ? siteFactView(row) : null };
+  }
+
   /** Edit the text or kind, archive, or restore (archived → active). A proposal is approved in Reviews, never here. */
   async update(userId: string, id: string, input: { kind?: SiteFactKind; text?: string; status?: 'active' | 'archived' }) {
     await this.requireOn(userId);
