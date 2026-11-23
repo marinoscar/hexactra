@@ -19,7 +19,7 @@
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import crypto from 'node:crypto';
-import { mkdtempSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -387,6 +387,58 @@ try {
     // The next unconfined action lifts the rule: the same redirect now lands.
     await ok('navigate', `${site}/redirect.html`);
     await until('redirect lands when unconfined', async () => /Hexactra Fixture Next/.test((await cli('tabs')).out), 15_000);
+  });
+
+  await step('run recording (#755): record a tab through the whole chain and get real VP8 frames back', async () => {
+    const api = async (method, path, body) => {
+      const r = await fetch(`${controlUrl}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, body: await r.json().catch(() => null) };
+    };
+    const sess = (await api('POST', '/v1/sessions', { label: 'record' })).body;
+    const act = async (action) => {
+      const r = (await api('POST', `/v1/sessions/${sess.id}/actions`, { action, timeout_ms: 30000 })).body;
+      assert.equal(r?.state, 'succeeded', `${action.type}: ${JSON.stringify(r)}`);
+      return r.result ?? {};
+    };
+    const bytesOf = async (res) => {
+      if (!res.artifact_id) return Buffer.alloc(0);
+      const r = await fetch(`${controlUrl}/v1/artifacts/${res.artifact_id}`, { headers: { authorization: `Bearer ${token}` } });
+      assert.equal(r.status, 200);
+      return Buffer.from(await r.arrayBuffer());
+    };
+    await act({ type: 'navigate', url: `${site}/` });
+    const { recording_id } = await act({ type: 'record_start', max_width: 800 });
+    assert.match(recording_id, /^rec-[0-9a-f]+$/);
+    const parts = [];
+    for (let i = 0; i < 6; i++) {
+      // Make the page repaint: the screencast only sends changed frames.
+      await act({ type: 'evaluate', script: `document.body.style.background = '${i % 2 ? '#fde' : '#def'}'; document.title = 'rec ${i}'; 1` });
+      await new Promise((r) => setTimeout(r, 400));
+      if (i % 2 === 1) parts.push(await bytesOf(await act({ type: 'record_pull', recording_id })));
+    }
+    const last = await act({ type: 'record_stop', recording_id });
+    assert.equal(last.done, true, JSON.stringify(last));
+    parts.push(await bytesOf(last));
+    const stream = Buffer.concat(parts);
+    // The HXR1 stream (apps/chrome-extension/src/recording-format.ts): a header, then one record per encoded frame.
+    assert.equal(stream.subarray(0, 4).toString('ascii'), 'HXR1', `no recording header (${stream.length} bytes, last ${JSON.stringify(last)})`);
+    let at = 9 + stream.readUInt8(8);
+    let frames = 0;
+    let keys = 0;
+    while (at + 10 <= stream.length) {
+      if (stream[at] !== 1) break;
+      keys += stream[at + 1] & 1;
+      at += 10 + stream.readUInt32BE(at + 6);
+      frames++;
+    }
+    assert.ok(frames >= 3, `only ${frames} frame(s) recorded`);
+    assert.ok(keys >= 1, 'no key frame');
+    writeFileSync(join(work, 'recording.hxr'), stream);
+    await api('DELETE', `/v1/sessions/${sess.id}`);
   });
 
   await step('full powers (#366): JavaScript, trusted input by position, marked screenshots and the desktop', async () => {

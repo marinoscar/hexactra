@@ -204,6 +204,31 @@ describe('the run recorder (#759)', () => {
     expect((await prisma.run.findMany({ where: { id: { in: [r.runId, noEncoder.runId, noStorage.runId] } } })).map((x) => x.status)).toEqual(['running', 'running', 'running']);
   });
 
+  it('says the node is outdated, stops asking, and keeps a start failure as the reason (#900)', async () => {
+    const old = await newRun();
+    const c1 = fakeCalls([]);
+    c1.startError = new RecordingCallError('unsupported');
+    const rec1 = (await RunRecorder.start(deps(memoryStore()), c1, old.runId, old.userId, { everyMs }))!;
+    await rec1.tick();
+    await rec1.tick();
+    expect(c1.log.filter((l) => l.startsWith('start'))).toHaveLength(1);
+    expect(await prisma.runRecording.findUniqueOrThrow({ where: { runId: old.runId } })).toMatchObject({ status: 'failed', note: 'node_outdated' });
+    await rec1.endJob();
+
+    const flaky = await newRun();
+    const c2 = fakeCalls([]);
+    c2.startError = new RecordingCallError('unavailable');
+    const rec2 = (await RunRecorder.start(deps(memoryStore()), c2, flaky.runId, flaky.userId, { everyMs }))!;
+    await rec2.tick();
+    const row = await prisma.runRecording.findUniqueOrThrow({ where: { runId: flaky.runId } });
+    expect(row).toMatchObject({ status: 'recording', note: 'start_failed' });
+    await rec2.endJob();
+    // The run ends with nothing recorded: the finalize job keeps the reason.
+    await prisma.runRecording.update({ where: { id: row.id }, data: { status: 'processing' } });
+    expect(await new RecordingsService(prisma, memoryStore()).finalize(row.id)).toBe('failed');
+    expect(await prisma.runRecording.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: 'failed', note: 'start_failed' });
+  });
+
   it('finalizes a recording whose run ended outside a job, and fails an empty one', async () => {
     const store = memoryStore();
     const svc = new RecordingsService(prisma, store);

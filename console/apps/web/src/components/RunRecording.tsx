@@ -31,6 +31,8 @@ const NOTES: Record<string, string> = {
   encoder_failed: 'The browser stopped recording part-way.',
   storage_error: 'Part of the video could not be saved.',
   empty: 'Nothing was recorded.',
+  node_outdated: "The browser node that ran this can't record video yet: its agent or extension is older than this console. On that machine run `hexactra agent update`, then restart its browser (or wait for Chrome to update the extension), and run again.",
+  start_failed: 'The browser node did not start recording. If this repeats, run `hexactra agent update` on the node and restart its browser.',
   unreadable: 'The recorded video could not be read.',
   no_storage: 'This console has no file storage, so the video could not be saved.',
 };
