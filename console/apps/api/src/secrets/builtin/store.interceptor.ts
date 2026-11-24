@@ -1,17 +1,19 @@
 // Scopes the embedded Vault controllers to the built-in store (E37.5, #594).
 //
 // It does three things for a request that reaches the `SecretsController` of `@marinoscar/vault-api` (matched by
-// class, so nothing else in the console is touched):
+// class, so nothing else in the console is touched; step 2 also covers Vault's `SecretTypesController`):
 //
 //   1. loads the caller's data key for the duration of the handler (store.context.ts), creating one on the first
 //      write, so the synchronous crypto port can encrypt and decrypt;
 //   2. refuses (404, as if the route did not exist) the parts of Vault that are NOT part of the built-in store:
 //      the zip export, card and document summaries and renewal, and attachments. The controller class is Vault's and mounts them
-//      all; the store holds logins only;
+//      all; the store holds logins only. A handler that is in neither the denied nor the served list (a route a newer
+//      Vault package adds) is refused too, on both Vault controllers, until it is classified (#918);
 //   3. limits `POST /secrets` to the `Credential` type (every other type is Vault's).
 //
 // The interceptor is the console's own (an `APP_INTERCEPTOR` of the store module), not an edit of the package.
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { SecretTypesController } from '@marinoscar/vault-api/secret-types';
 import { SecretsController } from '@marinoscar/vault-api/secrets';
 import type { FastifyRequest } from 'fastify';
 import { from, Observable, switchMap } from 'rxjs';
@@ -21,6 +23,28 @@ import { SecretsStoreKeys } from './store.data-keys';
 
 /** Handler names of Vault's `SecretsController` that the built-in store does not offer. */
 export const STORE_DENIED_HANDLERS: ReadonlySet<string> = new Set(['exportSecrets', 'cardSummary', 'documentSummary', 'renew', 'linkAttachment', 'findAttachments', 'unlinkAttachment']);
+
+/**
+ * Handler names of Vault's `SecretsController` that the built-in store serves (#918). Every handler of the controller is in
+ * exactly one of the two lists (`secrets-store-module.spec.ts` checks it against the installed package); a handler in
+ * neither, such as a route a newer Vault package adds, answers 404 until someone decides.
+ */
+export const STORE_SERVED_HANDLERS: ReadonlySet<string> = new Set([
+  'create',
+  'findAll',
+  'findByName',
+  'findOne',
+  'totp',
+  'update',
+  'updateAgentAccess',
+  'remove',
+  'findVersions',
+  'findVersion',
+  'rollback',
+]);
+
+/** Handler names of Vault's `SecretTypesController` that the store serves; any other answers 404 (#918). */
+export const STORE_SERVED_TYPE_HANDLERS: ReadonlySet<string> = new Set(['create', 'findAll', 'findOne', 'update', 'remove']);
 
 export const STORE_SECRET_TYPE = 'Credential';
 
@@ -36,10 +60,16 @@ export class SecretsStoreInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    // Only Vault's secrets controller needs a key scope; secret types hold no value.
+    const handler = context.getHandler().name;
+    // Secret types hold no value and need no key scope; only the handlers the store decided to serve are reachable.
+    if (context.getClass() === SecretTypesController) {
+      if (!STORE_SERVED_TYPE_HANDLERS.has(handler)) throw new NotFoundException();
+      return next.handle();
+    }
     if (context.getClass() !== SecretsController) return next.handle();
 
-    if (STORE_DENIED_HANDLERS.has(context.getHandler().name)) throw new NotFoundException();
+    // Fail closed: a denied handler, and one in neither list (a route a newer Vault package adds), are as if absent.
+    if (STORE_DENIED_HANDLERS.has(handler) || !STORE_SERVED_HANDLERS.has(handler)) throw new NotFoundException();
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const userId = request.user?.id;
     // An unauthenticated request never gets here (the guard ran first); a request with no user is left to fail there.
