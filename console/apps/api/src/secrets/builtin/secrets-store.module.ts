@@ -20,7 +20,7 @@ import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AgentCallPipeline, AgentCardsService, AgentCredentialsService, AgentIdentityService, AgentNotifier, AgentRateLimiter, AgentReleaseService, AGENT_RELEASE_PORT, CardGrantStore, InMemoryAgentRateLimiter, PrismaCardGrantStore } from '@marinoscar/vault-api/agent';
 import { SecretTypesController, SecretTypesService } from '@marinoscar/vault-api/secret-types';
-import { CardSummaryService, SecretsController, SecretsExportService, SecretsService } from '@marinoscar/vault-api/secrets';
+import { CardSummaryService, DocumentSummaryService, SecretsController, SecretsExportService, SecretsService } from '@marinoscar/vault-api/secrets';
 import { VAULT_AUDIT, VAULT_CRYPTO, VAULT_NOTIFY, VAULT_OBJECT_STORE, VAULT_PRISMA, VAULT_SETTINGS } from '@marinoscar/vault-api/ports';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -60,6 +60,8 @@ import { SecretsStoreBootstrap } from './store.bootstrap';
     SecretsService,
     SecretsExportService,
     CardSummaryService,
+    // Vault 0.1.0-next.6's SecretsController needs it; its route (documents/summary) is refused by the interceptor.
+    DocumentSummaryService,
     AgentCallPipeline,
     AgentCredentialsService,
     AgentCardsService,

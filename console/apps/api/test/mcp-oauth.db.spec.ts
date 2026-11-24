@@ -22,7 +22,7 @@ import { createApp } from '../src/main';
 import { FORBIDDEN_TOOL_TEXT, McpDispatcher, STEP_UP_NOTE } from '../src/mcp/mcp.dispatcher';
 import { rpcResult } from '../src/mcp/mcp.results';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
-import { MCP_DOCS_URL, MCP_SCOPES, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
+import { MCP_DOCS_URL, MCP_SCOPES } from '../src/mcp/mcp.scopes';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 let app: NestFastifyApplication;
@@ -128,7 +128,9 @@ async function discover() {
   expect(prmRes.statusCode).toBe(200);
   const prm = prmRes.json();
   expect(prm).toMatchObject({ resource: `${appUrl}/api/mcp`, resource_name: 'Hexactra agent tools', resource_documentation: MCP_DOCS_URL, bearer_methods_supported: ['header'] });
-  expect([...prm.scopes_supported].sort()).toEqual([...MCP_SCOPE_IDS, 'offline_access'].sort());
+  // A feature-gated scope (the Knowledge Graph's) is offered only while its feature is on, and it is off here (#916).
+  const offered = MCP_SCOPES.filter((s) => !s.feature).map((s) => s.id);
+  expect([...prm.scopes_supported].sort()).toEqual([...offered, 'offline_access'].sort());
   const issuer: string = prm.authorization_servers[0];
 
   const asRes = await app.inject({ method: 'GET', url: apiPathOfWellKnown(`${issuer}/.well-known/oauth-authorization-server`) });

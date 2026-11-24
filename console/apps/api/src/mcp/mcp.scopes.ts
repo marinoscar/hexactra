@@ -8,6 +8,8 @@
 // every tool. This file is pure data: no registration happens on import.
 import type { OAuthScopeRisk } from '@marinoscar/platform-api/identity';
 
+import type { McpToolFeature } from './mcp.tools';
+
 /** Every scope a tool may name, in consent order (low risk first). */
 export const MCP_SCOPE_IDS = ['runs:read', 'usage:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write', 'procedures:read', 'procedures:run', 'site_facts:read', 'site_facts:write', 'browser:drive', 'browser:evaluate', 'desktop:control', 'policies:write'] as const;
 export type McpScope = (typeof MCP_SCOPE_IDS)[number];
@@ -54,6 +56,11 @@ export interface McpScopeDefinition {
    * so both need `browser:drive` too.
    */
   requires?: readonly McpScope[];
+  /**
+   * The switch the scope belongs to (#916), the same as its tools' `McpTool.feature`: while it is off for the caller the
+   * platform does not offer, show, grant or honour the scope (`mcp.scope-availability.ts`).
+   */
+  feature?: McpToolFeature;
 }
 
 /**
@@ -122,6 +129,7 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     id: 'procedures:read',
     title: 'See the procedures the agent learned',
     description: 'See the procedures your Hexactra agent learned from your saved tasks: their parameters, outputs, state and masked steps.',
+    feature: 'kgraph',
     risk: 'low',
     // Opt-in (E46.22): the Knowledge Graph is off by default, and its tools are offered only while it is on for the deployment and the user.
     default: false,
@@ -132,6 +140,7 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     id: 'procedures:run',
     title: 'Run a learned procedure',
     description: 'Run one of the procedures your agent learned, with the values you give it. The run follows your limits and asks you what it must.',
+    feature: 'kgraph',
     risk: 'low',
     default: false,
     // GET /kgraph/procedures/:id, /tasks/:id/kgraph; POST /tasks/:id/runs (the run start path every run uses).
@@ -141,6 +150,7 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     id: 'site_facts:read',
     title: 'See the facts your agent keeps about sites',
     description: 'See the short notes your Hexactra agent keeps about the sites you use (where things are, how a site signs in), with their status and last use.',
+    feature: 'kgraph',
     risk: 'low',
     // Opt-in (E46.35): offered only while the Knowledge Graph is on for the deployment and the user.
     default: false,
@@ -151,6 +161,7 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     id: 'site_facts:write',
     title: 'Propose facts about sites for you to review',
     description: 'Propose a short note about a site. It waits for you to approve it in Hexactra and is never used by a run before you do.',
+    feature: 'kgraph',
     risk: 'low',
     default: false,
     // POST /kgraph/sites/:site/facts/proposals (always stored proposed; approving is console-only).
