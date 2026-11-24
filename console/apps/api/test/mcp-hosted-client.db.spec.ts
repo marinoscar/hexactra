@@ -34,7 +34,7 @@ import { createApp } from '../src/main';
 import { STEP_UP_NOTE } from '../src/mcp/mcp.dispatcher';
 import { META } from '../src/mcp/mcp.protocol';
 import { MAX_IMAGE_BASE64_OAUTH, TOOL_DEADLINE_MS_OAUTH } from '../src/mcp/mcp.results';
-import { MCP_SCOPES, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
+import { MCP_SCOPES } from '../src/mcp/mcp.scopes';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionsService } from '../src/questions/questions.service';
@@ -206,7 +206,9 @@ function checkDiscovery(client: HostedMcpClient) {
   expect(prm.resource).toBe(mcpUrl);
   expect(prm.authorization_servers[0]).toBe(issuer);
   expect(prm.bearer_methods_supported).toEqual(['header']);
-  expect([...prm.scopes_supported].sort()).toEqual([...MCP_SCOPE_IDS, 'offline_access'].sort());
+  // A feature-gated scope (the Knowledge Graph's) is offered only while its feature is on, and it is off here (#916).
+  const offered = MCP_SCOPES.filter((s) => !s.feature).map((s) => s.id);
+  expect([...prm.scopes_supported].sort()).toEqual([...offered, 'offline_access'].sort());
   expect(as.issuer).toBe(issuer);
   expect(as.response_types_supported).toEqual(['code']);
   expect(as.grant_types_supported).toEqual(expect.arrayContaining(['authorization_code', 'refresh_token']));

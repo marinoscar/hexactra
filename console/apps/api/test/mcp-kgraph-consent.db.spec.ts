@@ -10,12 +10,11 @@
 // schema hashes, checked when this spec was written), so the wire list is compared, per caller, on names, order, titles, hints and the
 // hashes of its schemas.
 //
-// What the console controls and what it does not (docs/security-hosted-clients.md, "Consent with the Knowledge Graph off"): the platform's
-// OAuth server shows on the consent screen exactly the scopes a client asks for, and the resource's default scopes when it asks for none;
-// the registered scopes are fixed at boot, so the protected-resource metadata lists every one of them whatever the switch. The console
-// keeps the Knowledge Graph scopes out of the default consent, out of every step-up challenge, out of the scopes a card shows as held, and
-// makes them useless while the switch is off (no tool listed, a call answers "turned off"). Those two platform behaviours are pinned at the
-// end so this file fails, and the document is corrected, when an EnterpriseAppBase release adds the seam.
+// Consent with the Knowledge Graph off (docs/security-hosted-clients.md, "Consent with the Knowledge Graph off"): the Knowledge Graph scopes
+// carry the platform's per-request `available` check (platform 0.1.0-next.40, marinoscar/EnterpriseAppBase#1215; #916), bound to the same
+// switches as their tools. While the switch is off the platform leaves them out of both metadata documents, drops them at /authorize, never
+// shows them on the consent screen and never grants them, and a token that holds one gets no permission from it. The console also keeps
+// them out of the default consent, out of every step-up challenge and out of the scopes a card shows as held.
 import { createHash } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -247,7 +246,7 @@ describe('the Knowledge Graph scopes and tools with the deployment switch off (#
     }
   });
 
-  it('an OAuth app explicitly granted every Knowledge Graph scope (the platform allows it): still no Knowledge Graph tool, no call, no scope shown as held, no REST route', async () => {
+  it('a token that already holds every Knowledge Graph scope (minted directly): with the switch off, still no Knowledge Graph tool, no call, no scope shown as held, no REST route', async () => {
     await deployment(false);
     const o = await owner('explicit');
     const token = await mint(o.id, [...DEFAULTS, ...KG_SCOPES]);
@@ -261,22 +260,51 @@ describe('the Knowledge Graph scopes and tools with the deployment switch off (#
     expect((await api(token, 'GET', '/kgraph/procedures')).statusCode).toBe(403);
   });
 
-  // ---- what the console does not control (the platform's OAuth server); pinned so the doc stays honest ------------------------------
+  // ---- the platform's OAuth server, through the scopes' availability check (#916) ------------------------------------------------------
 
-  it('platform: the metadata lists every registered scope, the Knowledge Graph\'s included, whatever the switch', async () => {
+  it('the metadata leaves the Knowledge Graph scopes out while the deployment switch is off, and lists them once it is on', async () => {
     await deployment(false);
-    const { prm, as } = await metadata();
-    for (const s of KG_SCOPES) {
-      expect([s, prm.scopes_supported.includes(s)]).toEqual([s, true]);
-      expect([s, as.scopes_supported.includes(s)]).toEqual([s, true]);
+    let { prm, as } = await metadata();
+    expect(KG_SCOPES.filter((s) => prm.scopes_supported.includes(s) || as.scopes_supported.includes(s))).toEqual([]);
+    await deployment(true);
+    try {
+      ({ prm, as } = await metadata());
+      expect(KG_SCOPES.filter((s) => prm.scopes_supported.includes(s))).toEqual(KG_SCOPES);
+      expect(KG_SCOPES.filter((s) => as.scopes_supported.includes(s))).toEqual(KG_SCOPES);
+    } finally {
+      await deployment(false);
     }
   });
 
-  it('platform: a client that ASKS for a Knowledge Graph scope sees it on the consent screen and can be granted it, whatever the switch', async () => {
+  it('a client that ASKS for the Knowledge Graph scopes with the switch off: they are dropped, never shown on the consent screen and never granted', async () => {
     await deployment(false);
     const o = await owner('asks');
     const { shown, granted } = await connect(o.token, [...DEFAULTS, ...KG_SCOPES].join(' '));
-    expect(KG_SCOPES.filter((s) => shown.includes(s))).toEqual(KG_SCOPES);
-    expect(KG_SCOPES.filter((s) => granted.includes(s))).toEqual(KG_SCOPES);
+    expect(KG_SCOPES.filter((s) => shown.includes(s))).toEqual([]);
+    expect(KG_SCOPES.filter((s) => granted.includes(s))).toEqual([]);
+    expect(DEFAULTS.filter((s) => granted.includes(s))).toEqual(DEFAULTS);
+  });
+
+  it('a client that asks ONLY for Knowledge Graph scopes with the switch off gets invalid_scope', async () => {
+    await deployment(false);
+    const { prm, as } = await metadata();
+    const pkce = pkcePair();
+    const query = new URLSearchParams({ response_type: 'code', client_id: client.clientId, redirect_uri: client.redirectUri, state: 's1', code_challenge: pkce.challenge, code_challenge_method: 'S256', resource: prm.resource, scope: KG_SCOPES.join(' ') });
+    const authorized = await app.inject({ method: 'GET', url: `${new URL(as.authorization_endpoint).pathname}?${query}` });
+    expect(authorized.statusCode).toBe(302);
+    const location = new URL(String(authorized.headers.location));
+    expect(location.searchParams.get('error')).toBe('invalid_scope');
+  });
+
+  it('with the switch ON for the deployment and the user, a client that asks for them sees them on the consent screen and is granted them', async () => {
+    await deployment(true);
+    try {
+      const o = await owner('asks-on');
+      const { shown, granted } = await connect(o.token, [...DEFAULTS, ...KG_SCOPES].join(' '));
+      expect(KG_SCOPES.filter((s) => shown.includes(s))).toEqual(KG_SCOPES);
+      expect(KG_SCOPES.filter((s) => granted.includes(s))).toEqual(KG_SCOPES);
+    } finally {
+      await deployment(false);
+    }
   });
 });

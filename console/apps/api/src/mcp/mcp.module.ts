@@ -8,6 +8,7 @@ import { McpActivityPurgeHandler, McpActivityPurgeTask } from './mcp-activity.jo
 import { McpAdminController } from './mcp-admin.controller';
 import { McpController } from './mcp.controller';
 import { McpDispatcher } from './mcp.dispatcher';
+import { McpScopeAvailabilityBinder } from './mcp.scope-availability.binder';
 import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwitchCheck, McpPublicReachabilityCheck, McpTrustProxyCheck } from './mcp.doctor-checks';
 
 /**
@@ -21,6 +22,6 @@ import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwit
 @Module({
   imports: [TasksModule, QuestionsModule, FabricModule, KgraphModule],
   controllers: [McpController, McpAdminController],
-  providers: [McpDispatcher, McpActivityPurgeHandler, McpActivityPurgeTask, McpEndpointCheck, McpPublicReachabilityCheck, McpExposureCheck, McpKillSwitchCheck, McpHighRiskGrantsCheck, McpTrustProxyCheck],
+  providers: [McpScopeAvailabilityBinder, McpDispatcher, McpActivityPurgeHandler, McpActivityPurgeTask, McpEndpointCheck, McpPublicReachabilityCheck, McpExposureCheck, McpKillSwitchCheck, McpHighRiskGrantsCheck, McpTrustProxyCheck],
 })
 export class McpModule {}
