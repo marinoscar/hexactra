@@ -127,9 +127,9 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
   },
   {
     id: 'procedures:read',
-    feature: 'kgraph',
     title: 'See the procedures the agent learned',
     description: 'See the procedures your Hexactra agent learned from your saved tasks: their parameters, outputs, state and masked steps.',
+    feature: 'kgraph',
     risk: 'low',
     // Opt-in (E46.22): the Knowledge Graph is off by default, and its tools are offered only while it is on for the deployment and the user.
     default: false,
@@ -138,9 +138,9 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
   },
   {
     id: 'procedures:run',
-    feature: 'kgraph',
     title: 'Run a learned procedure',
     description: 'Run one of the procedures your agent learned, with the values you give it. The run follows your limits and asks you what it must.',
+    feature: 'kgraph',
     risk: 'low',
     default: false,
     // GET /kgraph/procedures/:id, /tasks/:id/kgraph; POST /tasks/:id/runs (the run start path every run uses).
@@ -148,9 +148,9 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
   },
   {
     id: 'site_facts:read',
-    feature: 'kgraph',
     title: 'See the facts your agent keeps about sites',
     description: 'See the short notes your Hexactra agent keeps about the sites you use (where things are, how a site signs in), with their status and last use.',
+    feature: 'kgraph',
     risk: 'low',
     // Opt-in (E46.35): offered only while the Knowledge Graph is on for the deployment and the user.
     default: false,
@@ -159,9 +159,9 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
   },
   {
     id: 'site_facts:write',
-    feature: 'kgraph',
     title: 'Propose facts about sites for you to review',
     description: 'Propose a short note about a site. It waits for you to approve it in Hexactra and is never used by a run before you do.',
+    feature: 'kgraph',
     risk: 'low',
     default: false,
     // POST /kgraph/sites/:site/facts/proposals (always stored proposed; approving is console-only).
