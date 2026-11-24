@@ -94,6 +94,7 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/check-agent-sync.mjs
+      - run: node scripts/ci/check-no-tracked-node-modules.mjs
 
   e2e-remote-control:
     name: Remote control e2e (real Chromium)
