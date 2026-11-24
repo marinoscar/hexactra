@@ -1,7 +1,6 @@
 // Whether a run gets the Knowledge Graph's observer (E46.5): only when `KgraphEnabledService.modeFor` says `learn` or `reuse`. Asked once per
 // job; any error is `off` (no observer), so the run is exactly as without the feature.
 import type { Logger } from '@nestjs/common';
-import type { ObserverPort } from '@marinoscar/hexactra-agent';
 
 import type { KgraphEnabledService } from '../../../kgraph/kgraph-enabled.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
@@ -18,7 +17,7 @@ export interface ObserverRun {
 
 type ObserverDeps = { kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'> & Partial<Pick<KgraphEnabledService, 'everydayFor'>>; prisma: PrismaService; log: Logger };
 
-export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'> & Partial<Pick<KgraphEnabledService, 'everydayFor'>>; prisma: PrismaService; log: Logger }, userId: string, run: ObserverRun, aiOnly = false, capture?: KgraphObserverInput['capture']): Promise<ObserverPort | undefined> {
+export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService, 'modeFor' | 'systemSettingsOf'> & Partial<Pick<KgraphEnabledService, 'everydayFor'>>; prisma: PrismaService; log: Logger }, userId: string, run: ObserverRun, aiOnly = false, capture?: KgraphObserverInput['capture']): Promise<KgraphObserver | undefined> {
   if (!d.kgraph) return undefined;
   const isTaskRun = run.taskId !== null && run.trigger !== 'chat' && !run.conversationId;
   const mode = await d.kgraph.modeFor({ userId, taskId: run.taskId, run: { isTaskRun, aiOnly } }).catch(() => 'off' as const);
@@ -38,7 +37,7 @@ export async function kgraphObserverFor(d: { kgraph?: Pick<KgraphEnabledService,
  * row says `everyday` so the run's end queues the derive job. No trace row: nothing is ever compiled from it. Off (or any error): no
  * observer, no write, so the run is exactly as without the feature.
  */
-async function everydayObserverFor(d: ObserverDeps, userId: string, run: ObserverRun, isTaskRun: boolean, capture?: KgraphObserverInput['capture']): Promise<ObserverPort | undefined> {
+async function everydayObserverFor(d: ObserverDeps, userId: string, run: ObserverRun, isTaskRun: boolean, capture?: KgraphObserverInput['capture']): Promise<KgraphObserver | undefined> {
   if (!d.kgraph?.everydayFor || isTaskRun) return undefined;
   if (!(await d.kgraph.everydayFor(userId, { isTaskRun }).catch(() => false))) return undefined;
   try {

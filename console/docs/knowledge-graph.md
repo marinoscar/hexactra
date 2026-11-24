@@ -47,6 +47,16 @@ With your everyday switch on (and the deployment's and yours), a chat run or a o
 - **Learn only** (`learn`): the task runs as before. After each clean, successful run, the run's tool calls are compiled into a candidate procedure, which is never executed.
 - **Learn and reuse** (`reuse`): the procedure runs without the model, and the AI repairs it when needed. The first run of a new, restored, repaired or imported version is a **verification run**: it asks you before every step that sends or pays, whatever the task's confirmation setting and saved approvals say. After one clean verification run, the version becomes the task's active one.
 
+### How a run is captured (and what it costs the run)
+
+While a learn, reuse or everyday run works, the capture does only what needs the live page. Before a click, type or select, it reads the element's fingerprint (role, label, tag, a nearby anchor, selector candidates), because the page is gone afterwards. Everything else is off the run's path (#922):
+- **Queued writes.** Each tool call's trace row and the shared element and site records go onto an in-memory queue, written in order behind the run. The agent does not wait for the database.
+- **Flushed before the run ends.** The run store flushes the queue before the run finishes, so before the compile job is queued, and before it pauses. The wait is capped at 30 seconds.
+- **Gaps are never compiled.** A run whose capture lost a write (the database refused it, more than 1,000 writes were waiting, or the flush timed out) gets a `CompileRejection` marked `capture incomplete`, and is never compiled. A trace with a gap could otherwise become a procedure that skips a step. The run itself is not affected.
+- **One log line per run:** `kgraph capture: <n> writes, <f> failed, <ms> ms writing off the run's path`. This is the time the run no longer waits for.
+
+Compiling, comparing versions, deriving site facts, the savings ledger and upkeep all run afterwards, in queue jobs.
+
 ## What happens in a reuse run
 
 1. The procedure runs before the agent loop, inside the same run, lease and budgets. Its steps go through the agent's tool wrapper. Browser actions are paced like a person by default (the deployment's `kgraph.pacing`) and wait for the page rather than the clock.
