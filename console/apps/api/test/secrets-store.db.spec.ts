@@ -136,6 +136,7 @@ describe('the store as the owner uses it', () => {
     for (const [m, url] of [
       ['POST', '/api/secrets/export'],
       ['GET', '/api/secrets/cards/summary'],
+      ['GET', '/api/secrets/documents/summary'],
       ['POST', `/api/secrets/${id}/renew`],
       ['GET', `/api/secrets/${id}/attachments`],
       ['POST', `/api/secrets/${id}/attachments`],

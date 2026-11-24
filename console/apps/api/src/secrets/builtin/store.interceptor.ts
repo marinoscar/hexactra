@@ -6,7 +6,7 @@
 //   1. loads the caller's data key for the duration of the handler (store.context.ts), creating one on the first
 //      write, so the synchronous crypto port can encrypt and decrypt;
 //   2. refuses (404, as if the route did not exist) the parts of Vault that are NOT part of the built-in store:
-//      the zip export, card summary and renewal, and attachments. The controller class is Vault's and mounts them
+//      the zip export, card and document summaries and renewal, and attachments. The controller class is Vault's and mounts them
 //      all; the store holds logins only;
 //   3. limits `POST /secrets` to the `Credential` type (every other type is Vault's).
 //
@@ -20,7 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SecretsStoreKeys } from './store.data-keys';
 
 /** Handler names of Vault's `SecretsController` that the built-in store does not offer. */
-export const STORE_DENIED_HANDLERS: ReadonlySet<string> = new Set(['exportSecrets', 'cardSummary', 'renew', 'linkAttachment', 'findAttachments', 'unlinkAttachment']);
+export const STORE_DENIED_HANDLERS: ReadonlySet<string> = new Set(['exportSecrets', 'cardSummary', 'documentSummary', 'renew', 'linkAttachment', 'findAttachments', 'unlinkAttachment']);
 
 export const STORE_SECRET_TYPE = 'Credential';
 
