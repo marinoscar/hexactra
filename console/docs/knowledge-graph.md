@@ -189,7 +189,7 @@ While the deployment's switch and yours are both on, the console's MCP server li
 
 While either switch is off, the tools are not listed. Nothing over MCP creates, changes, approves, restores, forgets, exports or imports a procedure, approves, edits, archives or deletes a site fact, or changes a switch.
 
-**Verified:** CI runs the Hermes, OpenClaw and Pi recipes against these tools (`agent-clients.db.spec.ts` with `AGENT_CLIENTS_SMOKE=1`). With the switch off, `tools/list` and the consent flow are tested for every caller (`mcp-kgraph-consent.db.spec.ts`, #893). One platform behaviour remains: a client that explicitly asks for a Knowledge Graph scope still sees it on consent, though the grant does nothing ([security-hosted-clients.md](security-hosted-clients.md)).
+**Verified:** CI runs the Hermes, OpenClaw and Pi recipes against these tools (`agent-clients.db.spec.ts` with `AGENT_CLIENTS_SMOKE=1`). With the switch off, `tools/list` and the consent flow are tested for every caller (`mcp-kgraph-consent.db.spec.ts`, #893). While the switch is off the Knowledge Graph scopes are also left out of the OAuth metadata, dropped at `/authorize`, not shown on consent and not granted (#916, [security-hosted-clients.md](security-hosted-clients.md#consent-with-the-knowledge-graph-off)).
 
 ## The CLI
 
@@ -263,5 +263,4 @@ Your own switch is the user setting `kgraph.enabled` (`PATCH /api/user-settings`
 - **Site fact proposals show in the Knowledge Graph page's Reviews tab, not in the Inbox**, and nothing notifies you of a new one.
 - **`hexactra kgraph facts <site> extra`** accepts extra arguments and ignores them (they are allowed so that `facts approve <id>` can say where proposals are answered).
 - **A word query to `procedures_list`** matches by words, not by site, so an everyday chat on a lookalike domain (`shop.example.test.evil.io`) can list your procedure for the real site when the model asks. The procedures block never offers it, and a `run_procedure` the model calls anyway is refused by the site gate, because the real site is not among the chat's allowed sites (`scenarios/kgraph/everyday-lookalike.db.spec.ts`).
-- **The consent screen** still shows a Knowledge Graph scope that a hosted client explicitly requests while the deployment switch is off; the grant does nothing (no tool is listed or callable). Hiding it needs a platform seam ([security-hosted-clients.md](security-hosted-clients.md#consent-with-the-knowledge-graph-off)).
 - **The E46.4 heavy-owner Map query** missed its bar (2,104 ms against 2,000 ms warm p95). The owner accepted it; the Map's view folds and pages above 2,000 nodes.

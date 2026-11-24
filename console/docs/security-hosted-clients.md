@@ -83,11 +83,14 @@ With the Knowledge Graph's deployment switch off, its scopes (`procedures:read`,
 - **Not offered by a step-up.** A call of a Knowledge Graph tool answers "turned off" (200), never `403 insufficient_scope`. Another tool's step-up challenge never names one. With the switch on, the same token is asked to step up, so the switch is what keeps them out.
 - **Useless even when held.** A token explicitly granted them lists no Knowledge Graph tool. Its calls answer "turned off", and it cannot reach `/api/kgraph` (an `oat_` token is confined to `/api/mcp`).
 
-**What the platform decides, not the console** (EnterpriseAppBase OAuth server, pinned by the same spec):
+**Not offered while off** (#916, on the platform's per-request scope availability, EnterpriseAppBase #1215, platform `0.1.0-next.40`): each Knowledge Graph scope registers with an `available` check (`src/mcp/mcp.scope-availability.ts`, bound to the Knowledge Graph's switches by `McpScopeAvailabilityBinder`). It fails closed: before the app is up, after it closes, or when the settings read throws, the scope is unavailable. While the deployment switch is off:
 
-- Scopes are registered once at boot (`registerOAuthScope`) and the registry is then frozen. So the protected-resource metadata (`/.well-known/oauth-protected-resource/api/mcp`) and the authorization server metadata list every registered scope in `scopes_supported`, the Knowledge Graph's included, whatever the switch.
-- The consent screen (`GET /api/oauth/requests/:id`) shows exactly the scopes the client asked for. A client that explicitly asks for `procedures:read` sees it on the consent screen and can be granted it while the switch is off. The grant does nothing until the switch is on, but the consent screen does not say so.
-- There is no seam for an app to hide a registered scope from discovery or consent at request time. A seam request (an availability predicate per scope, read by the metadata, the authorize step and the consent read) is drafted in #893; until it ships, the console relies on the controls above.
+- The protected-resource metadata (`/.well-known/oauth-protected-resource/api/mcp`) and the authorization server metadata leave the Knowledge Graph scopes out of `scopes_supported`.
+- `/authorize` drops them from the request. A request that asked only for them is refused with `invalid_scope`.
+- The consent screen (`GET /api/oauth/requests/:id`) does not show them, and approving the request does not grant them. The other requested scopes are granted as usual.
+- A token that already holds one (granted while the switch was on) gets no permission from it: the platform drops an unavailable scope when it resolves the token.
+
+With a signed-in user (consent, token resolution) the check is the deployment switch and that user's own switch; with no user (the metadata documents, `/authorize`) it is the deployment switch alone. Turning the switch on offers the scopes again on the next request; nothing is cached.
 
 ## Hexactra as a server and as a client
 
