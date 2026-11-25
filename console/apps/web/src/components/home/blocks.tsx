@@ -3,6 +3,7 @@
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Alert, Box, Button, Card, CardContent, Chip, LinearProgress, Link, Skeleton, Stack, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import { Suspense, lazy, type ReactNode } from 'react';
@@ -11,6 +12,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import type { HomeFleet, HomeLiveRun, HomeQuestion, HomeRecentRun, HomeSummary, HomeWeek } from '../../types/home';
 import { RelativeTime, StatusChip, formatCost } from '../../ui';
 import { StartedByChip } from '../StartedByChip';
+import { signinNeededLabel } from '../fleet/ProfileSigninStatus';
 import { KIND_LABEL } from '../questions';
 import { taskPaths } from '../taskList';
 import { budgetColor, escalated, liveLine, progressLine, runDuration, successRate, timeLeft, upNextWhen, weekRunsLink, type ChecklistStep } from './homeText';
@@ -472,6 +474,19 @@ export function MachinesBlock({ fleet }: { fleet: HomeFleet }) {
             {fleet.online} of {fleet.total} online
             {fleet.disabled > 0 ? ` · ${fleet.disabled} disabled` : ''}
           </Typography>
+          {(fleet.needsSignin ?? 0) > 0 && (
+            <Chip
+              size="small"
+              color="warning"
+              icon={<WarningAmberIcon aria-hidden />}
+              label={signinNeededLabel(fleet.needsSignin!)}
+              component={RouterLink}
+              to="/fleet"
+              clickable
+              data-testid="home-machines-signin"
+              sx={{ mb: 1, maxWidth: '100%' }}
+            />
+          )}
           <Stack component="ul" spacing={0.5} sx={{ listStyle: 'none', p: 0, m: 0 }}>
             {fleet.hosts.map((h) => {
               const state = hostState(h);
@@ -481,6 +496,11 @@ export function MachinesBlock({ fleet }: { fleet: HomeFleet }) {
                   <Typography variant="body2" sx={{ ...ONE_LINE, flexGrow: 1 }}>
                     {h.name}
                   </Typography>
+                  {(h.needsSignin ?? 0) > 0 && (
+                    <Typography variant="body2" color="warning.main" sx={{ flexShrink: 0 }}>
+                      {h.needsSignin === 1 ? '1 needs sign-in' : `${h.needsSignin} need sign-in`}
+                    </Typography>
+                  )}
                   <Typography variant="body2" color="text.secondary">
                     {state.text}
                   </Typography>
