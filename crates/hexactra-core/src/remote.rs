@@ -988,6 +988,75 @@ pub enum RemoteAction {
     /// Stop the recording and return its last bytes, like `record_pull`, with
     /// `"done": true`. The screencast ends and the encoder is released.
     RecordStop { recording_id: String },
+    /// Sign in with a Hexactra passkey (E47.4, #942). Answered by the control
+    /// plane: it arms the tab, presses `selector`, reads the WebAuthn request
+    /// the page made, checks its RP ID against the origin the browser reports,
+    /// asks the owner's provider for a matching passkey, signs the challenge
+    /// and answers the page. The operation reports `{ signed_in: true, rp_id }`;
+    /// with no matching passkey the request goes to the browser untouched and
+    /// the action fails `no_passkey`. Never a key, a signature or a challenge.
+    PasskeySignIn {
+        selector: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
+    },
+    /// Add a Hexactra passkey to the site (E47.4): presses `selector` (the
+    /// site's "add a passkey" button), makes a P-256 key pair for the page's
+    /// WebAuthn `create` request, keeps it in the owner's provider and answers
+    /// the page. Reports `{ created: true, rp_id, user_name }`.
+    PasskeyCreate {
+        selector: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
+    },
+    /// The extension holds the tab's next WebAuthn request of `kind` (`get` or
+    /// `create`) for the control plane, for 15 s (E47.4). Queued only by the
+    /// control plane for a passkey action.
+    WebauthnArm {
+        kind: WebauthnKind,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// The request the armed tab holds, waiting up to `wait_ms`:
+    /// `{ request: { id, kind, origin, rp_id, challenge, ... } | null }`. The
+    /// origin is the tab's, as Chrome reports it.
+    WebauthnPending {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+        wait_ms: u64,
+    },
+    /// Answer the held request with `credential`, or give it to the browser
+    /// untouched (`passthrough`).
+    WebauthnResolve {
+        request_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        credential: Option<serde_json::Value>,
+        #[serde(default)]
+        passthrough: bool,
+    },
+}
+
+/// Which WebAuthn call a tab is armed for (E47.4).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WebauthnKind {
+    Get,
+    Create,
 }
 
 /// Validation failure for a remote action.
@@ -1266,6 +1335,11 @@ impl RemoteAction {
             RemoteAction::RecordPull { .. } => "record_pull",
             RemoteAction::RecordPause { .. } => "record_pause",
             RemoteAction::RecordStop { .. } => "record_stop",
+            RemoteAction::PasskeySignIn { .. } => "passkey_sign_in",
+            RemoteAction::PasskeyCreate { .. } => "passkey_create",
+            RemoteAction::WebauthnArm { .. } => "webauthn_arm",
+            RemoteAction::WebauthnPending { .. } => "webauthn_pending",
+            RemoteAction::WebauthnResolve { .. } => "webauthn_resolve",
         }
     }
 
@@ -1294,6 +1368,19 @@ impl RemoteAction {
                 | RemoteAction::TypeCodeFromProvider { .. }
                 | RemoteAction::SelectFromProvider { .. }
                 | RemoteAction::TypeCardField { .. }
+                | RemoteAction::PasskeySignIn { .. }
+                | RemoteAction::PasskeyCreate { .. }
+        )
+    }
+
+    /// The extension's WebAuthn actions (E47.4): queued only by the control
+    /// plane inside a passkey action, never accepted from an API caller.
+    pub fn is_webauthn_internal(&self) -> bool {
+        matches!(
+            self,
+            RemoteAction::WebauthnArm { .. }
+                | RemoteAction::WebauthnPending { .. }
+                | RemoteAction::WebauthnResolve { .. }
         )
     }
 
@@ -1330,6 +1417,35 @@ impl RemoteAction {
             RemoteAction::Click { selector, .. } | RemoteAction::TypeSecret { selector, .. } => {
                 check_selector(selector)
             }
+            RemoteAction::PasskeySignIn {
+                selector,
+                run_id,
+                client_label,
+                ..
+            }
+            | RemoteAction::PasskeyCreate {
+                selector,
+                run_id,
+                client_label,
+                ..
+            } => {
+                check_selector(selector)?;
+                for (name, v) in [("run_id", run_id), ("client_label", client_label)] {
+                    if let Some(v) = v {
+                        if v.len() > MAX_PROVIDER_META_LEN || v.chars().any(char::is_control) {
+                            return Err(ActionValidationError(format!(
+                                "{name} must be at most {MAX_PROVIDER_META_LEN} characters without control characters"
+                            )));
+                        }
+                    }
+                }
+                Ok(())
+            }
+            RemoteAction::WebauthnArm { .. }
+            | RemoteAction::WebauthnPending { .. }
+            | RemoteAction::WebauthnResolve { .. } => Err(ActionValidationError(
+                "webauthn actions are the control plane's own (use passkey_sign_in or passkey_create)".into(),
+            )),
             RemoteAction::Type {
                 selector,
                 text,

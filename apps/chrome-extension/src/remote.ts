@@ -19,6 +19,7 @@ import * as cdp from './cdp.js';
 import { recordPause, recordPull, recordStart, recordStop } from './recorder.js';
 import { isGoogleAccountsUrl, reportSignin } from './signin.js';
 import { MASK_ID, MASK_UNAVAILABLE, MAX_MASK_BOXES, loadSensitivePatterns, maskText, pageClearMask, pageMask, pageNextFrame, type MaskPattern } from './mask.js';
+import { pageWebauthnArm, pageWebauthnPending, pageWebauthnResolve, type BuiltCredential } from './webauthn.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
 
@@ -51,7 +52,15 @@ export type RemoteAction =
   | { type: 'record_start'; max_width?: number; quality?: number; tab_id?: number }
   | { type: 'record_pull'; recording_id: string }
   | { type: 'record_pause'; recording_id: string; paused: boolean }
-  | { type: 'record_stop'; recording_id: string };
+  | { type: 'record_stop'; recording_id: string }
+  // Hexactra passkeys (E47.4): queued only by the control plane inside passkey_sign_in / passkey_create.
+  | { type: 'webauthn_arm'; kind: 'get' | 'create'; tab_id?: number }
+  | { type: 'webauthn_pending'; wait_ms: number; tab_id?: number }
+  | { type: 'webauthn_resolve'; request_id: string; credential?: BuiltCredential | null; passthrough?: boolean; tab_id?: number };
+
+/** How long an armed tab holds its next WebAuthn request for the control plane (E47.4). */
+export const WEBAUTHN_HOLD_MS = 15_000;
+const WEBAUTHN_POLL_MS = 200;
 
 export interface BridgeRequest {
   type: 'request';
@@ -197,6 +206,42 @@ async function inPage<A extends unknown[], R>(
     throw new ActionError(value.__error);
   }
   return value;
+}
+
+/** Run a page function in the page's own JavaScript world (WebAuthn, E47.4): the top frame of the tab only. */
+async function inMain<A extends unknown[], R>(tabId: number, func: (...args: A) => R, args: A): Promise<Awaited<R>> {
+  let results: chrome.scripting.InjectionResult<Awaited<R>>[];
+  try {
+    results = (await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: func as unknown as () => R,
+      args: args as unknown as [],
+    })) as chrome.scripting.InjectionResult<Awaited<R>>[];
+  } catch (e) {
+    throw new ActionError(`cannot act on this page: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const first = results?.[0] as (chrome.scripting.InjectionResult<Awaited<R>> & { error?: unknown }) | undefined;
+  if (!first) throw new ActionError('script returned no result');
+  if (first.error) throw new ActionError(String((first.error as { message?: string }).message ?? first.error));
+  return first.result as Awaited<R>;
+}
+
+/**
+ * The request an armed tab holds (E47.4), with the tab's origin as Chrome reports it (never the page's word), waiting up to
+ * `waitMs`. Null when the page made none.
+ */
+export async function webauthnPending(tabId: number, waitMs: number): Promise<{ request: Record<string, unknown> | null }> {
+  const until = Date.now() + Math.max(0, waitMs);
+  for (;;) {
+    const facts = await inMain(tabId, pageWebauthnPending, []);
+    if (facts) {
+      const tab = await chrome.tabs.get(tabId);
+      return { request: { ...facts, origin: originOf(tab.url) ?? '' } };
+    }
+    if (Date.now() >= until) return { request: null };
+    await new Promise((r) => setTimeout(r, WEBAUTHN_POLL_MS));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -781,6 +826,19 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       return viaRecorder(async () => recordPause(action.recording_id, action.paused));
     case 'record_stop':
       return viaRecorder(() => recordStop(action.recording_id));
+    case 'webauthn_arm': {
+      const tab = await resolveTab(action.tab_id);
+      await inMain(tab.id!, pageWebauthnArm, [action.kind, WEBAUTHN_HOLD_MS]);
+      return { armed: true, tab_id: tab.id };
+    }
+    case 'webauthn_pending': {
+      const tab = await resolveTab(action.tab_id);
+      return webauthnPending(tab.id!, Math.min(action.wait_ms, answerBudget(deadline)));
+    }
+    case 'webauthn_resolve': {
+      const tab = await resolveTab(action.tab_id);
+      return inMain(tab.id!, pageWebauthnResolve, [action.request_id, action.credential ?? null, !!action.passthrough]);
+    }
     default:
       throw new ActionError(`unsupported action ${(action as { type?: string }).type}`);
   }

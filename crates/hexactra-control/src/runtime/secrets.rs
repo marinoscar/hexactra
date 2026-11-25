@@ -56,6 +56,9 @@ use super::api::ApiState;
 use super::events::EventLog;
 use super::store::{RuntimeStore, StoreError};
 
+mod passkeys;
+pub use passkeys::codes as passkey_codes;
+
 /// The failure code of a provider action whose time ran out.
 const TIMED_OUT: &str = "timed_out";
 /// Longest host error text copied into a failure (it never holds the value).
@@ -1560,6 +1563,18 @@ pub(super) async fn save_login(
 /// Run one provider action to its end and report how it went.
 async fn execute(mut run: Run, action: RemoteAction) -> (Run, Result<Value, Fail>) {
     let result = match action {
+        RemoteAction::PasskeySignIn {
+            selector,
+            provider,
+            tab_id,
+            ..
+        } => run.passkey_sign_in(selector, provider, tab_id).await,
+        RemoteAction::PasskeyCreate {
+            selector,
+            provider,
+            tab_id,
+            ..
+        } => run.passkey_create(selector, provider, tab_id).await,
         RemoteAction::SecretsLookup {
             kind,
             provider,
@@ -1715,6 +1730,16 @@ pub(super) fn start(
             client_label,
             ..
         } => (run_id.clone(), client_label.clone(), "secrets.release"),
+        RemoteAction::PasskeySignIn {
+            run_id,
+            client_label,
+            ..
+        } => (run_id.clone(), client_label.clone(), "passkey.sign_in"),
+        RemoteAction::PasskeyCreate {
+            run_id,
+            client_label,
+            ..
+        } => (run_id.clone(), client_label.clone(), "passkey.create"),
         _ => (None, None, "secrets.release"),
     };
     let kind = match &action {
