@@ -1,12 +1,13 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Optional, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Optional, Param, ParseUUIDPipe, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { FastifyReply } from 'fastify';
 
 import { RequestClientService } from '../connected-apps/request-client';
 import { QuestionResponseDto } from '../openapi/console.responses';
 import { AnswerQuestionDto, CancelQuestionDto, CreateQuestionDto, GetQuestionDto, ListQuestionsDto } from './questions.schemas';
-import { MEMORY_ANSWER_CHANNELS, SAVE_LOGIN_ANSWER_CHANNELS, channelId } from './channels/channel-rules';
+import { MEMORY_ANSWER_CHANNELS, SAVE_LOGIN_ANSWER_CHANNELS, SCAN_ANSWER_CHANNELS, channelId } from './channels/channel-rules';
 import { QuestionsService, isOwnerCardInput, type QuestionActor, type QuestionView } from './questions.service';
 
 /**
@@ -40,13 +41,27 @@ export class QuestionsController {
   /** The channel an answer is recorded under: through MCP never one of the console's own signed-in channels, whatever the body says (#553). */
   private async channelOf(req: object | undefined, claimed: string | undefined): Promise<string> {
     const channel = claimed ?? 'api';
-    return (MEMORY_ANSWER_CHANNELS.includes(channelId(channel)) || SAVE_LOGIN_ANSWER_CHANNELS.includes(channelId(channel))) && (await this.fromMcp(req)) ? 'mcp' : channel;
+    const owned = [...MEMORY_ANSWER_CHANNELS, ...SAVE_LOGIN_ANSWER_CHANNELS, ...SCAN_ANSWER_CHANNELS];
+    return owned.includes(channelId(channel)) && (await this.fromMcp(req)) ? 'mcp' : channel;
   }
 
   /** A memory proposal is a 404 to an MCP client (#553). */
   private async visible(req: object | undefined, view: QuestionView): Promise<QuestionView> {
     if (isOwnerCardInput(view.input) && (await this.fromMcp(req))) throw new NotFoundException({ code: 'QUESTION_NOT_FOUND', message: 'Question not found' });
     return view;
+  }
+
+  /**
+   * A fresh picture of a pending scan question (#924): the page, or the node's desktop, captured now by the server and never stored.
+   * The owner only, and never through MCP (an AI app or an MCP client gets the prompt and a link, not the picture). `x-scan-domain` names
+   * the site the browser is on; a browser that moved to another site gives `409 SCAN_PAGE_CHANGED` and no picture.
+   */
+  @Get(':id/scan-image')
+  @Auth({ permissions: ['runs:read'] })
+  async scanImage(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Res() reply: FastifyReply, @Req() req?: object): Promise<void> {
+    if (await this.fromMcp(req)) throw new NotFoundException({ code: 'QUESTION_NOT_FOUND', message: 'Question not found' });
+    const shot = await this.questions.scanImage(userId, id);
+    await reply.header('cache-control', 'no-store').header('x-scan-domain', shot.domain).type(shot.mime).send(shot.bytes);
   }
 
   /** One question; `waitMs` (≤ 30000) holds the request while it is pending. */

@@ -102,6 +102,7 @@ async fn service_and_host_tokens_are_scoped() {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap();
@@ -188,6 +189,7 @@ async fn operator_token_still_works_for_hosts() {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()

@@ -19,12 +19,13 @@ export const requestHuman = defineRunnerTool({
     'For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. ' +
     'input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), ' +
     'multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), ' +
-    'takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). ' +
+    'scan (they scan or read what is on the screen with their phone, then press Done: a sign-in QR code the page shows, a number to match in an app, or Chrome\'s "use a phone or tablet" passkey QR code; kind passkey, login, verification or code; scan_source "page" for a code the page draws, "desktop" for Chrome\'s own passkey window; they see a live picture the server takes, never one you send), ' +
+    'takeover (they take over the browser, then press Done: only for a passkey on this computer or a security key, a CAPTCHA you cannot pass, or when they declined to give a credential). ' +
     'Set the fields that do not apply to null. The run pauses until they answer.',
   parameters: z.object({
     kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'verification', 'other']),
     prompt: z.string().min(1).max(1500),
-    input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials']),
+    input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'scan']),
     /** Bare option labels (each its own id); or use `options`. */
     choices: z.array(z.string().max(100)).max(10).nullable(),
     options: z.array(z.object({ id: z.string().max(64), label: z.string().max(100), description: z.string().max(200).nullable() })).max(10).nullable(),
@@ -48,6 +49,8 @@ export const requestHuman = defineRunnerTool({
     remember_label: z.string().max(200).nullable(),
     /** kind confirmation: what the step is, from the fixed list (#555), so the owner can say "don't ask again". */
     topic: z.string().max(40).nullable(),
+    /** scan: where the code is, "page" (drawn by the site) or "desktop" (Chrome's own passkey window). */
+    scan_source: z.enum(['page', 'desktop']).nullable(),
   }),
   execute: async (ctx: BrowserContext, args) => {
     const started = Date.now();
@@ -55,6 +58,11 @@ export const requestHuman = defineRunnerTool({
     if (!parsed.ok) return `Invalid request_human: ${parsed.message}. Fix it and call request_human again.`;
     const spec = parsed.spec;
     const { memory, ports } = ctx;
+    // A scan that cannot work on this machine (#924): say so before anything is asked, so the agent asks for a takeover instead.
+    if (spec.input === 'scan' && ports.questions.scanCheck) {
+      const refused = await ports.questions.scanCheck(args.scan_source ?? 'page').catch(() => null);
+      if (refused) return refused;
+    }
     const approvals = ports.approvals;
     // The commitment the gate stopped travels with the confirmation (#550), from the server's own record:
     // a `gate` (or a host) in the model's arguments is not in the schema and never reaches here.

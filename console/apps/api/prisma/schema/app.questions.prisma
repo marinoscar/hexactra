@@ -26,6 +26,9 @@ enum QuestionInput {
   memory
   /// "Save this login?" (E37.4b): the sign-in the owner typed by hand, offered to their secrets provider; answered only in the signed-in web and app.
   save_login
+  /// Scan or read something on the node's screen (#924): a sign-in QR, a number, Chrome's passkey QR. Browser-bound; answered with Done
+  /// only in the signed-in web and app, which show a live picture the server captures on request and never stores.
+  scan
 
   @@map("question_input")
 }
@@ -74,6 +77,9 @@ model Question {
   /// A call through one of the owner's connections the owner is asked to approve (E39.7): `{ connectionId, connectionLabel, tool, lines, body? }`,
   /// built by the server from the tool's validated arguments, never from model text. The run waits on this question with no browser handoff.
   action           Json?
+  /// scan (#924): `{ source, domain, origin }`, set by the server when the question opens, from the page's address as the browser
+  /// reports it; never from model or page text. No picture is stored.
+  scan             Json?
   /// Why the harness itself asked (#909): `stall` for a stall handoff (`onStall: 'ask_human'`); null for every other question.
   /// Set by the runner only, never from a request or model text. A benchmark tells a stall from a real question by it.
   source           String?        @db.VarChar(20)

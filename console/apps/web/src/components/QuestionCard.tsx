@@ -210,7 +210,8 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
             </Typography>
           )}
         </Box>
-        {live && q.runId && <RunThumbnail runId={q.runId} />}
+        {/* A scan shows its own, larger live picture in the form (#924). */}
+        {live && q.runId && q.input !== 'scan' && <RunThumbnail runId={q.runId} />}
         {error && (
           <Alert severity="error" sx={{ mt: 2, ...WRAP }} onClose={() => setError(null)}>
             {error}

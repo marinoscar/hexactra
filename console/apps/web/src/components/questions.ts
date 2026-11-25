@@ -2,7 +2,15 @@
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
 import { answerLabel } from '@app/shared/question-rules';
 
-export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form' | 'memory' | 'save_login';
+export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'scan' | 'form' | 'memory' | 'save_login';
+
+/** scan (#924): what the card shows, set by the server from the browser when the question opened. The picture is fetched live, never stored. */
+export interface QuestionScan {
+  source: 'page' | 'desktop';
+  /** The site the browser was on, as the browser reported it; null when it could not be read (no picture is shown then). */
+  domain: string | null;
+  origin: string | null;
+}
 
 /** A field of a `form` question (#552): one missing value of a task run, asked before it starts. */
 export interface FormField {
@@ -63,6 +71,8 @@ export interface QuestionConstraints {
 
 /** What a form needs to ask a question. */
 export interface AskedQuestion {
+  /** The question's id: a scan (#924) fetches its live picture by it. */
+  id?: string;
   kind: string;
   input: QuestionInput;
   options: QuestionOption[] | null;
@@ -79,6 +89,8 @@ export interface AskedQuestion {
   proposal?: MemoryProposal | null;
   /** save_login (E37.4b): the sign-in offered to be saved. */
   saveLogin?: SaveLoginCard | null;
+  /** scan (#924): the picture's source and the site, set by the server. */
+  scan?: QuestionScan | null;
   /** False for a memory proposal (#553) and a "Save this login?" card (E37.4b): no run waits on it. */
   blocking?: boolean;
   /** What "Don't ask again" would remember (#555), computed by the server; null or absent when it cannot be remembered. */

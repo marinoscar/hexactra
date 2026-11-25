@@ -7712,6 +7712,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/questions/{id}/scan-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["questions_scanImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/questions/{id}": {
         parameters: {
             query?: never;
@@ -21677,10 +21694,10 @@ export interface components {
             handoffId: string | null;
             browserBound: boolean;
             /**
-             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app
              * @enum {string}
              */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan" | "memory" | "form" | "save_login";
             kind: string;
             prompt: string;
             options: {
@@ -21806,13 +21823,6 @@ export interface components {
             } | null;
             pageTitle: string | null;
             viewerUrl: string | null;
-            /** @description A takeover asked on Google's account sign-in page (E48.5): the run's machine and profile, so the card can link to that profile's guided sign-in. Set by the server from the page URL the browser reported; null otherwise. */
-            signin?: {
-                /** @description The machine of the run's browser */
-                hostId: string;
-                /** @description Its browser profile */
-                profile: string;
-            } | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             /** @description ISO 8601 timestamp */
@@ -21852,12 +21862,23 @@ export interface components {
                 /** @description When the fabric stops holding the password: after it the card says it is too late to save */
                 valueExpiresAt: string;
             } | null;
+            scan: {
+                /**
+                 * @description Where the picture comes from: the page, or the node's desktop (Chrome's own passkey window)
+                 * @enum {string}
+                 */
+                source: "page" | "desktop";
+                /** @description The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown */
+                domain: string | null;
+                /** @description That page's origin */
+                origin: string | null;
+            } | null;
             /** @description The chat a memory proposal came from (#553) */
             conversationId: string | null;
         };
         CreateQuestionDto: {
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan";
             /**
              * @default other
              * @enum {string}
@@ -21891,6 +21912,8 @@ export interface components {
             risk?: "low" | "high";
             rememberLabel?: string;
             timeoutMs?: number;
+            /** @enum {string} */
+            scanSource?: "page" | "desktop";
             asker?: string;
         };
         AnswerQuestionDto: {
@@ -22310,7 +22333,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan";
             /** @enum {string} */
             kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "verification" | "other";
             prompt: string;
@@ -22341,6 +22364,8 @@ export interface components {
             risk?: "low" | "high";
             rememberLabel?: string;
             timeoutMs?: number;
+            /** @enum {string} */
+            scanSource?: "page" | "desktop";
         };
         CloseDto: {
             /** @default true */
@@ -22359,10 +22384,10 @@ export interface components {
             kind: string;
             prompt: string;
             /**
-             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app
              * @enum {string}
              */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan" | "memory" | "form" | "save_login";
             choices: string[];
             options: {
                 id: string;
@@ -22455,12 +22480,16 @@ export interface components {
                 /** @description When the fabric stops holding the password: after it the card says it is too late to save */
                 valueExpiresAt: string;
             } | null;
-            /** @description A takeover asked on Google's account sign-in page (E48.5): the run's machine and profile, so the card can link to that profile's guided sign-in. Set by the server from the page URL the browser reported; null otherwise. */
-            signin?: {
-                /** @description The machine of the run's browser */
-                hostId: string;
-                /** @description Its browser profile */
-                profile: string;
+            scan: {
+                /**
+                 * @description Where the picture comes from: the page, or the node's desktop (Chrome's own passkey window)
+                 * @enum {string}
+                 */
+                source: "page" | "desktop";
+                /** @description The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown */
+                domain: string | null;
+                /** @description That page's origin */
+                origin: string | null;
             } | null;
         };
         InboxHistoryResponseDto: {
@@ -22475,10 +22504,10 @@ export interface components {
                 askedBy: string;
                 kind: string;
                 /**
-                 * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+                 * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app
                  * @enum {string}
                  */
-                input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+                input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan" | "memory" | "form" | "save_login";
                 /** @description Masked */
                 prompt: string;
                 /** @enum {string} */
@@ -22790,271 +22819,6 @@ export interface components {
                 /** @description Null without `runs:read` */
                 runs: number | null;
             };
-        };
-        RunStartResponseDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            userId: string;
-            taskId: string | null;
-            /** @description The chat that started the run (trigger `chat`); null for every other run */
-            conversationId: string | null;
-            /** @enum {string} */
-            status: "queued" | "running" | "waiting_human" | "paused" | "succeeded" | "failed" | "cancelled";
-            /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat" | "email" | "benchmark";
-            /**
-             * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
-             * @enum {string}
-             */
-            origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
-            client: {
-                /** @description The OAuth client id; null for an unverified MCP client name */
-                id: string | null;
-                /** @description The display name at the time the run started */
-                name: string | null;
-                /** @description False: a name an MCP client gave itself over a personal access token */
-                verified: boolean;
-            } | null;
-            goal: string;
-            profile: string;
-            hostId: string | null;
-            hostFallback: boolean;
-            sessionId: string | null;
-            handoffId: string | null;
-            /** @description Who drove an external run */
-            actor: string | null;
-            result: string | null;
-            error: string | null;
-            cancelRequested: boolean;
-            /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
-            cancelRequestedAt: string | null;
-            /** @description The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it. */
-            pauseRequested: boolean;
-            /** @description When the run was paused (`paused` only, until it runs again); null otherwise */
-            pausedAt: string | null;
-            stepCount: number;
-            activity: {
-                /** @enum {string} */
-                phase: "starting" | "looking" | "thinking" | "acting";
-                /** @description The fabric action being run (acting only) */
-                action?: string;
-                /** @description Redacted like step args */
-                args?: {
-                    [key: string]: unknown;
-                };
-                /** @description Why the model chose the action */
-                reason?: string;
-                /** @description ISO 8601 timestamp */
-                startedAt: string;
-                /** @description How long the host has before the action times out */
-                timeoutMs?: number;
-                /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
-                target?: {
-                    x: number;
-                    y: number;
-                    w?: number;
-                    h?: number;
-                };
-                /** @description Why the run is on a stronger model, while it is (for example "Escalated to Frontier (stuck: repeated click on #submit)") */
-                note?: string;
-            } | null;
-            inputTokens: number;
-            outputTokens: number;
-            policy: {
-                id: string;
-                name: string;
-                version: number;
-                /**
-                 * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
-                 * @enum {string}
-                 */
-                source: "run" | "schedule" | "task" | "user_default" | "system_default";
-                builtin: boolean;
-            } | null;
-            /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
-            stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
-            budget: {
-                /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
-                effective: {
-                    actions: number | null;
-                    modelCalls: number | null;
-                    activeMinutes: number | null;
-                    inputTokens: number | null;
-                    outputTokens: number | null;
-                    cost: number | null;
-                    warnAtPercent: number;
-                };
-                /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
-                used: {
-                    [key: string]: number;
-                };
-                /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
-                percent: {
-                    [key: string]: number | null;
-                };
-                /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
-                source: {
-                    [key: string]: ("policy" | "ceiling") | null;
-                };
-                /** @description False when a call could not be priced: `used.cost` is then "at least". */
-                costKnown: boolean;
-                /**
-                 * @description `hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).
-                 * @enum {string}
-                 */
-                enforcement: "hard" | "soft";
-                /** @description The budgets at or over their limit, in check order. A soft-budget run keeps working past them. */
-                over: ("actions" | "modelCalls" | "activeMinutes" | "inputTokens" | "outputTokens" | "cost")[];
-            } | null;
-            tier: {
-                /**
-                 * @description The tier the policy starts runs on
-                 * @enum {string}
-                 */
-                start: "fast" | "standard" | "frontier";
-                /**
-                 * @description The highest tier the run may escalate to
-                 * @enum {string}
-                 */
-                max: "fast" | "standard" | "frontier";
-                /**
-                 * @description The tier the run is on now: the start tier until a stall escalates it
-                 * @enum {string}
-                 */
-                current: "fast" | "standard" | "frontier";
-                /** @description How many times the run escalated */
-                escalations: number;
-                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
-                model: string | null;
-            } | null;
-            /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
-            currentTier: ("fast" | "standard" | "frontier") | null;
-            /** @description How many times the run moved to a stronger tier because it stalled */
-            escalations: number;
-            /** @description The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, "Reading a run's trace"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts. */
-            traceId: string | null;
-            /** @description Input tokens the provider served from its cache (part of inputTokens) */
-            cachedInputTokens: number;
-            /** @description Model calls (provider round trips) made so far */
-            modelCalls: number;
-            /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
-            costUsd: number;
-            /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
-            costKnown: boolean;
-            /** @description Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run. */
-            confirmedActions: {
-                /** @description The step's sequence number */
-                seq: number;
-                /** @description The question the owner approved, at most 300 characters, masked */
-                prompt: string;
-                /** @description The action carried out (click, click_at, key, …) */
-                action: string;
-                /** @description When it was carried out */
-                at: string;
-            }[];
-            /** @description The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page. */
-            usedSavedLogins: {
-                /** @description The secrets provider that held the login (`vault`) */
-                provider: string;
-                /** @description The saved login's name as the owner gave it ("Shop login"), never its username, password or code */
-                itemName: string;
-                /** @description The site the login was used on (`https://shop.example.test`) */
-                origin: string;
-                /** @description When it was first used in this run */
-                at: string;
-            }[];
-            /** @description The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page. */
-            usedSavedIdentity: {
-                /** @description The secrets provider that held the details (`vault`) */
-                provider: string;
-                /** @description The saved identity item's name as the owner gave it ("Passport") */
-                itemName: string;
-                /** @description The field filled, by its label ("Date of birth"): never its value */
-                label: string;
-                /** @description The site it was filled on */
-                origin: string;
-                /** @description When it was first filled in this run */
-                at: string;
-            }[];
-            /** @description The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ. */
-            usedSavedCards: {
-                /** @description The secrets provider that held the card (`vault`) */
-                provider: string;
-                /** @description The saved card's name as the owner gave it */
-                itemName: string;
-                /** @description The card network (`visa`), or null */
-                brand: string | null;
-                /** @description The last four digits, or null: never more */
-                last4: string | null;
-                /** @description The merchant's host as the page reported it */
-                merchant: string;
-                /** @description The merchant's origin the card was typed on */
-                origin: string;
-                /** @description ISO 4217 */
-                currency: string;
-                /** @description The amount the agent declared before paying, a decimal with two places */
-                declaredAmount: string;
-                /** @description The amount the agent read on the confirmation page, or null while unknown */
-                confirmedAmount: string | null;
-                /** @description The confirmed amount differs from the declared one by more than the tolerance */
-                mismatch: boolean;
-                /** @description When the card was typed */
-                at: string;
-            }[];
-            /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
-            inputs?: {
-                key: string;
-                label: string;
-                /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
-                value: string;
-                /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details" | "email";
-            }[] | null;
-            /** @description Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished */
-            outputsComplete: boolean | null;
-            /** @description What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs. */
-            outputs?: {
-                key: string;
-                label: string;
-                /** @enum {string} */
-                type: "text" | "number" | "money" | "date" | "datetime" | "boolean" | "url" | "choice";
-                required: boolean;
-                sensitive: boolean;
-                /** @description text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`. */
-                value: (string | number | boolean | {
-                    amount: number;
-                    /** @description ISO 4217, or null when the page gave none */
-                    currency: string | null;
-                }) | null;
-                /** @description The value was returned and valid (an optional output left empty is ok) */
-                ok: boolean;
-                /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
-                note: string | null;
-            }[] | null;
-            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
-            memoryIds: string[];
-            /** @description ISO 8601 timestamp */
-            createdAt: string;
-            startedAt: string | null;
-            finishedAt: string | null;
-            /** @description Present only when there is a warning (E48.5). Never a refusal: the run has started. A profile that needs a Google sign-in can be signed in to from Fleet. */
-            warnings?: {
-                /**
-                 * @description PROFILE_NOT_SIGNED_IN: the profile the run uses is signed out of Google, or its Google session expired, as the node last reported it
-                 * @enum {string}
-                 */
-                code: "PROFILE_NOT_SIGNED_IN";
-                /** @description A sentence for a person; names the host and the profile, never an account */
-                message: string;
-                /**
-                 * Format: uuid
-                 * @description The machine whose profile needs a sign-in
-                 */
-                hostId: string;
-                /** @description The browser profile */
-                profile: string;
-            }[];
         };
         RunTaskDto: {
             /** @description Run under this agent policy for this run only ("Run with..."), instead of the schedule's, the task's or the user's default. */
@@ -50155,7 +49919,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["RunStartResponseDto"];
+                        data: components["schemas"]["RunResponseDto"];
                     };
                 };
             };
@@ -50545,6 +50309,46 @@ export interface operations {
                     };
                 };
             };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_scanImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description Unauthorized - Invalid or missing token */
             401: {
                 headers: {
@@ -52188,7 +51992,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["RunStartResponseDto"];
+                        data: components["schemas"]["RunResponseDto"];
                     };
                 };
             };

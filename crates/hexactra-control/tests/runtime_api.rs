@@ -29,6 +29,7 @@ async fn register(url: &str) -> (HostClient, uuid::Uuid) {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()
@@ -236,6 +237,7 @@ async fn profiles_over_http() {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()
@@ -309,6 +311,7 @@ async fn host_mode_and_desktop_over_http() {
             viewer_url: None,
             mode: Some(HostMode::Unattended),
             desktop: true,
+            bluetooth: None,
         })
         .await
         .unwrap()

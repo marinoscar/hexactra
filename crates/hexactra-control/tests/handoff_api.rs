@@ -33,6 +33,7 @@ async fn start_with_service() -> (String, ControlClient, uuid::Uuid, String) {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()

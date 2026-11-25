@@ -146,6 +146,7 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()

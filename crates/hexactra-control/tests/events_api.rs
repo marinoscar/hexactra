@@ -86,6 +86,7 @@ async fn stream_replay_filter_and_scope() {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()
