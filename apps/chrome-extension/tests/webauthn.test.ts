@@ -91,4 +91,21 @@ describe('the WebAuthn hook of an armed tab', () => {
     expect(new Uint8Array(cred.response.getAuthenticatorData())).toEqual(new Uint8Array([0, 1]));
     expect(native.create).not.toHaveBeenCalled();
   });
+
+  // E47.6 (#944): a payment approval is the owner's. Secure Payment Confirmation through PaymentRequest is never wrapped, armed or not.
+  it('never touches PaymentRequest, and never holds a payment request even when armed', async () => {
+    class FakePaymentRequest {}
+    (globalThis as Record<string, unknown>).PaymentRequest = FakePaymentRequest;
+    pageWebauthnArm('get', 15_000);
+    pageWebauthnArm('create', 15_000);
+    expect((globalThis as Record<string, unknown>).PaymentRequest).toBe(FakePaymentRequest);
+    pageWebauthnArm('get', 15_000);
+    await expect(creds().get(getOptions({ extensions: { payment: { isPayment: true, rpId: 'bank.example.com' } } }))).resolves.toBe('native-get');
+    expect(pageWebauthnPending()).toBeNull();
+    // The arming is still there for a sign-in: a payment request did not use it up, and was never seen.
+    const held = creds().get(getOptions());
+    expect(pageWebauthnPending()).toMatchObject({ kind: 'get', payment: false });
+    pageWebauthnResolve(String(pageWebauthnPending()!.id), null, true);
+    await held;
+  });
 });
