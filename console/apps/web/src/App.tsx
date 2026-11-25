@@ -52,6 +52,7 @@ import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections'
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
 import { FleetPage } from './pages/FleetPage';
+import { SigninQueuePage } from './pages/SigninQueuePage';
 import { OverviewPage } from './pages/OverviewPage';
 import { ChatPage } from './pages/ChatPage';
 import { InboxPage } from './pages/InboxPage';
@@ -279,6 +280,7 @@ export function AppRoutes() {
           <Route path="runs/:id" element={<Gate permission="runs:read"><RunDetailPage /></Gate>} />
           <Route path="fleet" element={<Gate permission="fleet:read"><FleetPage /></Gate>} />
           <Route path="fleet/hosts/:id/desktop" element={<Gate permission="fleet:desktop"><DesktopPage /></Gate>} />
+          <Route path="fleet/signin-queue" element={<Gate permission="fleet:desktop"><SigninQueuePage /></Gate>} />
           <Route path="settings" element={<Hub sections={USER_SETTINGS_SECTIONS} hubKey="user-settings-hub" title="Settings" subtitle="Manage your account preferences." />} />
           <Route path="settings/tokens" element={<UserTokensPage />} />
           <Route path="settings/connected-apps" element={<ConnectedAppsPage />} />
