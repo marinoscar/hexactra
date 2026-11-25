@@ -892,6 +892,7 @@ mod tests {
                 viewer_url: None,
                 mode: None,
                 desktop: false,
+                bluetooth: None,
             })
             .await
             .unwrap()

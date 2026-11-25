@@ -82,6 +82,7 @@ fn start_stack() -> String {
                     viewer_url: None,
                     mode: None,
                     desktop: false,
+                    bluetooth: None,
                 })
                 .await
                 .unwrap()

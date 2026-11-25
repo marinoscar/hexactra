@@ -1820,6 +1820,11 @@ pub struct HostView {
     /// The host can share its desktop through the fabric (#338).
     #[serde(default)]
     pub desktop: bool,
+    /// The machine has a Bluetooth adapter (#924): a phone can then answer
+    /// Chrome's "use a phone" passkey QR code. Absent when the host did not say
+    /// (agents older than #924, or a machine where it cannot be told).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bluetooth: Option<bool>,
     /// Browser profiles this host has.
     #[serde(default)]
     pub profiles: Vec<String>,
@@ -1894,6 +1899,10 @@ pub struct RegisterHostRequest {
     /// The host has a local desktop it can share through the fabric.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub desktop: bool,
+    /// Whether the machine has a Bluetooth adapter (#924); `None` when it
+    /// cannot be told.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bluetooth: Option<bool>,
 }
 
 /// Response to host registration.

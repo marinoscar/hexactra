@@ -73,6 +73,8 @@ pub(super) struct HostEntry {
     pub(super) viewer_url: Option<String>,
     pub(super) mode: Option<HostMode>,
     pub(super) desktop: bool,
+    /// The machine has a Bluetooth adapter (#924); `None` when not reported.
+    pub(super) bluetooth: Option<bool>,
     /// Profiles the host reported; empty means a host that only knows the
     /// default profile (older agents).
     pub(super) profiles: Vec<String>,
@@ -190,6 +192,8 @@ pub(crate) struct HostRecord {
     pub mode: Option<HostMode>,
     #[serde(default)]
     pub desktop: bool,
+    #[serde(default)]
+    pub bluetooth: Option<bool>,
     pub profiles: Vec<String>,
     #[serde(default)]
     pub draining: bool,
@@ -279,6 +283,7 @@ fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
         viewer_url: h.viewer_url.clone(),
         mode: h.mode,
         desktop: h.desktop,
+        bluetooth: h.bluetooth,
         profiles: h.known_profiles(),
         running_profiles: h.running_profiles.clone(),
         draining: h.draining,
@@ -321,6 +326,7 @@ impl RuntimeStore {
                 viewer_url: h.viewer_url.clone(),
                 mode: h.mode,
                 desktop: h.desktop,
+                bluetooth: h.bluetooth,
                 profiles: h.profiles.clone(),
                 draining: h.draining,
             })
@@ -361,6 +367,7 @@ impl RuntimeStore {
                         viewer_url: h.viewer_url,
                         mode: h.mode,
                         desktop: h.desktop,
+                        bluetooth: h.bluetooth,
                         profiles: h.profiles,
                         running_profiles: Vec::new(),
                         queue: VecDeque::new(),
@@ -417,6 +424,7 @@ impl RuntimeStore {
                         viewer_url: None,
                         mode: None,
                         desktop: false,
+                        bluetooth: None,
                         profiles: Vec::new(),
                         running_profiles: Vec::new(),
                         queue: VecDeque::new(),
@@ -497,6 +505,18 @@ impl RuntimeStore {
             .ok_or(StoreError::NotFound("host"))?;
         h.mode = mode;
         h.desktop = desktop;
+        Ok(())
+    }
+
+    /// Record whether a host's machine has a Bluetooth adapter (#924), as it
+    /// reported at registration; `None` when it did not say.
+    pub fn set_host_bluetooth(&self, id: Uuid, bluetooth: Option<bool>) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let h = inner
+            .hosts
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("host"))?;
+        h.bluetooth = bluetooth;
         Ok(())
     }
 
@@ -1389,6 +1409,30 @@ mod tests {
         assert!(!old.desktop);
         assert_eq!(
             s.set_host_mode(Uuid::new_v4(), None, false).unwrap_err(),
+            StoreError::NotFound("host")
+        );
+    }
+
+    // #924: the Bluetooth report survives a restart; a record saved before it has none.
+    #[test]
+    fn host_bluetooth_survives_a_snapshot_and_old_records_have_none() {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "mini-pc".into(), "0".into());
+        assert_eq!(s.list_hosts()[0].bluetooth, None);
+        s.set_host_bluetooth(h, Some(true)).unwrap();
+        let json = serde_json::to_string(&s.export_snapshot()).unwrap();
+        let restored = RuntimeStore::new();
+        restored.import_snapshot(serde_json::from_str(&json).unwrap());
+        assert_eq!(restored.list_hosts()[0].bluetooth, Some(true));
+        let old: HostRecord = serde_json::from_value(json!({
+            "id": h, "name": "n", "version": "0", "last_seen": Utc::now(),
+            "on_demand": false, "viewer_url": null, "profiles": []
+        }))
+        .unwrap();
+        assert_eq!(old.bluetooth, None);
+        assert_eq!(
+            s.set_host_bluetooth(Uuid::new_v4(), Some(false))
+                .unwrap_err(),
             StoreError::NotFound("host")
         );
     }

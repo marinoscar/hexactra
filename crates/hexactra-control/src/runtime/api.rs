@@ -398,6 +398,7 @@ async fn register_host(
         .register_host(req.host_id, name.to_string(), req.version);
     s.store.set_host_viewer_url(host_id, viewer_url)?;
     s.store.set_host_mode(host_id, req.mode, req.desktop)?;
+    s.store.set_host_bluetooth(host_id, req.bluetooth)?;
     tracing::info!(%host_id, mode = ?req.mode, desktop = req.desktop, "host registered");
     Ok(Json(RegisterHostResponse { host_id }))
 }

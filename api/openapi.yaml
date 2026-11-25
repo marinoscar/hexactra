@@ -2313,6 +2313,14 @@ components:
       - browser_connected
       - last_seen
       properties:
+        bluetooth:
+          type:
+          - boolean
+          - 'null'
+          description: |-
+            The machine has a Bluetooth adapter (#924): a phone can then answer
+            Chrome's "use a phone" passkey QR code. Absent when the host did not say
+            (agents older than #924, or a machine where it cannot be told).
         browser_connected:
           type: boolean
           description: The Chrome extension is connected to this host's native bridge.
@@ -2502,6 +2510,13 @@ components:
       - name
       - version
       properties:
+        bluetooth:
+          type:
+          - boolean
+          - 'null'
+          description: |-
+            Whether the machine has a Bluetooth adapter (#924); `None` when it
+            cannot be told.
         desktop:
           type: boolean
           description: The host has a local desktop it can share through the fabric.
