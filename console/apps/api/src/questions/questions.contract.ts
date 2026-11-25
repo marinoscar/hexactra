@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 /** The inputs an agent (or a person's own automation) may ask with. */
-export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
+export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'scan'] as const;
 /**
  * The inputs only the server creates: `memory` (#553), a memory the agent
  * proposes and the owner saves or declines on its card; `form` (#552), the
@@ -25,6 +25,27 @@ export type QuestionInputType = AskableInputType | (typeof SERVER_QUESTION_INPUT
  */
 export function holdsSecret(input: string): boolean {
   return input === 'secret' || input === 'credentials';
+}
+
+/**
+ * A scan question (#924): the owner scans or reads something on the node's screen (a sign-in QR the site draws, a number to match, Chrome's
+ * "use a phone" passkey QR). Browser-bound only, answered with Done; the card shows a live picture the SERVER captures, never one an asker sends.
+ */
+export const SCAN_KINDS = ['passkey', 'login', 'verification', 'code'] as const;
+/** Where the scan picture comes from: the page (`screenshot`) or the node's desktop (`desktop_screenshot`, for Chrome's own passkey window). */
+export const SCAN_SOURCES = ['page', 'desktop'] as const;
+export type ScanSource = (typeof SCAN_SOURCES)[number];
+/** A scan's lifetime: 3 minutes unless the asker says otherwise, at most 10 (a sign-in code rotates within a minute or two). */
+export const SCAN_TIMEOUT = { defaultMs: 3 * 60_000, maxMs: 10 * 60_000 } as const;
+
+/**
+ * What a scan card shows (#924), set by the SERVER when the question is opened: the source, and the page's address as the browser reported it
+ * (`origin`, `domain` its registrable domain), never from model or page text. `domain` null: the address could not be read, and no picture is shown.
+ */
+export interface QuestionScan {
+  source: ScanSource;
+  domain: string | null;
+  origin: string | null;
 }
 
 /** The longest "remember me" label a question carries (the fabric's limit). */
@@ -88,6 +109,7 @@ const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstra
   memory: [],
   save_login: [],
   takeover: [],
+  scan: [],
   secret: [],
   credentials: [],
   form: [],
@@ -119,6 +141,8 @@ export const questionSpecObject = z.object({
     .refine((v) => !/[\u0000-\u001f\u007f]/.test(v), 'One line of text')
     .optional(),
   timeoutMs: z.number().int().min(QUESTION_TIMEOUT.minMs).max(QUESTION_TIMEOUT.maxMs).optional(),
+  /** scan (#924): where the picture comes from (`page` by default). Only the source: the address and the picture are the server's. */
+  scanSource: z.enum(SCAN_SOURCES).optional(),
 });
 
 /** A question as validated and normalised (options as objects, constraints only for its input). */
@@ -153,6 +177,8 @@ export interface QuestionSpec {
   action?: QuestionAction | null;
   /** `stall`: the harness's own stall handoff (#909). Never parsed from a request: only the runner sets it. */
   source?: 'stall';
+  /** scan (#924): the picture's source, from the request; `scan.domain` and `scan.origin` are filled by the server when the question opens. */
+  scan?: QuestionScan | null;
 }
 
 /**
@@ -279,6 +305,11 @@ function refineSpec(q: z.infer<typeof questionSpecObject>, ctx: z.RefinementCtx)
     if (q.risk !== undefined) issue('risk', 'risk is only allowed with confirm');
   }
   if (q.rememberLabel !== undefined && !holdsSecret(q.input)) issue('rememberLabel', 'rememberLabel is only allowed with credentials or secret');
+  if (q.scanSource !== undefined && q.input !== 'scan') issue('scanSource', 'scanSource is only allowed with scan');
+  if (q.input === 'scan') {
+    if (!(SCAN_KINDS as readonly string[]).includes(q.kind)) issue('kind', `scan is for kind ${SCAN_KINDS.join(', ')}`);
+    if (q.timeoutMs !== undefined && q.timeoutMs > SCAN_TIMEOUT.maxMs) issue('timeoutMs', `A scan waits at most ${SCAN_TIMEOUT.maxMs / 60_000} minutes`);
+  }
 }
 
 /** Validates and normalises a question. */
@@ -296,8 +327,10 @@ export const questionSpecSchema = questionSpecObject.superRefine(refineSpec).tra
       denyLabel: q.denyLabel ?? null,
       risk: q.input === 'confirm' ? (q.risk ?? 'high') : null,
       rememberLabel: q.rememberLabel ?? null,
-      timeoutMs: q.timeoutMs ?? QUESTION_TIMEOUT.defaultMs,
-      ...(q.timeoutMs === undefined ? { timeoutDefaulted: true } : {}),
+      // A scan has its own short default (#924), not the administrator's general wait.
+      timeoutMs: q.timeoutMs ?? (q.input === 'scan' ? SCAN_TIMEOUT.defaultMs : QUESTION_TIMEOUT.defaultMs),
+      ...(q.timeoutMs === undefined && q.input !== 'scan' ? { timeoutDefaulted: true } : {}),
+      ...(q.input === 'scan' ? { scan: { source: q.scanSource ?? 'page', domain: null, origin: null } } : {}),
     };
   },
 );
@@ -505,6 +538,7 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
     }
     case 'none':
     case 'takeover':
+    case 'scan':
       if (a.value !== undefined) fail(`A ${q.input} question takes no value`);
       return { outcome: 'completed' };
     case 'secret': {

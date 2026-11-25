@@ -78,6 +78,7 @@ async fn register(client: &HostClient, cfg: &DaemonConfig, previous: Option<Uuid
             viewer_url: cfg.viewer_url.clone(),
             mode: cfg.mode,
             desktop: cfg.desktop.is_some(),
+            bluetooth: crate::bluetooth::present(),
         };
         match client.register(&req).await {
             Ok(r) => {

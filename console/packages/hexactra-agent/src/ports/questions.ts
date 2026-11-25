@@ -25,6 +25,8 @@ export interface QuestionSpec {
    * is stuck. Set by the harness after parsing, never read from model text, so a benchmark can tell a stall from a real question.
    */
   source?: 'stall';
+  /** scan (#924): `{ source, domain, origin }`; the host fills the address from the browser when the question opens. */
+  scan?: unknown;
 }
 
 export interface OpenedQuestion {
@@ -48,4 +50,9 @@ export interface QuestionPort {
   /** The question as the person will see it: the host may add where the run came from ("Started by <app>"). Pure. */
   prepare(spec: QuestionSpec): QuestionSpec;
   open(spec: QuestionSpec): Promise<OpenedQuestion>;
+  /**
+   * Whether a scan question (#924) of this source can work on this run's machine: null when it can (or the host cannot tell), otherwise the
+   * sentence the model reads instead of asking (a desktop scan of Chrome's "use a phone" passkey code on a machine with no Bluetooth). Optional.
+   */
+  scanCheck?(source: 'page' | 'desktop'): Promise<string | null>;
 }

@@ -11,7 +11,7 @@ import { requestOutcomeWords } from '../questions/chat-request-record';
 import { maskSensitive } from '../tasks/mask';
 import { stepQuestionView, type StepQuestionView } from '../tasks/run-trace.view';
 import { QuestionsService, isOwnerCardInput, saveLoginCardOf, type SaveLoginCard } from '../questions/questions.service';
-import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable } from '../questions/questions.contract';
+import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable, QuestionScan } from '../questions/questions.contract';
 import { RequestClientService } from '../connected-apps/request-client';
 
 const respondSchema = z.object({
@@ -96,6 +96,8 @@ export interface InboxItem {
   proposal: MemoryProposal | null;
   /** save_login (E37.4b): the card of "Save this login?"; null for every other input. */
   saveLogin: SaveLoginCard | null;
+  /** scan (#924): the picture's source and the page's address as the browser reported it; null for every other input. */
+  scan: QuestionScan | null;
 }
 
 /**
@@ -148,6 +150,7 @@ export class InboxController {
         blocking: q.blocking,
         proposal: q.input === 'memory' ? ((q.proposal as unknown as MemoryProposal | null) ?? null) : null,
         saveLogin: saveLoginCardOf(q),
+        scan: q.input === 'scan' ? ((q.scan as unknown as QuestionScan | null) ?? null) : null,
       };
     });
   }

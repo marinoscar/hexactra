@@ -7712,6 +7712,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/questions/{id}/scan-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["questions_scanImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/questions/{id}": {
         parameters: {
             query?: never;
@@ -21677,10 +21694,10 @@ export interface components {
             handoffId: string | null;
             browserBound: boolean;
             /**
-             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app
              * @enum {string}
              */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan" | "memory" | "form" | "save_login";
             kind: string;
             prompt: string;
             options: {
@@ -21845,12 +21862,23 @@ export interface components {
                 /** @description When the fabric stops holding the password: after it the card says it is too late to save */
                 valueExpiresAt: string;
             } | null;
+            scan: {
+                /**
+                 * @description Where the picture comes from: the page, or the node's desktop (Chrome's own passkey window)
+                 * @enum {string}
+                 */
+                source: "page" | "desktop";
+                /** @description The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown */
+                domain: string | null;
+                /** @description That page's origin */
+                origin: string | null;
+            } | null;
             /** @description The chat a memory proposal came from (#553) */
             conversationId: string | null;
         };
         CreateQuestionDto: {
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan";
             /**
              * @default other
              * @enum {string}
@@ -21884,6 +21912,8 @@ export interface components {
             risk?: "low" | "high";
             rememberLabel?: string;
             timeoutMs?: number;
+            /** @enum {string} */
+            scanSource?: "page" | "desktop";
             asker?: string;
         };
         AnswerQuestionDto: {
@@ -22303,7 +22333,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan";
             /** @enum {string} */
             kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "verification" | "other";
             prompt: string;
@@ -22334,6 +22364,8 @@ export interface components {
             risk?: "low" | "high";
             rememberLabel?: string;
             timeoutMs?: number;
+            /** @enum {string} */
+            scanSource?: "page" | "desktop";
         };
         CloseDto: {
             /** @default true */
@@ -22352,10 +22384,10 @@ export interface components {
             kind: string;
             prompt: string;
             /**
-             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app
              * @enum {string}
              */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan" | "memory" | "form" | "save_login";
             choices: string[];
             options: {
                 id: string;
@@ -22448,6 +22480,17 @@ export interface components {
                 /** @description When the fabric stops holding the password: after it the card says it is too late to save */
                 valueExpiresAt: string;
             } | null;
+            scan: {
+                /**
+                 * @description Where the picture comes from: the page, or the node's desktop (Chrome's own passkey window)
+                 * @enum {string}
+                 */
+                source: "page" | "desktop";
+                /** @description The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown */
+                domain: string | null;
+                /** @description That page's origin */
+                origin: string | null;
+            } | null;
         };
         InboxHistoryResponseDto: {
             items: {
@@ -22461,10 +22504,10 @@ export interface components {
                 askedBy: string;
                 kind: string;
                 /**
-                 * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
+                 * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app
                  * @enum {string}
                  */
-                input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
+                input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "scan" | "memory" | "form" | "save_login";
                 /** @description Masked */
                 prompt: string;
                 /** @enum {string} */
@@ -50266,6 +50309,46 @@ export interface operations {
                     };
                 };
             };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_scanImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description Unauthorized - Invalid or missing token */
             401: {
                 headers: {

@@ -162,6 +162,8 @@ export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
         </Box>
       )}
       {item?.input === 'takeover' && <Text>Take over the browser (open it from the web app), then press enter.</Text>}
+      {/* A scan's picture is shown only in the signed-in web and Android app (#924): a terminal links there. */}
+      {item?.input === 'scan' && <Text>Scan the code in the web or Android app: its picture is shown only there (Inbox → this request).</Text>}
       {item && <Text dimColor>{hint(item, armed)}</Text>}
       {status && <Text>{status}</Text>}
       <Text dimColor>↑/↓ select · x decline · esc back</Text>

@@ -2,7 +2,7 @@ import type { ApiClient } from '@marinoscar/platform-cli/api-client';
 
 /** The input types (apps/api/src/questions/questions.contract.ts). */
 export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
-export type QuestionInput = (typeof QUESTION_INPUTS)[number];
+export type QuestionInput = (typeof QUESTION_INPUTS)[number] | 'scan';
 
 export interface QuestionOption {
   id: string;

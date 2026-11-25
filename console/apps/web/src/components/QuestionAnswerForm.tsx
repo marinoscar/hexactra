@@ -26,6 +26,7 @@ import { FormQuestion } from '../taskParams/FormQuestion';
 import { MemoryProposalForm } from './MemoryProposalForm';
 import { SaveLoginForm } from './SaveLoginForm';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
+import { ScanPicture } from './ScanPicture';
 import { ConnectionActionCard } from './ConnectionActionCard';
 import { NO_REMEMBER, RememberRuleField, amountError, rememberRuleOf, type RememberRuleState } from './RememberRuleField';
 
@@ -466,6 +467,11 @@ function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, 
           {rememberField && <Box>{rememberField}</Box>}
         </Stack>
       );
+      break;
+    case 'scan':
+      // The live picture the server takes (#924), with its warning; Done once the code is scanned.
+      primaryLabel = 'Done, I scanned it';
+      field = q.id && q.scan ? <ScanPicture questionId={q.id} scan={q.scan} /> : null;
       break;
     case 'takeover':
       primaryLabel = 'Done';
