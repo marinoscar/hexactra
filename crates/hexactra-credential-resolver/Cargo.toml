@@ -12,6 +12,7 @@ test-provider = ["dep:axum"]
 
 [dependencies]
 async-trait = "0.1"
+base64 = { workspace = true }
 # Only the fake Vault of the `test-provider` feature serves HTTP.
 axum = { workspace = true, optional = true }
 chrono = { version = "0.4", features = ["serde"] }

@@ -26,6 +26,7 @@ pub mod console;
 pub mod fake_vault;
 pub mod http;
 mod origin;
+pub mod passkey;
 #[cfg(any(test, feature = "test-provider"))]
 pub mod test_provider;
 mod value;
@@ -40,6 +41,7 @@ use chrono::{DateTime, Utc};
 pub use console::ConsoleProvider;
 pub use hexactra_core::remote::{ItemKind, ItemSummary, MatchKind, SecretField, SecretPurpose};
 pub use origin::{Origin, OriginError};
+pub use passkey::{rp_id_allowed, NewPasskey, PasskeyRelease, PasskeySummary};
 pub use value::SecretValue;
 pub use vault::VaultProvider;
 
@@ -243,5 +245,38 @@ pub trait SecretsProvider: Send + Sync {
     /// owner's behalf does; the default says so.
     async fn save_login(&self, _req: NewLogin) -> Result<SavedLogin, ProviderError> {
         Err(ProviderError::Unsupported)
+    }
+
+    /// The owner's Hexactra passkeys for an RP ID (E47.2), when the page's
+    /// origin may use that RP ID. Never a key. The default: none kept here.
+    async fn passkey_lookup(
+        &self,
+        _owner: &OwnerId,
+        _rp_id: &str,
+        _origin: &Origin,
+    ) -> Result<Vec<PasskeySummary>, ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
+
+    /// The private key of one passkey (PKCS#8 DER), for one signature; the
+    /// RP ID must be the passkey's and the origin allowed for it, or this is
+    /// [`ProviderError::OriginMismatch`].
+    async fn passkey_release(&self, _req: PasskeyRelease) -> Result<SecretValue, ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
+
+    /// Keep a passkey the fabric made (E47.4); its id.
+    async fn passkey_save(&self, _req: NewPasskey) -> Result<String, ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
+
+    /// Record a signature: the counter the fabric used and when.
+    async fn passkey_used(
+        &self,
+        _owner: &OwnerId,
+        _item_id: &str,
+        _sign_count: u32,
+    ) -> Result<(), ProviderError> {
+        Ok(())
     }
 }

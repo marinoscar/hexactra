@@ -39,8 +39,8 @@ use serde_json::{json, Value};
 use zeroize::Zeroizing;
 
 use crate::{
-    CodeRequest, NewLogin, Origin, OwnerId, ProviderError, ReleaseRequest, SavedLogin, SecretValue,
-    SecretsProvider,
+    rp_id_allowed, CodeRequest, NewLogin, NewPasskey, Origin, OwnerId, PasskeyRelease,
+    PasskeySummary, ProviderError, ReleaseRequest, SavedLogin, SecretValue, SecretsProvider,
 };
 
 /// The id actions name.
@@ -146,6 +146,41 @@ struct WireSaved {
 #[derive(Deserialize)]
 struct WireItems {
     items: Vec<ItemSummary>,
+}
+
+/// A passkey as the store's `passkey-lookup` lists it (E47.2): never a key.
+#[derive(Deserialize)]
+struct WirePasskey {
+    id: String,
+    credential_id: String,
+    user_handle: String,
+    #[serde(default)]
+    user_name: String,
+    rp_id: String,
+    #[serde(default)]
+    sign_count: u32,
+}
+
+#[derive(Deserialize)]
+struct WirePasskeys {
+    passkeys: Vec<WirePasskey>,
+}
+
+#[derive(serde::Serialize)]
+struct WireNewPasskey<'a> {
+    owner_id: &'a str,
+    rp_id: &'a str,
+    origin: &'a str,
+    credential_id: &'a str,
+    user_handle: &'a str,
+    user_name: &'a str,
+    public_key: &'a str,
+    /// PKCS#8 DER, base64url: the one secret field, written into a wiped buffer only.
+    private_key: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    run_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    client_label: Option<&'a str>,
 }
 
 impl ConsoleProvider {
@@ -384,6 +419,111 @@ impl SecretsProvider for ConsoleProvider {
             serde_json::from_slice(&reply.body).map_err(|_| ProviderError::Unavailable)?;
         Ok(SavedLogin { id: wire.id })
     }
+
+    /// `passkey-lookup` (E47.2): the owner's passkeys for the RP ID. The
+    /// RP ID is checked against the page's origin here first, and again by
+    /// the store.
+    async fn passkey_lookup(
+        &self,
+        owner: &OwnerId,
+        rp_id: &str,
+        origin: &Origin,
+    ) -> Result<Vec<PasskeySummary>, ProviderError> {
+        if !rp_id_allowed(rp_id, origin) {
+            return Err(ProviderError::OriginMismatch);
+        }
+        let body =
+            json!({ "owner_id": owner.as_str(), "rp_id": rp_id, "origin": origin.to_string() });
+        let reply = self.post("passkey-lookup", body).await?;
+        let wire: WirePasskeys =
+            serde_json::from_slice(&reply.body).map_err(|_| ProviderError::Unavailable)?;
+        Ok(wire
+            .passkeys
+            .into_iter()
+            .map(|p| PasskeySummary {
+                id: p.id,
+                credential_id: p.credential_id,
+                user_handle: p.user_handle,
+                user_name: p.user_name,
+                rp_id: p.rp_id,
+                sign_count: p.sign_count,
+            })
+            .collect())
+    }
+
+    /// `passkey-release`: the private key's PKCS#8 bytes are the body.
+    async fn passkey_release(&self, req: PasskeyRelease) -> Result<SecretValue, ProviderError> {
+        if !rp_id_allowed(&req.rp_id, &req.origin) {
+            return Err(ProviderError::OriginMismatch);
+        }
+        let body = json!({
+            "owner_id": req.owner.as_str(),
+            "item_id": req.item_id,
+            "rp_id": req.rp_id,
+            "origin": req.origin.to_string(),
+            "purpose": "passkey",
+            "run_id": req.run_id,
+            "client_label": req.client_label,
+        });
+        let reply = self.post("passkey-release", strip_nulls(body)).await?;
+        Ok(SecretValue::new(reply.body.to_vec()))
+    }
+
+    /// `passkey-save`: a passkey the fabric made. The private key goes from
+    /// its [`SecretValue`] into one wiped buffer and the request.
+    async fn passkey_save(&self, req: NewPasskey) -> Result<String, ProviderError> {
+        use base64::Engine as _;
+        if !rp_id_allowed(&req.rp_id, &req.origin) {
+            return Err(ProviderError::OriginMismatch);
+        }
+        let origin = req.origin.to_string();
+        let body = req
+            .private_key
+            .expose(|der| {
+                let mut b64 = Zeroizing::new(String::with_capacity(der.len() * 4 / 3 + 4));
+                base64::engine::general_purpose::URL_SAFE_NO_PAD.encode_string(der, &mut b64);
+                let wire = WireNewPasskey {
+                    owner_id: req.owner.as_str(),
+                    rp_id: &req.rp_id,
+                    origin: &origin,
+                    credential_id: &req.credential_id,
+                    user_handle: &req.user_handle,
+                    user_name: &req.user_name,
+                    public_key: &req.public_key,
+                    private_key: &b64,
+                    run_id: req.run_id.as_deref(),
+                    client_label: req.client_label.as_deref(),
+                };
+                let mut buf = Zeroizing::new(Vec::with_capacity(
+                    b64.len()
+                        + req.public_key.len()
+                        + req.credential_id.len()
+                        + req.user_handle.len()
+                        + req.user_name.len()
+                        + origin.len()
+                        + 1024,
+                ));
+                serde_json::to_writer(&mut *buf, &wire).ok()?;
+                Some(buf)
+            })
+            .ok_or_else(|| ProviderError::Refused("invalid_request".into()))?;
+        let reply = self.post_bytes("passkey-save", body).await?;
+        let wire: WireSaved =
+            serde_json::from_slice(&reply.body).map_err(|_| ProviderError::Unavailable)?;
+        Ok(wire.id)
+    }
+
+    /// `passkey-used`: the counter of the signature just made.
+    async fn passkey_used(
+        &self,
+        owner: &OwnerId,
+        item_id: &str,
+        sign_count: u32,
+    ) -> Result<(), ProviderError> {
+        let body =
+            json!({ "owner_id": owner.as_str(), "item_id": item_id, "sign_count": sign_count });
+        self.post("passkey-used", body).await.map(|_| ())
+    }
 }
 
 /// The route's schema is strict: omit absent optional fields instead of sending `null`.
@@ -407,6 +547,7 @@ mod tests {
 
     const TOKEN: &str = "sct_canary-token-5d41402abc4b2a76b9719d911017c592";
     const PASSWORD: &str = "CANARY-builtin-password-9e107d9d372bb682";
+    const PASSKEY_DER: &str = "CANARY-passkey-private-key-der";
 
     type Seen = Arc<Mutex<Vec<(String, Option<String>, Value)>>>;
 
@@ -446,6 +587,14 @@ mod tests {
                             ("code", _) => raw("123456", &[("x-expires-at", "2030-01-01T00:00:30Z")]),
                             ("save", _) if body["name"] == "Taken" => reply(409, json!({"code": "name_taken"}), &[]),
                             ("save", _) => reply(201, json!({"id": "saved-1"}), &[]),
+                            ("passkey-lookup", _) => reply(
+                                200,
+                                json!({"passkeys": [{"id": "pk-1", "credential_id": "Y3JlZA", "user_handle": "dXNlcg", "user_name": "person-a", "rp_id": "example.com", "sign_count": 3}]}),
+                                &[],
+                            ),
+                            ("passkey-release", _) => raw(PASSKEY_DER, &[]),
+                            ("passkey-save", _) => reply(201, json!({"id": "pk-2"}), &[]),
+                            ("passkey-used", _) => reply(200, json!({}), &[]),
                             _ => reply(500, json!({}), &[]),
                         }
                     }
@@ -670,5 +819,71 @@ mod tests {
         );
         // The provider never shows the password in Debug.
         assert!(!format!("{p:?}").contains("CANARY"));
+    }
+
+    // E47.2: the passkey routes, the RP ID checked before anything is sent, the key only in a wiped buffer.
+    #[tokio::test]
+    async fn passkeys_are_looked_up_released_saved_and_counted_on_the_store_routes() {
+        let (url, seen) = serve().await;
+        let p = ConsoleProvider::new(&url, TOKEN.into(), None).unwrap();
+        let owner = OwnerId::new("00000000-0000-4000-8000-000000000001").unwrap();
+        let page = Origin::from_browser_url("https://login.example.com/x").unwrap();
+        let found = p
+            .passkey_lookup(&owner, "example.com", &page)
+            .await
+            .unwrap();
+        assert_eq!(found[0].id, "pk-1");
+        assert_eq!(found[0].sign_count, 3);
+        // Another site's RP ID is refused here: nothing is sent.
+        let before = seen.lock().unwrap().len();
+        assert_eq!(
+            p.passkey_lookup(&owner, "evil.com", &page)
+                .await
+                .unwrap_err(),
+            ProviderError::OriginMismatch
+        );
+        assert_eq!(seen.lock().unwrap().len(), before);
+        let key = p
+            .passkey_release(PasskeyRelease {
+                owner: owner.clone(),
+                item_id: "pk-1".into(),
+                rp_id: "example.com".into(),
+                origin: page.clone(),
+                run_id: None,
+                client_label: None,
+            })
+            .await
+            .unwrap();
+        assert!(key.expose(|b| b == PASSKEY_DER.as_bytes()));
+        let id = p
+            .passkey_save(NewPasskey {
+                owner: owner.clone(),
+                rp_id: "example.com".into(),
+                origin: page.clone(),
+                credential_id: "bmV3".into(),
+                user_handle: "dXNlcg".into(),
+                user_name: "person-a".into(),
+                public_key: "cHVi".into(),
+                private_key: SecretValue::new(b"NEW-KEY-BYTES".to_vec()),
+                run_id: Some("run-1".into()),
+                client_label: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(id, "pk-2");
+        p.passkey_used(&owner, "pk-1", 4).await.unwrap();
+        let log = seen.lock().unwrap();
+        let save = log.iter().find(|(r, _, _)| r == "passkey-save").unwrap();
+        // The key travels base64url, once, on the save route only.
+        assert_eq!(save.2["private_key"], "TkVXLUtFWS1CWVRFUw");
+        assert_eq!(save.2["rp_id"], "example.com");
+        assert!(log
+            .iter()
+            .filter(|(r, _, _)| r != "passkey-save")
+            .all(|(_, _, b)| !b.to_string().contains("TkVXLUtFWS1CWVRFUw")));
+        assert_eq!(
+            log.iter().find(|(r, _, _)| r == "passkey-used").unwrap().2["sign_count"],
+            4
+        );
     }
 }

@@ -27,6 +27,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SecretsProviderError, type SecretField, type SecretPurpose } from '../secrets-provider.port';
 import { SecretsStoreCallbackTokens } from './store.callback-tokens';
 import { BuiltinSecretsProvider } from './store.provider';
+import { StorePasskeys } from './store.passkeys';
 
 export const STORE_CALLBACK_PATH = 'internal/secrets-store/v1';
 /** Runs that can be using a stored secret. */
@@ -44,6 +45,23 @@ const codeBody = base.extend({ item_id: z.string().uuid(), purpose: z.enum(PURPO
 const saveBody = base
   .extend({ name: z.string().trim().min(1).max(200), username: z.string().trim().min(1).max(200), password: z.string().min(1).max(1024), purpose: z.literal('save_login') })
   .strict();
+
+// Hexactra passkeys (E47.2, #940): the fabric looks up, releases (for one signature), saves and counts.
+const B64URL = /^[A-Za-z0-9_-]+$/;
+const rpIdField = z.string().min(1).max(253);
+const passkeyLookupBody = base.extend({ rp_id: rpIdField }).strict();
+const passkeyReleaseBody = base.extend({ item_id: z.string().uuid(), rp_id: rpIdField, purpose: z.literal('passkey') }).strict();
+const passkeySaveBody = base
+  .extend({
+    rp_id: rpIdField,
+    credential_id: z.string().min(1).max(1024).regex(B64URL),
+    user_handle: z.string().min(1).max(1024).regex(B64URL),
+    user_name: z.string().max(200).default(''),
+    public_key: z.string().min(1).max(1024).regex(B64URL),
+    private_key: z.string().min(1).max(4096).regex(B64URL),
+  })
+  .strict();
+const passkeyUsedBody = z.object({ owner_id: z.string().uuid(), item_id: z.string().uuid(), sign_count: z.number().int().min(0).max(0xffffffff) }).strict();
 
 const STATUS: Record<string, number> = { name_taken: 409, not_found: 404, origin_mismatch: 403, disabled: 403, rate_limited: 429, unauthorized: 401, refused: 403, unsupported: 422, unavailable: 503, unknown: 500 };
 
@@ -79,6 +97,7 @@ export class StoreCallbackController {
   constructor(
     private readonly provider: BuiltinSecretsProvider,
     private readonly prisma: PrismaService,
+    private readonly passkeys: StorePasskeys,
   ) {}
 
   private fail(reply: FastifyReply, e: unknown): FastifyReply {
@@ -159,6 +178,54 @@ export class StoreCallbackController {
   }
 
   /** Writes the bytes as the body and zeroes them once the response has gone out. Never a string. */
+  @Post('passkey-lookup')
+  @HttpCode(200)
+  passkeyLookup(@Body() raw: unknown, @Req() req: CallbackRequest, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    return this.handle(passkeyLookupBody, raw, req, reply, async (b) => {
+      const found = await this.passkeys.lookup(b.owner_id.toLowerCase(), b.rp_id, b.origin);
+      return reply.status(200).header('cache-control', 'no-store').send({ passkeys: found.map((p) => ({ id: p.id, credential_id: p.credentialId, user_handle: p.userHandle, user_name: p.userName, rp_id: p.rpId, sign_count: p.signCount })) });
+    });
+  }
+
+  /** The private key of one passkey (PKCS#8) as the body, for one signature; wiped when the response ends. A live run is required. */
+  @Post('passkey-release')
+  @HttpCode(200)
+  passkeyRelease(@Body() raw: unknown, @Req() req: CallbackRequest, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    return this.handle(passkeyReleaseBody, raw, req, reply, async (b) => {
+      const key = await this.passkeys.release(b.owner_id.toLowerCase(), b.item_id, b.rp_id, b.origin);
+      return this.sendBytes(reply, { expose: (fn) => fn(key), wipe: () => key.fill(0) }, {});
+    });
+  }
+
+  /** A passkey the fabric made in a live run: the private key arrives once, base64url, and is taken into a buffer wiped after the call. */
+  @Post('passkey-save')
+  @HttpCode(201)
+  async passkeySave(@Body() raw: unknown, @Req() req: CallbackRequest, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    return this.handle(passkeySaveBody, raw, req, reply, async (b) => {
+      const privateKey = Buffer.from(b.private_key, 'base64url');
+      try {
+        const saved = await this.passkeys.save(b.owner_id.toLowerCase(), { rpId: b.rp_id, origin: b.origin, credentialId: b.credential_id, userHandle: b.user_handle, userName: b.user_name, publicKey: b.public_key, privateKey, ...(b.run_id ? { runId: b.run_id } : {}) });
+        return reply.status(201).header('cache-control', 'no-store').send({ id: saved.id });
+      } finally {
+        privateKey.fill(0);
+      }
+    });
+  }
+
+  @Post('passkey-used')
+  @HttpCode(200)
+  async passkeyUsed(@Body() raw: unknown, @Req() req: CallbackRequest, @Res() reply: FastifyReply): Promise<FastifyReply> {
+    const parsed = passkeyUsedBody.safeParse(raw);
+    if (!parsed.success) return reply.status(400).header('cache-control', 'no-store').send({ code: 'refused' });
+    try {
+      if (!req.storeOwnerId || parsed.data.owner_id.toLowerCase() !== req.storeOwnerId) throw new SecretsProviderError('unauthorized', 'owner');
+      await this.passkeys.used(req.storeOwnerId, parsed.data.item_id, parsed.data.sign_count);
+      return reply.status(200).header('cache-control', 'no-store').send({});
+    } catch (e) {
+      return this.fail(reply, e);
+    }
+  }
+
   private sendBytes(reply: FastifyReply, secret: { expose<R>(fn: (b: Buffer) => R): R; wipe(): void }, headers: Record<string, string>): FastifyReply {
     const wipe = () => secret.wipe();
     reply.raw.once('finish', wipe);
