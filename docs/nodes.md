@@ -67,10 +67,12 @@ It installs:
 
 They start at every boot with nobody logged in.
 
-To use it:
-1. In the console, open **Fleet → Open desktop**.
-2. Pick a profile and click **Sign in to profile**, then sign in to Google there.
-3. Close that Chrome window to save the sign-in.
+To use it, sign its profiles in to Google:
+1. In the console, open **Fleet**. Each profile that is not signed in shows **Not signed in to Google** (see [Sign-in status](#sign-in-status)).
+2. Click **Sign in** on it. The console takes over the node's desktop and opens that profile at the Google sign-in.
+3. Sign in to Google on the desktop. The console notices, closes that Chrome so the sign-in is saved, and gives the desktop back. There is nothing else to do.
+
+With several profiles to sign in, **Fix sign-ins** on the Fleet page takes you through them one after another.
 
 Manage it with `hexactra agent status | logs | start | stop | restart | uninstall --mode unattended`. `hexactra agent update` updates it too.
 
@@ -98,13 +100,36 @@ Everything goes through the console. A node is just another host in **Fleet**.
 - **Web app and Android app:**
   - Fleet shows each host's mode and whether it is online.
   - **Open desktop** shows its screen in the console, for people with `fleet:desktop` (`hexactra fleet desktop <host>` prints the link).
-  - **Sign in to profile** (on the desktop page) opens that profile's Chrome on the node at the Google sign-in; `hexactra fleet profile show <host> <profile>` does the same.
+  - Each profile shows its Google sign-in status, and **Sign in** signs it in with one click ([Sign-in status](#sign-in-status)).
+  - **Sign in to profile** (on the desktop page) opens that profile's Chrome on the node at the Google sign-in, for doing it by hand; `hexactra fleet profile show <host> <profile>` does the same.
   - Tasks and runs pick a host and profile.
 - **MCP:** `hosts_list` shows hosts with their mode. Browser tools and goals take a profile. Viewing and controlling a desktop is for people, so MCP has no viewer tool.
 - **API and SDK:** the same operations over REST (`/api/docs`).
 - **CLI on the node:** `hexactra agent install | status | logs | update | start | stop | restart | uninstall`, also in the terminal UI under **Agent ▸ This machine as a browser node**.
 
 When a site needs you (a CAPTCHA, a code, an approval), the run pauses and asks in the Inbox and on your phone (a run started from a chat asks in that chat). You answer, or **take over** the desktop: the agent pauses between steps until you release it. On the desktop page you watch by default: **Take over** gives you the mouse and keyboard and pauses the agent, and **Release** hands it back. `hexactra fleet takeover | release <host>` does the same.
+
+## Sign-in status
+
+Most sites sign in through Google, and the agent relies on the profile's Google session. So every node reports, for every profile, whether it is signed in to Google (epic #926, [decision record](decisions/profile-signin-health.md)).
+
+| State | Fleet shows | Meaning |
+|---|---|---|
+| `signed_in` | **Signed in as** the account's email, in full | A valid Google session |
+| `signed_out` | **Not signed in to Google** (warning) | No Google account in the profile |
+| `expired` | **Google session expired** (warning) | Chrome knows the account, but Google wants the person to sign in again |
+| `unknown` | **Sign-in not checked** | The browser never ran, the check failed, or the checks disagree. A failed check is never shown as signed out |
+
+**How it is checked.** The node reads the profile's Chrome settings on disk (at agent start, after the browser closes, and when a profile is created), and while the browser runs, the extension asks Google which accounts the profile's session holds (when it starts, every 10 minutes, and as soon as a Google sign-in page finishes loading). Only the state, the email and the time of the check leave the node; cookies and Google's answer never do. `expired` is seen only while the browser runs.
+
+**Where it shows.** The Fleet page shows it on each profile, a "needs sign-in" count on each host, and a **Needs sign-in** filter; Home's Machines block shows the count; `hexactra fleet hosts` marks a profile that needs sign-in; `hexactra agent doctor` on the node prints each profile's status. The owner gets a **profile signed out** alert, and starting a task or run on a profile that needs sign-in shows a warning with a **Sign in** link. Neither ever blocks a run.
+
+**What each mode can do.**
+- **Unattended with a desktop:** **Sign in** (one click) and **Fix sign-ins** (a queue across the fleet), for people with `fleet:desktop`. If the profile's browser is busy with a run, the console names the run and waits for it; it never interrupts a run. Cancel, leaving the page or 15 minutes without a sign-in give the desktop back and leave the browser open.
+- **Attended:** the status and the warning, with the hint "Sign in on this computer's Chrome".
+- **Browser-only (no desktop):** the status and the warning, with the hint to sign in with `hexactra fleet profile show`.
+
+The email is shown in full to people with `fleet:read` (they own these accounts). It is never in a log, a span, a run trace, an export, a model's context or Hexactra's MCP tools. Sign-in status never authorises anything.
 
 ## Looking like a person
 
@@ -173,4 +198,6 @@ What the node has always held is unchanged: the browser profiles, with their coo
 | `chrome://policy` does not list Hexactra | Run `hexactra agent doctor`, then `hexactra agent chrome setup`, then restart Chrome |
 | The extension is not connected | `hexactra agent doctor` checks the policy, the native host and the extension |
 | The node shows offline | `hexactra agent status`, then `hexactra agent logs`. The node needs outbound HTTPS to the console. |
+| Profile shows **Not signed in to Google** or **Google session expired** | Click **Sign in** on it in Fleet (unattended nodes) and sign in on the desktop. On an attended node, sign in in your own Chrome; on a browser-only host, use `hexactra fleet profile show`. The warning clears within seconds of the sign-in. |
+| Profile shows **Sign-in not checked** | Its browser has not run yet, or the node could not read its settings. Start a run or open the profile once; `hexactra agent doctor` on the node prints what it read. |
 | A warning about software graphics | The machine has no usable Intel or AMD GPU (or uses NVIDIA's proprietary driver). The node works but is easier to detect. |
