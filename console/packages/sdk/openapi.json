@@ -37841,7 +37841,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/RunResponseDto"
+                      "$ref": "#/components/schemas/RunStartResponseDto"
                     }
                   }
                 }
@@ -41633,7 +41633,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/RunResponseDto"
+                      "$ref": "#/components/schemas/RunStartResponseDto"
                     }
                   }
                 }
@@ -100607,6 +100607,31 @@
               "null"
             ]
           },
+          "signin": {
+            "description": "A takeover asked on Google's account sign-in page (E48.5): the run's machine and profile, so the card can link to that profile's guided sign-in. Set by the server from the page URL the browser reported; null otherwise.",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "hostId": {
+                    "type": "string",
+                    "description": "The machine of the run's browser"
+                  },
+                  "profile": {
+                    "type": "string",
+                    "description": "Its browser profile"
+                  }
+                },
+                "required": [
+                  "hostId",
+                  "profile"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -103272,6 +103297,31 @@
                 "type": "null"
               }
             ]
+          },
+          "signin": {
+            "description": "A takeover asked on Google's account sign-in page (E48.5): the run's machine and profile, so the card can link to that profile's guided sign-in. Set by the server from the page URL the browser reported; null otherwise.",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "hostId": {
+                    "type": "string",
+                    "description": "The machine of the run's browser"
+                  },
+                  "profile": {
+                    "type": "string",
+                    "description": "Its browser profile"
+                  }
+                },
+                "required": [
+                  "hostId",
+                  "profile"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -104797,6 +104847,1129 @@
           "week",
           "fleet",
           "counts"
+        ]
+      },
+      "RunStartResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that started the run (trigger `chat`); null for every other run"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "waiting_human",
+              "paused",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "schedule",
+              "api",
+              "mcp",
+              "external",
+              "chat",
+              "email",
+              "benchmark"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "web",
+              "android",
+              "cli",
+              "api",
+              "mcp",
+              "schedule",
+              "system"
+            ],
+            "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+          },
+          "client": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "The OAuth client id; null for an unverified MCP client name",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name at the time the run started",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "verified": {
+                    "type": "boolean",
+                    "description": "False: a name an MCP client gave itself over a personal access token"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "verified"
+                ],
+                "description": "The AI app that started the run; null when it was not started by an app"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostFallback": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "handoffId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actor": {
+            "description": "Who drove an external run",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancelRequested": {
+            "type": "boolean"
+          },
+          "cancelRequestedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure."
+          },
+          "pauseRequested": {
+            "type": "boolean",
+            "description": "The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it."
+          },
+          "pausedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the run was paused (`paused` only, until it runs again); null otherwise"
+          },
+          "stepCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "activity": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "starting",
+                      "looking",
+                      "thinking",
+                      "acting"
+                    ]
+                  },
+                  "action": {
+                    "description": "The fabric action being run (acting only)",
+                    "type": "string"
+                  },
+                  "args": {
+                    "description": "Redacted like step args",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "reason": {
+                    "description": "Why the model chose the action",
+                    "type": "string"
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  "timeoutMs": {
+                    "description": "How long the host has before the action times out",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "target": {
+                    "description": "Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h",
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "w": {
+                        "type": "number"
+                      },
+                      "h": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "note": {
+                    "description": "Why the run is on a stronger model, while it is (for example \"Escalated to Frontier (stuck: repeated click on #submit)\")",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "phase",
+                  "startedAt"
+                ],
+                "description": "What a running run is doing right now; null when it is not running"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "run",
+                      "schedule",
+                      "task",
+                      "user_default",
+                      "system_default"
+                    ],
+                    "description": "Why this policy applied: the run request, the schedule, the task, the user default or the system default."
+                  },
+                  "builtin": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "version",
+                  "source",
+                  "builtin"
+                ],
+                "description": "The agent policy a run runs under; null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "finished",
+                  "budget_actions",
+                  "budget_model_calls",
+                  "budget_active_time",
+                  "budget_input_tokens",
+                  "budget_output_tokens",
+                  "budget_cost",
+                  "stalled",
+                  "cancelled",
+                  "error",
+                  "no_model"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field."
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effective": {
+                    "type": "object",
+                    "properties": {
+                      "actions": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "modelCalls": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "activeMinutes": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "inputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "outputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "cost": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "warnAtPercent": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost",
+                      "warnAtPercent"
+                    ],
+                    "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
+                  },
+                  "used": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "What the run has used so far, in the same units (active time includes the stretch in progress)."
+                  },
+                  "percent": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Percent of each limit used, one decimal; `null` for an unlimited budget."
+                  },
+                  "source": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "policy",
+                            "ceiling"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited."
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  },
+                  "enforcement": {
+                    "type": "string",
+                    "enum": [
+                      "hard",
+                      "soft"
+                    ],
+                    "description": "`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537)."
+                  },
+                  "over": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "description": "The budgets at or over their limit, in check order. A soft-budget run keeps working past them."
+                  }
+                },
+                "required": [
+                  "effective",
+                  "used",
+                  "percent",
+                  "source",
+                  "costKnown",
+                  "enforcement",
+                  "over"
+                ],
+                "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the policy starts runs on"
+                  },
+                  "max": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier the run may escalate to"
+                  },
+                  "current": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the run is on now: the start tier until a stall escalates it"
+                  },
+                  "escalations": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many times the run escalated"
+                  },
+                  "model": {
+                    "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "start",
+                  "max",
+                  "current",
+                  "escalations",
+                  "model"
+                ],
+                "description": "The run's model tier, from its policy snapshot: null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentTier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "standard",
+                  "frontier"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts."
+          },
+          "escalations": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many times the run moved to a stronger tier because it stalled"
+          },
+          "traceId": {
+            "description": "The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cachedInputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Input tokens the provider served from its cache (part of inputTokens)"
+          },
+          "modelCalls": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Model calls (provider round trips) made so far"
+          },
+          "costUsd": {
+            "type": "number",
+            "description": "USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false"
+          },
+          "costKnown": {
+            "type": "boolean",
+            "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
+          },
+          "confirmedActions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The step's sequence number"
+                },
+                "prompt": {
+                  "type": "string",
+                  "description": "The question the owner approved, at most 300 characters, masked"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "The action carried out (click, click_at, key, …)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was carried out"
+                }
+              },
+              "required": [
+                "seq",
+                "prompt",
+                "action",
+                "at"
+              ]
+            },
+            "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
+          },
+          "usedSavedLogins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the login (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved login's name as the owner gave it (\"Shop login\"), never its username, password or code"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site the login was used on (`https://shop.example.test`)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first used in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
+          },
+          "usedSavedIdentity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the details (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved identity item's name as the owner gave it (\"Passport\")"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The field filled, by its label (\"Date of birth\"): never its value"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site it was filled on"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first filled in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "label",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
+          },
+          "usedSavedCards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the card (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved card's name as the owner gave it"
+                },
+                "brand": {
+                  "description": "The card network (`visa`), or null",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "last4": {
+                  "description": "The last four digits, or null: never more",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "merchant": {
+                  "type": "string",
+                  "description": "The merchant's host as the page reported it"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The merchant's origin the card was typed on"
+                },
+                "currency": {
+                  "type": "string",
+                  "description": "ISO 4217"
+                },
+                "declaredAmount": {
+                  "type": "string",
+                  "description": "The amount the agent declared before paying, a decimal with two places"
+                },
+                "confirmedAmount": {
+                  "description": "The amount the agent read on the confirmation page, or null while unknown",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "mismatch": {
+                  "type": "boolean",
+                  "description": "The confirmed amount differs from the declared one by more than the tolerance"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When the card was typed"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "brand",
+                "last4",
+                "merchant",
+                "origin",
+                "currency",
+                "declaredAmount",
+                "confirmedAmount",
+                "mismatch",
+                "at"
+              ]
+            },
+            "description": "The saved cards the run paid with (E37.7), oldest first; empty when it used none. \"Paid with Visa ending 4242 at shop.example.test: 42.50 USD\" on the run page; a warning when the declared and the confirmed amounts differ."
+          },
+          "inputs": {
+            "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Masked like the rest of the run (#538); a sensitive value is never stored: \"[provided at run time]\""
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "provided",
+                        "default",
+                        "memory",
+                        "asked",
+                        "schedule",
+                        "saved_details",
+                        "email"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "value",
+                    "source"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outputsComplete": {
+            "description": "Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "outputs": {
+            "description": "What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs.",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "datetime",
+                        "boolean",
+                        "url",
+                        "choice"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "sensitive": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "description": "ISO 4217, or null when the page gave none",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+                    },
+                    "ok": {
+                      "type": "boolean",
+                      "description": "The value was returned and valid (an optional output left empty is ok)"
+                    },
+                    "note": {
+                      "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required",
+                    "sensitive",
+                    "value",
+                    "ok",
+                    "note"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "description": "Present only when there is a warning (E48.5). Never a refusal: the run has started. A profile that needs a Google sign-in can be signed in to from Fleet.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "PROFILE_NOT_SIGNED_IN"
+                  ],
+                  "description": "PROFILE_NOT_SIGNED_IN: the profile the run uses is signed out of Google, or its Google session expired, as the node last reported it"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "A sentence for a person; names the host and the profile, never an account"
+                },
+                "hostId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "The machine whose profile needs a sign-in"
+                },
+                "profile": {
+                  "type": "string",
+                  "description": "The browser profile"
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "hostId",
+                "profile"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "taskId",
+          "conversationId",
+          "status",
+          "trigger",
+          "origin",
+          "client",
+          "goal",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "sessionId",
+          "handoffId",
+          "actor",
+          "result",
+          "error",
+          "cancelRequested",
+          "cancelRequestedAt",
+          "pauseRequested",
+          "pausedAt",
+          "stepCount",
+          "activity",
+          "inputTokens",
+          "outputTokens",
+          "policy",
+          "stopReason",
+          "budget",
+          "tier",
+          "currentTier",
+          "escalations",
+          "traceId",
+          "cachedInputTokens",
+          "modelCalls",
+          "costUsd",
+          "costKnown",
+          "confirmedActions",
+          "usedSavedLogins",
+          "usedSavedIdentity",
+          "usedSavedCards",
+          "outputsComplete",
+          "memoryIds",
+          "createdAt",
+          "startedAt",
+          "finishedAt"
         ]
       },
       "RunTaskDto": {
