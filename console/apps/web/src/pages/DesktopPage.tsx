@@ -21,6 +21,7 @@ import type { ElementType, ReactNode } from 'react';
 
 import { KEYBOARD_SENTINEL, SPECIAL_KEYSYMS, diffKeysyms } from '../components/remoteKeyboard';
 import { ProfileSigninBanner, useProfileSignin } from '../fleet/ProfileSigninBanner';
+import { profileInUseRun, signinDesktopPath, startProfileSignin } from '../fleet/signin';
 import type { FleetHost } from '../types/fleet';
 import { BOTTOM_BAR_HEIGHT, formatDateTime, useBreakpoint } from '../ui';
 
@@ -226,7 +227,17 @@ export function DesktopPage() {
       setHost(h);
       if (wanted && h.profiles.some((p) => p.name === wanted)) {
         setProfile(wanted);
-        if (signinAsked && h.mode === 'unattended') setNotice(`To sign in "${wanted}", use "Sign in to profile" once the desktop is connected.`);
+        // A `?profile=<name>&signin=1` link (a run's warning or question card, E48.5) starts the guided sign-in (E48.4).
+        if (signinAsked && h.mode === 'unattended' && h.desktop && h.online) {
+          try {
+            const s = await startProfileSignin(api, h.id, wanted);
+            navigate(signinDesktopPath(s), { replace: true });
+            return;
+          } catch (e) {
+            const run = profileInUseRun(e);
+            setNotice(run ? `"${wanted}" is busy with a run (${run.runUrl}). Sign it in when the run ends.` : `${message(e, 'Could not start the sign-in')}. You can still use "Sign in to profile" once the desktop is connected.`);
+          }
+        }
       } else if (h.profiles.length && !h.profiles.some((p) => p.name === 'default')) setProfile(h.profiles[0]!.name);
       if (!h.online) return setStatus('offline');
       if (!h.desktop) return setStatus('unavailable');
@@ -238,7 +249,7 @@ export function DesktopPage() {
       setStatus('error');
       setError(message(e, 'Could not open the desktop'));
     }
-  }, [api, connect, id, wanted, signinAsked]);
+  }, [api, connect, id, wanted, signinAsked, navigate]);
 
   useEffect(() => {
     closing.current = false;
