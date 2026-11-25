@@ -281,6 +281,23 @@ export const runResponseSchema = z.object({
 });
 export class RunResponseDto extends createZodDto(runResponseSchema) {}
 
+/** A run start's warning (E48.5): additive; the run is started and unchanged whatever it says. */
+export const runStartWarningSchema = z.object({
+  code: z.enum(['PROFILE_NOT_SIGNED_IN']).describe('PROFILE_NOT_SIGNED_IN: the profile the run uses is signed out of Google, or its Google session expired, as the node last reported it'),
+  message: z.string().describe('A sentence for a person; names the host and the profile, never an account'),
+  hostId: z.uuid().describe('The machine whose profile needs a sign-in'),
+  profile: z.string().describe('The browser profile'),
+});
+
+/** `POST /runs` and `POST /tasks/{id}/runs`: the run, plus `warnings` when there is something to say. */
+export const runStartResponseSchema = runResponseSchema.extend({
+  warnings: z
+    .array(runStartWarningSchema)
+    .optional()
+    .describe('Present only when there is a warning (E48.5). Never a refusal: the run has started. A profile that needs a Google sign-in can be signed in to from Fleet.'),
+});
+export class RunStartResponseDto extends createZodDto(runStartResponseSchema) {}
+
 /** A run in a list (`GET /runs`): the run, with its task's name and a budget only while it is live. */
 export const runListItemResponseSchema = runResponseSchema.extend({
   taskName: z.string().nullable().describe("The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted"),
