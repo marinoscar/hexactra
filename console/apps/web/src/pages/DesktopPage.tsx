@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, Chip, Divider, IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack, TextField, Tooltip, Typography, useMediaQuery } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AspectRatioIcon from '@mui/icons-material/AspectRatio';
@@ -20,6 +20,7 @@ import RFB from '@novnc/novnc/core/rfb.js';
 import type { ElementType, ReactNode } from 'react';
 
 import { KEYBOARD_SENTINEL, SPECIAL_KEYSYMS, diffKeysyms } from '../components/remoteKeyboard';
+import { ProfileSigninBanner, useProfileSignin } from '../fleet/ProfileSigninBanner';
 import type { FleetHost } from '../types/fleet';
 import { BOTTOM_BAR_HEIGHT, formatDateTime, useBreakpoint } from '../ui';
 
@@ -127,11 +128,18 @@ function ToolButton({ label, Icon, compact, onClick, disabled, variant = 'text',
   );
 }
 
+const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 /**
  * A host's remote desktop (#339, docs/nodes.md), from the web app and the
  * Android app. The page opens a viewer session (an HttpOnly cookie scoped to
  * this host's /viewer/ path), then a WebSocket to /viewer/<id>/websockify
  * that nginx checks with the API and relays through the fabric to the node.
+ *
+ * Sign-in mode (`?signin=<id>`, E48.4): the console already took over the
+ * desktop and opened the profile at Google's sign-in. The page adopts that
+ * lease, shows a banner with what to do, and follows the sign-in until the
+ * API has saved the profile and given the desktop back.
  */
 export function DesktopPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -161,6 +169,13 @@ export function DesktopPage() {
   const leaseRef = useRef<Lease | null>(null);
   const [profile, setProfile] = useState('default');
   const [notice, setNotice] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const signinParam = searchParams.get('signin');
+  const signinId = signinParam && UUID.test(signinParam) ? signinParam : null;
+  const signin = useProfileSignin(api, signinId);
+  const signinActive = signin.session?.status === 'started';
+  /** A sign-in that keeps its lease for the next profile (E48.6): leaving the page does not release it. */
+  const keepLease = useRef(false);
 
   const connect = useCallback(
     (wsPath: string) => {
@@ -229,7 +244,7 @@ export function DesktopPage() {
       closing.current = true;
       rfb.current?.disconnect();
       const l = leaseRef.current;
-      if (l) void api.delete(`/fleet/hosts/${id}/takeover/${l.leaseId}`).catch(() => undefined);
+      if (l && !keepLease.current) void api.delete(`/fleet/hosts/${id}/takeover/${l.leaseId}`).catch(() => undefined);
       void api.delete(`/fleet/hosts/${id}/viewer-session`).catch(() => undefined);
     };
   }, [api, id, open]);
@@ -257,6 +272,31 @@ export function DesktopPage() {
     const l = leaseRef.current;
     setControl(null);
     if (l) await api.delete(`/fleet/hosts/${id}/takeover/${l.leaseId}`).catch(() => undefined);
+  };
+
+  // Sign-in mode: the API took the lease for this person; the page uses (and renews) it, and drops it once the sign-in ended.
+  const signinLease = signin.session?.leaseId ?? null;
+  const signinStatus = signin.session?.status;
+  useEffect(() => {
+    keepLease.current = signin.session?.keepLease ?? false;
+    if (signinStatus === 'started' && signinLease && leaseRef.current?.leaseId !== signinLease) {
+      void api
+        .get<Lease | null>(`/fleet/hosts/${id}/takeover`)
+        .then((l) => {
+          if (l && typeof l === 'object' && l.leaseId === signinLease) {
+            setControl(l);
+            setHeldBy(null);
+          }
+        })
+        .catch(() => undefined);
+    }
+    if (signinStatus && signinStatus !== 'started' && !keepLease.current && leaseRef.current) setControl(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setControl only touches refs and state setters
+  }, [api, id, signinLease, signinStatus, signin.session?.keepLease]);
+
+  const cancelSignin = async () => {
+    await signin.cancel();
+    setControl(null);
   };
 
   // Keep the lease while the page is open.
@@ -404,7 +444,7 @@ export function DesktopPage() {
           <Chip size="small" color={connected ? 'success' : 'default'} label={label[status]} sx={{ flexShrink: 0 }} />
         </Stack>
         <Stack direction="row" sx={{ alignItems: 'center', flexWrap: compact ? 'nowrap' : 'wrap', columnGap: compact ? 0.5 : 1, rowGap: 0.5 }}>
-          {lease ? (
+          {signinActive && lease ? null : lease ? (
             <ToolButton compact={compact} label="Release" Icon={BackHandOutlinedIcon} variant="contained" color="warning" onClick={() => void release()} />
           ) : (
             <ToolButton compact={compact} label="Take over" Icon={PanToolOutlinedIcon} variant="contained" onClick={() => void takeOver()} disabled={!connected} />
@@ -468,6 +508,9 @@ export function DesktopPage() {
           )}
         </Stack>
       </Stack>
+      {signinId && (
+        <ProfileSigninBanner session={signin.session} hostName={host?.name ?? null} error={signin.error} onCancel={() => void cancelSignin()} onBack={() => void close()} />
+      )}
       {status === 'offline' && host && (
         <Alert severity="warning">
           {host.name} is offline (last seen {formatDateTime(host.lastSeen)}). On the node, run `hexactra agent status`.
@@ -478,7 +521,7 @@ export function DesktopPage() {
           {host.name} does not share a desktop. Attended nodes need an X11 session (not Wayland); see the node guide.
         </Alert>
       )}
-      {lease && (
+      {lease && !signinActive && (
         <Alert severity="warning" sx={{ py: 0 }}>
           You are controlling {host?.name ?? 'this node'}; the agent is paused until you release it.
         </Alert>
