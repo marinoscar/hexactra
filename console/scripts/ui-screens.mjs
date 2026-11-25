@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5), `{signinWaiting}` and `{signinDone}` (mock only, E48.4) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -105,6 +105,9 @@ export const ROUTES = [
   ['run-trace-export', '/runs/{traceRun}', { action: openExportMenu, viewport: true }],
   ['fleet', '/fleet'],
   ['desktop', '/fleet/hosts/{host}/desktop'],
+  // The desktop page in sign-in mode (E48.4): the banner while the person signs in, then "Signed in as" with the next steps.
+  ['desktop-signin', '/fleet/hosts/{host}/desktop?signin={signinWaiting}'],
+  ['desktop-signin-done', '/fleet/hosts/{host}/desktop?signin={signinDone}'],
   ['notes', '/notes'],
   // Settings (the user's hub and its pages).
   ['settings', '/settings'],
