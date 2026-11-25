@@ -202,6 +202,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn signin_check_requests_and_status_cross_the_relay() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("bridge.sock");
+        let listener = UnixListener::bind(&sock).unwrap();
+        let (mut ext_w, relay_stdin) = tokio::io::duplex(1 << 16);
+        let (relay_stdout, mut ext_r) = tokio::io::duplex(1 << 16);
+        let _relay = tokio::spawn(run(
+            relay_stdin,
+            relay_stdout,
+            sock.clone(),
+            Duration::from_millis(20),
+        ));
+        let (mut agent, _) = listener.accept().await.unwrap();
+        assert_eq!(ext_recv(&mut ext_r).await["type"], "agent_connected");
+
+        // The agent asks for a check; the extension answers with only the
+        // state and the email, which reach the agent unchanged.
+        write_frame(&mut agent, br#"{"type":"check_signin"}"#, 1 << 20)
+            .await
+            .unwrap();
+        assert_eq!(
+            ext_recv(&mut ext_r).await,
+            serde_json::json!({"type": "check_signin"})
+        );
+        let status =
+            serde_json::json!({"type": "profile_status", "signin": "signed_out", "accounts": []});
+        ext_send(&mut ext_w, status.clone()).await;
+        let f = read_frame(&mut agent, 1 << 20).await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&f).unwrap(),
+            status
+        );
+    }
+
+    #[tokio::test]
     async fn relays_both_ways_and_survives_agent_restart() {
         let dir = tempfile::tempdir().unwrap();
         let sock = dir.path().join("bridge.sock");
