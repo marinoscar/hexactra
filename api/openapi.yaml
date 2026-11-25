@@ -3692,6 +3692,139 @@ components:
             type: string
             enum:
             - record_stop
+      - type: object
+        description: |-
+          Sign in with a Hexactra passkey (E47.4, #942). Answered by the control
+          plane: it arms the tab, presses `selector`, reads the WebAuthn request
+          the page made, checks its RP ID against the origin the browser reports,
+          asks the owner's provider for a matching passkey, signs the challenge
+          and answers the page. The operation reports `{ signed_in: true, rp_id }`;
+          with no matching passkey the request goes to the browser untouched and
+          the action fails `no_passkey`. Never a key, a signature or a challenge.
+        required:
+        - selector
+        - type
+        properties:
+          client_label:
+            type:
+            - string
+            - 'null'
+          provider:
+            type:
+            - string
+            - 'null'
+          run_id:
+            type:
+            - string
+            - 'null'
+          selector:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - passkey_sign_in
+      - type: object
+        description: |-
+          Add a Hexactra passkey to the site (E47.4): presses `selector` (the
+          site's "add a passkey" button), makes a P-256 key pair for the page's
+          WebAuthn `create` request, keeps it in the owner's provider and answers
+          the page. Reports `{ created: true, rp_id, user_name }`.
+        required:
+        - selector
+        - type
+        properties:
+          client_label:
+            type:
+            - string
+            - 'null'
+          provider:
+            type:
+            - string
+            - 'null'
+          run_id:
+            type:
+            - string
+            - 'null'
+          selector:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - passkey_create
+      - type: object
+        description: |-
+          The extension holds the tab's next WebAuthn request of `kind` (`get` or
+          `create`) for the control plane, for 15 s (E47.4). Queued only by the
+          control plane for a passkey action.
+        required:
+        - kind
+        - type
+        properties:
+          kind:
+            $ref: '#/components/schemas/WebauthnKind'
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - webauthn_arm
+      - type: object
+        description: |-
+          The request the armed tab holds, waiting up to `wait_ms`:
+          `{ request: { id, kind, origin, rp_id, challenge, ... } | null }`. The
+          origin is the tab's, as Chrome reports it.
+        required:
+        - wait_ms
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - webauthn_pending
+          wait_ms:
+            type: integer
+            format: int64
+            minimum: 0
+      - type: object
+        description: |-
+          Answer the held request with `credential`, or give it to the browser
+          untouched (`passthrough`).
+        required:
+        - request_id
+        - type
+        properties:
+          credential: {}
+          passthrough:
+            type: boolean
+          request_id:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - webauthn_resolve
       description: |-
         A single bounded browser operation.
 
@@ -4111,6 +4244,12 @@ components:
         y:
           type: integer
           format: int64
+    WebauthnKind:
+      type: string
+      description: Which WebAuthn call a tab is armed for (E47.4).
+      enum:
+      - get
+      - create
     WebhookDelivery:
       type: object
       description: One delivery attempt.

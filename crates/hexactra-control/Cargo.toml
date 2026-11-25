@@ -41,6 +41,8 @@ rusqlite.workspace = true
 clap.workspace = true
 jsonwebtoken = "9.3"
 sha2 = "0.10"
+# Hexactra passkeys (E47.4): ES256 signing and the PKCS#8 form of the key.
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8", "std"] }
 hex = "0.4"
 rand = "0.8"
 futures-util.workspace = true
