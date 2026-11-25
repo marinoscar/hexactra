@@ -76,6 +76,11 @@ export interface RunMemory extends BrowserMemory {
   tierNote?: string | null;
   /** Saved logins (E37.3): the references handed out, the page last looked up, the sign-in attempt in progress. Never a value. */
   savedLogins?: SavedLoginsMemory;
+  /**
+   * Hexactra passkeys (E47.5): the site `add_passkey` asked the owner about, and the sites the owner approved in this run (each
+   * lets one passkey be added). Set only by the tool and the runner's fold of the owner's answer, never by the model.
+   */
+  passkeys?: { asking?: { domain: string } | null; approved?: string[] };
   /** Saved identity details (E37.6): the references handed out, the page last looked up, the inputs filled from a provider. Never a value. */
   savedIdentity?: SavedIdentityMemory;
   /** Saved cards (E37.7): the references handed out, the page last looked up, the declared charge, the owner's approval and the phases of a payment. Never a card value. */

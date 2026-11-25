@@ -207,6 +207,20 @@ export type SecretsErrorCode =
   /** Saving a login: the fabric no longer holds the password (saved, expired, restarted): too late. */
   | 'secret_unavailable'
   | 'unsupported'
+  /** Hexactra passkeys (E47.4): the page asked for no passkey after the click. */
+  | 'no_request'
+  /** No Hexactra passkey of the owner fits the page (the browser shows its own prompt). */
+  | 'no_passkey'
+  /** Several of the owner's passkeys fit: the owner chooses the account. */
+  | 'several_passkeys'
+  /** A payment approval (Secure Payment Confirmation): never made by Hexactra (E47.6). */
+  | 'payment_refused'
+  /** The site wants a passkey type Hexactra does not make (only ES256). */
+  | 'unsupported_algorithm'
+  /** This account on the site already has the owner's Hexactra passkey. */
+  | 'already_registered'
+  /** The page's passkey request is not usable. */
+  | 'invalid_request'
   | 'timed_out'
   | 'cancelled'
   | 'unknown';
@@ -237,6 +251,13 @@ export const SECRETS_ERROR_CODES: readonly SecretsErrorCode[] = [
   'name_taken',
   'secret_unavailable',
   'unsupported',
+  'no_request',
+  'no_passkey',
+  'several_passkeys',
+  'payment_refused',
+  'unsupported_algorithm',
+  'already_registered',
+  'invalid_request',
   'timed_out',
   'cancelled',
   'unknown',

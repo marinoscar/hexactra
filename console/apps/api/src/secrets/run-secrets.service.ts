@@ -71,6 +71,15 @@ export class RunSecretsService {
    * Whether a sign-in the owner types by hand can be offered to their provider (E37.4b): both switches on, the Vault connected with
    * the write scope and speaking contract 1.3. The runner asks it when it opens a `credentials` card. Never throws.
    */
+  /** Whether the owner's provider keeps Hexactra passkeys (E47.2): the built-in store today (Vault: E47.3). Never throws. */
+  async passkeysSupported(userId: string): Promise<boolean> {
+    try {
+      return (await this.policy.activeProvider(userId)) === 'builtin';
+    } catch {
+      return false;
+    }
+  }
+
   saveLoginSupported(userId: string): Promise<boolean> {
     return this.saveLogins.supported(userId);
   }

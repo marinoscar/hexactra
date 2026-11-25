@@ -15,6 +15,8 @@ export interface RunToolsOptions<C extends AnyContext> {
   savedLogins?: readonly RunnerTool<C>[] | null;
   savedIdentity?: readonly RunnerTool<C>[] | null;
   savedCards?: readonly RunnerTool<C>[] | null;
+  /** Hexactra passkeys (E47.5): offered only when saved sign-ins are on and the owner's provider keeps passkeys. */
+  passkeys?: readonly RunnerTool<C>[] | null;
   /** The run lists a connection and the deployment has the connections module (E39.7). */
   connections: boolean;
   /** The tools of the owner's MCP servers the run lists (E39.9), already built, and one family per server (E41.2). */
@@ -47,6 +49,7 @@ export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): T
   if (o.savedLogins && !noBrowser) registry.registerAll(o.savedLogins);
   if (o.savedIdentity && !noBrowser) registry.registerAll(o.savedIdentity);
   if (o.savedCards && !noBrowser) registry.registerAll(o.savedCards);
+  if (o.passkeys && !noBrowser) registry.registerAll(o.passkeys);
   // The owner's connections (E39.7): offered only when the run has one with the capability switched on (`available`).
   if (o.connections) registry.registerAll(connectionTools as unknown as RunnerTool<C>[]);
   // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.

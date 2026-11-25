@@ -178,6 +178,23 @@ export class FabricSession {
    * types with trusted input and wipes the value: the answer is only
    * `{ typed: true }`, never the value, never its length.
    */
+  /**
+   * Sign in with a Hexactra passkey (E47.4): the browser host presses `selector`, answers the page's WebAuthn request with the owner's
+   * passkey for that site, and reports only `{ signed_in, rp_id }`. Never a key, a signature or the page's challenge.
+   */
+  async passkeySignIn(sessionId: string, opts: { selector: string } & ProviderCallOptions): Promise<{ rpId: string }> {
+    const op = await this.act(sessionId, { type: 'passkey_sign_in', selector: opts.selector, ...providerMeta(opts) }, opts.timeoutMs, { waitForTakeover: opts.waitForTakeover });
+    const r = secretsResult(op) as { rp_id?: string };
+    return { rpId: String(r.rp_id ?? '') };
+  }
+
+  /** Add a Hexactra passkey to the site (E47.4): presses `selector`, makes and keeps a key pair, answers the page. */
+  async passkeyCreate(sessionId: string, opts: { selector: string } & ProviderCallOptions): Promise<{ rpId: string; userName: string }> {
+    const op = await this.act(sessionId, { type: 'passkey_create', selector: opts.selector, ...providerMeta(opts) }, opts.timeoutMs, { waitForTakeover: opts.waitForTakeover });
+    const r = secretsResult(op) as { rp_id?: string; user_name?: string };
+    return { rpId: String(r.rp_id ?? ''), userName: String(r.user_name ?? '') };
+  }
+
   async typeFromProvider(sessionId: string, opts: TypeFromProviderOptions): Promise<{ typed: true }> {
     const op = await this.act(
       sessionId,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PasskeysController } from './passkeys.controller';
 import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 
 import { FabricModule } from '../fabric/fabric.module';
@@ -36,7 +37,7 @@ import { VaultTokenService } from './vault-token.service';
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
-  controllers: [SecretsController, SecretsActivityController],
+  controllers: [SecretsController, SecretsActivityController, PasskeysController],
   providers: [
     { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricSessionSecretsRegistry },
     SecretsPolicyService,

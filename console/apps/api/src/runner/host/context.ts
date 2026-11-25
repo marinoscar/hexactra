@@ -40,7 +40,7 @@ export interface HostExt extends BrowserExt {
   /** The connections this run may use (E39.7), fixed at its start. */
   connections: RunConnectionsInfo;
   /** The saved-secret tool families this run is offered. */
-  flags: { savedLogins: boolean; savedIdentity: boolean; savedCards: boolean; saveLogin: boolean };
+  flags: { savedLogins: boolean; savedIdentity: boolean; savedCards: boolean; saveLogin: boolean; passkeys: boolean };
 }
 
 export type HostContext = RunContext<RunMemory, HostExt>;

@@ -32,6 +32,7 @@ import {
 } from '../secrets/api';
 import { CONNECT_RESULT_WORDS, fieldsWords, hasCardsScope, hasIdentityScope, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
 import { limitsText, type ApprovalRule, type ApprovalRulesList } from '../approvals/types';
+import { PasskeysSection } from '../secrets/PasskeysSection';
 import { CardSkeleton, EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, useApiAction, useConfirm, type Column } from '../ui';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -832,6 +833,7 @@ export function SecretsSettingsPage() {
             </Stack>
           </Paper>
 
+          {store?.provider === 'builtin' && <PasskeysSection canWrite={canWrite} />}
           {neverSites.length > 0 && <NeverSaveSection sites={neverSites} canWrite={canWrite} busy={action.busy === 'never'} onRemove={(site) => void offerAgain(site)} />}
           {reach && <ReachSection reach={reach} manageUrl={manageUrl} store={store} />}
           {store?.provider !== 'builtin' && <CardsSection connected={vault.status === 'connected'} hasScope={hasCardsScope(vault.scopes)} manageUrl={manageUrl} remembered={cardRules} />}

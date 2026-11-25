@@ -182,6 +182,8 @@ export function fakeSecretsFabric(url: string) {
   const registrations: { owner: string; provider: string; kind: string }[] = [];
   const sessions: Record<string, unknown>[] = [];
   const state = {
+    /** Hexactra passkeys (E47.5): what the fabric answers to passkey_sign_in and passkey_create ('ok', or a failure code). */
+    passkeys: { signIn: 'ok', create: 'ok', rpId: 'example.com' },
     items: defaultItems(),
     identities: defaultIdentities(),
     cards: defaultCards(),
@@ -317,6 +319,11 @@ export function fakeSecretsFabric(url: string) {
         const marks = page.inputs.map((i, n) => ({ n: n + 1, selector: i.selector, tag: i.tag, text: page.fields[i.selector] ?? '', x: 10, y: 10 + n * 30, w: 100, h: 20 }));
         shots.push({ screen: action.type === 'screenshot' ? 'page' : 'desktop', covered: page.covered, hasValues: Object.keys(page.fields).length > 0, markTexts: marks.map((m) => m.text) });
         return { id: 'op', state: 'succeeded', result: { mime: 'image/jpeg', data: 'AAAA', width: 800, height: 600, url: page.url, title: 'Form', marks, masked: action.mask === true ? 0 : undefined } };
+      }
+      if (action.type === 'passkey_sign_in' || action.type === 'passkey_create') {
+        const outcome = action.type === 'passkey_sign_in' ? state.passkeys.signIn : state.passkeys.create;
+        if (outcome !== 'ok') return { id: 'op', state: 'failed', error: `${outcome}: the passkey step did not happen` };
+        return { id: 'op', state: 'succeeded', result: action.type === 'passkey_sign_in' ? { signed_in: true, rp_id: state.passkeys.rpId } : { created: true, rp_id: state.passkeys.rpId, user_name: 'person-a@example.test' } };
       }
       if (action.type === 'secrets_lookup' && action.kind === 'card') {
         providerCalls.push({ op: 'lookup', origin, kind: 'card', ...meta });

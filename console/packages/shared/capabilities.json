@@ -1326,6 +1326,24 @@
       "web": "/admin/settings/secrets"
     },
     {
+      "id": "secrets.passkeys",
+      "description": "The owner's Hexactra passkeys (E47.5): the site, the account, when each was added and last used, and Remove. Never a key",
+      "rest": [
+        "GET /api/secrets/passkeys",
+        "DELETE /api/secrets/passkeys/{id}"
+      ],
+      "cli": {
+        "none": "Deliberate: the owner reviews and removes passkeys on the Secrets page; no command yet"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must never list or remove the owner's passkeys (the same rule as saved logins, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/secrets"
+    },
+    {
       "id": "secrets.activity",
       "description": "What the agent did with the owner's saved secrets: the newest 100 uses and refusals (when, run, site, which field kind, outcome) and the logins used so far. Never a value, a username or a code (E37.4)",
       "rest": [

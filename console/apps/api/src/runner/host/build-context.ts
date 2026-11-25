@@ -51,6 +51,7 @@ import { originOf } from './tools/secrets-support';
 import { buildSavedCardTools } from './tools/saved-card-tools';
 import { savedIdentityTools } from './tools/saved-identity';
 import { savedLoginTools } from './tools/saved-logins';
+import { passkeyTools } from './tools/passkeys';
 import { proposeMemory, proposeSavingLogin } from './tools/propose';
 import { kgraphObserverFor } from './kgraph/kgraph-observer';
 import { surfaceCapture } from './kgraph/surface';
@@ -231,6 +232,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     savedLogins: flags.savedLogins ? savedLoginTools : null,
     savedIdentity: flags.savedIdentity ? savedIdentityTools : null,
     savedCards: flags.savedCards ? buildSavedCardTools(cardCtx) : null,
+    passkeys: flags.passkeys ? passkeyTools : null,
     connections: s.connections.list.length > 0 && Boolean(d.connections),
     ...(s.connections.list.length > 0 ? await mcpToolset(d, userId, s.connections.list).then((m) => ({ mcp: m.tools, mcpFamilies: m.families })) : { mcp: [] }),
     procedures,
