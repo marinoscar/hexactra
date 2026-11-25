@@ -132,6 +132,24 @@ pub struct TestProvider {
     cards: Vec<TestCard>,
     failure: Mutex<Option<ProviderError>>,
     calls: Mutex<Vec<TestCall>>,
+    /// Hexactra passkeys (E47.2): kept in memory, the private key included.
+    passkeys: Mutex<Vec<TestPasskey>>,
+}
+
+/// A passkey the test provider keeps (E47.2). Tests read the private key to
+/// check a signature; a real provider never lets it out but to the fabric.
+#[derive(Debug, Clone)]
+pub struct TestPasskey {
+    pub id: String,
+    pub owner: String,
+    pub rp_id: String,
+    pub origin: String,
+    pub credential_id: String,
+    pub user_handle: String,
+    pub user_name: String,
+    pub public_key: String,
+    pub private_key: Vec<u8>,
+    pub sign_count: u32,
 }
 
 impl Default for TestProvider {
@@ -150,7 +168,19 @@ impl TestProvider {
             cards: Vec::new(),
             failure: Mutex::new(None),
             calls: Mutex::new(Vec::new()),
+            passkeys: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The passkeys kept (E47.2), private keys included: for tests only.
+    pub fn passkeys(&self) -> Vec<TestPasskey> {
+        self.passkeys.lock().unwrap().clone()
+    }
+
+    /// Keep a passkey made elsewhere (a second account on the same site).
+    pub fn with_passkey(self, p: TestPasskey) -> Self {
+        self.passkeys.lock().unwrap().push(p);
+        self
     }
 
     /// Two logins: `test-login-1` for [`FIXTURE_ORIGIN`] (with a one-time
@@ -409,6 +439,93 @@ impl TestProvider {
 impl SecretsProvider for TestProvider {
     fn id(&self) -> &str {
         "test"
+    }
+
+    async fn passkey_lookup(
+        &self,
+        owner: &OwnerId,
+        rp_id: &str,
+        origin: &Origin,
+    ) -> Result<Vec<crate::PasskeySummary>, ProviderError> {
+        if let Some(e) = self.failure.lock().unwrap().clone() {
+            return Err(e);
+        }
+        if !crate::rp_id_allowed(rp_id, origin) {
+            return Err(ProviderError::OriginMismatch);
+        }
+        Ok(self
+            .passkeys
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| p.owner == owner.as_str() && p.rp_id == rp_id)
+            .map(|p| crate::PasskeySummary {
+                id: p.id.clone(),
+                credential_id: p.credential_id.clone(),
+                user_handle: p.user_handle.clone(),
+                user_name: p.user_name.clone(),
+                rp_id: p.rp_id.clone(),
+                sign_count: p.sign_count,
+            })
+            .collect())
+    }
+
+    async fn passkey_release(
+        &self,
+        req: crate::PasskeyRelease,
+    ) -> Result<SecretValue, ProviderError> {
+        if !crate::rp_id_allowed(&req.rp_id, &req.origin) {
+            return Err(ProviderError::OriginMismatch);
+        }
+        let keys = self.passkeys.lock().unwrap();
+        let p = keys
+            .iter()
+            .find(|p| p.id == req.item_id && p.owner == req.owner.as_str())
+            .ok_or(ProviderError::NotFound)?;
+        if p.rp_id != req.rp_id {
+            return Err(ProviderError::OriginMismatch);
+        }
+        Ok(SecretValue::new(p.private_key.clone()))
+    }
+
+    async fn passkey_save(&self, req: crate::NewPasskey) -> Result<String, ProviderError> {
+        if let Some(e) = self.failure.lock().unwrap().clone() {
+            return Err(e);
+        }
+        let mut keys = self.passkeys.lock().unwrap();
+        let id = format!("test-passkey-{}", keys.len() + 1);
+        let private_key = req.private_key.expose(|b| b.to_vec());
+        keys.push(TestPasskey {
+            id: id.clone(),
+            owner: req.owner.as_str().to_string(),
+            rp_id: req.rp_id,
+            origin: req.origin.to_string(),
+            credential_id: req.credential_id,
+            user_handle: req.user_handle,
+            user_name: req.user_name,
+            public_key: req.public_key,
+            private_key,
+            sign_count: 0,
+        });
+        Ok(id)
+    }
+
+    async fn passkey_used(
+        &self,
+        owner: &OwnerId,
+        item_id: &str,
+        sign_count: u32,
+    ) -> Result<(), ProviderError> {
+        if let Some(p) = self
+            .passkeys
+            .lock()
+            .unwrap()
+            .iter_mut()
+            .find(|p| p.id == item_id && p.owner == owner.as_str())
+        {
+            p.sign_count = sign_count;
+        }
+        Ok(())
     }
 
     async fn lookup(

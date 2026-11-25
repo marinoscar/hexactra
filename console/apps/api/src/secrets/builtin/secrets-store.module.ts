@@ -29,6 +29,7 @@ import { StoreCallbackController, StoreCallbackGuard } from './store.callback.co
 import { SecretsStoreCallbackTokens } from './store.callback-tokens';
 import { SecretsStoreCrypto } from './store.crypto';
 import { SecretsStoreKeys, STORE_KEY_RING } from './store.data-keys';
+import { StorePasskeys } from './store.passkeys';
 import { StoreKeyCheck } from './store.doctor';
 import { SecretsStoreController } from './store.controller';
 import { SecretsStoreInterceptor } from './store.interceptor';
@@ -74,6 +75,7 @@ import { SecretsStoreBootstrap } from './store.bootstrap';
     { provide: AgentRateLimiter, useClass: InMemoryAgentRateLimiter },
     // The console's own parts.
     BuiltinSecretsProvider,
+    StorePasskeys,
     StoreCallbackGuard,
     SecretsStoreInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: SecretsStoreInterceptor },
@@ -84,6 +86,6 @@ import { SecretsStoreBootstrap } from './store.bootstrap';
     StoreKeyCheck,
     SecretsStoreBootstrap,
   ],
-  exports: [BuiltinSecretsProvider, SecretsStoreKeys, AGENT_RELEASE_PORT],
+  exports: [BuiltinSecretsProvider, SecretsStoreKeys, StorePasskeys, AGENT_RELEASE_PORT],
 })
 export class SecretsStoreModule {}

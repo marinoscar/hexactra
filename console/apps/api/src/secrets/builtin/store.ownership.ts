@@ -27,7 +27,8 @@ export type StoreModelName =
   | 'BackupSchedule'
   | 'AgentCardGrant'
   | 'AgentCardGrantRequest'
-  | 'AgentCardRelease';
+  | 'AgentCardRelease'
+  | 'PasskeyCredential';
 
 export const STORE_USER_OWNED_MODELS: readonly UserOwnedModelDef<StoreModelName>[] = [
   {
@@ -61,6 +62,14 @@ export const STORE_USER_OWNED_MODELS: readonly UserOwnedModelDef<StoreModelName>
     rationale: "The owner's data key, wrapped under the deployment's store key. Deleted with the user (their secrets go with it); never exported: it is key material.",
   },
   {
+    model: 'PasskeyCredential',
+    ownerField: 'ownerUserId',
+    ownerRelation: 'owner',
+    purge: 'delete',
+    export: 'exclude',
+    rationale: "A Hexactra passkey (E47.2): its private key is ciphertext under the owner's data key. Deleted with the user; never exported: it is key material.",
+  },
+  {
     model: 'SecretsStoreCallbackToken',
     ownerField: 'userId',
     purge: 'delete',
@@ -82,6 +91,7 @@ export const STORE_MODEL_OWNERSHIP: readonly ModelOwnershipDef<StoreModelName>[]
   { model: 'SecretAttachment', kind: 'user', rationale: "An attachment belongs to its secret version (attachments are not mounted in the console)." },
   { model: 'SecretType', kind: 'system', rationale: 'Shared secret-type definitions: system types are code-seeded.' },
   { model: 'SecretsStoreDataKey', kind: 'user', rationale: "One owner's wrapped data key." },
+  { model: 'PasskeyCredential', kind: 'user', rationale: "One owner's Hexactra passkey for one site." },
   { model: 'SecretsStoreCallbackToken', kind: 'user', rationale: "The hash of the credential the fabric presents for one owner." },
   { model: 'MediaFolder', kind: 'user', rationale: 'Not mounted in the console.' },
   { model: 'MediaFolderFile', kind: 'system', orgReference: 'orgId', rationale: 'Side table placing a storage object in a folder; org_id is half of the composite key to storage_objects. Not mounted in the console.' },

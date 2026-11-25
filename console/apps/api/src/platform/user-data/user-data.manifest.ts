@@ -57,6 +57,7 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'SecretType', category: 'saved-logins' },
   { model: 'SecretsStoreDataKey', category: 'saved-logins' },
   { model: 'SecretsStoreCallbackToken', category: 'saved-logins' },
+  { model: 'PasskeyCredential', category: 'saved-logins' },
   { model: 'MediaFolder', category: 'saved-logins' },
   { model: 'BackupRun', category: 'saved-logins' },
   { model: 'BackupSchedule', category: 'saved-logins' },

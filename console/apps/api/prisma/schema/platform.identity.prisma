@@ -194,6 +194,7 @@ model User {
   // composed from app:secrets-store.prisma
   secretsStoreDataKey        SecretsStoreDataKey?
   secretsStoreCallbackTokens SecretsStoreCallbackToken[]
+  passkeyCredentials         PasskeyCredential[]         @relation("PasskeyCredentialOwner")
 
   // composed from app:tasks.prisma
   tasks Task[]
