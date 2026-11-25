@@ -87,6 +87,14 @@ enum Commands {
         #[arg(long = "desktop-vnc", env = "HEXACTRA_DESKTOP_VNC")]
         desktop_vnc: Option<DesktopTarget>,
     },
+    /// Check this node: each browser profile's Google sign-in status, read
+    /// from the profile on disk (the Fleet page also shows the live check).
+    Doctor {
+        /// Directory with one subdirectory per browser profile
+        /// (default: $XDG_DATA_HOME/hexactra/profiles).
+        #[arg(long, env = "HEXACTRA_PROFILES_DIR")]
+        profiles_dir: Option<PathBuf>,
+    },
     /// Print the bridge socket path the native host will use.
     SocketPath,
     /// Print version.
@@ -202,6 +210,14 @@ async fn main() -> Result<()> {
     match Cli::parse().command {
         Commands::Version => {
             println!("hexactra-agent {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
+        Commands::Doctor { profiles_dir } => {
+            let dir = profiles_dir.unwrap_or_else(|| data_dir().join("profiles"));
+            println!("profiles in {}", dir.display());
+            for line in hexactra_agent::signin::doctor_lines(&dir) {
+                println!("{line}");
+            }
             Ok(())
         }
         Commands::SocketPath => {
@@ -341,6 +357,17 @@ mod tests {
             "tcp:0.0.0.0:5900",
         ])
         .is_err());
+    }
+
+    #[test]
+    fn cli_parses_doctor() {
+        let cli = Cli::parse_from(["hexactra-agent", "doctor", "--profiles-dir", "/p"]);
+        match cli.command {
+            Commands::Doctor { profiles_dir } => {
+                assert_eq!(profiles_dir, Some(PathBuf::from("/p")))
+            }
+            _ => panic!("expected doctor"),
+        }
     }
 
     #[test]
