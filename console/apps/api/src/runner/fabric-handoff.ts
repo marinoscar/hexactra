@@ -89,6 +89,8 @@ export interface CreatedHandoff {
   id: string;
   viewerUrl: string | null;
   pageTitle: string | null;
+  /** The page's URL as the browser reported it: used, never stored (E48.5: a takeover on Google's sign-in links to the guided sign-in). */
+  pageUrl?: string | null;
   expiresAt: Date | null;
 }
 

@@ -109,7 +109,7 @@ export class FabricSession {
     const r = await this.fabric.request<{ handoff: Partial<FabricHandoff> & { id: string } }>('POST', `/v1/sessions/${sessionId}/handoffs`, { body: handoffBody(req) });
     const h = r.handoff;
     const expires = h.expires_at ? new Date(h.expires_at) : null;
-    return { id: h.id, viewerUrl: h.viewer_url ?? null, pageTitle: h.page?.title ?? null, expiresAt: expires && !Number.isNaN(expires.getTime()) ? expires : null };
+    return { id: h.id, viewerUrl: h.viewer_url ?? null, pageTitle: h.page?.title ?? null, pageUrl: h.page?.url ?? null, expiresAt: expires && !Number.isNaN(expires.getTime()) ? expires : null };
   }
 
   /** Answer a handoff with the console's service token, as `answeredBy` (e.g. `user:<id>`). */

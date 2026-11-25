@@ -1,5 +1,5 @@
 // E46.15 (#789): each detector with positive and negative fixtures.
-import { detectBlocked, detectConsent, detectInterrupt, detectOverlay, detectSignedOut, isConsentChoice, pageSnapshot, type PageSnapshot } from '../src/surface';
+import { detectBlocked, detectConsent, detectInterrupt, detectOverlay, detectSignedOut, isConsentChoice, isGoogleSignInPage, pageSnapshot, type PageSnapshot } from '../src/surface';
 import { FakeBrowser } from '../src/testing';
 
 const el = (o: Partial<PageSnapshot['elements'][number]>) => ({ selector: '#x', selectors: ['#x'], role: null, name: null, tag: 'button', inputType: null, anchor: null, ...o });
@@ -33,6 +33,32 @@ describe('signed_out', () => {
   });
   it('a page with a "Sign in" link but no password field is not', () => {
     expect(detectSignedOut(page({ elements: [el({ name: 'Sign in', tag: 'a' })] }))).toBe(false);
+  });
+  it("Google's own account sign-in is told from the URL alone (E48.5)", () => {
+    for (const url of [
+      'https://accounts.google.com/v3/signin/identifier?continue=https%3A%2F%2Fmail.google.com',
+      'https://accounts.google.com/signin/v2/challenge/pwd',
+      'https://accounts.google.com/ServiceLogin?service=mail',
+      'https://accounts.google.com/AccountChooser',
+      'https://Accounts.Google.com/InteractiveLogin',
+    ]) {
+      expect(isGoogleSignInPage(url)).toBe(true);
+    }
+    for (const url of [
+      null,
+      undefined,
+      '',
+      'not a url',
+      'http://accounts.google.com/signin',
+      'https://accounts.google.com/',
+      'https://accounts.google.com/b/0/ManageAccount',
+      'https://accounts.google.com.evil.example/signin',
+      'https://evil.example/accounts.google.com/signin',
+      'https://mail.google.com/mail/u/0/',
+      'https://shop.example.com/signin',
+    ]) {
+      expect(isGoogleSignInPage(url)).toBe(false);
+    }
   });
 });
 

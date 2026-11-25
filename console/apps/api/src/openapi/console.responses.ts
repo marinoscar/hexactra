@@ -464,6 +464,13 @@ export const questionAnswerResponseSchema = z.object({
   answeredAt: iso,
 });
 
+/** A takeover asked on Google's account sign-in page (E48.5): where its guided sign-in is. */
+const questionSigninSchema = z
+  .object({ hostId: z.string().describe('The machine of the run\'s browser'), profile: z.string().describe('Its browser profile') })
+  .nullable()
+  .optional()
+  .describe("A takeover asked on Google's account sign-in page (E48.5): the run's machine and profile, so the card can link to that profile's guided sign-in. Set by the server from the page URL the browser reported; null otherwise.");
+
 export const questionResponseSchema = z.object({
   id: z.uuid(),
   askedBy: z.string().describe('run:<id>, agent:<name> or user:<id>'),
@@ -492,6 +499,7 @@ export const questionResponseSchema = z.object({
   response: questionAnswerResponseSchema.nullable(),
   pageTitle: z.string().nullable(),
   viewerUrl: z.string().nullable(),
+  signin: questionSigninSchema,
   createdAt: iso,
   expiresAt: iso,
   answeredAt: iso.nullable(),
@@ -534,7 +542,9 @@ export const inboxItemResponseSchema = z.object({
   proposal: memoryProposal.nullable(),
   saveLogin: saveLoginCard.nullable(),
 });
-export class InboxItemResponseDto extends createZodDto(inboxItemResponseSchema) {}
+/** `GET /inbox` for the console and the REST API: the item, plus where a Google sign-in takeover is fixed (E48.5; MCP's `inbox_list` keeps `inboxItemResponseSchema`). */
+export const inboxItemRestResponseSchema = inboxItemResponseSchema.extend({ signin: questionSigninSchema });
+export class InboxItemResponseDto extends createZodDto(inboxItemRestResponseSchema) {}
 
 /** A request that is over (E40.3): what was asked, how it ended, never a secret. */
 export const inboxHistoryItemResponseSchema = z.object({
