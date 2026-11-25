@@ -443,6 +443,17 @@ A failed action is `state: "failed"` with `error: "<code>: <message>"`: `no_prov
 
 Audit: each lookup emits `secrets.lookup` and each release `secrets.release` on the event stream with `owner_id`, `session_id`, `op_id`, `run_id`, `client_label`, `provider`, `item_id`, `field`, `origin`, `purpose`, `outcome` (`ok`, `typed`, or the failure code) and `released`; registrations emit `secrets.provider_registered` and `secrets.provider_removed`. Never a value. The console stores the stream as its audit trail; the fabric keeps the last 2,000 events. Webhooks carry handoff events only.
 
+### Passkeys (E47)
+
+`passkey_sign_in` and `passkey_create` (`{ selector, tab_id?, provider?, run_id?, client_label? }`) are answered by the control plane from the owner's secrets provider, like the actions above ([decision record](decisions/passkey-provider.md)):
+
+1. It reads the tab, arms it with `webauthn_arm` (the extension holds that tab's next WebAuthn `get` or `create` for 15 s, in the page's own world, injected only now), presses `selector`, and reads the held request with `webauthn_pending`. The request's origin is the tab's, as Chrome reports it.
+2. It checks the RP ID with WebAuthn's rule: the origin's host or a registrable parent, never a public suffix; `https`, or `http` on `localhost`.
+3. Sign-in: the provider's passkeys for the RP ID, filtered by the page's allowed credentials. Exactly one must fit. Its PKCS#8 key is released for one signature, `clientDataJSON` is built from the browser's origin and the page's challenge, and `authenticatorData` carries the RP ID hash, user present and verified, and the counter. The ES256 signature answers the page through `webauthn_resolve`, and the counter is recorded. Create: a P-256 key pair is made, kept by the provider first, then the page gets a `none` attestation.
+4. The result is `{ signed_in: true, rp_id }` or `{ created: true, rp_id, user_name }`: never a key, a signature or a challenge.
+
+Failures leave the request to the browser untouched (`webauthn_resolve` with `passthrough`): `no_request`, `no_passkey`, `several_passkeys`, `payment_refused` (a request with the `payment` extension, E47.6), `origin_mismatch`, `unsupported_algorithm` (only ES256), `already_registered`, `invalid_request`, and the provider codes. `webauthn_arm`, `webauthn_pending` and `webauthn_resolve` are the control plane's own: an API caller gets `400`. Audit events are `passkey.sign_in` and `passkey.create`, with the outcome and no value. The Vault provider answers `unsupported` until E47.3.
+
 ## Webhooks: channels that reach a person
 
 Webhooks let any number of channels hear about handoffs and answer them: a Slack or Telegram bot, an n8n or Zapier flow, an email or SMS gateway, your own service.

@@ -631,8 +631,10 @@ sequenceDiagram
 ### 11.8 HITL sequence: phone prompt, passkey, or security key
 
 - Ask with `input: none` (kind `login` or `other`) when the user must respond on a separate trusted device: they act there, then press Done.
-- Give clear, contextual instructions but do not ask the agent to impersonate the authenticator.
-- For a passkey or hardware security key, ask with `input: takeover` (kind `passkey`); when the host registered a remote viewer, the question links to it.
+- Give clear, contextual instructions but do not ask the agent to impersonate the owner's own authenticator.
+- When the screen shows a code to scan or read (a site's sign-in QR code, a number to match, Chrome's "use a phone or tablet" passkey QR code), ask with `input: scan` (#924): the owner sees a live picture the server takes, under a warning naming the site the browser is on. Chrome's code needs the phone near the node with Bluetooth on; a node that reports no Bluetooth is asked a takeover instead.
+- For a passkey or hardware security key on the node itself, ask with `input: takeover` (kind `passkey`); when the host registered a remote viewer, the question links to it.
+- *Post-v1, epic E47 (#925):* the owner may add **Hexactra as one more passkey** on a site, approved by them per site; the fabric then signs in with it (an ES256 key kept in the owner's secrets provider, Secret Material handled like a password, §11.6), only on a tab it armed, never for a payment. The owner's own passkeys are untouched. See `docs/decisions/passkey-provider.md`.
 - *Future:* where browser and authenticator support require local presence and that presence is unavailable, return an explicit **HUMAN_ACTION_UNSUPPORTED_ON_THIS_HOST** outcome rather than inventing a bypass. Today the person declines the question (`cancelled`).
 - After the user acts, independently check the page/navigation/authentication state before declaring success.
 
