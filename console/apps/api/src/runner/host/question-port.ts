@@ -23,10 +23,14 @@ export interface QuestionContext {
   saveLoginOn: boolean;
 }
 
-/** Whether answering the question needs the run's browser: a secret typed into a page, a sign-in, a takeover, a CAPTCHA or a passkey. */
+/** Whether answering the question needs the run's browser: a secret typed into a page, a sign-in, a takeover, a scan, a CAPTCHA or a passkey. */
 function needsBrowser(spec: BrokerSpec): boolean {
-  return spec.input === 'secret' || spec.input === 'credentials' || spec.input === 'takeover' || spec.kind === 'captcha' || spec.kind === 'passkey' || spec.kind === 'login';
+  return spec.input === 'secret' || spec.input === 'credentials' || spec.input === 'takeover' || spec.input === 'scan' || spec.kind === 'captcha' || spec.kind === 'passkey' || spec.kind === 'login';
 }
+
+/** What the model reads instead of a desktop scan on a machine with no Bluetooth (#924): Chrome's "use a phone" code cannot reach the phone there. */
+export const NO_BLUETOOTH_SCAN =
+  'This computer has no Bluetooth, so a phone cannot answer Chrome\'s "use a phone or tablet" passkey code here. Do not ask for a scan of it: ask for a takeover (kind passkey) instead.';
 
 export function questionPort(c: QuestionContext): QuestionPort {
   return {
@@ -36,6 +40,15 @@ export function questionPort(c: QuestionContext): QuestionPort {
       return { ok: false, message: parsed.error.issues.map((i) => `${i.path.join('.') || 'question'}: ${i.message}`).join('; ') };
     },
     prepare: (spec) => withAppOrigin(spec as unknown as BrokerSpec, c.run) as unknown as QuestionSpec,
+    async scanCheck(source) {
+      // Only Chrome's own passkey code needs the phone near the machine (#924); a code the page draws is scanned from anywhere.
+      if (source !== 'desktop' || !c.sessionId()) return null;
+      const s = await c.d.fabric.request<{ host_id?: string }>('GET', `/v1/sessions/${encodeURIComponent(c.sessionId())}`);
+      if (!s.host_id) return null;
+      const host = (await c.d.fabric.hosts()).find((h) => h.id === s.host_id);
+      // Only a machine that said it has none: an older agent, or one that cannot tell, is asked as usual (the card warns).
+      return host?.bluetooth === false ? NO_BLUETOOTH_SCAN : null;
+    },
     async open(asked) {
       const spec = asked as unknown as BrokerSpec;
       // A question that needs no browser is asked in the owner's inbox with no handoff (E39.7): a call through a connection they are asked to

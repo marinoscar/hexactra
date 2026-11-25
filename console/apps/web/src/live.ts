@@ -37,6 +37,23 @@ export async function fetchRunScreenshot(id: string): Promise<string | null> {
   return URL.createObjectURL(await res.blob());
 }
 
+/**
+ * One live picture of a scan question (#924), or why there is none. `refused`: the server will not show one (the browser left the site,
+ * its address is unknown, the request is closed): the card says "do not scan". Otherwise a passing failure: the card tries again. Never stored.
+ */
+export type ScanFrame = { ok: true; url: string; domain: string | null } | { ok: false; refused: boolean; message: string };
+
+export async function fetchScanImage(questionId: string): Promise<ScanFrame> {
+  const auth = bearer();
+  const path = `/questions/${questionId}/scan-image`;
+  const res = await fetch(`/api${path}`, { headers: auth ? { authorization: auth } : {}, cache: 'no-store' });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string } | null;
+    return { ok: false, refused: res.status === 409 || res.status === 410 || res.status === 404, message: body?.message ?? 'The picture is not available.' };
+  }
+  return { ok: true, url: URL.createObjectURL(await res.blob()), domain: res.headers.get('x-scan-domain') };
+}
+
 /** The events of `GET /api/chats/:id/stream` (#485), or `open` on every (re)connect. */
 export const CHAT_STREAM_EVENTS = ['chat', 'message', 'turn', 'run', 'question', 'guidance', 'heartbeat'] as const;
 export type ChatStreamEventType = (typeof CHAT_STREAM_EVENTS)[number];

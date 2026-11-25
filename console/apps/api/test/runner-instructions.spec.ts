@@ -37,9 +37,16 @@ describe("the browser agent's instructions for a sign-in", () => {
     expect(signIn).toContain('Without their answer, leave the box as it is.');
   });
 
-  it('keeps a takeover for what cannot be typed for the person', () => {
-    expect(signIn).toMatch(/Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass/);
+  it('keeps a takeover for what cannot be typed or scanned for the person', () => {
+    expect(signIn).toMatch(/Use input "takeover" only for what cannot be typed or scanned for them: a passkey on this computer or a security-key touch, a CAPTCHA puzzle you cannot pass/);
     expect(signIn).toContain('when they declined to sign in');
+  });
+
+  // #924: a code on the screen is scanned from the owner's phone, not taken over.
+  it('asks for a scan of a code on the screen: the page\'s own, or Chrome\'s passkey window', () => {
+    expect(signIn).toMatch(/Use input "scan" when the screen shows something the person must scan or read with their phone/);
+    expect(signIn).toContain('a sign-in QR code the page draws (scan_source "page")');
+    expect(signIn).toContain('Chrome\'s own passkey window offering "use a phone or tablet" with a QR code (scan_source "desktop")');
   });
 });
 

@@ -38704,6 +38704,72 @@
         "description": "**Requires:** authentication, plus permission `runs:write`."
       }
     },
+    "/api/questions/{id}/scan-image": {
+      "get": {
+        "operationId": "questions_scanImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Questions"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
     "/api/questions/{id}": {
       "get": {
         "operationId": "questions_get",
@@ -100084,11 +100150,12 @@
               "confirm",
               "takeover",
               "credentials",
+              "scan",
               "memory",
               "form",
               "save_login"
             ],
-            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it"
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app"
           },
           "kind": {
             "type": "string"
@@ -100712,6 +100779,46 @@
               }
             ]
           },
+          "scan": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "page",
+                      "desktop"
+                    ],
+                    "description": "Where the picture comes from: the page, or the node's desktop (Chrome's own passkey window)"
+                  },
+                  "domain": {
+                    "description": "The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "origin": {
+                    "description": "That page's origin",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "domain",
+                  "origin"
+                ],
+                "description": "scan (#924): what the card shows; the picture itself is GET /api/questions/{id}/scan-image, captured on request and never stored"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "conversationId": {
             "anyOf": [
               {
@@ -100756,6 +100863,7 @@
           "blocking",
           "proposal",
           "saveLogin",
+          "scan",
           "conversationId"
         ]
       },
@@ -100773,7 +100881,8 @@
               "number",
               "confirm",
               "takeover",
-              "credentials"
+              "credentials",
+              "scan"
             ]
           },
           "kind": {
@@ -100934,6 +101043,13 @@
             "type": "integer",
             "minimum": 10000,
             "maximum": 86400000
+          },
+          "scanSource": {
+            "type": "string",
+            "enum": [
+              "page",
+              "desktop"
+            ]
           },
           "asker": {
             "type": "string",
@@ -102578,7 +102694,8 @@
               "number",
               "confirm",
               "takeover",
-              "credentials"
+              "credentials",
+              "scan"
             ]
           },
           "kind": {
@@ -102738,6 +102855,13 @@
             "type": "integer",
             "minimum": 10000,
             "maximum": 86400000
+          },
+          "scanSource": {
+            "type": "string",
+            "enum": [
+              "page",
+              "desktop"
+            ]
           }
         },
         "required": [
@@ -102827,11 +102951,12 @@
               "confirm",
               "takeover",
               "credentials",
+              "scan",
               "memory",
               "form",
               "save_login"
             ],
-            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it"
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app"
           },
           "choices": {
             "type": "array",
@@ -103217,6 +103342,46 @@
                 "type": "null"
               }
             ]
+          },
+          "scan": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "page",
+                      "desktop"
+                    ],
+                    "description": "Where the picture comes from: the page, or the node's desktop (Chrome's own passkey window)"
+                  },
+                  "domain": {
+                    "description": "The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "origin": {
+                    "description": "That page's origin",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "domain",
+                  "origin"
+                ],
+                "description": "scan (#924): what the card shows; the picture itself is GET /api/questions/{id}/scan-image, captured on request and never stored"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -103243,7 +103408,8 @@
           "expiresAt",
           "blocking",
           "proposal",
-          "saveLogin"
+          "saveLogin",
+          "scan"
         ]
       },
       "InboxHistoryResponseDto": {
@@ -103306,11 +103472,12 @@
                     "confirm",
                     "takeover",
                     "credentials",
+                    "scan",
                     "memory",
                     "form",
                     "save_login"
                   ],
-                  "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it"
+                  "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node's screen; browser-bound, answered with Done only in the signed-in web and Android app"
                 },
                 "prompt": {
                   "type": "string",

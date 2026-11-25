@@ -51,6 +51,8 @@ export interface FabricHost {
   /** Absent for agents older than #336. */
   mode?: HostMode | null;
   desktop?: boolean;
+  /** The machine has a Bluetooth adapter (#924); absent when the agent did not say (older agents, or it cannot be told). */
+  bluetooth?: boolean | null;
   profiles: string[];
   running_profiles: string[];
   draining?: boolean;

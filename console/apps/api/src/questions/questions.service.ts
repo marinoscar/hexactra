@@ -16,6 +16,7 @@ import { CHANNEL_RULES, channelId, mayAnswerOn, mayRememberOn } from './channels
 import { QuestionEvents, type QuestionEventType } from './question-events';
 import { SAVE_ERROR_STATUS, SAVE_TOO_LATE_TEXT, SaveLoginError, type SaveLoginPort } from './save-login.port';
 import { TaskRunStarter } from './task-run-starter';
+import { captureScan, scanFacts, ScanCaptureError } from './scan-capture';
 import type { FormField } from '../tasks/task-params';
 import {
   holdsSecret,
@@ -37,6 +38,7 @@ import {
   type QuestionGate,
   type QuestionRememberable,
   type QuestionAction,
+  type QuestionScan,
   type QuestionConstraints,
   type QuestionInputType,
   type QuestionOption,
@@ -102,6 +104,8 @@ export interface QuestionView {
   conversationId: string | null;
   /** save_login (E37.4b): what the card shows (the site, the suggested name, the username, when the fabric stops holding the password); null for every other input. */
   saveLogin: SaveLoginCard | null;
+  /** scan (#924): the picture's source and the page's address as the browser reported it when asked; null for every other input. */
+  scan: QuestionScan | null;
 }
 
 /** A "Save this login?" proposal as the API returns it: the fabric's handoff id and the provider stay on the server. */
@@ -156,6 +160,7 @@ export function toQuestionView(q: Question): QuestionView {
     proposal: q.input === 'memory' ? ((q.proposal as unknown as MemoryProposal | null) ?? null) : null,
     conversationId: q.conversationId,
     saveLogin: saveLoginCardOf(q),
+    scan: q.input === 'scan' ? ((q.scan as unknown as QuestionScan | null) ?? null) : null,
   };
 }
 
@@ -241,6 +246,10 @@ export class QuestionsService {
    * by `mirrorHandoff`).
    */
   async create(owner: QuestionActor, spec: QuestionSpec, opts: { askedBy: string; runId?: string | null; fabricSessionId?: string | null; client?: QuestionClient | null }): Promise<QuestionView> {
+    if (spec.input === 'scan') {
+      // Its picture is the run's browser, captured by the server (#924): a question with no browser has nothing to show.
+      throw new BadRequestException({ code: 'SCAN_NEEDS_BROWSER', message: "A scan question must belong to a browser session (its picture is the browser's screen)" });
+    }
     if (holdsSecret(spec.input) && !opts.runId && !opts.fabricSessionId) {
       throw new BadRequestException({ code: 'SECRET_NEEDS_BROWSER', message: 'A secret or sign-in question must belong to a browser session (it is typed there, never stored)' });
     }
@@ -330,6 +339,7 @@ export class QuestionsService {
       gate: spec.gate ? (spec.gate as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       rememberable: spec.rememberable ? (spec.rememberable as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       action: spec.action ? (spec.action as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+      scan: spec.input === 'scan' && spec.scan ? (spec.scan as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       source: spec.source === 'stall' ? 'stall' : null,
     };
   }
@@ -355,6 +365,8 @@ export class QuestionsService {
   /** Record the question a fabric handoff asks (the goal runner's and external agents' handoffs). */
   async mirrorHandoff(owner: QuestionActor, spec: QuestionSpec, h: CreatedHandoff, opts: { askedBy: string; runId: string | null; fabricSessionId: string | null; client?: QuestionClient | null }): Promise<QuestionView> {
     const viewerUrl = h.viewerUrl && h.viewerUrl.length <= 2000 ? h.viewerUrl : await this.desktopLink(opts.fabricSessionId);
+    // A scan's address is read from the browser now, by the server (#924): whatever the asker or the page says is not used.
+    if (spec.input === 'scan') spec = { ...spec, scan: await scanFacts(this.fabric, opts.fabricSessionId, spec.scan?.source ?? 'page') };
     const q = await this.db(owner.id).question.create({
       data: {
         ownerUserId: owner.id,
@@ -372,6 +384,26 @@ export class QuestionsService {
     await this.emit('question.asked', q);
     await recordRequestInChat(this.prisma, q, this.log);
     return toQuestionView(q);
+  }
+
+  /**
+   * A fresh picture for a pending scan question (#924), for its owner only; nothing is stored. 404 for another user's question or another
+   * input, 410 once it is settled or expired, 409 when the page's address is unknown or the browser moved to another site.
+   */
+  async scanImage(userId: string, id: string): Promise<{ bytes: Buffer; mime: string; domain: string }> {
+    const q = await this.find(userId, id);
+    if (q.input !== 'scan') throw new NotFoundException({ code: 'QUESTION_NOT_FOUND', message: 'Question not found' });
+    if (q.status !== 'pending' || q.expiresAt.getTime() <= Date.now() || !q.fabricSessionId) {
+      throw new HttpException({ code: 'SCAN_CLOSED', message: 'This request is no longer open.' }, HttpStatus.GONE);
+    }
+    const scan = (q.scan as unknown as QuestionScan | null) ?? { source: 'page' as const, domain: null, origin: null };
+    try {
+      return await captureScan(this.fabric, q.fabricSessionId, scan);
+    } catch (e) {
+      // A picture that could not be taken is a passing failure (503: the card tries again); a page that is not the site is a refusal (409).
+      if (e instanceof ScanCaptureError) throw e.code === 'SCAN_CAPTURE_FAILED' ? new HttpException({ code: e.code, message: e.message }, HttpStatus.SERVICE_UNAVAILABLE) : new ConflictException({ code: e.code, message: e.message });
+      throw e;
+    }
   }
 
   /**

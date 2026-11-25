@@ -119,6 +119,13 @@ export class FakeQuestions implements QuestionPort {
   failToOpen = false;
   /** Ask without a browser (E39.7): the question has no handoff and the run waits on it by its own id. */
   noHandoff = false;
+  /** What `scanCheck` answers (#924): null (a scan can work here) unless a test sets the refusal; every source asked is kept. */
+  scanRefusal: string | null = null;
+  scanChecks: string[] = [];
+  async scanCheck(source: 'page' | 'desktop') {
+    this.scanChecks.push(source);
+    return source === 'desktop' ? this.scanRefusal : null;
+  }
   parse(raw: Record<string, unknown>) {
     if (typeof raw.prompt !== 'string' || !raw.prompt) return { ok: false as const, message: 'prompt: required' };
     return { ok: true as const, spec: raw as unknown as QuestionSpec };

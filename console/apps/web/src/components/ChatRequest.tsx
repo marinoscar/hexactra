@@ -1,6 +1,7 @@
 import HelpOutlineIcon from '@mui/icons-material/HelpOutlineOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
+import QrCodeScannerOutlinedIcon from '@mui/icons-material/QrCodeScannerOutlined';
 import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import { Alert, Box, Button, Chip, Link, Paper, Stack, Typography } from '@mui/material';
@@ -23,6 +24,7 @@ export function requestTitle(q: Pick<Question, 'input' | 'kind'>): string {
   if (q.input === 'confirm' || q.kind === 'confirmation') return 'Approval needed';
   if (q.input === 'secret') return `${secretLabel(q.kind)} needed`;
   if (q.input === 'takeover') return 'Your help is needed in the browser';
+  if (q.input === 'scan') return 'Scan with your phone';
   // A sign-in the agent does itself (#524, #527).
   if (q.input === 'credentials' || (q.input === 'text' && q.kind === 'login')) return 'Sign-in needed';
   return 'A question for you';
@@ -31,6 +33,7 @@ function RequestIcon({ q }: { q: Pick<Question, 'input' | 'kind'> }) {
   if (q.input === 'confirm' || q.kind === 'confirmation') return <VerifiedUserOutlinedIcon color="primary" aria-hidden />;
   if (q.input === 'secret') return <KeyOutlinedIcon color="primary" aria-hidden />;
   if (q.input === 'takeover') return <PanToolOutlinedIcon color="primary" aria-hidden />;
+  if (q.input === 'scan') return <QrCodeScannerOutlinedIcon color="primary" aria-hidden />;
   if (q.input === 'credentials' || (q.input === 'text' && q.kind === 'login')) return <KeyOutlinedIcon color="primary" aria-hidden />;
   return <HelpOutlineIcon color="primary" aria-hidden />;
 }
@@ -46,7 +49,7 @@ export function settledText(q: Pick<Question, 'input'>, answer: AnswerBody): str
   // "Don't ask again" was ticked (#555): the approval is remembered.
   if (answer.rememberRule && (q.input === 'none' || answer.value === 'approve')) return "Allowed · won't ask again";
   if (q.input === 'confirm') return answer.value === 'approve' ? 'Allowed' : 'Denied';
-  if (q.input === 'takeover' || q.input === 'none') return 'Done';
+  if (q.input === 'takeover' || q.input === 'none' || q.input === 'scan') return 'Done';
   if (q.input === 'form') return 'Provided';
   return 'Sent';
 }

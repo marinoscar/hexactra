@@ -90,7 +90,10 @@ describe('the kgraph migrations', () => {
   it('exist and sort after every earlier migration', () => {
     expect(kg.length).toBeGreaterThanOrEqual(1);
     const all = readdirSync(dir).filter((d) => /^\d{14}_/.test(d)).sort();
-    expect(all.slice(-kg.length)).toEqual(kg);
+    // Every kg_ migration sorts after every migration from before the epic; a later epic's migration (#924) may follow them.
+    const start = all.indexOf(kg[0]);
+    expect(all.slice(0, start).filter((d) => /_kgraph/.test(d))).toEqual([]);
+    expect(all.slice(start).filter((d) => /_kgraph/.test(d))).toEqual(kg);
   });
   it.each(kg)('%s creates, indexes or extends kg_ tables only', (folder) => {
     const sql = readFileSync(join(dir, folder, 'migration.sql'), 'utf8');

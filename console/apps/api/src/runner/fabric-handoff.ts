@@ -122,7 +122,8 @@ export function handoffBody(req: HandoffRequest): Record<string, unknown> {
   return {
     kind: req.kind,
     prompt: req.prompt,
-    input: req.input,
+    // A scan (#924) is the console's card: to the fabric it is a handoff the person marks done (a plain screenshot is still taken while it waits).
+    input: req.input === 'scan' ? 'none' : req.input,
     choices: (req.choices ?? []).map(fabricChoice),
     ...(Object.keys(constraints).length ? { constraints } : {}),
     ...(req.confirmLabel ? { confirm_label: req.confirmLabel } : {}),

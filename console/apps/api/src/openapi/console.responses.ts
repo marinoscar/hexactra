@@ -376,8 +376,15 @@ export class RunDetailResponseDto extends createZodDto(
 ) {}
 
 const questionInput = z
-  .enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'memory', 'form', 'save_login'])
-  .describe('`form` (#552): a task run\'s missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it');
+  .enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'scan', 'memory', 'form', 'save_login'])
+  .describe('`form` (#552): a task run\'s missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it. `scan` (#924): the owner scans or reads what is on the node\'s screen; browser-bound, answered with Done only in the signed-in web and Android app');
+const questionScan = z
+  .object({
+    source: z.enum(['page', 'desktop']).describe('Where the picture comes from: the page, or the node\'s desktop (Chrome\'s own passkey window)'),
+    domain: z.string().nullable().describe('The site the browser was on when the question opened, as the browser reported it (never from model or page text); null: it could not be read, and no picture is shown'),
+    origin: z.string().nullable().describe('That page\'s origin'),
+  })
+  .describe('scan (#924): what the card shows; the picture itself is GET /api/questions/{id}/scan-image, captured on request and never stored');
 const saveLoginCard = z
   .object({
     site: z.string().describe('The host of the sign-in page'),
@@ -482,6 +489,7 @@ export const questionResponseSchema = z.object({
   blocking: z.boolean().describe('False for a question no run waits on: a memory proposal (#553)'),
   proposal: memoryProposal.nullable(),
   saveLogin: saveLoginCard.nullable(),
+  scan: questionScan.nullable(),
   conversationId: z.uuid().nullable().describe('The chat a memory proposal came from (#553)'),
 });
 export class QuestionResponseDto extends createZodDto(questionResponseSchema) {}
@@ -516,6 +524,7 @@ export const inboxItemResponseSchema = z.object({
   blocking: z.boolean().describe('False for a memory proposal (#553) and "Save this login?" (E37.4b): no run waits on it; the Inbox lists it in its own group'),
   proposal: memoryProposal.nullable(),
   saveLogin: saveLoginCard.nullable(),
+  scan: questionScan.nullable(),
 });
 export class InboxItemResponseDto extends createZodDto(inboxItemResponseSchema) {}
 

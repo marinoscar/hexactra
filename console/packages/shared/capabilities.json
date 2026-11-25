@@ -573,6 +573,26 @@
       ]
     },
     {
+      "id": "questions.scan_image",
+      "description": "See the live picture of a scan question (#924): what to scan or read on the node's screen, captured now by the server and never stored",
+      "rest": [
+        "GET /api/questions/{id}/scan-image"
+      ],
+      "cli": {
+        "none": "A terminal cannot show the code to scan; the CLI prints the request with a link to answer it in the web or Android app"
+      },
+      "mcp": {
+        "none": "By design: the picture of the owner's screen, often a sign-in code, is never given to an AI app or an MCP client (the request links to the console)"
+      },
+      "tui": {
+        "none": "A terminal cannot show the code to scan; the Inbox screen links to the web app"
+      },
+      "web": [
+        "/inbox",
+        "/inbox/q/:id"
+      ]
+    },
+    {
       "id": "schedules.list",
       "description": "List task schedules",
       "rest": [

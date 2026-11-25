@@ -96,10 +96,17 @@ export const MEMORY_ANSWER_CHANNELS: readonly string[] = ['web', 'android_app', 
  */
 export const SAVE_LOGIN_ANSWER_CHANNELS: readonly string[] = ['web', 'android_app', 'inbox'];
 
+/**
+ * The only channels a scan (#924) is answered on, Done or declined: the signed-in web app (its chat card, the Inbox, the question page) and
+ * the Android app, the places that show its live picture. Everywhere else gets the prompt and a link, never the picture.
+ */
+export const SCAN_ANSWER_CHANNELS: readonly string[] = ['web', 'android_app', 'inbox'];
+
 /** Whether `channel` may record this answer to `q`. Declining is allowed everywhere, but for a memory proposal and a "Save this login?" card. */
 export function mayAnswerOn(channel: string, q: Pick<RuleQuestion, 'input' | 'risk' | 'fields'>, outcome: 'completed' | 'cancelled' = 'completed'): boolean {
   if (q.input === 'memory') return MEMORY_ANSWER_CHANNELS.includes(channelId(channel));
   if (q.input === 'save_login') return SAVE_LOGIN_ANSWER_CHANNELS.includes(channelId(channel));
+  if (q.input === 'scan') return SCAN_ANSWER_CHANNELS.includes(channelId(channel));
   if (outcome === 'cancelled') return true;
   const rule = CHANNEL_RULES[channelId(channel)];
   return !rule || rule.signedIn || !needsSignedIn(q);
