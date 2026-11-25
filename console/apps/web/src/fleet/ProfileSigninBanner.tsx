@@ -54,20 +54,24 @@ export function useProfileSignin(api: PlatformApiClient, id: string | null) {
         id,
         window.setTimeout(() => {
           pendingCancel.delete(id);
-          void cancelProfileSignin(api, id).catch(() => undefined);
+          // The person left: the desktop is given back even when a queue meant to keep the lease for its next profile.
+          void cancelProfileSignin(api, id, { keepLease: false }).catch(() => undefined);
         }, 300),
       );
     };
   }, [api, id]);
 
-  const cancel = useCallback(async () => {
-    if (!id) return;
+  /** Cancel; `keepLease` overrides the sign-in's own choice (a queue's Skip keeps it for the next profile on the host). */
+  const cancel = useCallback(async (opts: { keepLease?: boolean } = {}) => {
+    if (!id) return null;
     try {
-      const s = await cancelProfileSignin(api, id);
+      const s = await cancelProfileSignin(api, id, opts);
       ended.current = true;
       setSession(s);
+      return s;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not cancel the sign-in');
+      return null;
     }
   }, [api, id]);
 
@@ -96,10 +100,14 @@ export interface ProfileSigninBannerProps {
   onBack: () => void;
   /** The next profile that needs a sign-in ("Fix sign-ins", E48.6); the button shows only with it. */
   onNext?: () => void;
+  /** Skip this profile and go to the next one ("Fix sign-ins"); shown while the sign-in runs. */
+  onSkip?: () => void;
+  /** The label of the button that leaves (default "Back to Fleet"). */
+  backLabel?: string;
 }
 
 /** What the person does now, and how the sign-in ended. */
-export function ProfileSigninBanner({ session, hostName, error, onCancel, onBack, onNext }: ProfileSigninBannerProps) {
+export function ProfileSigninBanner({ session, hostName, error, onCancel, onBack, onNext, onSkip, backLabel = 'Back to Fleet' }: ProfileSigninBannerProps) {
   if (!session) {
     return error ? <ErrorBanner error={error} /> : <Alert severity="info" icon={<CircularProgress size={20} />}>Opening the sign-in…</Alert>;
   }
@@ -107,7 +115,7 @@ export function ProfileSigninBanner({ session, hostName, error, onCancel, onBack
   const next = (
     <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', rowGap: 1 }}>
       <Button size="small" variant="contained" onClick={onBack}>
-        Back to Fleet
+        {backLabel}
       </Button>
       {onNext && (
         <Button size="small" variant="outlined" onClick={onNext}>
@@ -122,7 +130,7 @@ export function ProfileSigninBanner({ session, hostName, error, onCancel, onBack
       return (
         <Alert severity="success" data-testid="signin-banner" sx={{ overflowWrap: 'anywhere' }}>
           <AlertTitle>{session.email ? `Signed in as ${session.email}` : 'Signed in'}</AlertTitle>
-          The &quot;{session.profile}&quot; profile is saved and the desktop is released.
+          The &quot;{session.profile}&quot; profile is saved{session.keepLease ? '; you keep the desktop for the next profile.' : ' and the desktop is released.'}
           {next}
         </Alert>
       );
@@ -140,16 +148,23 @@ export function ProfileSigninBanner({ session, hostName, error, onCancel, onBack
     return (
       <Alert severity="info" data-testid="signin-banner">
         <AlertTitle>Sign-in ended</AlertTitle>
-        {END_REASON[session.endReason ?? 'cancelled']} The desktop is released; Chrome was left open as it was.
+        {END_REASON[session.endReason ?? 'cancelled']} {session.keepLease ? 'You keep the desktop for the next profile' : 'The desktop is released'}; Chrome was left open as it was.
         {next}
       </Alert>
     );
   }
 
   const cancel = (
-    <Button color="inherit" size="small" onClick={onCancel}>
-      Cancel
-    </Button>
+    <Stack direction="row" spacing={0.5}>
+      {onSkip && (
+        <Button color="inherit" size="small" onClick={onSkip}>
+          Skip
+        </Button>
+      )}
+      <Button color="inherit" size="small" onClick={onCancel}>
+        Cancel
+      </Button>
+    </Stack>
   );
   if (session.phase === 'saving') {
     return (

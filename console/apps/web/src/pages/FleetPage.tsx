@@ -27,6 +27,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import LoginIcon from '@mui/icons-material/Login';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
@@ -37,6 +38,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { HostSigninChip, ProfileSigninStatus, signinNeededCount } from '../components/fleet/ProfileSigninStatus';
 import { needsSignin, type FleetEnrollment, type FleetHost, type FleetProfile } from '../types/fleet';
 import { profileInUseRun, signinDesktopPath, startProfileSignin } from '../fleet/signin';
+import { fixableCount } from '../fleet/signinQueue';
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, useApiAction, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How each host mode reads in the list (docs/nodes.md). */
@@ -292,6 +294,8 @@ export function FleetPage() {
   };
 
   const needing = hosts?.reduce((n, h) => n + signinNeededCount(h), 0) ?? 0;
+  /** "Fix sign-ins (N)" (E48.6): the profiles this person can sign in from the console, one at a time. */
+  const fixable = hosts ? fixableCount(hosts, canDesktop) : 0;
   const shown = onlySignin ? (hosts ?? []).filter((h) => signinNeededCount(h) > 0) : hosts;
 
   return (
@@ -318,6 +322,11 @@ export function FleetPage() {
           >
             Needs sign-in ({needing})
           </ToggleButton>
+          {fixable > 0 && (
+            <Button size="small" variant="contained" component={RouterLink} to="/fleet/signin-queue" startIcon={<LoginIcon />} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+              Fix sign-ins ({fixable})
+            </Button>
+          )}
         </Stack>
       )}
       {onlySignin && shown?.length === 0 && (
