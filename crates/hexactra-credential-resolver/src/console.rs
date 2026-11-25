@@ -875,12 +875,14 @@ mod tests {
         let log = seen.lock().unwrap();
         let save = log.iter().find(|(r, _, _)| r == "passkey-save").unwrap();
         // The key travels base64url, once, on the save route only.
-        assert_eq!(save.2["private_key"], "TkVXLUtFWS1CWVRFUw");
+        use base64::Engine as _;
+        let sent = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"NEW-KEY-BYTES");
+        assert_eq!(save.2["private_key"], sent.as_str());
         assert_eq!(save.2["rp_id"], "example.com");
         assert!(log
             .iter()
             .filter(|(r, _, _)| r != "passkey-save")
-            .all(|(_, _, b)| !b.to_string().contains("TkVXLUtFWS1CWVRFUw")));
+            .all(|(_, _, b)| !b.to_string().contains(&sent)));
         assert_eq!(
             log.iter().find(|(r, _, _)| r == "passkey-used").unwrap().2["sign_count"],
             4
