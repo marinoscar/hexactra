@@ -28,5 +28,9 @@ Hexactra can hold a passkey for a site and sign in with it in the browser it dri
 
 ## What has not been proven
 
-- Real sites: the acceptance run on a passkey-only site is the owner's (E47.7, #945).
-- Vault custody (E47.3, #941) is blocked on Vault.
+- **Real sites.** The tests cover the byte formats, a signature verified with the stored key, the hook in jsdom and the control plane with a fake extension; not Chrome and a real site. The acceptance run is the owner's on the deployed stack (E47.7, #945):
+  1. Switch on saved sign-ins and the built-in store; give a task "add a passkey on <site>" with saved sign-ins allowed, on a site where you are signed in.
+  2. Approve the card. Check the site lists a new passkey and Settings, Secrets lists it.
+  3. Sign out of the site. Run a scheduled task that signs in there with nobody watching: it signs in with the passkey.
+  4. Remove it in Settings, Secrets and on the site; the next run asks you instead.
+- **Vault custody** (E47.3, #941) is blocked on Vault.

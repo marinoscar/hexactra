@@ -60,6 +60,19 @@ The same rule holds for what a hosted AI app sees: the answer of the run, never 
 
 A provider that is unreachable, refusing, revoked, rate limited or simply has no match **makes the agent ask the owner**; it does not fail the run by itself. The runner turns each failure into an instruction ("Saved logins are not available right now. Ask the owner to sign in"), the run raises the sign-in card, and it continues after the owner answers, exactly as before saved logins existed. The connection's status follows what happened (`needs_reconnect` after a `401`, Vault's agent access off after a `403 AGENT_ACCESS_DISABLED`) and the owner is notified once. The cost is that **an unattended run waits for a person**: a scheduled task whose Vault is down stops at the sign-in card until someone answers. The runbook says how to find and fix it ([A run could not sign in](runbooks/operations.md#a-run-could-not-sign-in)).
 
+## Passkeys for Hexactra (E47, post-v1)
+
+A site that signs in with passkeys can have **one more passkey: Hexactra's**. Your own passkeys (phone, laptop, security key) stay as they are.
+
+- **Adding one.** Ask the agent to add a passkey on the site's security settings page, signed in. It asks you first, on a card naming the site the browser is on ("Add a Hexactra passkey to your account on example.com?"), signed in, every time. Only your Approve lets it make one, for that site, once. The key pair is made by the fabric; the private key is kept by your secrets provider (the built-in store today; Vault when it supports passkeys, E47.3).
+- **Signing in.** In a run that may use your saved sign-ins, the agent presses the site's passkey button and the fabric answers the site's request itself. The model never sees a key or which passkey was used.
+- **When there is none.** The browser shows its own prompt. The agent asks you to scan Chrome's "use a phone or tablet" code (a scan, which needs your phone near the node with Bluetooth on), or asks for a takeover.
+- **Payments.** A payment approved with a passkey is never made by Hexactra.
+- **Removing one.** Settings, Secrets, **Passkeys for Hexactra**, Remove. Hexactra stops using it at once; remove it on the site too, because the site still lists it.
+- **What is stored.** The site (RP ID), the page it was made on, the account name, the public key, the counter, and the private key as ciphertext under your data key. The private key is never in a log, a step, a span, an export or MCP.
+
+Threat model: [security-passkeys.md](security-passkeys.md). Decision record: [../../docs/decisions/passkey-provider.md](../../docs/decisions/passkey-provider.md).
+
 ## Limits, stated plainly
 
 - **A code sent by text message or email still needs the owner.** A provider supplies authenticator-app codes only.

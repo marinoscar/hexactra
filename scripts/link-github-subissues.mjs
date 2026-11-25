@@ -41,7 +41,7 @@ const epicChildren = new Map([
   // E37 secrets the agent can use but never see. Sequence order, then #621 (the "Save this login?" card split out of #593)
   // and the follow-ups filed by the close-out: #624 acceptance run, #625 hardening, #626 migration, #627 built-in identity,
   // #628 other password managers, #629 rotation, #630 contract package and conformance kit.
-  [579, [590, 591, 592, 593, 594, 595, 596, 597, 621, 624, 625, 626, 627, 628, 629, 630, 711, 712]],
+  [579, [590, 591, 592, 593, 594, 595, 596, 597, 621, 624, 625, 626, 627, 628, 629, 630, 711, 712, 924]],
   // E38 a harness you can stop, pause and trust. Sequence order (E38.1 to E38.8), then #614 (E38.9, the agent packages),
   // the fabric idempotency key #633, the follow-up #643 (E38.10, packages) and those filed by the close-out: #650 the
   // acceptance run on the deployed stack, #651 nightly live replay, #652 the flaky VPS stack job, #653 tidy after the
@@ -67,6 +67,8 @@ const epicChildren = new Map([
   [774, [793, 794, 795, 796, 797, 798, 799]],
   // E46 phase 5 (owner's decision, 2026-11-22): reuse across goals and site knowledge, before the final merge (E46.25).
   [847, [848, 849, 850, 851, 852, 853, 854, 855, 856]],
+  // E47 Hexactra as a passkey provider (post-v1): E47.1 to E47.7 in order; E47.3 (Vault) waits for marinoscar/vault.
+  [925, [939, 940, 941, 942, 943, 944, 945]],
   // E48 profile sign-in health: warn on signed-out Chrome profiles and sign them in with one click (E48.1 to E48.7, in order).
   [926, [927, 928, 929, 930, 931, 932, 933]],
 ]);
