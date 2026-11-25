@@ -13,6 +13,7 @@ pub mod launcher;
 pub mod platform;
 pub mod pool;
 pub mod remote_daemon;
+pub mod signin;
 
 use anyhow::Result;
 use std::path::Path;
