@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Box, Button, Chip, Divider, IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack, TextField, Tooltip, Typography, useMediaQuery } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AspectRatioIcon from '@mui/icons-material/AspectRatio';
@@ -135,6 +135,10 @@ function ToolButton({ label, Icon, compact, onClick, disabled, variant = 'text',
  */
 export function DesktopPage() {
   const { id = '' } = useParams<{ id: string }>();
+  // `?profile=<name>&signin=1` from the Fleet page's "Sign in" (E48.3): preselect that profile.
+  const [search] = useSearchParams();
+  const wanted = search.get('profile');
+  const signinAsked = search.get('signin') === '1';
   const { api } = usePlatformHost();
   const navigate = useNavigate();
   // The viewer fills <main>: no padding around it, and the shell (the one owner of the window's height) sizes it.
@@ -205,7 +209,10 @@ export function DesktopPage() {
     try {
       const h = await api.get<FleetHost>(`/fleet/hosts/${id}`);
       setHost(h);
-      if (h.profiles.length && !h.profiles.some((p) => p.name === 'default')) setProfile(h.profiles[0]!.name);
+      if (wanted && h.profiles.some((p) => p.name === wanted)) {
+        setProfile(wanted);
+        if (signinAsked && h.mode === 'unattended') setNotice(`To sign in "${wanted}", use "Sign in to profile" once the desktop is connected.`);
+      } else if (h.profiles.length && !h.profiles.some((p) => p.name === 'default')) setProfile(h.profiles[0]!.name);
       if (!h.online) return setStatus('offline');
       if (!h.desktop) return setStatus('unavailable');
       const s = await api.post<{ wsPath: string }>(`/fleet/hosts/${id}/viewer-session`, {});
@@ -216,7 +223,7 @@ export function DesktopPage() {
       setStatus('error');
       setError(message(e, 'Could not open the desktop'));
     }
-  }, [api, connect, id]);
+  }, [api, connect, id, wanted, signinAsked]);
 
   useEffect(() => {
     closing.current = false;

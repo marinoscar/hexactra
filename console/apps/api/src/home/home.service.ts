@@ -107,7 +107,15 @@ export interface HomeSummary {
     totals: { succeeded: number; failed: number; cancelled: number; successRate: number | null; costUsd: number | null; costKnown: boolean; budgetStops: number; stalled: number };
     series: { date: string; succeeded: number; failed: number; cancelled: number; costUsd: number | null }[];
   } | null;
-  fleet: { total: number; online: number; disabled: number; stale: boolean; hosts: { id: string; name: string; online: boolean; draining: boolean; mode: FleetHost['mode'] }[] } | null;
+  fleet: {
+    total: number;
+    online: number;
+    disabled: number;
+    /** Profiles, across every host, that need the owner to sign in (signed out or expired; E48.3). A count only, never an email. */
+    needsSignin: number;
+    stale: boolean;
+    hosts: { id: string; name: string; online: boolean; draining: boolean; mode: FleetHost['mode']; needsSignin: number }[];
+  } | null;
   counts: { tasks: number | null; runs: number | null };
 }
 
@@ -424,13 +432,19 @@ export class HomeService {
         total: hosts.length,
         online: hosts.filter((h) => h.online).length,
         disabled: hosts.filter((h) => h.draining).length,
+        needsSignin: hosts.reduce((n, h) => n + profilesNeedingSignin(h), 0),
         stale,
         // Online first, then by name (the order the Fleet page lists them in).
         hosts: [...hosts]
           .sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name))
           .slice(0, HOME_LIMITS.hosts)
-          .map((h) => ({ id: h.id, name: h.name, online: h.online, draining: h.draining, mode: h.mode })),
+          .map((h) => ({ id: h.id, name: h.name, online: h.online, draining: h.draining, mode: h.mode, needsSignin: profilesNeedingSignin(h) })),
       },
     };
   }
+}
+
+/** A host's profiles that need sign-in: signed out or expired, never `unknown` (docs/decisions/profile-signin-health.md). */
+function profilesNeedingSignin(h: FleetHost): number {
+  return (h.profiles ?? []).filter((p) => p.signin === 'signed_out' || p.signin === 'expired').length;
 }

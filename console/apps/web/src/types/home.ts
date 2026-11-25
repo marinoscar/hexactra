@@ -93,12 +93,16 @@ export interface HomeHost {
   online: boolean;
   draining: boolean;
   mode: 'unattended' | 'attended' | 'container' | null;
+  /** Profiles on this host that need sign-in (E48.3); absent from an older API. */
+  needsSignin?: number;
 }
 
 export interface HomeFleet {
   total: number;
   online: number;
   disabled: number;
+  /** Profiles, across every host, that need sign-in (E48.3); absent from an older API. */
+  needsSignin?: number;
   /** The fabric did not answer in time: the hosts are the last ones read. */
   stale: boolean;
   hosts: HomeHost[];

@@ -211,7 +211,7 @@ describe('GET /api/home/summary: a busy account', () => {
     expect(Object.keys(s.recentRuns!.items[0]!).sort()).toEqual(
       ['client', 'costKnown', 'costUsd', 'createdAt', 'error', 'finishedAt', 'goal', 'id', 'origin', 'startedAt', 'status', 'stepCount', 'stopReason', 'taskId', 'taskName', 'trigger'].sort(),
     );
-    expect(Object.keys(s.fleet!.hosts[0]!).sort()).toEqual(['draining', 'id', 'mode', 'name', 'online']);
+    expect(Object.keys(s.fleet!.hosts[0]!).sort()).toEqual(['draining', 'id', 'mode', 'name', 'needsSignin', 'online']);
     const limited = s.liveRuns!.items.find((r) => r.id === id.limited)!;
     expect(Object.keys(limited.activity as object).sort()).toEqual(['action', 'note', 'phase', 'reason', 'startedAt']);
     const text = JSON.stringify(s);
@@ -310,10 +310,11 @@ describe('GET /api/home/summary: a busy account', () => {
       total: 2,
       online: 1,
       disabled: 0,
+      needsSignin: 0,
       stale: false,
       hosts: [
-        { id: HOST_A, name: 'den-mini', online: true, draining: false, mode: 'unattended' },
-        { id: '00000000-0000-4000-8000-0000000000a2', name: 'attic-box', online: false, draining: false, mode: 'attended' },
+        { id: HOST_A, name: 'den-mini', online: true, draining: false, mode: 'unattended', needsSignin: 0 },
+        { id: '00000000-0000-4000-8000-0000000000a2', name: 'attic-box', online: false, draining: false, mode: 'attended', needsSignin: 0 },
       ],
     });
     expect(s.counts).toEqual({ tasks: 4, runs: 19 });
@@ -324,6 +325,24 @@ describe('GET /api/home/summary: a busy account', () => {
     const big = await summaryOf(alice.token);
     expect(big.fleet).toMatchObject({ total: 8, online: 4, disabled: 3, stale: false });
     expect(big.fleet!.hosts.map((h) => h.name)).toEqual(['host-0', 'host-2', 'host-4', 'host-6', 'host-1', 'host-3']);
+  });
+
+  it('counts the profiles that need sign-in (signed out or expired, never unknown), without an email (E48.3)', async () => {
+    const profile = (name: string, signin: FleetHost['profiles'][number]['signin'], email?: string) => ({
+      name,
+      running: false,
+      signin,
+      accounts: email ? [{ provider: 'google', email, state: signin }] : [],
+      checkedAt: '2026-11-25T00:00:00Z',
+    });
+    fleet.mockResolvedValue([
+      host(HOST_A, 'den-mini', { profiles: [profile('default', 'signed_in', 'SIGNIN-EMAIL@example.test'), profile('work', 'signed_out'), profile('shop', 'expired', 'EXPIRED-EMAIL@example.test')] }),
+      host('00000000-0000-4000-8000-0000000000a2', 'attic-box', { profiles: [profile('default', 'unknown')] }),
+    ]);
+    const signin = await summaryOf(alice.token);
+    expect(signin.fleet).toMatchObject({ needsSignin: 2 });
+    expect(Object.fromEntries(signin.fleet!.hosts.map((h) => [h.name, h.needsSignin]))).toEqual({ 'den-mini': 2, 'attic-box': 0 });
+    expect(JSON.stringify(signin)).not.toContain('EMAIL@example.test');
   });
 
   it("contains none of another user's rows", () => {
@@ -436,6 +455,6 @@ describe('GET /api/home/summary: the fleet never fails the summary', () => {
     fleet.mockRejectedValue(new Error('connect ECONNREFUSED'));
     expect((await summaryOf(dana.token)).fleet).toMatchObject({ total: 2, stale: true });
     fleet.mockRejectedValue(new ServiceUnavailableException({ code: 'FABRIC_NOT_CONFIGURED', message: 'not configured' }));
-    expect((await summaryOf(dana.token)).fleet).toEqual({ total: 0, online: 0, disabled: 0, stale: false, hosts: [] });
+    expect((await summaryOf(dana.token)).fleet).toEqual({ total: 0, online: 0, disabled: 0, needsSignin: 0, stale: false, hosts: [] });
   });
 });
