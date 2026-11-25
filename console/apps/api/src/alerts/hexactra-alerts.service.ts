@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { toHost } from '../fleet/fleet.service';
 import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsageReportService } from '../usage/usage-report.service';
@@ -32,7 +33,8 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
   readonly sources: AlertSources = {
     hosts: async () => {
       try {
-        return (await this.fabric.hosts()).map((h) => ({ id: h.id, name: h.name, online: h.online, draining: Boolean(h.draining) }));
+        // Each profile's sign-in state only (E48.5): the accounts and their emails stay out of the alerts.
+        return (await this.fabric.hosts()).map((h) => ({ id: h.id, name: h.name, online: h.online, draining: Boolean(h.draining), profiles: toHost(h).profiles.map((p) => ({ name: p.name, signin: p.signin })) }));
       } catch (e) {
         if (e instanceof FabricError && e.kind === 'not_configured') return null;
         throw e;

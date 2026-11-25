@@ -63,15 +63,15 @@ async function incidents(key: string) {
 }
 
 describe('console alert rules', () => {
-  it('creates its ten rules once by key (the expensive-run and monthly AI spend rules disabled), and leaves existing ones alone', async () => {
+  it('creates its eleven rules once by key (the expensive-run and monthly AI spend rules disabled), and leaves existing ones alone', async () => {
     expect(await service.seed()).toBe(0); // bootstrap already created them
-    for (const key of ['hexactra.host_offline', 'hexactra.schedule_failing', 'hexactra.run_budget', 'hexactra.run_stalled']) {
+    for (const key of ['hexactra.host_offline', 'hexactra.profile_signed_out', 'hexactra.schedule_failing', 'hexactra.run_budget', 'hexactra.run_stalled']) {
       expect(await rule(key)).toMatchObject({ enabled: true });
     }
     expect(await rule('hexactra.run_stalled')).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.RUN_STALLED, severity: 'warning', config: { windowHours: 24, minStalls: 3 } });
     expect(await rule('hexactra.run_cost')).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, enabled: false, config: { maxRunCostUsd: 10 } });
     expect(await rule('hexactra.ai_spend_monthly')).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.AI_SPEND_MONTHLY, enabled: false, config: { maxDeploymentUsd: 500, maxUserUsd: null, warnAtPercent: 80 } });
-    expect(await prisma.alertRule.count({ where: { key: { in: HEXACTRA_ALERT_RULES.map((r) => r.key) } } })).toBe(10);
+    expect(await prisma.alertRule.count({ where: { key: { in: HEXACTRA_ALERT_RULES.map((r) => r.key) } } })).toBe(11);
     // A deleted starter rule comes back once, by key, with its starter values.
     await prisma.alertRule.delete({ where: { key: 'hexactra.run_cost' } });
     expect(await service.seed()).toBe(1);
@@ -107,6 +107,29 @@ describe('console alert rules', () => {
     fake.hostsError = new Error('connect ECONNREFUSED');
     expect((await evaluation.observe(r)).find((o) => o.labels.fabric)?.breached).toBe(true);
     fake.hostsError = null;
+  });
+
+  it('profile signed out (E48.5): pending, firing after its hold, resolved once signed in; unknown never fires; no email', async () => {
+    const r = await rule('hexactra.profile_signed_out');
+    expect(r).toMatchObject({ kind: HEXACTRA_ALERT_KINDS.PROFILE_SIGNED_OUT, enabled: true, config: { includeExpired: true, profiles: [] } });
+    const t0 = new Date();
+    fake.hosts = [{ id: H1, name: 'home', online: true, draining: false, profiles: [{ name: 'default', signin: 'signed_out' }, { name: 'other', signin: 'unknown' }] }];
+    await evaluation.evaluateRule(r, t0);
+    const mine = async () => (await incidents('hexactra.profile_signed_out')).filter((i) => i.labelsKey.includes(H1));
+    expect((await mine()).map((i) => i.state)).toEqual(['pending']);
+
+    await evaluation.evaluateRule(r, new Date(t0.getTime() + (r.forSeconds + 5) * 1000));
+    const [firing] = await mine();
+    expect(firing!.state).toBe('firing');
+    expect(firing!.labelsKey).toContain('default');
+    expect(firing!.summary).toMatch(/profile default on host home/);
+    expect(firing!.summary).not.toMatch(/@/);
+
+    fake.hosts = [{ id: H1, name: 'home', online: true, draining: false, profiles: [{ name: 'default', signin: 'signed_in' }, { name: 'other', signin: 'unknown' }] }];
+    await evaluation.evaluateRule(r, new Date(t0.getTime() + (r.forSeconds + 65) * 1000));
+    expect((await prisma.alertIncident.findUniqueOrThrow({ where: { id: firing!.id } })).state).toBe('resolved');
+    expect((await mine()).filter((i) => i.labelsKey.includes('other'))).toEqual([]);
+    fake.hosts = [];
   });
 
   it('schedule failing: fires at the threshold and resolves when the schedule recovers', async () => {
