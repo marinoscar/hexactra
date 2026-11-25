@@ -59,6 +59,18 @@ hexactra agent doctor
 - [ ] Plug it back in. The host comes back online within a minute, and the desktop page reconnects or reopens.
 - [ ] `hexactra agent update` updates both modes, and both come back online.
 
+## 7. Profile sign-in status (epic #926)
+
+Note the Chrome version (`chrome://version`) in the result.
+
+- [ ] On `mini-pc`, sign profile `personal` out of Google (in its Chrome, at `accounts.google.com`). Within the check interval (10 minutes, or at once when the sign-out page loads), Fleet shows **Not signed in to Google** on `personal` and "1 profile needs sign-in" on the host; the **profile signed out** alert fires.
+- [ ] The **expired** state: revoke the session from another device (Google Account → Security → Your devices → sign out of the mini PC). Fleet shows **Google session expired** at the next live check. If it cannot be reproduced, note why.
+- [ ] Click **Sign in** on `personal`. The desktop opens in sign-in mode with Chrome at Google's sign-in. Sign in. With no further step, the banner shows "Signed in as <your email>", Chrome closes and the desktop is released; Fleet shows **Signed in as <your email>**.
+- [ ] `hexactra fleet profile restart mini-pc personal` (or **Restart browser**), then reboot the mini PC: `personal` is still **Signed in**.
+- [ ] Sign two profiles out, then **Fix sign-ins (2)**: both are signed in in one pass, with one takeover.
+- [ ] Start a run on a signed-out profile: the run starts and shows the "not signed in to Google" warning with a **Sign in** link.
+- [ ] Export the acceptance run's traces, the console and fabric logs (`docker compose logs`) and the OTel spans, and `grep -i` them for your email: nothing.
+
 ## Result
 
 Attach this checklist, ticked, with notes and the `agent doctor` output, to #344. Any unticked line needs an issue.

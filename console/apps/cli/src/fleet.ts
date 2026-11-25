@@ -10,7 +10,8 @@ export interface FleetHost {
   viewerUrl: string | null;
   mode: 'unattended' | 'attended' | 'container' | null;
   desktop: boolean;
-  profiles: { name: string; running: boolean }[];
+  /** `signin` is absent from consoles older than E48 (#926); the account email is never printed here. */
+  profiles: { name: string; running: boolean; signin?: 'signed_in' | 'signed_out' | 'expired' | 'unknown' }[];
   lastSeen: string;
 }
 
@@ -41,7 +42,9 @@ export function hostLine(h: FleetHost): string {
     ...(h.desktop ? ['desktop'] : []),
     ...(h.draining ? ['disabled'] : []),
   ];
-  const profiles = h.profiles.map((p) => (p.running ? `${p.name}*` : p.name)).join(', ') || '-';
+  // A profile that needs a Google sign-in says so (E48, #926); never the account's email.
+  const signin = (p: FleetHost['profiles'][number]) => (p.signin === 'signed_out' ? ' (signed out)' : p.signin === 'expired' ? ' (expired)' : '');
+  const profiles = h.profiles.map((p) => `${p.running ? `${p.name}*` : p.name}${signin(p)}`).join(', ') || '-';
   return `${h.name}  [${flags.join(', ')}]  profiles: ${profiles}`;
 }
 
