@@ -57,8 +57,13 @@ function Where() {
   return <div data-testid="where">{`${l.pathname}${l.search}`}</div>;
 }
 
+<<<<<<< HEAD
 function renderPage(permissions: string[], hosts: FleetHost[], extra: Record<string, unknown> = {}) {
   const host = createTestPlatformHost({ permissions, responses: { 'GET /fleet/hosts': hosts, ...extra } });
+=======
+function renderPage(permissions: string[], hosts: FleetHost[]) {
+  const host = createTestPlatformHost({ permissions, responses: { 'GET /fleet/hosts': hosts } });
+>>>>>>> origin/main
   render(
     <PlatformHostProvider host={host}>
       <ConfirmProvider>
@@ -145,11 +150,16 @@ describe('Fleet sign-in status (E48.3)', () => {
     expect(screen.getByText('Every profile is signed in or not yet checked.')).toBeInTheDocument();
   });
 
+<<<<<<< HEAD
   it('offers Sign in only on an unattended host with a desktop, for fleet:desktop, starting the guided sign-in (E48.4)', async () => {
     const sid = '11111111-2222-4333-8444-555555555555';
     renderPage(['fleet:read', 'fleet:desktop'], [node, attended, browserOnly], {
       [`POST /fleet/hosts/${node.id}/profiles/work/signin`]: { id: sid, hostId: node.id, profile: 'work', status: 'started' },
     });
+=======
+  it('offers Sign in only on an unattended host with a desktop, for fleet:desktop, opening the desktop with the profile preselected', async () => {
+    renderPage(['fleet:read', 'fleet:desktop'], [node, attended, browserOnly]);
+>>>>>>> origin/main
     const card = await screen.findByLabelText('Host mini-pc');
     // Only the profiles that need sign-in carry the button.
     expect(within(card).getAllByRole('button', { name: /^Sign in / })).toHaveLength(2);
@@ -164,7 +174,11 @@ describe('Fleet sign-in status (E48.3)', () => {
     expect(within(vps).getByText(NO_DESKTOP_HINT)).toBeInTheDocument();
 
     fireEvent.click(within(card).getByRole('button', { name: 'Sign in work on mini-pc' }));
+<<<<<<< HEAD
     expect(await screen.findByTestId('where')).toHaveTextContent(`/fleet/hosts/${node.id}/desktop?signin=${sid}`);
+=======
+    expect(await screen.findByTestId('where')).toHaveTextContent(`/fleet/hosts/${node.id}/desktop?profile=work&signin=1`);
+>>>>>>> origin/main
   });
 
   it('shows no Sign in button without fleet:desktop', async () => {
