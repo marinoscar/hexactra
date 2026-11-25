@@ -254,6 +254,8 @@ export const ROUTES = [
   ['question-form', '/inbox/q/{formQuestion}'],
   // "Save this login?" (E37.4b): its own page; the same card is in the Inbox's suggestions (`inbox`) and in the chat thread (`chat-thread`).
   ['question-save-login', '/inbox/q/{saveLoginQuestion}'],
+  // A scan (#924): the live picture under its warning, then "Done, I scanned it".
+  ['question-scan', '/inbox/q/{scanQuestion}'],
   ['run-inputs', '/runs/{paramRun}'],
   // Task outputs (E39.5): the form's Outputs section, the task page's history table, a finished run's Outputs block.
   ['task-edit-outputs', '/tasks/{outputsTask}/edit'],
@@ -552,6 +554,7 @@ async function main() {
     const path = url.pathname.replace(/^\/api/, '');
     const key = `${request.method()} ${path}`;
     if (/^GET \/runs\/[^/]+\/screenshot$/.test(key)) return route.fulfill({ contentType: 'image/png', body: frame });
+    if (/^GET \/questions\/[^/]+\/scan-image$/.test(key)) return route.fulfill({ contentType: 'image/png', headers: { 'x-scan-domain': 'example.com', 'cache-control': 'no-store' }, body: frame });
     const traceShot = /^GET \/runs\/[^/]+\/steps\/(\d+)\/screenshot$/.exec(key);
     if (traceShot) return route.fulfill({ contentType: 'image/png', body: traceFrames.get(Number(traceShot[1])) ?? frame });
     if (/\/stream$/.test(path) || request.headers().accept?.includes('text/event-stream')) return route.abort();
