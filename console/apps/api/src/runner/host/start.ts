@@ -46,7 +46,7 @@ export interface RunStart {
   /** The connections the run may use and whether its browser opens at the first browser tool (E39.7). */
   connections: { list: SnapshotConnection[]; needsBrowser: NeedsBrowser; lazyBrowser: boolean };
   /** Which saved-secret tool families this run may be offered. */
-  flags: { savedLogins: boolean; savedIdentity: boolean; savedCards: boolean; saveLogin: boolean };
+  flags: { savedLogins: boolean; savedIdentity: boolean; savedCards: boolean; saveLogin: boolean; passkeys: boolean };
 }
 
 /** The run row with what the runner reads. */
@@ -179,6 +179,17 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
             memory.savedIdentity!.typeNow = { label: askedDetail.label, origin: askedDetail.origin, selector: askedDetail.selector };
           }
         }
+        // The owner answered "Add a Hexactra passkey for <site>?" (E47.5): an approval lets add_passkey make one, on that site, once.
+        const askedPasskey = memory.passkeys?.asking ?? null;
+        if (askedPasskey && q?.input === 'confirm' && h.kind === 'passkey') {
+          memory.passkeys!.asking = null;
+          if ((resp?.value ?? h.response?.value) === 'approve') {
+            memory.passkeys!.approved = [...new Set([...(memory.passkeys!.approved ?? []), askedPasskey.domain])];
+            memory.log.push(`The owner approved adding a Hexactra passkey for ${askedPasskey.domain}. Call add_passkey again with the same button.`);
+          } else {
+            memory.log.push(`The owner declined adding a Hexactra passkey for ${askedPasskey.domain}. Do not add one.`);
+          }
+        }
         // A sensitive task parameter's value (#552) is kept for its own parameter; any other secret is the next one to type.
         if (h.input === 'secret' && memory.askingParam) memory.paramSecrets = { ...(memory.paramSecrets ?? {}), [memory.askingParam]: h.id };
         else if (h.input === 'secret' || h.input === 'credentials') memory.secretHandoffId = h.id;
@@ -295,6 +306,8 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
     // Offering to save a sign-in the owner types by hand (E37.4b): on only with saved logins on and a Vault that can save one (the
     // write scope, contract 1.3). The `credentials` cards then ask the fabric to keep the typed password, and `propose_saving_login` exists.
     const saveLoginOn = savedLoginsOn && d.secrets ? await d.secrets.saveLoginSupported(userId) : false;
+    // Hexactra passkeys (E47.5): where saved sign-ins are on and the owner's provider keeps passkeys.
+    const passkeysOn = savedLoginsOn && d.secrets ? ((await d.secrets.passkeysSupported?.(userId)) ?? false) : false;
 
     let sessionId = run.sessionId;
     // A paused run keeps its browser (E38.2). The fabric has no idle limit for sessions, but a session can still be gone (the host restarted,
@@ -320,5 +333,5 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
       sessionId = opened.sessionId;
       await db.run.updateMany({ where: { id: run.id }, data: { sessionId } });
     }
-  return { run, db, userId, orgId, lease, tr, stop, session, sessionId: sessionId ?? '', memory, snapshot, tier, stall, active: current, jobStartedAt, connections: { list: connections, needsBrowser, lazyBrowser: lazy }, flags: { savedLogins: savedLoginsOn, savedIdentity: savedIdentityOn, savedCards: savedCardsOn, saveLogin: saveLoginOn } };
+  return { run, db, userId, orgId, lease, tr, stop, session, sessionId: sessionId ?? '', memory, snapshot, tier, stall, active: current, jobStartedAt, connections: { list: connections, needsBrowser, lazyBrowser: lazy }, flags: { savedLogins: savedLoginsOn, savedIdentity: savedIdentityOn, savedCards: savedCardsOn, saveLogin: saveLoginOn, passkeys: passkeysOn } };
 }

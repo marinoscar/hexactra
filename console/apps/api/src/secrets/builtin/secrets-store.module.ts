@@ -30,6 +30,7 @@ import { SecretsStoreCallbackTokens } from './store.callback-tokens';
 import { SecretsStoreCrypto } from './store.crypto';
 import { SecretsStoreKeys, STORE_KEY_RING } from './store.data-keys';
 import { StorePasskeys } from './store.passkeys';
+import { STORE_PASSKEYS } from '../passkeys.controller';
 import { StoreKeyCheck } from './store.doctor';
 import { SecretsStoreController } from './store.controller';
 import { SecretsStoreInterceptor } from './store.interceptor';
@@ -76,6 +77,7 @@ import { SecretsStoreBootstrap } from './store.bootstrap';
     // The console's own parts.
     BuiltinSecretsProvider,
     StorePasskeys,
+    { provide: STORE_PASSKEYS, useExisting: StorePasskeys },
     StoreCallbackGuard,
     SecretsStoreInterceptor,
     { provide: APP_INTERCEPTOR, useExisting: SecretsStoreInterceptor },
