@@ -67,6 +67,8 @@ const epicChildren = new Map([
   [774, [793, 794, 795, 796, 797, 798, 799]],
   // E46 phase 5 (owner's decision, 2026-11-22): reuse across goals and site knowledge, before the final merge (E46.25).
   [847, [848, 849, 850, 851, 852, 853, 854, 855, 856]],
+  // E48 profile sign-in health: warn on signed-out Chrome profiles and sign them in with one click (E48.1 to E48.7, in order).
+  [926, [927, 928, 929, 930, 931, 932, 933]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

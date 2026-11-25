@@ -79,6 +79,21 @@ describe('hexactra fleet', () => {
     expect(hostLine({ ...hosts[0]!, mode: 'unattended', desktop: false })).toBe('vps  [online, browser only]  profiles: default, travel*');
   });
 
+  it('marks a profile that needs a Google sign-in, never printing the email (E48)', () => {
+    const h = {
+      ...hosts[0]!,
+      profiles: [
+        { name: 'default', running: false, signin: 'signed_in' as const, accounts: [{ provider: 'google', email: 'owner@example.com', state: 'signed_in' }] },
+        { name: 'travel', running: true, signin: 'signed_out' as const },
+        { name: 'work', running: false, signin: 'expired' as const },
+        { name: 'new', running: false, signin: 'unknown' as const },
+      ],
+    };
+    const line = hostLine(h);
+    expect(line).toBe('vps  [online, launch]  profiles: default, travel* (signed out), work (expired), new');
+    expect(line).not.toContain('owner@example.com');
+  });
+
   it('drains, manages profiles and enrolls, naming hosts by name', async () => {
     const calls = fakeApi({
       'GET /fleet/hosts': hosts,

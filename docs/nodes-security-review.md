@@ -22,8 +22,25 @@ This page checks each security invariant of epic #333 against the code and the t
 - **Agent pauses at a safe point.** A takeover refuses new actions, and an action already running finishes. The console's runner waits up to 30 minutes; external agents are told at once.
 - **Legacy surfaces removed.** The ticket viewer (`/viewer/local/`, `POST /api/fleet/viewer-ticket`) and the unused `routes/viewers.rs` are gone. Anything under `/viewer/` other than a desktop WebSocket answers 404.
 
+## Profile sign-in status (epic #926)
+
+Each profile's Google sign-in status travels from the node to the Fleet page (`docs/decisions/profile-signin-health.md`). Re-check this table when the sign-in code changes.
+
+| # | Invariant | Where it is enforced | Proof |
+|---|---|---|---|
+| S1 | **Only the status leaves the node:** the state, the account email(s) and the time of the check. Cookie values and Google's answer never leave the browser. | The extension's live check sends only `{provider, email, state}` per account (`apps/chrome-extension/src/signin.ts`). The agent's offline check reads `Preferences` read-only (`crates/hexactra-agent/src/signin.rs`). | Vitest in `signin.test.ts`: the native message holds no cookie value, raw body, name, photo or Gaia id. |
+| S2 | **The email is display data.** It is shown in full to `fleet:read` and is never in a log, a span, an event, a run trace, an export, a model's context or an MCP result. | Agents report with `POST /v1/hosts/{id}/profile-status` (a body, never a URL). `ProfileAccount`'s `Debug` prints `[redacted]`; the route logs a count; the `host.profile_signin` event carries the state only. MCP `hosts_list` strips sign-in fields. Audit events and sign-in sessions store no email. | `crates/hexactra-control/tests/profile_status_api.rs` (no email in TRACE logs or `/v1/events`), `profile_account_debug_never_prints_the_email`, `apps/api/test/fleet.spec.ts` (MCP strip), `profile-signin.db.spec.ts` (no email in logs or audit), `home-summary.db.spec.ts` (Home count holds no email). |
+| S3 | **A failed check is `unknown`, never `signed_out`.** | Offline: a missing, partial or corrupt file is `unknown`. Live: any error, non-200 or unparsable answer is `unknown`. The control plane stores a `signed_in`/`expired` report without an account as `unknown`; the console maps any unknown value to `unknown`. | Fixture tests in `signin.rs`, the extension's error tests, `profile_signin_report_is_cleaned_and_merged`, `fleet.spec.ts`. |
+| S4 | **Sign-in status never authorises anything and never blocks a run.** It is not read by policy, gates, approvals, the Knowledge Graph or the agent. | The status is read only by the Fleet page, Home, the alert kind and the start-of-run warning (additive `warnings[]`). | `runner-characterisation.db.spec.ts` passes unchanged; the `POST /runs` warning test starts the run on a signed-out profile. |
+| S5 | **The fabric never types the Google password.** The person signs in on the desktop. | The guided sign-in only opens the profile at Google's sign-in (`show_profile`) and closes the browser after success. | `profile-signin.db.spec.ts`: the only fabric commands sent are `show_profile` and `close_browser`. |
+| S6 | **Takeover rules are unchanged.** A guided sign-in takes the ordinary takeover lease; a host taken over by someone else gives `409`; a profile busy with a run gives `409 PROFILE_IN_USE` and is never interrupted. | `console/apps/api/src/fleet/profile-signin.service.ts`. | `profile-signin.db.spec.ts`. |
+| S7 | **Audit.** Each guided sign-in is recorded: `profile.signin.started`, `completed` (with the resulting state), `abandoned` (with the reason), with the user, host and profile. | `profile-signin.service.ts`. | `profile-signin.db.spec.ts`. |
+| S8 | **No new extension permission.** The live check uses `<all_urls>` and `tabs`, which the extension already had. | `apps/chrome-extension/manifest/manifest.json` is unchanged by the epic. | The manifest diff of epic #926. |
+
 ## Residual risks
 
 - **One fabric replica.** Tunnels and takeover leases live in memory, so run a single `fabric-control`. A restart drops open desktops; viewers reconnect.
 - **Google may still challenge a new sign-in**, even from a residential IP. The person answers it through the desktop.
+- **Google's `ListAccounts` format is not a public interface.** If it changes, the live check reads `unknown` (never a false `signed_out`) and the offline check still works.
+- **The control plane's state database holds the last sign-in status with the email**, so a restart keeps it, like host names. Protect it like the rest of the fabric's state.
 - **Software rendering is detectable.** On a machine without an Intel or AMD GPU, WebGL reports software rendering; `agent doctor` warns.
