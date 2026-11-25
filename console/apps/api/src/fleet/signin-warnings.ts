@@ -54,9 +54,11 @@ export class ProfileSigninWarnings {
 
   async forRun(run: { hostId: string | null; profile: string }, deadlineMs = SIGNIN_WARNING_DEADLINE_MS): Promise<RunStartWarning[]> {
     let timer: NodeJS.Timeout | undefined;
+    // The fabric call itself ends at the deadline (aborted, never retried), so no request outlives the run start.
+    const deadline = new AbortController();
     try {
       const hosts = await Promise.race([
-        this.fabric.hosts(),
+        this.fabric.hosts({ timeoutMs: deadlineMs, retries: 0, signal: deadline.signal }),
         new Promise<null>((resolve) => {
           timer = setTimeout(() => resolve(null), deadlineMs);
           timer.unref?.();
@@ -69,6 +71,7 @@ export class ProfileSigninWarnings {
       return [];
     } finally {
       if (timer) clearTimeout(timer);
+      deadline.abort();
     }
   }
 }

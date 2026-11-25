@@ -171,8 +171,9 @@ export class FabricClient {
     return this.request('GET', '/v1/health', { timeoutMs, retries: 0 });
   }
 
-  async hosts(): Promise<FabricHost[]> {
-    return (await this.request<{ hosts: FabricHost[] }>('GET', '/v1/hosts')).hosts;
+  /** `opts` bounds the call (a caller with a deadline passes `timeoutMs`, `retries: 0` and its `signal`). */
+  async hosts(opts: Pick<FabricRequest, 'timeoutMs' | 'retries' | 'signal'> = {}): Promise<FabricHost[]> {
+    return (await this.request<{ hosts: FabricHost[] }>('GET', '/v1/hosts', opts)).hosts;
   }
 
   /** Open the event stream and confirm it answers as SSE, then close it. */

@@ -75,8 +75,6 @@ export class RunsStartController {
     const parsed = runTaskSchema.safeParse(rawBody ?? {});
     if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
     const task = await this.tasks.getTask(user.id, id);
-    // Read alongside the start (never fails, at most a short deadline): a profile that needs a Google sign-in is a warning only (E48.5).
-    const warnings = this.signin.forRun({ hostId: task.hostId ?? null, profile: task.profile });
     await this.policies.assertAssignable(user.id, parsed.data.policyId);
     // The inputs are checked before anything else is decided: a bad value writes nothing (#552).
     await this.starter.checkInputs(user.id, task, parsed.data.inputs);
@@ -97,7 +95,9 @@ export class RunsStartController {
       },
     });
     await this.apps.afterStart(user.id, client, run);
-    return withWarnings(runView(withCost(run)), await warnings);
+    // Read once the run exists (never fails, at most a short deadline, nothing left running): a profile that needs a
+    // Google sign-in is a warning only (E48.5).
+    return withWarnings(runView(withCost(run)), await this.signin.forRun({ hostId: task.hostId ?? null, profile: task.profile }));
   }
 
   /** Run an ad-hoc goal (under the user's default agent policy unless `policyId` names one). */
@@ -106,7 +106,6 @@ export class RunsStartController {
   @Auth({ permissions: ['runs:write'] })
   async start(@CurrentUser() user: Principal, @Body() body: StartRunDto, @Req() req: object) {
     await this.policies.assertAssignable(user.id, body.policyId);
-    const warnings = this.signin.forRun({ hostId: body.hostId ?? null, profile: body.profile });
     // Who is starting it (#464), from the request's credential (never from the body), and the app's limits.
     const client = await this.clients.resolve(req);
     const decision = await this.apps.checkStart(user.id, client, { kind: 'run', policyId: body.policyId });
@@ -128,7 +127,7 @@ export class RunsStartController {
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
     await this.apps.afterStart(user.id, client, run);
-    return withWarnings(runView(withCost(run)), await warnings);
+    return withWarnings(runView(withCost(run)), await this.signin.forRun({ hostId: body.hostId ?? null, profile: body.profile }));
   }
 }
 

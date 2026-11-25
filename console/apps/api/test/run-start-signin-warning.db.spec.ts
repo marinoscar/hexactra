@@ -118,6 +118,10 @@ describe('POST /runs on a profile that needs a Google sign-in', () => {
     expect(Date.now() - t0).toBeLessThan(5_000);
     expect('warnings' in slow).toBe(false);
     expect(enqueue).toHaveBeenCalledTimes(5);
+    // The fabric call itself is bounded and cancelled at the deadline: nothing outlives the run start.
+    const [opts] = hosts.mock.lastCall as [{ timeoutMs: number; retries: number; signal: AbortSignal }];
+    expect(opts).toMatchObject({ timeoutMs: 1_500, retries: 0 });
+    expect(opts.signal.aborted).toBe(true);
   });
 
   it('POST /tasks/{id}/runs warns for the task\'s machine and profile', async () => {
