@@ -4337,6 +4337,7 @@ mod tests {
             viewer_url: None,
             mode: Some(HostMode::Unattended),
             desktop: true,
+            bluetooth: None,
             profiles: vec!["default".into(), "work".into()],
             running_profiles: vec!["work".into()],
             draining: false,
