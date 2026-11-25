@@ -44,7 +44,7 @@ const host: FleetHost = {
 
 let takeoverAnswer: unknown = null;
 
-function renderPage(h: FleetHost = host) {
+function renderPage(h: FleetHost = host, search = '', extra: Record<string, unknown> = {}) {
   const platform = createTestPlatformHost({
     permissions: ['fleet:read', 'fleet:desktop'],
     responses: {
@@ -56,11 +56,12 @@ function renderPage(h: FleetHost = host) {
       [`DELETE /fleet/hosts/${ID}/takeover/l1`]: undefined,
       [`POST /fleet/hosts/${ID}/profiles/personal/show`]: { id: 'c1', kind: 'show_profile', profile: 'personal', state: 'succeeded', error: null, createdAt: '', completedAt: '' },
       'GET /fleet/hosts': [h],
+      ...extra,
     },
   });
   const view = render(
     <PlatformHostProvider host={platform}>
-      <MemoryRouter initialEntries={[`/fleet/hosts/${ID}/desktop`]}>
+      <MemoryRouter initialEntries={[`/fleet/hosts/${ID}/desktop${search}`]}>
         <Routes>
           <Route path="/fleet/hosts/:id/desktop" element={<DesktopPage />} />
           <Route path="/fleet" element={<p>Fleet list</p>} />
@@ -170,6 +171,36 @@ describe('DesktopPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
     expect(await screen.findByText(/Chrome for "personal" is open at the Google sign-in/)).toBeInTheDocument();
     expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true);
+  });
+
+  it('turns a ?profile=&signin=1 link into the guided sign-in (E48.4)', async () => {
+    const sid = '11111111-2222-4333-8444-555555555555';
+    const profiles: FleetHost['profiles'] = [
+      { name: 'default', running: false, signin: 'signed_in', accounts: [], checkedAt: null },
+      { name: 'personal', running: false, signin: 'signed_out', accounts: [], checkedAt: null },
+    ];
+    const session = { id: sid, hostId: ID, profile: 'personal', status: 'started', phase: 'waiting', leaseId: 'l1', keepLease: false, signin: 'signed_out', email: null, resultState: null, endReason: null, startedAt: '2026-11-16T00:00:00Z', expiresAt: '2026-11-16T00:15:00Z', endedAt: null };
+    const { platform } = renderPage({ ...host, mode: 'unattended', profiles }, '?profile=personal&signin=1', {
+      [`POST /fleet/hosts/${ID}/profiles/personal/signin`]: session,
+      [`GET /fleet/signin-sessions/${sid}`]: session,
+    });
+    await waitFor(() => expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/signin`)).toBe(true));
+    await waitFor(() => expect(platform.requests.some((r) => r.method === 'GET' && r.path === `/fleet/signin-sessions/${sid}`)).toBe(true));
+  });
+
+  it('preselects the profile and keeps the manual way when the guided sign-in cannot start', async () => {
+    const profiles: FleetHost['profiles'] = [
+      { name: 'default', running: false, signin: 'signed_in', accounts: [], checkedAt: null },
+      { name: 'personal', running: false, signin: 'signed_out', accounts: [], checkedAt: null },
+    ];
+    const { platform } = renderPage({ ...host, mode: 'unattended', profiles }, '?profile=personal&signin=1');
+    expect(await screen.findByText(/You can still use "Sign in to profile"/)).toBeInTheDocument();
+    await waitFor(() => expect(rfb.instances).toHaveLength(1));
+    act(() => {
+      (rfb.instances[0] as unknown as EventTarget).dispatchEvent(new Event('connect'));
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
+    await waitFor(() => expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true));
   });
 
   it('says nobody controls the desktop when the takeover answer is empty', async () => {

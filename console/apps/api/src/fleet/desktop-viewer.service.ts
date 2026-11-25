@@ -49,18 +49,23 @@ export class DesktopViewerService {
   ) {}
 
   /** A new session for `hostId`; returns the cookie value (shown once) and when it expires. */
-  async open(input: { userId: string; orgId: string | null; hostId: string }): Promise<{ token: string; expiresAt: Date }> {
+  async open(input: { userId: string; orgId: string | null; hostId: string }): Promise<{ id: string; token: string; expiresAt: Date }> {
     const host = await this.fleet.host(input.hostId);
     if (!host.desktop) {
       throw new ConflictException({ code: 'DESKTOP_UNAVAILABLE', message: `${host.name} has no desktop to share` });
     }
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + VIEWER_SESSION_TTL_S * 1000);
-    await this.prisma.viewerSession.create({
+    const row = await this.prisma.viewerSession.create({
       data: { tokenHash: sha256(token), hostId: input.hostId, userId: input.userId, organizationId: input.orgId, expiresAt },
     });
     this.logger.log(`desktop session opened: host ${input.hostId} by user ${input.userId}`);
-    return { token, expiresAt };
+    return { id: row.id, token, expiresAt };
+  }
+
+  /** Ends one desktop session (a guided sign-in's own, E48.4); the person's other sessions stay open. */
+  async revokeSession(id: string): Promise<void> {
+    await this.prisma.viewerSession.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date() } });
   }
 
   /** Ends this user's open sessions for a host. */

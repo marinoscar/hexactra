@@ -5467,6 +5467,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fleet/hosts/{id}/profiles/{name}/signin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `fleet:desktop`. */
+        post: operations["profileSignin_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fleet/signin-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `fleet:desktop`. */
+        get: operations["profileSignin_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fleet/signin-sessions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `fleet:desktop`. */
+        post: operations["profileSignin_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-policies": {
         parameters: {
             query?: never;
@@ -10147,6 +10198,13 @@ export interface components {
              * @example KGRAPH_SITE_FACT_REFUSED
              * @example KGRAPH_SITE_FACT_EXISTS
              * @example KGRAPH_SITE_FACT_STATUS
+             * @example PROFILE_IN_USE
+             * @example TAKEOVER_HELD
+             * @example SIGNIN_UNAVAILABLE
+             * @example SIGNIN_HOST_OFFLINE
+             * @example PROFILE_NOT_FOUND
+             * @example SIGNIN_NOT_FOUND
+             * @example INVALID_PROFILE
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -16508,6 +16566,12 @@ export interface components {
             /** Format: uri */
             url?: string;
         };
+        StartProfileSigninDto: {
+            keepLease?: boolean;
+        };
+        CancelProfileSigninDto: {
+            keepLease?: boolean;
+        };
         AgentPolicyResponseDto: {
             /** @description A UUID, or `builtin:<key>` for a built-in policy. */
             id: string;
@@ -22705,6 +22769,8 @@ export interface components {
                 online: number;
                 /** @description Hosts that are draining: they take no new run */
                 disabled: number;
+                /** @description Profiles, across every host, that are signed out of Google or whose session expired (a count; never an email) */
+                needsSignin: number;
                 /** @description True when the fabric did not answer within 1.5 s: the hosts are the last ones read, and may be out of date */
                 stale: boolean;
                 /** @description At most 6: online first, then by name */
@@ -22714,6 +22780,8 @@ export interface components {
                     online: boolean;
                     draining: boolean;
                     mode: ("unattended" | "attended" | "container") | null;
+                    /** @description This host's profiles that need sign-in */
+                    needsSignin: number;
                 }[];
             } | null;
             counts: {
@@ -44023,6 +44091,135 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    profileSignin_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartProfileSigninDto"];
+            };
+        };
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    profileSignin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    profileSignin_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelProfileSigninDto"];
+            };
+        };
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

@@ -19,6 +19,7 @@ import {
   Stack,
   Switch,
   TextField,
+  ToggleButton,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -31,9 +32,11 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import DesktopWindowsOutlined from '@mui/icons-material/DesktopWindowsOutlined';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
-import type { FleetEnrollment, FleetHost, FleetProfile } from '../types/fleet';
+import { HostSigninChip, ProfileSigninStatus, signinNeededCount } from '../components/fleet/ProfileSigninStatus';
+import { needsSignin, type FleetEnrollment, type FleetHost, type FleetProfile } from '../types/fleet';
+import { profileInUseRun, signinDesktopPath, startProfileSignin } from '../fleet/signin';
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, useApiAction, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How each host mode reads in the list (docs/nodes.md). */
@@ -77,7 +80,11 @@ interface ProfileRowProps {
   profile: FleetProfile;
   /** The viewer may change profiles on this host (`fleet:write`, an on-demand host). */
   canAct: boolean;
+  /** The viewer may open this host's desktop (`fleet:desktop`). */
+  canDesktop: boolean;
   disabled: boolean;
+  /** "Sign in" on a profile that needs it (E48.3; E48.4 rewires it to the guided sign-in). */
+  onSignIn: (profile: FleetProfile) => void;
   onRestart: () => void;
   onClose: () => void;
   onDelete: () => void;
@@ -89,7 +96,7 @@ interface ProfileRowProps {
  * overlap. From `sm` up the actions are icon buttons; on a phone they are one
  * "More" menu.
  */
-function ProfileRow({ host, profile, canAct, disabled, onRestart, onClose, onDelete }: ProfileRowProps) {
+function ProfileRow({ host, profile, canAct, canDesktop, disabled, onSignIn, onRestart, onClose, onDelete }: ProfileRowProps) {
   const { isPhone } = useBreakpoint();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const canDelete = profile.name !== 'default';
@@ -106,6 +113,7 @@ function ProfileRow({ host, profile, canAct, disabled, onRestart, onClose, onDel
         <Typography variant="body2" color="text.secondary">
           {profile.running ? 'Browser running' : 'Browser stopped'}
         </Typography>
+        <ProfileSigninStatus host={host} profile={profile} canDesktop={canDesktop} onSignIn={onSignIn} />
       </Box>
       {canAct && !isPhone && (
         <Stack direction="row" sx={{ flexShrink: 0 }}>
@@ -181,6 +189,7 @@ function message(e: unknown, fallback: string): string {
 /** `/fleet`: the browser hosts of the fabric and their profiles. */
 export function FleetPage() {
   const { api, viewer } = usePlatformHost();
+  const navigate = useNavigate();
   const canWrite = viewer.hasPermission('fleet:write');
   const canDesktop = viewer.hasPermission('fleet:desktop');
   const [hosts, setHosts] = useState<FleetHost[] | null>(null);
@@ -191,6 +200,8 @@ export function FleetPage() {
   const [enrollName, setEnrollName] = useState('');
   const [enrollment, setEnrollment] = useState<FleetEnrollment | null>(null);
   const [newProfile, setNewProfile] = useState<Record<string, string>>({});
+  /** The "Needs sign-in" filter: only hosts with a profile that needs sign-in, and only those profiles. */
+  const [onlySignin, setOnlySignin] = useState(false);
   const { isPhone } = useBreakpoint();
   const commandRef = useRef<HTMLPreElement | null>(null);
   /** `copied` for 2 s after a copy; `selected` when the Clipboard API is missing and the text was selected instead. */
@@ -269,6 +280,20 @@ export function FleetPage() {
     }
   };
 
+  /** "Sign in" starts the guided sign-in (E48.4): the console takes over the desktop and opens the profile at Google's sign-in. */
+  const openSignin = (h: FleetHost) => async (p: FleetProfile) => {
+    setError(null);
+    try {
+      navigate(signinDesktopPath(await startProfileSignin(api, h.id, p.name)));
+    } catch (e) {
+      const run = profileInUseRun(e);
+      setError(run ? `"${p.name}" is busy with a run (${run.runUrl}). Sign it in when the run ends; a run is never interrupted.` : message(e, 'Could not start the sign-in'));
+    }
+  };
+
+  const needing = hosts?.reduce((n, h) => n + signinNeededCount(h), 0) ?? 0;
+  const shown = onlySignin ? (hosts ?? []).filter((h) => signinNeededCount(h) > 0) : hosts;
+
   return (
     <PageContainer>
       <PageHeader title="Fleet" primary={{ key: 'enroll', label: 'Enroll host', Icon: AddIcon, onClick: () => setEnrollOpen(true), hidden: !canWrite }} />
@@ -282,8 +307,26 @@ export function FleetPage() {
           action={{ key: 'connect', label: 'Connect a machine', Icon: AddIcon, onClick: () => setEnrollOpen(true), hidden: !canWrite }}
         />
       )}
+      {hosts !== null && hosts.length > 0 && (
+        <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 2 }}>
+          <ToggleButton
+            size="small"
+            value="needs-signin"
+            selected={onlySignin}
+            onChange={() => setOnlySignin(!onlySignin)}
+            sx={{ minHeight: { xs: 44, sm: 'auto' }, px: 1.5, textTransform: 'none' }}
+          >
+            Needs sign-in ({needing})
+          </ToggleButton>
+        </Stack>
+      )}
+      {onlySignin && shown?.length === 0 && (
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Every profile is signed in or not yet checked.
+        </Typography>
+      )}
       <Stack spacing={2} aria-label="Hosts">
-        {hosts?.map((h) => (
+        {shown?.map((h) => (
           <Card key={h.id} variant="outlined" aria-label={`Host ${h.name}`}>
             <CardContent>
               <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
@@ -307,23 +350,36 @@ export function FleetPage() {
                     <Chip size="small" color="warning" label="Disabled" />
                   </Tooltip>
                 )}
+                <HostSigninChip host={h} />
                 <Typography variant="caption" color="text.secondary">
                   v{h.version}
                 </Typography>
               </Stack>
+              {!h.online && h.profiles.length > 0 && (
+                <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
+                  Sign-in status as of {formatDateTime(h.lastSeen)}
+                </Typography>
+              )}
               {h.desktop && canDesktop && (
                 <Button size="small" component={RouterLink} to={`/fleet/hosts/${h.id}/desktop`} disabled={!h.online}>
                   Open desktop
                 </Button>
               )}
-              <Box component="ul" aria-label={`Profiles on ${h.name}`} sx={{ listStyle: 'none', p: 0, my: 1, borderBottom: 1, borderColor: 'divider' }}>
-                {h.profiles.map((p) => (
+              {/* An offline host keeps its last known status, greyed. */}
+              <Box
+                component="ul"
+                aria-label={`Profiles on ${h.name}`}
+                sx={{ listStyle: 'none', p: 0, my: 1, borderBottom: 1, borderColor: 'divider', opacity: h.online ? 1 : 0.6 }}
+              >
+                {(onlySignin ? h.profiles.filter(needsSignin) : h.profiles).map((p) => (
                   <ProfileRow
                     key={p.name}
                     host={h}
                     profile={p}
                     canAct={canWrite && h.onDemand}
+                    canDesktop={canDesktop}
                     disabled={busy !== null}
+                    onSignIn={openSignin(h)}
                     onRestart={() => void act(`${h.id}/${p.name}`, () => api.post(`/fleet/hosts/${h.id}/profiles/${p.name}/restart`, {}))}
                     onClose={() => void act(`${h.id}/${p.name}`, () => api.post(`/fleet/hosts/${h.id}/profiles/${p.name}/close`, {}))}
                     onDelete={() => void deleteProfile(h, p.name)}

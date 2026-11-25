@@ -85,3 +85,46 @@ export interface FleetCommandResult {
   createdAt: string;
   completedAt: string | null;
 }
+
+/**
+ * `POST /api/fleet/hosts/:id/profiles/:name/signin` (E48.4). `keepLease`: when the session ends, keep the takeover lease and the
+ * desktop session for the next profile on the same host (a "Fix sign-ins" queue, E48.6); the queue then starts the next profile's
+ * sign-in, which adopts the lease the person already holds, and the last one is started without it (or the lease is released with
+ * `DELETE /api/fleet/hosts/:id/takeover/:leaseId`).
+ */
+export const startProfileSigninSchema = z.object({ keepLease: z.boolean().optional() }).strict();
+export class StartProfileSigninDto extends createZodDto(startProfileSigninSchema) {}
+
+/** `POST /api/fleet/signin-sessions/:id/cancel`. `keepLease` overrides the session's own choice (a queue skipping a profile). */
+export const cancelProfileSigninSchema = z.object({ keepLease: z.boolean().optional() }).strict();
+export class CancelProfileSigninDto extends createZodDto(cancelProfileSigninSchema) {}
+
+export type ProfileSigninStatus = 'started' | 'completed' | 'abandoned';
+
+/**
+ * A guided sign-in as its page polls it. `email` is read live from the host's profile status (shown to the person who started
+ * it, who holds `fleet:desktop`); the console never stores, logs or traces it.
+ */
+export interface ProfileSigninView {
+  id: string;
+  hostId: string;
+  profile: string;
+  status: ProfileSigninStatus;
+  /** While started: `waiting` for the person, or `saving` (the browser was closed; waiting for the offline check). Null once ended. */
+  phase: 'waiting' | 'saving' | null;
+  /** The takeover lease the session holds (null once released). */
+  leaseId: string | null;
+  keepLease: boolean;
+  /** The profile's sign-in state now (unknown when the host could not be read). */
+  signin: FleetSigninState;
+  /** The signed-in account, while the profile reads signed in. */
+  email: string | null;
+  /** The state the profile was left in when the session completed. */
+  resultState: FleetSigninState | null;
+  /** Why an abandoned session ended. */
+  endReason: 'cancelled' | 'timeout' | 'profile_gone' | 'replaced' | null;
+  startedAt: string;
+  /** When an unfinished session is abandoned. */
+  expiresAt: string;
+  endedAt: string | null;
+}
