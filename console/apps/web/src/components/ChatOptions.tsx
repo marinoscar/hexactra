@@ -15,6 +15,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import { machineState, type FleetHost } from '../types/fleet';
 import { useFleetHosts } from './MachinePicker';
+import { ProfileSigninWarning } from './ProfileSigninWarning';
 import { SAFE_AREA_BOTTOM } from '../ui';
 
 /** The run choices the composer offers: the agent policy and the machine. */
@@ -32,6 +33,8 @@ export interface ChatOptionsProps extends ChatRunChoice {
   /** Open every setting of the chat (the settings dialog). */
   onOpenSettings?: () => void;
   disabled?: boolean;
+  /** The chat's browser profile: a warning shows while it is not signed in to Google on the machine (E48.5). */
+  profile?: string;
 }
 
 type View = 'root' | 'policy' | 'machine';
@@ -51,7 +54,7 @@ function hostLabel(hosts: readonly FleetHost[], hostId: string | null): string {
  * that show (and change) the policy and the machine the next run uses. From
  * `sm` the options are a popover; on a phone they are a bottom sheet.
  */
-export function ChatOptions({ policyId, hostId, hostFallback, onChange, onOpenSettings, disabled = false }: ChatOptionsProps) {
+export function ChatOptions({ policyId, hostId, hostFallback, onChange, onOpenSettings, disabled = false, profile = 'default' }: ChatOptionsProps) {
   const { viewer } = usePlatformHost();
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
@@ -158,6 +161,7 @@ export function ChatOptions({ policyId, hostId, hostFallback, onChange, onOpenSe
             </ListItemButton>
           )}
         </List>
+        <ProfileSigninWarning hosts={hosts} hostId={hostId} profile={profile} dense onNavigate={close} />
         {hostId && (
           <>
             <Divider />
@@ -173,6 +177,7 @@ export function ChatOptions({ policyId, hostId, hostFallback, onChange, onOpenSe
     );
   } else {
     content = (
+      <>
       <List aria-label="Chat options" sx={{ py: 0.5 }}>
         {canPickPolicy && (
           <ListItemButton sx={ROW} onClick={() => setView('policy')}>
@@ -208,6 +213,8 @@ export function ChatOptions({ policyId, hostId, hostFallback, onChange, onOpenSe
           </>
         )}
       </List>
+      <ProfileSigninWarning hosts={hosts} hostId={hostId} profile={profile} dense onNavigate={close} />
+      </>
     );
   }
 

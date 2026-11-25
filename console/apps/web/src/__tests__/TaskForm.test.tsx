@@ -255,6 +255,33 @@ describe('creating a task', () => {
     expect(screen.getByRole('link', { name: 'Fleet' })).toHaveAttribute('href', '/fleet');
   });
 
+  it('warns that the chosen profile is not signed in to Google, with a Sign in link, and still saves (E48.5)', async () => {
+    const signin = (name: string, state: string) => ({ name, running: false, signin: state, accounts: [], checkedAt: '2026-11-25T00:00:00Z' });
+    const hosts = [
+      { ...HOSTS[0]!, profiles: [signin('default', 'signed_in'), signin('travel', 'unknown')] },
+      { ...HOSTS[1]!, profiles: [signin('default', 'signed_in'), signin('travel', 'expired'), signin('work', 'signed_out')] },
+    ];
+    const { sent } = mount('/tasks/new', { 'GET /fleet/hosts': hosts });
+    await fill();
+    // Any available machine: only cloud-1 is online and has "work", and it is signed out.
+    await choose(screen.getByRole('combobox', { name: 'Browser profile' }), /^work/);
+    const warning = await screen.findByTestId('profile-signin-warning');
+    expect(warning).toHaveTextContent('This profile is not signed in to Google');
+    expect(within(warning).getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', `/fleet/hosts/${CLOUD}/desktop?profile=work&signin=1`);
+    // Signed in: nothing; unknown (home-mini's travel) never warns.
+    await choose(screen.getByRole('combobox', { name: 'Browser profile' }), /^default/);
+    expect(screen.queryByTestId('profile-signin-warning')).not.toBeInTheDocument();
+    await choose(screen.getByRole('combobox', { name: 'Machine' }), 'home-mini (offline)');
+    await choose(screen.getByRole('combobox', { name: 'Browser profile' }), /^travel/);
+    expect(screen.queryByTestId('profile-signin-warning')).not.toBeInTheDocument();
+    // An expired session warns on the chosen machine.
+    await choose(screen.getByRole('combobox', { name: 'Machine' }), 'cloud-1 (online)');
+    expect(await screen.findByTestId('profile-signin-warning')).toHaveTextContent('expired Google session');
+    // A warning only: the task saves.
+    fireEvent.click(save());
+    await waitFor(() => expect(sent('POST', '/tasks')).toHaveLength(1));
+  });
+
   it('falls back to a typed profile when the machines cannot be loaded, and still saves', async () => {
     const { sent } = mount('/tasks/new', { 'GET /fleet/hosts': () => Promise.reject(createTestApiError(500, 'Fleet is down')) });
     await fill();

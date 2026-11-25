@@ -625,7 +625,7 @@ export function ChatPage() {
                 <>
                   <ChatAccountChips accounts={chat?.connections} />
                   <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'Ask Hexactra to do something' : liveRun ? 'Add something for the agent' : 'Message'}
-                    options={<ChatOptions {...choice} onChange={(change) => void changeChoice(change)} onOpenSettings={() => void openSettings()} />}
+                    options={<ChatOptions {...choice} profile={chat && chatId !== null ? chat.profile : undefined} onChange={(change) => void changeChoice(change)} onOpenSettings={() => void openSettings()} />}
                   />
                 </>
               )
