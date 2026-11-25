@@ -410,6 +410,23 @@ describe('OverviewPage: a busy account', () => {
     expect(within(machines).queryByTestId('home-machines-stale')).toBeNull();
   });
 
+  it('shows how many profiles need sign-in on Machines, linking to the Fleet page (E48.3)', async () => {
+    const summary = busy();
+    summary.fleet = { ...summary.fleet!, needsSignin: 3, hosts: summary.fleet!.hosts.map((h, i) => ({ ...h, needsSignin: i === 0 ? 2 : i === 2 ? 1 : 0 })) };
+    mount(summary);
+    const machines = await screen.findByTestId('home-machines');
+    expect(within(machines).getByTestId('home-machines-signin')).toHaveTextContent('3 profiles need sign-in');
+    expect(within(machines).getByTestId('home-machines-signin')).toHaveAttribute('href', '/fleet');
+    expect(within(machines).getByText('2 need sign-in')).toBeInTheDocument();
+    expect(within(machines).getByText('1 needs sign-in')).toBeInTheDocument();
+  });
+
+  it('shows no sign-in warning on Machines when no profile needs it, or the API is older', async () => {
+    mount(busy());
+    const machines = await screen.findByTestId('home-machines');
+    expect(within(machines).queryByTestId('home-machines-signin')).toBeNull();
+  });
+
   it('shows Spend as known, as a lower bound, and not at all', async () => {
     const lower = busy();
     lower.week!.totals = { ...lower.week!.totals, costKnown: false, budgetStops: 0, stalled: 0 };
