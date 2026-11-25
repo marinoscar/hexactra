@@ -36,10 +36,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
 import { HostSigninChip, ProfileSigninStatus, signinNeededCount } from '../components/fleet/ProfileSigninStatus';
 import { needsSignin, type FleetEnrollment, type FleetHost, type FleetProfile } from '../types/fleet';
-<<<<<<< HEAD
 import { profileInUseRun, signinDesktopPath, startProfileSignin } from '../fleet/signin';
-=======
->>>>>>> origin/main
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, useApiAction, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How each host mode reads in the list (docs/nodes.md). */
@@ -283,7 +280,6 @@ export function FleetPage() {
     }
   };
 
-<<<<<<< HEAD
   /** "Sign in" starts the guided sign-in (E48.4): the console takes over the desktop and opens the profile at Google's sign-in. */
   const openSignin = (h: FleetHost) => async (p: FleetProfile) => {
     setError(null);
@@ -294,11 +290,6 @@ export function FleetPage() {
       setError(run ? `"${p.name}" is busy with a run (${run.runUrl}). Sign it in when the run ends; a run is never interrupted.` : message(e, 'Could not start the sign-in'));
     }
   };
-=======
-  /** Until the guided sign-in (E48.4), "Sign in" opens the host's desktop with the profile preselected. */
-  const openSignin = (h: FleetHost) => (p: FleetProfile) =>
-    navigate(`/fleet/hosts/${h.id}/desktop?profile=${encodeURIComponent(p.name)}&signin=1`);
->>>>>>> origin/main
 
   const needing = hosts?.reduce((n, h) => n + signinNeededCount(h), 0) ?? 0;
   const shown = onlySignin ? (hosts ?? []).filter((h) => signinNeededCount(h) > 0) : hosts;

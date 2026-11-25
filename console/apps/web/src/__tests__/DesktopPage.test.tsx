@@ -44,11 +44,7 @@ const host: FleetHost = {
 
 let takeoverAnswer: unknown = null;
 
-<<<<<<< HEAD
 function renderPage(h: FleetHost = host, search = '', extra: Record<string, unknown> = {}) {
-=======
-function renderPage(h: FleetHost = host, search = '') {
->>>>>>> origin/main
   const platform = createTestPlatformHost({
     permissions: ['fleet:read', 'fleet:desktop'],
     responses: {
@@ -177,17 +173,12 @@ describe('DesktopPage', () => {
     expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true);
   });
 
-<<<<<<< HEAD
   it('turns a ?profile=&signin=1 link into the guided sign-in (E48.4)', async () => {
     const sid = '11111111-2222-4333-8444-555555555555';
-=======
-  it("preselects the profile the Fleet page's Sign in asked for (E48.3)", async () => {
->>>>>>> origin/main
     const profiles: FleetHost['profiles'] = [
       { name: 'default', running: false, signin: 'signed_in', accounts: [], checkedAt: null },
       { name: 'personal', running: false, signin: 'signed_out', accounts: [], checkedAt: null },
     ];
-<<<<<<< HEAD
     const session = { id: sid, hostId: ID, profile: 'personal', status: 'started', phase: 'waiting', leaseId: 'l1', keepLease: false, signin: 'signed_out', email: null, resultState: null, endReason: null, startedAt: '2026-11-16T00:00:00Z', expiresAt: '2026-11-16T00:15:00Z', endedAt: null };
     const { platform } = renderPage({ ...host, mode: 'unattended', profiles }, '?profile=personal&signin=1', {
       [`POST /fleet/hosts/${ID}/profiles/personal/signin`]: session,
@@ -204,10 +195,6 @@ describe('DesktopPage', () => {
     ];
     const { platform } = renderPage({ ...host, mode: 'unattended', profiles }, '?profile=personal&signin=1');
     expect(await screen.findByText(/You can still use "Sign in to profile"/)).toBeInTheDocument();
-=======
-    const { platform } = renderPage({ ...host, profiles }, '?profile=personal&signin=1');
-    expect(await screen.findByText(/To sign in "personal", use "Sign in to profile"/)).toBeInTheDocument();
->>>>>>> origin/main
     await waitFor(() => expect(rfb.instances).toHaveLength(1));
     act(() => {
       (rfb.instances[0] as unknown as EventTarget).dispatchEvent(new Event('connect'));
