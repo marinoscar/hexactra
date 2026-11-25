@@ -90,6 +90,15 @@ for _ in $(seq 1 30); do chromium_running || break; sleep 1; done
 chromium_running && fail "idle browser was not closed"
 pass "idle browser closed"
 
+# E48 (#928): the fresh default profile has run and closed, so the agent's
+# offline check reads Chrome's Preferences and reports it signed out.
+for _ in $(seq 1 30); do
+    hx status | grep -q 'default (signed out)' && break
+    sleep 1
+done
+hx status | grep -q 'default (signed out)' || fail "fresh profile not reported signed_out"
+pass "a fresh profile reports signed_out"
+
 hx navigate http://fixture/persist.html >/dev/null
 visits() { hx text --selector '#visits' | sed -n 's/.*visits: \([0-9]*\).*/\1/p'; }
 [ "$(visits)" -ge 2 ] || fail "profile did not persist across idle relaunch"

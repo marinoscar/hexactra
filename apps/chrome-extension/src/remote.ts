@@ -11,10 +11,13 @@
 //   extension -> agent: { "type": "response", "id": string, "ok": boolean, "result"?: any, "error"?: string }
 //   extension -> agent: { "type": "hello", "version": string }
 //   agent <-> extension: { "type": "ping" } / { "type": "pong" }
+//   agent -> extension: { "type": "check_signin" }  (every 10 minutes, E48)
+//   extension -> agent: { "type": "profile_status", "signin": SigninState, "accounts": [{ "provider", "email", "state" }] }
 
 import { applyAllowedDomains, currentAllowed, recordBlocked, takeBlocked, urlAllowed, urlHost, type BlockedNavigation } from './site-policy.js';
 import * as cdp from './cdp.js';
 import { recordPause, recordPull, recordStart, recordStop } from './recorder.js';
+import { isGoogleAccountsUrl, reportSignin } from './signin.js';
 import { MASK_ID, MASK_UNAVAILABLE, MAX_MASK_BOXES, loadSensitivePatterns, maskText, pageClearMask, pageMask, pageNextFrame, type MaskPattern } from './mask.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
@@ -873,8 +876,12 @@ function connect() {
       // The host agent is closing this browser: close every window so
       // Chromium exits normally and flushes cookies and site storage.
       void closeAllWindows();
+    } else if (m?.type === 'check_signin') {
+      void reportSignin((s) => p.postMessage(s));
     } else if (m?.type === 'agent_connected') {
       setBadge(true);
+      // Extension start, or the agent (re)started: report the sign-in now.
+      void reportSignin((s) => p.postMessage(s));
     } else if (m?.type === 'agent_disconnected') {
       setBadge(false);
     }
@@ -906,5 +913,17 @@ function scheduleReconnect() {
 export function startRemoteBridge() {
   if (started) return;
   started = true;
+  // A page on accounts.google.com finished loading: the person may have
+  // just signed in or out, so check at once (E48.4's success detection).
+  try {
+    chrome.tabs.onUpdated.addListener((_id, info, tab) => {
+      if (info.status === 'complete' && port && isGoogleAccountsUrl(tab.url)) {
+        const p = port;
+        void reportSignin((s) => p.postMessage(s));
+      }
+    });
+  } catch (e) {
+    console.warn('Hexactra: cannot watch sign-in pages', e);
+  }
   connect();
 }

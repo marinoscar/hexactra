@@ -25,6 +25,8 @@ use uuid::Uuid;
 
 use crate::browser_bridge::BrowserBridge;
 use crate::launcher::{BrowserLauncher, LaunchConfig};
+use crate::signin::SigninTracker;
+use hexactra_core::remote::ProfileStatusReport;
 
 /// Pool settings.
 #[derive(Debug, Clone)]
@@ -59,6 +61,8 @@ pub struct BrowserPool {
     capacity: Mutex<()>,
     /// Serialises `desktop_*` actions: the node has one pointer and keyboard.
     desktop: Mutex<()>,
+    /// Each profile's Google sign-in status (E48, #928).
+    signin: Arc<SigninTracker>,
 }
 
 /// Desktop input reaches every window on the node, so a session confined to
@@ -88,6 +92,7 @@ impl BrowserPool {
             entries: Mutex::new(HashMap::new()),
             capacity: Mutex::new(()),
             desktop: Mutex::new(()),
+            signin: Arc::new(SigninTracker::new()),
         }))
     }
 
@@ -97,20 +102,48 @@ impl BrowserPool {
 
     /// Profiles on disk (plus `default`, which always exists logically).
     pub fn profiles(&self) -> Vec<String> {
-        let mut v: Vec<String> = std::fs::read_dir(&self.cfg.profiles_dir)
-            .map(|rd| {
-                rd.filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-                    .filter_map(|e| e.file_name().into_string().ok())
-                    .filter(|n| valid_profile_name(n))
-                    .collect()
-            })
-            .unwrap_or_default();
-        if !v.iter().any(|p| p == DEFAULT_PROFILE) {
-            v.push(DEFAULT_PROFILE.to_string());
+        crate::signin::list_profiles(&self.cfg.profiles_dir)
+    }
+
+    /// The profiles' sign-in tracker.
+    pub fn signin(&self) -> &Arc<SigninTracker> {
+        &self.signin
+    }
+
+    /// A profile's browser has stopped: its live sign-in result no longer
+    /// wins, and the offline check reads what Chrome wrote on exit.
+    fn signin_after_close(&self, name: &str) {
+        self.signin.browser_stopped(name);
+        self.signin.refresh_offline(name, &self.profile_dir(name));
+    }
+
+    /// Run the sign-in checks that are due (E48): the offline check for a
+    /// profile never checked or whose browser stopped since the last call
+    /// (a crash or an idle close included), and a live check request to
+    /// every running browser not asked within
+    /// [`crate::signin::LIVE_CHECK_INTERVAL`]. Returns the status to report.
+    pub async fn signin_tick(&self) -> ProfileStatusReport {
+        let profiles = self.profiles();
+        let running = self.running().await;
+        let now = Instant::now();
+        let work = self.signin.observe(&profiles, &running, now);
+        for name in &work.offline {
+            self.signin.refresh_offline(name, &self.profile_dir(name));
         }
-        v.sort();
-        v
+        for name in &work.live {
+            let bridge = self
+                .entries
+                .lock()
+                .await
+                .get(name)
+                .map(|e| e.bridge.clone());
+            if let Some(b) = bridge {
+                if b.request_signin_check().await {
+                    self.signin.asked(name, now);
+                }
+            }
+        }
+        self.signin.report(&profiles, &running)
     }
 
     /// Profiles whose browser is running.
@@ -145,6 +178,11 @@ impl BrowserPool {
         }
         let socket = self.cfg.socket_dir.join(format!("bridge-{name}.sock"));
         let bridge = BrowserBridge::bind(&socket).await?;
+        {
+            let tracker = self.signin.clone();
+            let profile = name.to_string();
+            bridge.on_signin(Arc::new(move |check| tracker.set_live(&profile, check)));
+        }
         let mut launch = self.cfg.launch.clone();
         launch.profile_dir = self.profile_dir(name);
         launch.bridge_socket = socket;
@@ -198,6 +236,7 @@ impl BrowserPool {
                     if let Ok(_guard) = busy.try_lock() {
                         tracing::info!(closing = %other, starting = %name, "browser pool full; closing the least recently used browser");
                         l.shutdown().await;
+                        self.signin_after_close(&other);
                         return launcher.ensure_running().await;
                     }
                 }
@@ -331,6 +370,7 @@ impl BrowserPool {
         let dir = self.profile_dir(name);
         let created = !dir.exists();
         std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        self.signin.refresh_offline(name, &dir);
         Ok(serde_json::json!({ "profile": name, "created": created }))
     }
 
@@ -353,6 +393,7 @@ impl BrowserPool {
             .map_err(|_| anyhow::anyhow!("the browser is busy with an action; try again"))?;
         let was_running = launcher.is_running().await;
         launcher.shutdown().await;
+        self.signin_after_close(name);
         Ok(serde_json::json!({ "profile": name, "closed": was_running }))
     }
 
@@ -402,6 +443,7 @@ impl BrowserPool {
         }
         self.close_browser(name, wait).await?;
         self.entries.lock().await.remove(name);
+        self.signin.remove(name);
         let dir = self.profile_dir(name);
         std::fs::remove_dir_all(&dir).with_context(|| format!("removing {}", dir.display()))?;
         let _ = std::fs::remove_file(self.cfg.socket_dir.join(format!("bridge-{name}.sock")));
@@ -635,12 +677,36 @@ mod tests {
         .await;
         assert!(!bad.ok);
 
+        // Chrome writes a fresh profile's Preferences (signed out) while it
+        // runs; closing the browser re-runs the offline sign-in check.
+        use hexactra_core::remote::SigninState;
+        assert_eq!(
+            p.signin().status("travel", false).signin,
+            SigninState::Unknown
+        );
+        std::fs::create_dir_all(dir.path().join("profiles/travel/Default")).unwrap();
+        std::fs::write(
+            dir.path().join("profiles/travel/Default/Preferences"),
+            std::fs::read(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/preferences/signed-out.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let r = run(HostCommand::CloseBrowser {
             profile: "travel".into(),
         })
         .await;
         assert!(r.ok && r.result.unwrap()["closed"] == true);
         assert!(p.running().await.is_empty());
+        assert_eq!(
+            p.signin().status("travel", false).signin,
+            SigninState::SignedOut
+        );
+        let report = p.signin_tick().await;
+        let travel = report.profiles.iter().find(|s| s.name == "travel").unwrap();
+        assert_eq!(travel.signin, SigninState::SignedOut);
 
         let r = run(HostCommand::DeleteProfile {
             profile: "travel".into(),

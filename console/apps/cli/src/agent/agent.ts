@@ -517,7 +517,28 @@ export async function agentDoctor(d: AgentDeps, layout: NodeLayout = DEFAULT_LAY
   add('credential', existsSync(d.paths.credential), existsSync(d.paths.credential) ? 'present (0600)' : 'missing: run `hexactra agent install --reenroll`');
   if (s.service) add('service', st.service?.active === 'active', `${UNIT_NAME}: ${st.service?.active ?? 'unknown'} (${st.service?.sub ?? 'unknown'})`);
   add('fleet', !!st.fleet?.online, st.fleet ? `${st.fleet.online ? 'online' : 'offline'}${st.fleet.browserConnected ? ', extension connected' : ', extension not connected yet'}` : (st.fleetError ?? 'unknown'));
+  checks.push(...profileSigninChecks(d, u.state ? `${layout.home}/profiles` : d.paths.profilesDir));
   return checks;
+}
+
+/**
+ * Each profile's Google sign-in status (E48.2, #928), from the agent's own
+ * `hexactra-agent doctor`, which reads the profile on disk. A profile that
+ * needs sign-in is a warning, never a failure: it does not stop the node.
+ * The email is printed on this terminal only (the owner's own node).
+ */
+export function profileSigninChecks(d: AgentDeps, profilesDir: string): DoctorCheck[] {
+  const bin = join(d.paths.current, 'bin', 'hexactra-agent');
+  if (!existsSync(bin)) return [];
+  const r = d.exec([bin, 'doctor', '--profiles-dir', profilesDir]);
+  if (r.code !== 0) return [];
+  const out: DoctorCheck[] = [];
+  for (const line of r.stdout.split('\n')) {
+    const m = /^(ok|warn)\s+profile ([^:]+): (\S+) \((.*)\)$/.exec(line.trim());
+    if (!m) continue;
+    out.push({ name: `profile ${m[2]}`, ok: true, warning: m[1] === 'warn', detail: m[4]! });
+  }
+  return out;
 }
 
 export interface UnattendedOptions extends InstallOptions {

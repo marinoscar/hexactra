@@ -90,7 +90,10 @@ describe('the kgraph migrations', () => {
   it('exist and sort after every earlier migration', () => {
     expect(kg.length).toBeGreaterThanOrEqual(1);
     const all = readdirSync(dir).filter((d) => /^\d{14}_/.test(d)).sort();
-    expect(all.slice(-kg.length)).toEqual(kg);
+    // One block after every migration that came before them; a later feature's migration may follow it (E48.4).
+    const first = all.indexOf(kg[0]!);
+    expect(all.slice(first, first + kg.length)).toEqual(kg);
+    expect(all.slice(0, first).some((d) => /_kgraph/.test(d))).toBe(false);
   });
   it.each(kg)('%s creates, indexes or extends kg_ tables only', (folder) => {
     const sql = readFileSync(join(dir, folder, 'migration.sql'), 'utf8');

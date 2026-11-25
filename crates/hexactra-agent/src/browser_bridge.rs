@@ -22,6 +22,8 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
+use crate::signin::{parse_live_frame, SigninCheck};
+
 #[derive(Serialize)]
 struct RequestFrame<'a> {
     #[serde(rename = "type")]
@@ -65,7 +67,12 @@ struct Inner {
     next_conn_id: u64,
     pending: HashMap<String, (u64, oneshot::Sender<OperationResult>)>,
     extension_version: Option<String>,
+    /// Receives the extension's live sign-in checks (E48, #928).
+    signin_sink: Option<SigninSink>,
 }
+
+/// Where a bridge hands the extension's live sign-in checks.
+pub type SigninSink = Arc<dyn Fn(SigninCheck) + Send + Sync>;
 
 /// Handle to the bridge. Cheap to clone.
 #[derive(Clone)]
@@ -234,6 +241,16 @@ impl BrowserBridge {
     }
 
     fn on_frame(&self, conn_id: u64, frame: &[u8]) {
+        // The live sign-in check (E48): only state and email cross, and the
+        // frame is never logged (it holds the email).
+        if let Some(check) = parse_live_frame(frame) {
+            let sink = self.lock().signin_sink.clone();
+            match sink {
+                Some(sink) => sink(check),
+                None => tracing::debug!("ignoring a sign-in status: nobody tracks it"),
+            }
+            return;
+        }
         let msg: IncomingFrame = match serde_json::from_slice(frame) {
             Ok(m) => m,
             Err(e) => {
@@ -309,6 +326,27 @@ impl BrowserBridge {
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    /// Hand the extension's live sign-in checks to `sink`.
+    pub fn on_signin(&self, sink: SigninSink) {
+        self.lock().signin_sink = Some(sink);
+    }
+
+    /// Ask the extension to check the Google sign-in now (E48). Returns
+    /// false if the request could not be sent.
+    pub async fn request_signin_check(&self) -> bool {
+        let sender = {
+            let inner = self.lock();
+            match inner.conn.as_ref().filter(|c| c.hello) {
+                Some(c) => c.tx.clone(),
+                None => return false,
+            }
+        };
+        sender
+            .send(br#"{"type":"check_signin"}"#.to_vec())
+            .await
+            .is_ok()
     }
 
     /// Ask the extension to close the browser's windows (graceful
@@ -571,6 +609,37 @@ mod tests {
             reply_wait(now - chrono::Duration::seconds(1), now),
             Duration::from_millis(100)
         );
+    }
+
+    #[tokio::test]
+    async fn signin_checks_are_requested_and_reach_the_sink() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("b.sock");
+        let b = BrowserBridge::bind(&sock).await.unwrap();
+        assert!(!b.request_signin_check().await, "nobody connected yet");
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        b.on_signin(Arc::new(move |c| {
+            let _ = tx.send(c);
+        }));
+        let mut ext = fake_extension(&sock).await;
+        wait_connected(&b).await;
+        assert!(b.request_signin_check().await);
+        let f = read_frame(&mut ext, 1 << 20).await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&f).unwrap(),
+            json!({"type": "check_signin"})
+        );
+        let status = json!({"type": "profile_status", "signin": "signed_in",
+            "accounts": [{"provider": "google", "email": "a@example.com", "state": "signed_in"}]});
+        write_frame(&mut ext, status.to_string().as_bytes(), 1 << 20)
+            .await
+            .unwrap();
+        let c = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(c.signin, hexactra_core::remote::SigninState::SignedIn);
+        assert_eq!(c.accounts[0].email, "a@example.com");
     }
 
     #[tokio::test]
