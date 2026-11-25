@@ -288,6 +288,8 @@ export class RunDeleteService {
         await tx.approvalRuleUse.updateMany({ where: { runId: { in: goneIds }, rule: { userId } }, data: { runId: null } });
         // What the agent did with saved secrets (E37.4) outlives the run: the row forgets which run it was.
         await tx.secretsActivity.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
+        // A Hexactra passkey outlives the run that made it (E47.2): only the audit pointer goes.
+        await tx.passkeyCredential.updateMany({ where: { ownerUserId: userId, createdByRunId: { in: goneIds } }, data: { createdByRunId: null } });
         // What a mail trigger did with a message (E39.8) outlives the run it started: the row forgets which run it was.
         await tx.mailTriggerEvent.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
       }
