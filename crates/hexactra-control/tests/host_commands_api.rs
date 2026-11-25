@@ -43,6 +43,7 @@ async fn a_command_round_trips_through_the_host_poll() {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()
@@ -160,6 +161,7 @@ async fn only_the_owning_host_may_report_and_old_agents_get_operations_only() {
                 viewer_url: None,
                 mode: None,
                 desktop: false,
+                bluetooth: None,
             })
             .await
             .unwrap();

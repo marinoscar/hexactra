@@ -272,7 +272,8 @@ When you need the person:
   4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
   5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
   6. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
-- Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
+- Use input "scan" when the screen shows something the person must scan or read with their phone: a sign-in QR code the page draws (scan_source "page"), a number to match in their app (scan_source "page"), or Chrome's own passkey window offering "use a phone or tablet" with a QR code (scan_source "desktop"). They see a live picture of it and press Done; then check that the page moved on.
+- Use input "takeover" only for what cannot be typed or scanned for them: a passkey on this computer or a security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before commitments, call request_human with kind "confirmation", then try again.
 - When you ask for a confirmation on your own, give request_human a topic from this list: open_menu, choose_date, choose_option, fill_form, navigate, dismiss_dialog, scroll_or_expand, download, upload, other ("other" when none fits).
 - The server itself stops you before a commitment (pressing Pay, Send, Place order, Transfer, Delete account) when the task asks for confirmation; you do not ask first. Never ask the person before ordinary steps: opening menus, choosing dates, filling fields, picking options, moving between pages. Ask only when the owner's intent is unclear or a detail you need is missing.
@@ -992,7 +993,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
+          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), scan (they scan or read what is on the screen with their phone, then press Done: a sign-in QR code the page shows, a number to match in an app, or Chrome's "use a phone or tablet" passkey QR code; kind passkey, login, verification or code; scan_source "page" for a code the page draws, "desktop" for Chrome's own passkey window; they see a live picture the server takes, never one you send), takeover (they take over the browser, then press Done: only for a passkey on this computer or a security key, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
           "name": "request_human",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1152,6 +1153,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   "confirm",
                   "takeover",
                   "credentials",
+                  "scan",
                 ],
                 "type": "string",
               },
@@ -1238,6 +1240,20 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   },
                 ],
               },
+              "scan_source": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "page",
+                      "desktop",
+                    ],
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
               "topic": {
                 "anyOf": [
                   {
@@ -1262,6 +1278,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
               "risk",
               "remember_label",
               "topic",
+              "scan_source",
             ],
             "type": "object",
           },
@@ -2367,7 +2384,8 @@ When you need the person:
   4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
   5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
   6. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
-- Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
+- Use input "scan" when the screen shows something the person must scan or read with their phone: a sign-in QR code the page draws (scan_source "page"), a number to match in their app (scan_source "page"), or Chrome's own passkey window offering "use a phone or tablet" with a QR code (scan_source "desktop"). They see a live picture of it and press Done; then check that the page moved on.
+- Use input "takeover" only for what cannot be typed or scanned for them: a passkey on this computer or a security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before commitments, call request_human with kind "confirmation", then try again.
 - When you ask for a confirmation on your own, give request_human a topic from this list: open_menu, choose_date, choose_option, fill_form, navigate, dismiss_dialog, scroll_or_expand, download, upload, other ("other" when none fits).
 - The server itself stops you before a commitment (pressing Pay, Send, Place order, Transfer, Delete account) when the task asks for confirmation; you do not ask first. Never ask the person before ordinary steps: opening menus, choosing dates, filling fields, picking options, moving between pages. Ask only when the owner's intent is unclear or a detail you need is missing.
@@ -3087,7 +3105,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
+          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), scan (they scan or read what is on the screen with their phone, then press Done: a sign-in QR code the page shows, a number to match in an app, or Chrome's "use a phone or tablet" passkey QR code; kind passkey, login, verification or code; scan_source "page" for a code the page draws, "desktop" for Chrome's own passkey window; they see a live picture the server takes, never one you send), takeover (they take over the browser, then press Done: only for a passkey on this computer or a security key, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
           "name": "request_human",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3247,6 +3265,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   "confirm",
                   "takeover",
                   "credentials",
+                  "scan",
                 ],
                 "type": "string",
               },
@@ -3333,6 +3352,20 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   },
                 ],
               },
+              "scan_source": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "page",
+                      "desktop",
+                    ],
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
               "topic": {
                 "anyOf": [
                   {
@@ -3357,6 +3390,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
               "risk",
               "remember_label",
               "topic",
+              "scan_source",
             ],
             "type": "object",
           },
@@ -3754,7 +3788,8 @@ When you need the person:
   4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
   5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
   6. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
-- Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
+- Use input "scan" when the screen shows something the person must scan or read with their phone: a sign-in QR code the page draws (scan_source "page"), a number to match in their app (scan_source "page"), or Chrome's own passkey window offering "use a phone or tablet" with a QR code (scan_source "desktop"). They see a live picture of it and press Done; then check that the page moved on.
+- Use input "takeover" only for what cannot be typed or scanned for them: a passkey on this computer or a security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before commitments, call request_human with kind "confirmation", then try again.
 - When you ask for a confirmation on your own, give request_human a topic from this list: open_menu, choose_date, choose_option, fill_form, navigate, dismiss_dialog, scroll_or_expand, download, upload, other ("other" when none fits).
 - The server itself stops you before a commitment (pressing Pay, Send, Place order, Transfer, Delete account) when the task asks for confirmation; you do not ask first. Never ask the person before ordinary steps: opening menus, choosing dates, filling fields, picking options, moving between pages. Ask only when the owner's intent is unclear or a detail you need is missing.
@@ -4474,7 +4509,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
+          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), scan (they scan or read what is on the screen with their phone, then press Done: a sign-in QR code the page shows, a number to match in an app, or Chrome's "use a phone or tablet" passkey QR code; kind passkey, login, verification or code; scan_source "page" for a code the page draws, "desktop" for Chrome's own passkey window; they see a live picture the server takes, never one you send), takeover (they take over the browser, then press Done: only for a passkey on this computer or a security key, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
           "name": "request_human",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4634,6 +4669,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   "confirm",
                   "takeover",
                   "credentials",
+                  "scan",
                 ],
                 "type": "string",
               },
@@ -4720,6 +4756,20 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   },
                 ],
               },
+              "scan_source": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "page",
+                      "desktop",
+                    ],
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
               "topic": {
                 "anyOf": [
                   {
@@ -4744,6 +4794,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
               "risk",
               "remember_label",
               "topic",
+              "scan_source",
             ],
             "type": "object",
           },
@@ -5992,7 +6043,8 @@ When you need the person:
   4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
   5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
   6. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
-- Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
+- Use input "scan" when the screen shows something the person must scan or read with their phone: a sign-in QR code the page draws (scan_source "page"), a number to match in their app (scan_source "page"), or Chrome's own passkey window offering "use a phone or tablet" with a QR code (scan_source "desktop"). They see a live picture of it and press Done; then check that the page moved on.
+- Use input "takeover" only for what cannot be typed or scanned for them: a passkey on this computer or a security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before commitments, call request_human with kind "confirmation", then try again.
 - When you ask for a confirmation on your own, give request_human a topic from this list: open_menu, choose_date, choose_option, fill_form, navigate, dismiss_dialog, scroll_or_expand, download, upload, other ("other" when none fits).
 - The server itself stops you before a commitment (pressing Pay, Send, Place order, Transfer, Delete account) when the task asks for confirmation; you do not ask first. Never ask the person before ordinary steps: opening menus, choosing dates, filling fields, picking options, moving between pages. Ask only when the owner's intent is unclear or a detail you need is missing.
@@ -6712,7 +6764,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
+          "description": "Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), scan (they scan or read what is on the screen with their phone, then press Done: a sign-in QR code the page shows, a number to match in an app, or Chrome's "use a phone or tablet" passkey QR code; kind passkey, login, verification or code; scan_source "page" for a code the page draws, "desktop" for Chrome's own passkey window; they see a live picture the server takes, never one you send), takeover (they take over the browser, then press Done: only for a passkey on this computer or a security key, a CAPTCHA you cannot pass, or when they declined to give a credential). Set the fields that do not apply to null. The run pauses until they answer.",
           "name": "request_human",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -6872,6 +6924,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   "confirm",
                   "takeover",
                   "credentials",
+                  "scan",
                 ],
                 "type": "string",
               },
@@ -6958,6 +7011,20 @@ When done, or when the goal is impossible, call finish with a short, factual res
                   },
                 ],
               },
+              "scan_source": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "page",
+                      "desktop",
+                    ],
+                    "type": "string",
+                  },
+                  {
+                    "type": "null",
+                  },
+                ],
+              },
               "topic": {
                 "anyOf": [
                   {
@@ -6982,6 +7049,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
               "risk",
               "remember_label",
               "topic",
+              "scan_source",
             ],
             "type": "object",
           },

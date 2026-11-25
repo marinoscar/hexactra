@@ -42,6 +42,7 @@ async fn register(url: &str, name: &str, desktop: bool) -> (HostClient, uuid::Uu
             viewer_url: None,
             mode: Some(HostMode::Unattended),
             desktop,
+            bluetooth: None,
         })
         .await
         .unwrap()

@@ -108,6 +108,8 @@ function formHasSensitive(q) {
 function needsSignedIn(q) {
   // "Save this login?" (E37.4b) writes to the owner's vault: only where the console signs the person in.
   if (q.input === 'save_login') return true;
+  // A scan (#924) shows a live picture of the owner's screen, often a sign-in code: only where the console signs the person in.
+  if (q.input === 'scan') return true;
   if (q.input === 'form') return formHasSensitive(q);
   return q.input === 'secret' || q.input === 'credentials' || (q.input === 'confirm' && q.risk !== 'low');
 }
@@ -138,11 +140,12 @@ function isPublicAnswer(q) {
  * - `signed_in`: a high-risk confirmation, approved only in Hexactra;
  * - `secret`: a code, a password or a sign-in (`credentials`), entered only in Hexactra;
  * - `takeover`: done in the browser itself (the desktop viewer).
+ * A scan (#924) is `signed_in`: its live picture is shown only in Hexactra.
  */
 function chatAnswerMode(q) {
   if (q.input === 'secret' || q.input === 'credentials') return 'secret';
   // A memory proposal and "Save this login?" are answered only in Hexactra, signed in.
-  if (q.input === 'memory' || q.input === 'save_login') return 'signed_in';
+  if (q.input === 'memory' || q.input === 'save_login' || q.input === 'scan') return 'signed_in';
   if (q.input === 'takeover') return 'takeover';
   if (q.input === 'none') return 'acknowledge';
   // A task run's form (#552) is filled in Hexactra, or relayed field by field with inbox_answer.
@@ -163,7 +166,7 @@ function answerLabel(q, answer) {
   if (q.input === 'save_login') return 'Saved';
   if (q.input === 'form') return 'Provided';
   if (Array.isArray(answer.values)) return answer.values.map(label).join(', ');
-  if (answer.value === undefined || answer.value === null) return q.input === 'takeover' ? 'Done' : 'Acknowledged';
+  if (answer.value === undefined || answer.value === null) return q.input === 'takeover' || q.input === 'scan' ? 'Done' : 'Acknowledged';
   const v = String(answer.value);
   if (q.input === 'choice') return label(v);
   if (q.input === 'confirm') return v === 'approve' ? q.confirmLabel || 'Approve' : q.denyLabel || 'Deny';

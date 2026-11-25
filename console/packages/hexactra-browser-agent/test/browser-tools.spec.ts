@@ -9,6 +9,7 @@ import { click } from '../src/tools/click';
 import { look } from '../src/tools/look';
 import { saveScreenshot } from '../src/tools/save-screenshot';
 import { requestHuman } from '../src/tools/request-human';
+import { answerLine } from '../src/request-human-spec';
 import { typeHandoffSecret } from '../src/tools/type-secret';
 import { observeElements } from '../src/tools/observe';
 
@@ -103,6 +104,23 @@ describe('look, request_human, finish, observe_elements and type_handoff_secret'
     expect(run.ctx.memory.askedPrompt).toBe('Pay 10 USD at the shop?');
     expect(run.ctx.state).toMatchObject({ stop: 'pause', handoffId: 'handoff-1' });
     expect(run.store.rows()).toMatchObject([{ kind: 'handoff', ok: true, summary: 'asked a person (confirmation): Pay 10 USD at the shop?' }]);
+  });
+
+  // #924: a code on the screen is scanned from the owner's phone; the source travels, the picture and the address are the server's.
+  it('request_human asks for a scan with its source, or refuses a desktop scan the machine cannot serve', async () => {
+    const args = { kind: 'passkey', prompt: 'Scan the passkey code with your phone', input: 'scan', choices: null, options: null, constraints: null, confirm_label: null, deny_label: null, risk: null, remember_label: null, topic: null, scan_source: 'desktop' };
+    const run = fakeBrowserRun();
+    expect(await call(run, requestHuman, args)).toBe('Waiting for the person.');
+    expect(run.questions.opened).toMatchObject([{ input: 'scan', kind: 'passkey', scanSource: 'desktop' }]);
+    expect(run.questions.scanChecks).toEqual(['desktop']);
+    expect(await call(fakeBrowserRun(), requestHuman, { ...args, kind: 'login', scan_source: null })).toBe('Waiting for the person.');
+
+    const noBluetooth = fakeBrowserRun();
+    noBluetooth.questions.scanRefusal = 'This computer has no Bluetooth: ask for a takeover (kind passkey) instead.';
+    expect(await call(noBluetooth, requestHuman, args)).toBe('This computer has no Bluetooth: ask for a takeover (kind passkey) instead.');
+    expect(noBluetooth.questions.opened).toEqual([]);
+    expect(noBluetooth.ctx.state.stop).not.toBe('pause');
+    expect(answerLine({ input: 'scan', kind: 'passkey', options: null, unit: null })).toMatch(/^The person scanned the code .* pressed Done\. Check the page and continue/);
   });
 
   it('finish ends the run with its result', async () => {

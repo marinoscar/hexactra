@@ -19,6 +19,7 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 |---|---|---|---|
 | `none` | Nothing: they do something, then press Done | | `outcome` |
 | `takeover` | Nothing: they take over the browser, then press Done | | `outcome` |
+| `scan` | Nothing: they scan or read what is on the node's screen with their phone, then press Done (browser-bound only, #924) | `scanSource` (`page` by default, or `desktop`); kind `passkey`, `login`, `verification` or `code`; waits 3 minutes by default, 10 at most | `outcome` |
 | `text` | A line or paragraph of text | `maxLength` (≤ 4096), `pattern` (whole-answer regex), `multiline` | `value` |
 | `secret` | A code or password (browser-bound only) | | `valueWithheld: true`, never the value |
 | `credentials` | A sign-in: a username (`value`) and a password (`secret`), in one answer (browser-bound only, #527) | | `value`: the username; `valueWithheld: true`, never the password |
@@ -33,6 +34,19 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 `kind` says why it is asked (`captcha`, `code`, `passkey`, `login`, `confirmation`, `verification`, `other`). `verification` is the owner's own bank wanting them to confirm a payment (a banking-app approval, 3-D Secure): the agent does not try to pass it and waits (E37.7). Declining is `outcome: "cancelled"` for any type.
 
 A response is `{ outcome, value?, values?, valueWithheld, channel?, by?, answeredAt }`. `by` is the signed-in answerer (`user:<id>`); a webhook answer is recorded as its owner on channel `webhook`. **The first answer wins**: a later one is a 409, whichever channel it comes from.
+
+### A scan: the owner scans what is on the screen (#924)
+
+A question of input `scan` is for a sign-in or an approval that needs the owner to **scan or read something on the node's screen** with their phone: a sign-in QR code the site draws (scanned with the site's own app), a number to match in an app, or Chrome's own "use a phone or tablet" passkey QR code. The owner answers from their phone without opening the remote desktop.
+
+- **The server takes the picture.** `GET /api/questions/{id}/scan-image` captures a fresh picture through the fabric at each request (a plain `screenshot` of the active tab, or `desktop_screenshot` for `scanSource: "desktop"`) and returns it with `Cache-Control: no-store`. Nothing is stored: no row, no file, no trace image of it (the run's trace keeps its masked picture of the moment it asked, as for any question). An asker sends only `scanSource`; a picture, a URL or an address in a request is not part of the contract and is dropped.
+- **The address is the browser's.** When the question opens, the server reads the active tab's address from the browser and stores `scan: { source, domain, origin }` (`domain` is the registrable domain, or the whole host for a page without a public suffix). Every capture reads it again: when the tab is on another site the endpoint answers `409` (`SCAN_PAGE_CHANGED`) with no picture; when the address could not be read, `domain` is null and no picture is ever shown (`SCAN_PAGE_UNKNOWN`). A picture that could not be taken now is `503` (the card tries again); a settled or expired question is `410`. The owner only (another user's question is `404`), and never through the MCP endpoint (`404`).
+- **The card** (web, Android app, Inbox, chat) shows the picture at full width, refreshed every 2 seconds, tap for full screen, under a warning that cannot be switched off: "Only scan this if you just started a sign-in to **<domain>**. Scanning a code from a site you did not open can sign someone else in as you." For `desktop` it adds "Your phone must be near the computer running the browser, with Bluetooth on." The button is **Done, I scanned it**.
+- **Channels.** Done or declined only on `web`, `android_app` and `inbox` (`SCAN_ANSWER_CHANNELS`); every other channel, declining included, is `403 CHANNEL_NOT_ALLOWED`. A notification, a webhook, the CLI, MCP and hosted AI apps get the prompt and a link, never the picture.
+- **To the fabric** a scan is a handoff of input `none`: the browser waits, and a plain screenshot is still allowed while it waits (#525).
+- **Free-standing** (`POST /api/questions`, MCP `ask_human`) it is `400 SCAN_NEEDS_BROWSER`.
+- **Bluetooth.** A node reports whether its machine has a Bluetooth adapter (`bluetooth` on the host, from `/sys/class/bluetooth` on Linux; absent when it cannot tell). For a `desktop` scan on a node that reported none, `request_human` answers the agent that a phone cannot reach Chrome's code there and to ask for a takeover instead; nothing is asked.
+- **What it does not do.** The QR code is never decoded: its payload is a sign-in grant and stays a picture on the owner's signed-in card. A passkey on the node itself (a PIN, a fingerprint, a security key) is still a takeover.
 
 ### Memory proposals (#553)
 
@@ -91,6 +105,7 @@ A question is delivered on every registered channel and withdrawn from all of th
 | `confirm`, `risk: high` | Yes (signed in) | Opens the question | No: the payload carries no token | No: the inbox link | Never asked | No: the inbox link |
 | `secret`, `credentials` | Yes, on the question's protected page | A link only | A link only (a sign-in's webhook carries neither the username nor the password) | No: the inbox link | Never asked (no URL mode either) | No: the inbox link |
 | `none`, `takeover` | Yes | Opens the question | No | No: the inbox link | Never asked | `none`: Done; `takeover`: a link to the viewer |
+| `scan` | Web, Android app and Inbox only (the live picture) | Opens the question | No | No: the inbox link | Never asked | No: the inbox link |
 
 The rule table is code: `CHANNEL_RULES` in `apps/api/src/questions/channels/channel-rules.ts`, by channel id (`mcp-oauth.claude` is the `mcp-oauth` channel from a Claude client). `QuestionsService` refuses, with `403`, a secret or the approval of a high-risk confirm from a channel that is not signed in (`notification`, `webhook`, `mcp-oauth`, `mcp-elicitation`, `mcp-app`); declining is allowed from anywhere. The web, Android, CLI, TUI, inbox, REST and `mcp` (a personal access token) channels are signed in.
 
@@ -125,6 +140,7 @@ A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is
 | `choice`, `multi_choice` | Full-width rows, at least 44 px tall, the whole row clickable | More than 8 options scroll inside a box; the buttons stay outside it. `multi_choice` says "2 of 3 selected" |
 | `confirm` | The `confirmLabel` and `denyLabel` buttons | `risk: high` (the default) asks "Are you sure?" as a second step |
 | `takeover` | "Open the browser", then "Done" | "Open the browser" is the main button until it has been pressed once |
+| `scan` | The live picture under its warning, then "Done, I scanned it" | Refreshed every 2 s; a tap opens it full screen; replaced by "Do not scan" when the browser left the site |
 | `none` | "Done" ("Approve" for kind `confirmation`) | |
 
 **The buttons.** One row from 600 px up; on a phone a full-width stack in the order main action, Open the browser, Decline. Decline is always last. Declining a browser-bound question asks first ("Decline? The agent will be told you said no."), because its run cannot go on without an answer; a free-standing question declines at once. While an answer is sent, the main button shows progress and the card's controls are disabled.

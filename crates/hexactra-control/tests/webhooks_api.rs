@@ -90,6 +90,7 @@ async fn start(allow_insecure: bool) -> (String, ControlClient, uuid::Uuid) {
             viewer_url: None,
             mode: None,
             desktop: false,
+            bluetooth: None,
         })
         .await
         .unwrap()

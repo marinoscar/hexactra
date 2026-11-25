@@ -35,6 +35,7 @@ function view(over: Partial<QuestionView>): QuestionView {
     blocking: true,
     proposal: null,
     saveLogin: null,
+    scan: null,
     conversationId: null,
     handoffId: null,
     browserBound: false,

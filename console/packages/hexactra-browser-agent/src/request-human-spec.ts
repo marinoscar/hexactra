@@ -16,6 +16,8 @@ export interface RequestHumanArgs {
   remember_label?: string | null;
   /** A confirmation's topic from the fixed list (#555); anything else is `other`. Never a source of authorization. */
   topic?: string | null;
+  /** scan (#924): `page` for a code the site draws, `desktop` for Chrome's own passkey window. Only the source: the picture is the server's. */
+  scan_source?: 'page' | 'desktop' | null;
 }
 
 const CONSTRAINT_FROM_MODEL = {
@@ -52,6 +54,7 @@ export function requestHumanSpec(a: RequestHumanArgs): Record<string, unknown> {
     ...(a.input === 'confirm' && a.deny_label ? { denyLabel: a.deny_label } : {}),
     ...(a.input === 'confirm' && a.risk ? { risk: a.risk } : {}),
     // The page's words, cut to the fabric's limit; only where a person types a secret.
+    ...(a.input === 'scan' ? { scanSource: a.scan_source ?? 'page' } : {}),
     ...((a.input === 'credentials' || a.input === 'secret') && a.remember_label?.trim() ? { rememberLabel: a.remember_label.trim().replace(/\s+/g, ' ').slice(0, 80) } : {}),
   };
 }
@@ -83,6 +86,8 @@ export function answerLine(a: { input: string; kind: string; value?: string; val
       return `The person answered: ${clip(a.value ?? '', 500)}`;
     case 'takeover':
       return 'The person took over the browser and is done. Check the page and continue.';
+    case 'scan':
+      return 'The person scanned the code (or did what the screen asked) and pressed Done. Check the page and continue; if it did not move on, ask again or ask for a takeover.';
     default:
       return `The person completed the ${a.kind} step. Check the page and continue.`;
   }
