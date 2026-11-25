@@ -898,7 +898,7 @@
     },
     {
       "id": "fleet.signin",
-      "description": "Sign a node's browser profile in to Google with one click (E48.4): the console takes over the desktop, opens the profile at Google's sign-in, notices the sign-in, closes the browser so Chrome saves the profile, and releases the desktop; unattended nodes with a desktop, fleet:desktop",
+      "description": "Sign a node's browser profile in to Google with one click (E48.4): the console takes over the desktop, opens the profile at Google's sign-in, notices the sign-in, closes the browser so Chrome saves the profile, and releases the desktop; \"Fix sign-ins\" (E48.6) runs it for every profile that needs it, one at a time; unattended nodes with a desktop, fleet:desktop",
       "rest": [
         "POST /api/fleet/hosts/{id}/profiles/{name}/signin",
         "GET /api/fleet/signin-sessions/{id}",
@@ -913,7 +913,7 @@
       "tui": {
         "none": "A terminal cannot show the desktop the person signs in on; use the console"
       },
-      "web": "/fleet/hosts/:id/desktop"
+      "web": ["/fleet/hosts/:id/desktop", "/fleet/signin-queue"]
     },
     {
       "id": "fleet.agent",
