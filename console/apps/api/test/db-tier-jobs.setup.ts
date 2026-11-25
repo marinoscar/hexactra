@@ -1,21 +1,22 @@
-// The db tier's leftover Knowledge Graph jobs: after each `*.db.spec.ts` file, `kgraph.*` jobs it left `pending` are marked `failed`, so
-// the next file's job worker never picks them up.
+// The db tier's leftover jobs (#912, #934): after each `*.db.spec.ts` file, every job it left `pending` is marked `failed`, and a leftover
+// `browser.goal.run` job ends its run when the run is still live (`test/support/db-tier-leftovers.ts`).
 //
-// Why: the db specs share one database and run one after another (`--runInBand`). A spec that queues a job and does its work directly
-// (the Knowledge Graph specs queue `kgraph.compile`, `kgraph.ledger.write` and `kgraph.site_facts` after every run they drive; others
-// queue `browser.goal.run`) left that job for whichever later spec ran a worker. That spec then ran someone else's job, and one still
-// running when it closed its app queried the database after Jest had torn the file down ("Cannot read properties of undefined (reading
-// 'Socket')", "You are trying to `require` a file after the Jest environment has been torn down"), failing CI after every test had
-// passed. #889 fixed one such spec by turning its worker off.
+// Why: the db specs share one database and run one after another (`--runInBand`). A spec that queues a job and does its own work leaves
+// the job `pending` (specs queue `browser.goal.run` for every run they start, the Knowledge Graph specs `kgraph.*` after every run). The
+// next spec that boots the app starts a job worker, which claims that stranger's job. One still running, or the fire-and-forget work a
+// finished run starts, can query the database after that spec closed its app (the platform worker waits only 5 s) and Jest has torn the
+// file down: "Cannot read properties of undefined (reading 'Socket')", failing CI after every test passed (#889, #912, #934).
 //
-// Only the Knowledge Graph's own job types (`kgraph.*`, added by epic E46, which multiplied the leftovers) are cleared. Other leftovers,
-// such as `browser.goal.run`, are left as before: later specs finishing them is what ends those runs, and some specs rely on there being
-// few live runs (`dueUserIds` reads the first 500). A `kgraph.*` job never changes a run's status.
+// #912 cleared only `kgraph.*` jobs: failing every pending job once broke `secrets-vault`, because the leftover runs then stayed live and
+// `dueUserIds` reads only the first 500 users with a live run. #934 clears every type and ends the leftover runs too, so no live run is
+// left behind for a later spec either.
 //
 // A spec's own jobs are its own business while it runs; nothing here touches a job before the file is done. Unit specs (no database)
-// are skipped. Test-only: the job queue's behaviour in the app is unchanged.
+// are skipped. Test-only: the job queue's and the runner's behaviour in the app is unchanged.
 import { buildDatabaseUrl } from '@marinoscar/platform-api/core';
 import { Client } from 'pg';
+
+import { clearLeftoverJobs } from './support/db-tier-leftovers';
 
 const isDbSpec = (): boolean => /\.db\.spec\.ts$/.test(expect.getState().testPath ?? '');
 
@@ -24,7 +25,7 @@ afterAll(async () => {
   const client = new Client({ connectionString: buildDatabaseUrl(process.env) });
   try {
     await client.connect();
-    await client.query(`UPDATE "jobs" SET "status" = 'failed' WHERE "status" = 'pending' AND "type" LIKE 'kgraph.%'`);
+    await clearLeftoverJobs(client);
   } catch {
     // Best effort: a spec that never reached the database, or a database already gone, has nothing to leave behind.
   } finally {
