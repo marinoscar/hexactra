@@ -79162,11 +79162,66 @@
                 },
                 "running": {
                   "type": "boolean"
+                },
+                "signin": {
+                  "type": "string",
+                  "enum": [
+                    "signed_in",
+                    "signed_out",
+                    "expired",
+                    "unknown"
+                  ],
+                  "description": "signed_in, signed_out, expired, or unknown (never checked, check failed, or the checks disagree)"
+                },
+                "accounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "description": "Identity provider (google)"
+                      },
+                      "email": {
+                        "type": "string",
+                        "description": "The account email, in full"
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "signed_in",
+                          "signed_out",
+                          "expired",
+                          "unknown"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "email",
+                      "state"
+                    ]
+                  }
+                },
+                "checkedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When the node last checked; null when it never did"
                 }
               },
               "required": [
                 "name",
-                "running"
+                "running",
+                "signin",
+                "accounts",
+                "checkedAt"
               ]
             }
           },

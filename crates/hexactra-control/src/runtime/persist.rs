@@ -333,6 +333,58 @@ mod tests {
     }
 
     #[test]
+    fn profile_signin_status_survives_a_restart() {
+        use hexactra_core::remote::{
+            ProfileAccount, ProfileSignin, ProfileStatusReport, SigninState,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("control.db");
+        let creds = Credentials::new("operator-token-0123456789abcdef");
+        let host_id;
+        {
+            let store = RuntimeStore::new();
+            let db = StateDb::open(&path).unwrap();
+            host_id = store.register_host(None, "node".into(), "1".into());
+            store
+                .set_host_profiles(host_id, vec!["default".into(), "work".into()], vec![])
+                .unwrap();
+            store
+                .set_profile_signin(
+                    host_id,
+                    ProfileStatusReport {
+                        profiles: vec![ProfileSignin {
+                            name: "work".into(),
+                            signin: SigninState::Expired,
+                            accounts: vec![ProfileAccount {
+                                provider: "google".into(),
+                                email: "owner@example.com".into(),
+                                state: SigninState::Expired,
+                            }],
+                            checked_at: Some(chrono::Utc::now()),
+                        }],
+                    },
+                )
+                .unwrap();
+            db.flush(&store, &creds);
+        }
+        let store = RuntimeStore::new();
+        let db = StateDb::open(&path).unwrap();
+        assert!(db.restore(&store, &creds).unwrap());
+        let v = store.list_hosts();
+        let h = v.iter().find(|h| h.id == host_id).unwrap();
+        let work = h.profile_status.iter().find(|p| p.name == "work").unwrap();
+        assert_eq!(work.signin, SigninState::Expired);
+        assert_eq!(work.accounts[0].email, "owner@example.com");
+        assert!(work.checked_at.is_some());
+        let default = h
+            .profile_status
+            .iter()
+            .find(|p| p.name == "default")
+            .unwrap();
+        assert_eq!(default.signin, SigninState::Unknown);
+    }
+
+    #[test]
     fn refuses_a_newer_schema() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("c.db");

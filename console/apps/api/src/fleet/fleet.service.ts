@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 
 import { FabricClient, FabricError, type FabricHost } from '../fabric/fabric.client';
-import type { FleetCommandResult, FleetEnrollment, FleetHost } from './fleet.schemas';
+import type { FleetCommandResult, FleetEnrollment, FleetHost, FleetProfile, FleetSigninState } from './fleet.schemas';
 
 interface FabricCommandView {
   id: string;
@@ -29,8 +29,29 @@ type HostCommand =
 
 const COMMAND_TIMEOUT_MS = 90_000;
 
-function toHost(h: FabricHost): FleetHost {
+const SIGNIN_STATES: readonly FleetSigninState[] = ['signed_in', 'signed_out', 'expired', 'unknown'];
+
+/** A state the console knows, else `unknown` (a missing or new value never reads as signed out). */
+function signinState(v: unknown): FleetSigninState {
+  return SIGNIN_STATES.includes(v as FleetSigninState) ? (v as FleetSigninState) : 'unknown';
+}
+
+/** One profile with its sign-in status; a fabric or agent that does not report it gives `unknown`. */
+function toProfile(name: string, running: boolean, s: NonNullable<FabricHost['profile_status']>[number] | undefined): FleetProfile {
+  return {
+    name,
+    running,
+    signin: signinState(s?.signin),
+    accounts: (s?.accounts ?? [])
+      .filter((a) => typeof a?.email === 'string' && typeof a?.provider === 'string')
+      .map((a) => ({ provider: a.provider, email: a.email, state: signinState(a.state) })),
+    checkedAt: s?.checked_at ?? null,
+  };
+}
+
+export function toHost(h: FabricHost): FleetHost {
   const running = new Set(h.running_profiles ?? []);
+  const status = new Map((h.profile_status ?? []).map((p) => [p.name, p]));
   return {
     id: h.id,
     name: h.name,
@@ -42,7 +63,7 @@ function toHost(h: FabricHost): FleetHost {
     viewerUrl: h.viewer_url ?? null,
     mode: h.mode ?? null,
     desktop: h.desktop ?? false,
-    profiles: (h.profiles ?? []).map((name) => ({ name, running: running.has(name) })),
+    profiles: (h.profiles ?? []).map((name) => toProfile(name, running.has(name), status.get(name))),
     lastSeen: h.last_seen,
   };
 }

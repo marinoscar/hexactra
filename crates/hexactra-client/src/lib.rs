@@ -656,6 +656,24 @@ impl HostClient {
         Ok(Some(resp.json().await?))
     }
 
+    /// Report some or all profiles' sign-in status (E48, #927). The body
+    /// carries account emails, so it is never logged.
+    pub async fn report_profile_status(
+        &self,
+        host_id: Uuid,
+        report: &hexactra_core::remote::ProfileStatusReport,
+    ) -> Result<()> {
+        self.http
+            .send(
+                Method::POST,
+                &format!("v1/hosts/{host_id}/profile-status"),
+                Some(report),
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Report a host command's result.
     pub async fn report_command(
         &self,

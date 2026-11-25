@@ -1,7 +1,8 @@
 import { BadGatewayException, ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import { FabricError, type FabricClient } from '../src/fabric/fabric.client';
-import { FleetService, agentUrlFor } from '../src/fleet/fleet.service';
+import { FleetService, agentUrlFor, toHost } from '../src/fleet/fleet.service';
+import { withoutSignin } from '../src/mcp/mcp.tools';
 
 function fakeFabric(overrides: Partial<Record<'hosts' | 'request' | 'config', jest.Mock>> = {}) {
   const hosts = jest.fn().mockResolvedValue([
@@ -42,6 +43,37 @@ describe('FleetService', () => {
         { name: 'travel', running: true },
       ],
     });
+  });
+
+  it('maps each profile\'s sign-in status and full email (E48.1)', () => {
+    const h = toHost({
+      id: 'h3', name: 'node', version: '1', online: true, browser_connected: true, on_demand: true,
+      profiles: ['default', 'travel', 'work', 'old'], running_profiles: ['work'], last_seen: '2026-11-15T00:00:00Z',
+      profile_status: [
+        { name: 'default', running: false, signin: 'signed_in', accounts: [{ provider: 'google', email: 'owner.full.name@example.com', state: 'signed_in' }], checked_at: '2026-11-25T10:00:00Z' },
+        { name: 'travel', running: false, signin: 'expired', accounts: [{ provider: 'google', email: 'owner@example.com', state: 'expired' }], checked_at: '2026-11-25T10:00:00Z' },
+        // A state this console does not know is unknown, never signed out.
+        { name: 'work', running: true, signin: 'locked' as never, checked_at: null },
+      ],
+    });
+    expect(h.profiles).toEqual([
+      { name: 'default', running: false, signin: 'signed_in', accounts: [{ provider: 'google', email: 'owner.full.name@example.com', state: 'signed_in' }], checkedAt: '2026-11-25T10:00:00Z' },
+      { name: 'travel', running: false, signin: 'expired', accounts: [{ provider: 'google', email: 'owner@example.com', state: 'expired' }], checkedAt: '2026-11-25T10:00:00Z' },
+      { name: 'work', running: true, signin: 'unknown', accounts: [], checkedAt: null },
+      // Not reported (an older agent or fabric): unknown.
+      { name: 'old', running: false, signin: 'unknown', accounts: [], checkedAt: null },
+    ]);
+  });
+
+  it('keeps sign-in status and emails out of the MCP hosts_list result', () => {
+    const h = toHost({
+      id: 'h4', name: 'node', version: '1', online: true, browser_connected: true, on_demand: true,
+      profiles: ['default'], running_profiles: [], last_seen: '2026-11-15T00:00:00Z',
+      profile_status: [{ name: 'default', running: false, signin: 'signed_in', accounts: [{ provider: 'google', email: 'owner@example.com', state: 'signed_in' }] }],
+    });
+    const out = withoutSignin(h) as { profiles: unknown[] };
+    expect(out.profiles).toEqual([{ name: 'default', running: false }]);
+    expect(JSON.stringify(out)).not.toContain('owner@example.com');
   });
 
   it('maps the host mode and desktop capability', async () => {

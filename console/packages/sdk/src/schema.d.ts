@@ -16473,6 +16473,21 @@ export interface components {
             profiles: {
                 name: string;
                 running: boolean;
+                /**
+                 * @description signed_in, signed_out, expired, or unknown (never checked, check failed, or the checks disagree)
+                 * @enum {string}
+                 */
+                signin: "signed_in" | "signed_out" | "expired" | "unknown";
+                accounts: {
+                    /** @description Identity provider (google) */
+                    provider: string;
+                    /** @description The account email, in full */
+                    email: string;
+                    /** @enum {string} */
+                    state: "signed_in" | "signed_out" | "expired" | "unknown";
+                }[];
+                /** @description When the node last checked; null when it never did */
+                checkedAt: string | null;
             }[];
             /** @description ISO 8601 timestamp */
             lastSeen: string;

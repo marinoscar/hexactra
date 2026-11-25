@@ -424,11 +424,18 @@ fn profile_summary(h: &hexactra_core::remote::HostView) -> String {
     h.profiles
         .iter()
         .map(|p| {
-            if h.running_profiles.contains(p) {
+            let mut s = if h.running_profiles.contains(p) {
                 format!("{p}*")
             } else {
                 p.clone()
+            };
+            // E48: flag a profile that needs a Google sign-in (never the email).
+            if let Some(st) = h.profile_status.iter().find(|x| &x.name == p) {
+                if st.signin.needs_signin() {
+                    s.push_str(&format!(" ({})", st.signin.as_str().replace('_', " ")));
+                }
             }
+            s
         })
         .collect::<Vec<_>>()
         .join(", ")

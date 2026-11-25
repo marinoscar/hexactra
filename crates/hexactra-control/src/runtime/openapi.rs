@@ -71,6 +71,7 @@ impl Modify for Bearer {
         super::api::register_host,
         super::api::next_operation,
         super::api::host_offline,
+        super::api::profile_status,
         super::api::post_result,
         super::api::list_sessions,
         super::api::create_session,

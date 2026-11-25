@@ -756,6 +756,37 @@ paths:
           description: Unknown operation
         '409':
           description: Not dispatched, or already reported
+  /v1/hosts/{host_id}/profile-status:
+    post:
+      tags:
+      - agent
+      summary: |-
+        The agent reports its profiles' sign-in status (E48, #927). A separate
+        route, not the poll's query string, so account emails never appear in a
+        URL or an access log. Only the count is logged; never an email.
+      operationId: profile_status
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileStatusReport'
+        required: true
+      responses:
+        '204':
+          description: Recorded
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host
   /v1/hosts/{id}/desktop-sessions:
     post:
       tags:
@@ -2343,6 +2374,15 @@ components:
         online:
           type: boolean
           description: Polled the control plane recently.
+        profile_status:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileStatus'
+          description: |-
+            Each profile's identity sign-in status (E48, #927), one entry per
+            name in `profiles`, in the same order. A profile the agent has not
+            reported on is `unknown`. `profiles` and `running_profiles` keep
+            their meaning.
         profiles:
           type: array
           items:
@@ -2495,6 +2535,80 @@ components:
           format: uuid
         state:
           $ref: '#/components/schemas/OperationState'
+    ProfileAccount:
+      type: object
+      description: |-
+        An account a profile is signed in to. `Debug` never prints the email:
+        it is display data and must not reach a log line or a span (E48 rule 2).
+      required:
+      - provider
+      - email
+      - state
+      properties:
+        email:
+          type: string
+          description: The account's email, in full (shown to the owner only).
+        provider:
+          type: string
+          description: Identity provider (`google`).
+        state:
+          $ref: '#/components/schemas/SigninState'
+    ProfileSignin:
+      type: object
+      description: One profile's sign-in status as the agent reports it.
+      required:
+      - name
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileAccount'
+        checked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the node last checked; absent when it never did.
+        name:
+          type: string
+        signin:
+          $ref: '#/components/schemas/SigninState'
+          description: The profile's overall state (for the `google` provider).
+    ProfileStatus:
+      type: object
+      description: A profile as the control plane shows it.
+      required:
+      - name
+      - running
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileAccount'
+        checked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        name:
+          type: string
+        running:
+          type: boolean
+          description: Its browser is running now.
+        signin:
+          $ref: '#/components/schemas/SigninState'
+    ProfileStatusReport:
+      type: object
+      description: |-
+        `POST /v1/hosts/{host_id}/profile-status`: the agent's report on some or
+        all of its profiles. A profile not listed keeps its last status.
+      required:
+      - profiles
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileSignin'
     RegisterHostRequest:
       type: object
       description: '`POST /v1/hosts/register`'
@@ -3931,6 +4045,17 @@ components:
           description: Browser profile this session drives.
         status:
           $ref: '#/components/schemas/RemoteSessionStatus'
+    SigninState:
+      type: string
+      description: |-
+        Whether a browser profile is signed in to an identity provider (E48,
+        `docs/decisions/profile-signin-health.md`). Display data for the owner:
+        it never authorises anything and never blocks a run.
+      enum:
+      - signed_in
+      - signed_out
+      - expired
+      - unknown
     TakeoverActor:
       type: object
       description: Who holds a lease.

@@ -563,6 +563,14 @@ async function answerTool(a: Record<string, unknown>, ctx: McpContext, mode: 're
 }
 
 /** A list answer: the bare list in `content` (as it always was), `{ items }` as structured content. */
+/** A fleet host as `hosts_list` returns it: profiles keep only their name and running state (E48, #927). */
+export function withoutSignin(h: unknown): unknown {
+  if (!h || typeof h !== 'object') return h;
+  const host = h as { profiles?: unknown };
+  if (!Array.isArray(host.profiles)) return h;
+  return { ...host, profiles: host.profiles.map((p: { name?: unknown; running?: unknown }) => ({ name: p?.name, running: p?.running })) };
+}
+
 function listOutput(items: unknown[], noun: string, extra: { untrusted?: boolean } = {}): McpToolResult {
   return toolOutput({ text: items, structured: { items }, summary: `${items.length} ${noun}${items.length === 1 ? '' : 's'}.`, untrusted: extra.untrusted });
 }
@@ -1472,7 +1480,8 @@ export const MCP_TOOLS: McpTool[] = [
     effect: 'read',
     openWorld: false,
     idempotent: true,
-    call: async (_a, ctx) => listOutput(await ctx.api<unknown[]>('GET', '/fleet/hosts'), 'machine'),
+    // A profile's sign-in status and account email are display data for the console only (E48): never in an MCP result.
+    call: async (_a, ctx) => listOutput((await ctx.api<unknown[]>('GET', '/fleet/hosts')).map(withoutSignin), 'machine'),
   },
 
   // --- drive a browser directly (an external session) ----------------------
