@@ -38,6 +38,9 @@ export const IDS = {
   benchmark: 'b0000000-0000-4000-8000-000000000001',
   liveBenchmark: 'b0000000-0000-4000-8000-000000000002',
   baselineBenchmark: 'b0000000-0000-4000-8000-000000000003',
+  // A guided profile sign-in (E48.4): one waiting for the person, one completed.
+  signinWaiting: '5191a000-0000-4000-8000-000000000001',
+  signinDone: '5191a000-0000-4000-8000-000000000002',
 };
 
 const PERMISSIONS = [
@@ -212,17 +215,6 @@ const saveLogin = {
   askedBy: `run:${runs[1].id}`, browserBound: false, prompt: 'The agent offers to save the sign-in you just typed.', pageTitle: null, kind: 'login', input: 'save_login', constraints: null, rememberLabel: null,
   expiresAt: iso(9 * 60_000), blocking: false, conversationId: IDS.chat,
   saveLogin: { site: 'login.example.com', domain: 'example.com', name: 'Example Bank sign-in', username: 'person-a@example.test', valueExpiresAt: iso(9 * 60_000) },
-};
-
-/**
- * A scan (#924): the owner scans a sign-in QR code the site shows. Browser-bound; its live picture is GET /questions/{id}/scan-image, mocked with the
- * run's placeholder frame (the audit checks the layout, not the code).
- */
-const scanQuestion = {
-  ...question, questionId: '5555555c-5555-4555-8555-555555555555', id: '5555555c-5555-4555-8555-555555555555', runId: runs[1].id, goal: runs[1].goal,
-  askedBy: `run:${runs[1].id}`, browserBound: true, prompt: 'Scan the QR code with the Example Bank app on your phone to sign in.', pageTitle: 'Sign in with your phone', kind: 'login', input: 'scan',
-  constraints: null, rememberLabel: null, options: null, expiresAt: iso(3 * 60_000),
-  scan: { source: 'page', domain: 'example.com', origin: 'https://login.example.com' },
 };
 
 const hosts = [
@@ -634,6 +626,8 @@ export const RESPONSES = {
   [`GET /fleet/hosts/${IDS.host}`]: hosts[0],
   [`GET /fleet/hosts/${IDS.host}/takeover`]: null,
   [`POST /fleet/hosts/${IDS.host}/viewer-session`]: { hostId: IDS.host, wsPath: `/viewer/${IDS.host}/websockify`, expiresAt: iso(3_600_000) },
+  [`GET /fleet/signin-sessions/${IDS.signinWaiting}`]: { id: IDS.signinWaiting, hostId: IDS.host, profile: 'default', status: 'started', phase: 'waiting', leaseId: null, keepLease: false, signin: 'signed_out', email: null, resultState: null, endReason: null, startedAt: iso(-60_000), expiresAt: iso(840_000), endedAt: null },
+  [`GET /fleet/signin-sessions/${IDS.signinDone}`]: { id: IDS.signinDone, hostId: IDS.host, profile: 'default', status: 'completed', phase: null, leaseId: null, keepLease: false, signin: 'signed_in', email: 'a.very.long.owner.address@example.com', resultState: 'signed_in', endReason: null, startedAt: iso(-180_000), expiresAt: iso(720_000), endedAt: iso(-5_000) },
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
   'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
   [`GET /chats/${IDS.pausedChat}`]: {
@@ -645,7 +639,6 @@ export const RESPONSES = {
   [`GET /questions/${IDS.question}`]: question,
   [`GET /questions/${memoryProposal.id}`]: memoryProposal,
   [`GET /questions/${saveLogin.id}`]: saveLogin,
-  [`GET /questions/${scanQuestion.id}`]: scanQuestion,
   'GET /agent-policies': policies,
   [`GET /agent-policies/${IDS.policy}`]: policies[2],
   'GET /agent-policies/default': { policyId: 'builtin:balanced' },
@@ -1153,4 +1146,4 @@ Object.assign(RESPONSES, {
   [`GET /benchmarks/${IDS.baselineBenchmark}/scorecard`]: benchScorecard(IDS.baselineBenchmark, benchBaseline.name, 'completed', false),
 });
 
-export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id, scanQuestion: scanQuestion.id, benchmark: IDS.benchmark, liveBenchmark: IDS.liveBenchmark, baselineBenchmark: IDS.baselineBenchmark };
+export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id, scanQuestion: scanQuestion.id, benchmark: IDS.benchmark, liveBenchmark: IDS.liveBenchmark, baselineBenchmark: IDS.baselineBenchmark, signinWaiting: IDS.signinWaiting, signinDone: IDS.signinDone };

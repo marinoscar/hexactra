@@ -27550,6 +27550,232 @@
         ]
       }
     },
+    "/api/fleet/hosts/{id}/profiles/{name}/signin": {
+      "post": {
+        "operationId": "profileSignin_start",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartProfileSigninDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Fleet"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "fleet:desktop"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `fleet:desktop`."
+      }
+    },
+    "/api/fleet/signin-sessions/{id}": {
+      "get": {
+        "operationId": "profileSignin_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Fleet"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "fleet:desktop"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `fleet:desktop`."
+      }
+    },
+    "/api/fleet/signin-sessions/{id}/cancel": {
+      "post": {
+        "operationId": "profileSignin_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelProfileSigninDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Fleet"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "fleet:desktop"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `fleet:desktop`."
+      }
+    },
     "/api/agent-policies": {
       "get": {
         "description": "The four built-in policies (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`) and your own, each with its spec, version, whether it is your default (`isDefault`), the tasks and schedules that use it (`usage`) and whether it has no hard stop (`hasNoHardStop`: every budget is `null`, so only finishing, Stop or stall detection ends a run).\n\n**Requires:** authentication, plus permission `agent_policies:read`.",
@@ -51114,6 +51340,13 @@
               "KGRAPH_SITE_FACT_REFUSED",
               "KGRAPH_SITE_FACT_EXISTS",
               "KGRAPH_SITE_FACT_STATUS",
+              "PROFILE_IN_USE",
+              "TAKEOVER_HELD",
+              "SIGNIN_UNAVAILABLE",
+              "SIGNIN_HOST_OFFLINE",
+              "PROFILE_NOT_FOUND",
+              "SIGNIN_NOT_FOUND",
+              "INVALID_PROFILE",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -79363,6 +79596,24 @@
             "format": "uri"
           }
         }
+      },
+      "StartProfileSigninDto": {
+        "type": "object",
+        "properties": {
+          "keepLease": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CancelProfileSigninDto": {
+        "type": "object",
+        "properties": {
+          "keepLease": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
       },
       "AgentPolicyResponseDto": {
         "type": "object",
