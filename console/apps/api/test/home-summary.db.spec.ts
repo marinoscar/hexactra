@@ -341,7 +341,7 @@ describe('GET /api/home/summary: a busy account', () => {
     ]);
     const signin = await summaryOf(alice.token);
     expect(signin.fleet).toMatchObject({ needsSignin: 2 });
-    expect(signin.fleet!.hosts.map((h) => h.needsSignin)).toEqual([2, 0]);
+    expect(Object.fromEntries(signin.fleet!.hosts.map((h) => [h.name, h.needsSignin]))).toEqual({ 'den-mini': 2, 'attic-box': 0 });
     expect(JSON.stringify(signin)).not.toContain('EMAIL@example.test');
   });
 
@@ -455,6 +455,6 @@ describe('GET /api/home/summary: the fleet never fails the summary', () => {
     fleet.mockRejectedValue(new Error('connect ECONNREFUSED'));
     expect((await summaryOf(dana.token)).fleet).toMatchObject({ total: 2, stale: true });
     fleet.mockRejectedValue(new ServiceUnavailableException({ code: 'FABRIC_NOT_CONFIGURED', message: 'not configured' }));
-    expect((await summaryOf(dana.token)).fleet).toEqual({ total: 0, online: 0, disabled: 0, stale: false, hosts: [] });
+    expect((await summaryOf(dana.token)).fleet).toEqual({ total: 0, online: 0, disabled: 0, needsSignin: 0, stale: false, hosts: [] });
   });
 });
