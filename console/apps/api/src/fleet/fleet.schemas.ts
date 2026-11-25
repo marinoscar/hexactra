@@ -43,8 +43,27 @@ export interface FleetHost {
   mode: 'unattended' | 'attended' | 'container' | null;
   /** The host can share its desktop through the fabric. */
   desktop: boolean;
-  profiles: { name: string; running: boolean }[];
+  profiles: FleetProfile[];
   lastSeen: string;
+}
+
+/** A profile's identity sign-in state (E48, docs/decisions/profile-signin-health.md). */
+export type FleetSigninState = 'signed_in' | 'signed_out' | 'expired' | 'unknown';
+
+/** An account a profile is signed in to. The email is shown in full to `fleet:read`; never logged, traced or given to MCP. */
+export interface FleetProfileAccount {
+  provider: string;
+  email: string;
+  state: FleetSigninState;
+}
+
+/** A browser profile on a host, with its sign-in status. */
+export interface FleetProfile {
+  name: string;
+  running: boolean;
+  signin: FleetSigninState;
+  accounts: FleetProfileAccount[];
+  checkedAt: string | null;
 }
 
 /** What enrolling a host returns: shown once, never stored by the console. */

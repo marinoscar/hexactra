@@ -117,9 +117,10 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   };
   const browser = new FabricBrowser(session, d.fabric, sessionId, s.connections.lazyBrowser ? ensureSession : undefined);
   const masking = readMasking(memory, browser, () => currentUrlOf(browser));
-  const store = new PrismaRunStore(d, userId, run.id, lease, { run, session, sessionId: () => sessionRef.id });
-  // The Knowledge Graph's capture (E46.5): bound only when the run's mode is learn or reuse; otherwise no observer at all.
+  // The Knowledge Graph's capture (E46.5): bound only when the run's mode is learn or reuse; otherwise no observer at all. Its writes are
+  // queued off the run's path and flushed by the store before the run pauses or finishes (#922).
   const observer = await kgraphObserverFor(d, userId, run, false, (tool, args) => surfaceCapture(browser, browserState, tool, args));
+  const store = new PrismaRunStore(d, userId, run.id, lease, { run, session, sessionId: () => sessionRef.id, ...(observer ? { beforeSettle: () => observer.flush() } : {}) });
   const ports: Ports = {
     model: new AiModelPort(d.ai, userId, orgId),
     store,

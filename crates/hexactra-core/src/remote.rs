@@ -1835,6 +1835,107 @@ pub struct HostView {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub draining: bool,
     pub last_seen: DateTime<Utc>,
+    /// Each profile's identity sign-in status (E48, #927), one entry per
+    /// name in `profiles`, in the same order. A profile the agent has not
+    /// reported on is `unknown`. `profiles` and `running_profiles` keep
+    /// their meaning.
+    #[serde(default)]
+    pub profile_status: Vec<ProfileStatus>,
+}
+
+/// Whether a browser profile is signed in to an identity provider (E48,
+/// `docs/decisions/profile-signin-health.md`). Display data for the owner:
+/// it never authorises anything and never blocks a run.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SigninState {
+    /// A valid web session for the account.
+    SignedIn,
+    /// No account signed in.
+    SignedOut,
+    /// The browser knows the account, but its web session is no longer valid.
+    Expired,
+    /// Never checked, the check failed, or the checks disagree. A failed
+    /// check is never `signed_out`.
+    #[default]
+    Unknown,
+}
+
+impl SigninState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SigninState::SignedIn => "signed_in",
+            SigninState::SignedOut => "signed_out",
+            SigninState::Expired => "expired",
+            SigninState::Unknown => "unknown",
+        }
+    }
+
+    /// The profile needs the owner to sign in (`signed_out` or `expired`).
+    pub fn needs_signin(self) -> bool {
+        matches!(self, SigninState::SignedOut | SigninState::Expired)
+    }
+}
+
+/// An account a profile is signed in to. `Debug` never prints the email:
+/// it is display data and must not reach a log line or a span (E48 rule 2).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileAccount {
+    /// Identity provider (`google`).
+    pub provider: String,
+    /// The account's email, in full (shown to the owner only).
+    pub email: String,
+    pub state: SigninState,
+}
+
+impl std::fmt::Debug for ProfileAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProfileAccount")
+            .field("provider", &self.provider)
+            .field("email", &"[redacted]")
+            .field("state", &self.state)
+            .finish()
+    }
+}
+
+/// One profile's sign-in status as the agent reports it.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSignin {
+    pub name: String,
+    /// The profile's overall state (for the `google` provider).
+    #[serde(default)]
+    pub signin: SigninState,
+    #[serde(default)]
+    pub accounts: Vec<ProfileAccount>,
+    /// When the node last checked; absent when it never did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at: Option<DateTime<Utc>>,
+}
+
+/// `POST /v1/hosts/{host_id}/profile-status`: the agent's report on some or
+/// all of its profiles. A profile not listed keeps its last status.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileStatusReport {
+    pub profiles: Vec<ProfileSignin>,
+}
+
+/// A profile as the control plane shows it.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileStatus {
+    pub name: String,
+    /// Its browser is running now.
+    pub running: bool,
+    #[serde(default)]
+    pub signin: SigninState,
+    #[serde(default)]
+    pub accounts: Vec<ProfileAccount>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at: Option<DateTime<Utc>>,
 }
 
 /// `POST /v1/sessions`
@@ -4222,5 +4323,86 @@ mod tests {
         assert!(!OperationState::Queued.is_terminal());
         assert!(!OperationState::Dispatched.is_terminal());
         assert!(OperationState::TimedOut.is_terminal());
+    }
+
+    #[test]
+    fn host_view_profile_status_round_trips() {
+        let v = HostView {
+            id: Uuid::nil(),
+            name: "node".into(),
+            version: "1".into(),
+            online: true,
+            browser_connected: true,
+            on_demand: true,
+            viewer_url: None,
+            mode: Some(HostMode::Unattended),
+            desktop: true,
+            profiles: vec!["default".into(), "work".into()],
+            running_profiles: vec!["work".into()],
+            draining: false,
+            last_seen: Utc::now(),
+            profile_status: vec![
+                ProfileStatus {
+                    name: "default".into(),
+                    running: false,
+                    signin: SigninState::Unknown,
+                    accounts: vec![],
+                    checked_at: None,
+                },
+                ProfileStatus {
+                    name: "work".into(),
+                    running: true,
+                    signin: SigninState::SignedIn,
+                    accounts: vec![ProfileAccount {
+                        provider: "google".into(),
+                        email: "owner@example.com".into(),
+                        state: SigninState::SignedIn,
+                    }],
+                    checked_at: Some(Utc::now()),
+                },
+            ],
+        };
+        let j = serde_json::to_value(&v).unwrap();
+        assert_eq!(j["profile_status"][1]["signin"], "signed_in");
+        assert_eq!(
+            j["profile_status"][1]["accounts"][0]["email"],
+            "owner@example.com"
+        );
+        let back: HostView = serde_json::from_value(j).unwrap();
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn host_view_without_profile_status_still_parses() {
+        let v: HostView = serde_json::from_value(json!({
+            "id": Uuid::nil(), "name": "n", "version": "1", "online": true,
+            "browser_connected": false, "last_seen": "2026-01-01T00:00:00Z"
+        }))
+        .unwrap();
+        assert!(v.profile_status.is_empty());
+        let p: ProfileSignin = serde_json::from_value(json!({"name": "default"})).unwrap();
+        assert_eq!(p.signin, SigninState::Unknown);
+    }
+
+    #[test]
+    fn profile_account_debug_never_prints_the_email() {
+        let a = ProfileAccount {
+            provider: "google".into(),
+            email: "owner@example.com".into(),
+            state: SigninState::Expired,
+        };
+        let d = format!(
+            "{:?}",
+            ProfileSignin {
+                name: "default".into(),
+                signin: SigninState::Expired,
+                accounts: vec![a],
+                checked_at: None,
+            }
+        );
+        assert!(!d.contains("owner@example.com"), "{d}");
+        assert!(d.contains("[redacted]"));
+        assert!(SigninState::Expired.needs_signin());
+        assert!(!SigninState::Unknown.needs_signin());
     }
 }

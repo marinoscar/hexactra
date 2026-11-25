@@ -16490,6 +16490,21 @@ export interface components {
             profiles: {
                 name: string;
                 running: boolean;
+                /**
+                 * @description signed_in, signed_out, expired, or unknown (never checked, check failed, or the checks disagree)
+                 * @enum {string}
+                 */
+                signin: "signed_in" | "signed_out" | "expired" | "unknown";
+                accounts: {
+                    /** @description Identity provider (google) */
+                    provider: string;
+                    /** @description The account email, in full */
+                    email: string;
+                    /** @enum {string} */
+                    state: "signed_in" | "signed_out" | "expired" | "unknown";
+                }[];
+                /** @description When the node last checked; null when it never did */
+                checkedAt: string | null;
             }[];
             /** @description ISO 8601 timestamp */
             lastSeen: string;
@@ -22719,6 +22734,8 @@ export interface components {
                 online: number;
                 /** @description Hosts that are draining: they take no new run */
                 disabled: number;
+                /** @description Profiles, across every host, that are signed out of Google or whose session expired (a count; never an email) */
+                needsSignin: number;
                 /** @description True when the fabric did not answer within 1.5 s: the hosts are the last ones read, and may be out of date */
                 stale: boolean;
                 /** @description At most 6: online first, then by name */
@@ -22728,6 +22745,8 @@ export interface components {
                     online: boolean;
                     draining: boolean;
                     mode: ("unattended" | "attended" | "container") | null;
+                    /** @description This host's profiles that need sign-in */
+                    needsSignin: number;
                 }[];
             } | null;
             counts: {

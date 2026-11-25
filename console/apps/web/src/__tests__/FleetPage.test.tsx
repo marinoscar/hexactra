@@ -23,8 +23,8 @@ const hosts: FleetHost[] = [
     mode: null,
     desktop: false,
     profiles: [
-      { name: 'default', running: false },
-      { name: 'travel', running: true },
+      { name: 'default', running: false, signin: 'unknown', accounts: [], checkedAt: null },
+      { name: 'travel', running: true, signin: 'unknown', accounts: [], checkedAt: null },
     ],
     lastSeen: '2026-11-15T00:00:00Z',
   },

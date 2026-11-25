@@ -595,6 +595,18 @@ export const fleetHostResponseSchema = z.object({
   profiles: z.array(z.object({ name: z.string(), running: z.boolean() })),
   lastSeen: iso,
 });
-export class FleetHostResponseDto extends createZodDto(fleetHostResponseSchema) {}
+
+/** A profile's Google sign-in status (E48, #927). Display data for the owner; never in MCP results. */
+const signinState = z.enum(['signed_in', 'signed_out', 'expired', 'unknown']);
+export const fleetProfileResponseSchema = z.object({
+  name: z.string(),
+  running: z.boolean(),
+  signin: signinState.describe('signed_in, signed_out, expired, or unknown (never checked, check failed, or the checks disagree)'),
+  accounts: z.array(z.object({ provider: z.string().describe('Identity provider (google)'), email: z.string().describe('The account email, in full'), state: signinState })),
+  checkedAt: iso.nullable().describe('When the node last checked; null when it never did'),
+});
+/** `GET /api/fleet/hosts`: the MCP shape plus each profile's sign-in status. */
+export const fleetHostWithSigninResponseSchema = fleetHostResponseSchema.extend({ profiles: z.array(fleetProfileResponseSchema) });
+export class FleetHostResponseDto extends createZodDto(fleetHostWithSigninResponseSchema) {}
 
 export class OkResponseDto extends createZodDto(z.object({ ok: z.literal(true) })) {}

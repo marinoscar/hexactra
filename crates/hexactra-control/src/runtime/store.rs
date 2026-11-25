@@ -5,15 +5,16 @@
 //! restart drops sessions and in-flight operations, and callers see them as
 //! not found. Durable sessions and audit are follow-up work on epic #173.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
     valid_profile_name, DispatchedOperation, HostMode, HostView, HostWork, OperationResult,
-    OperationState, OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
-    REDACTED_TEXT,
+    OperationState, OperationView, ProfileAccount, ProfileSignin, ProfileStatus,
+    ProfileStatusReport, RemoteAction, RemoteSessionStatus, SessionView, SigninState,
+    DEFAULT_PROFILE, REDACTED_TEXT,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -79,6 +80,8 @@ pub(super) struct HostEntry {
     /// default profile (older agents).
     pub(super) profiles: Vec<String>,
     pub(super) running_profiles: Vec<String>,
+    /// Each profile's last reported sign-in status (E48, #927), by name.
+    pub(super) signin: BTreeMap<String, ProfileSignin>,
     queue: VecDeque<Uuid>,
     pub(super) notify: Arc<Notify>,
     /// No new sessions are placed here (#213).
@@ -197,6 +200,9 @@ pub(crate) struct HostRecord {
     pub profiles: Vec<String>,
     #[serde(default)]
     pub draining: bool,
+    /// Last known sign-in status per profile (E48), so a restart keeps it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub signin: Vec<ProfileSignin>,
 }
 
 /// Everything the store persists (#211). Operations are not persisted:
@@ -267,6 +273,46 @@ fn op_event(v: &OperationView) -> serde_json::Value {
     })
 }
 
+/// Most profiles one sign-in report may carry (as for the poll's list).
+const MAX_SIGNIN_PROFILES: usize = 100;
+/// Most accounts kept per profile.
+const MAX_SIGNIN_ACCOUNTS: usize = 10;
+
+/// A reported profile status the store can keep, or `None`. The email is
+/// length-checked and must look like an address; the provider is a short
+/// lowercase word. A `signed_in` profile with no account is `unknown`
+/// (the checks disagree), never `signed_out`.
+fn clean_profile_signin(p: ProfileSignin) -> Option<ProfileSignin> {
+    if !valid_profile_name(&p.name) {
+        return None;
+    }
+    let accounts: Vec<ProfileAccount> = p
+        .accounts
+        .into_iter()
+        .filter(|a| {
+            !a.provider.is_empty()
+                && a.provider.len() <= 32
+                && a.provider
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+                && a.email.len() <= 320
+                && a.email.contains('@')
+                && !a.email.chars().any(|c| c.is_control() || c.is_whitespace())
+        })
+        .take(MAX_SIGNIN_ACCOUNTS)
+        .collect();
+    let signin = match p.signin {
+        SigninState::SignedIn | SigninState::Expired if accounts.is_empty() => SigninState::Unknown,
+        s => s,
+    };
+    Some(ProfileSignin {
+        name: p.name,
+        signin,
+        accounts,
+        checked_at: p.checked_at,
+    })
+}
+
 fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
     let online = now
         .signed_duration_since(h.last_seen)
@@ -288,6 +334,29 @@ fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
         running_profiles: h.running_profiles.clone(),
         draining: h.draining,
         last_seen: h.last_seen,
+        profile_status: h
+            .known_profiles()
+            .into_iter()
+            .map(|name| {
+                let running = h.running_profiles.iter().any(|r| r == &name);
+                match h.signin.get(&name) {
+                    Some(p) => ProfileStatus {
+                        running,
+                        signin: p.signin,
+                        accounts: p.accounts.clone(),
+                        checked_at: p.checked_at,
+                        name,
+                    },
+                    None => ProfileStatus {
+                        name,
+                        running,
+                        signin: SigninState::Unknown,
+                        accounts: Vec::new(),
+                        checked_at: None,
+                    },
+                }
+            })
+            .collect(),
     }
 }
 
@@ -329,6 +398,7 @@ impl RuntimeStore {
                 bluetooth: h.bluetooth,
                 profiles: h.profiles.clone(),
                 draining: h.draining,
+                signin: h.signin.values().cloned().collect(),
             })
             .collect();
         hosts.sort_by_key(|h| h.id);
@@ -370,6 +440,7 @@ impl RuntimeStore {
                         bluetooth: h.bluetooth,
                         profiles: h.profiles,
                         running_profiles: Vec::new(),
+                        signin: h.signin.into_iter().map(|p| (p.name.clone(), p)).collect(),
                         queue: VecDeque::new(),
                         notify: Arc::new(Notify::new()),
                         draining: h.draining,
@@ -427,6 +498,7 @@ impl RuntimeStore {
                         bluetooth: None,
                         profiles: Vec::new(),
                         running_profiles: Vec::new(),
+                        signin: BTreeMap::new(),
                         queue: VecDeque::new(),
                         notify: Arc::new(Notify::new()),
                         draining: false,
@@ -556,6 +628,55 @@ impl RuntimeStore {
         h.profiles = clean(profiles);
         h.running_profiles = clean(running);
         Ok(())
+    }
+
+    /// Record the sign-in status the agent reported for some of its
+    /// profiles (E48, #927). Invalid entries are dropped, not rejected, so
+    /// one bad profile never hides the others. Emits a content-free
+    /// `host.profile_signin` event (state only, never the email) for each
+    /// profile whose state changed. Returns how many entries were kept.
+    pub fn set_profile_signin(
+        &self,
+        id: Uuid,
+        report: ProfileStatusReport,
+    ) -> Result<usize, StoreError> {
+        let mut changed = Vec::new();
+        let mut kept = 0;
+        {
+            let mut inner = self.lock();
+            let h = inner
+                .hosts
+                .get_mut(&id)
+                .ok_or(StoreError::NotFound("host"))?;
+            for p in report.profiles.into_iter().take(MAX_SIGNIN_PROFILES) {
+                let Some(p) = clean_profile_signin(p) else {
+                    continue;
+                };
+                kept += 1;
+                let before = h.signin.get(&p.name).map(|x| x.signin);
+                if before != Some(p.signin) {
+                    changed.push((p.name.clone(), before, p.signin));
+                }
+                h.signin.insert(p.name.clone(), p);
+            }
+            // Forget profiles the host no longer has (it reported its list).
+            if !h.profiles.is_empty() {
+                let known = h.profiles.clone();
+                h.signin.retain(|name, _| known.contains(name));
+            }
+        }
+        for (profile, before, after) in changed {
+            self.log.emit(
+                "host.profile_signin",
+                json!({
+                    "host_id": id,
+                    "profile": profile,
+                    "signin": after.as_str(),
+                    "previous": before.map(|b| b.as_str()),
+                }),
+            );
+        }
+        Ok(kept)
     }
 
     pub fn list_hosts(&self) -> Vec<HostView> {
@@ -1463,6 +1584,137 @@ mod tests {
         // Re-registration clears the browser flag until the next poll.
         s.register_host(Some(h), "h".into(), "0".into());
         assert!(!s.list_hosts()[0].browser_connected);
+    }
+
+    fn google(email: &str, state: SigninState) -> ProfileAccount {
+        ProfileAccount {
+            provider: "google".into(),
+            email: email.into(),
+            state,
+        }
+    }
+
+    #[test]
+    fn profiles_are_unknown_until_the_agent_reports() {
+        // An older agent reports profiles on the poll but never a status.
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "h".into(), "0".into());
+        let v = &s.list_hosts()[0];
+        assert_eq!(v.profile_status.len(), 1);
+        assert_eq!(v.profile_status[0].name, "default");
+        assert_eq!(v.profile_status[0].signin, SigninState::Unknown);
+        s.set_host_profiles(
+            h,
+            vec!["default".into(), "work".into()],
+            vec!["work".into()],
+        )
+        .unwrap();
+        let v = &s.list_hosts()[0];
+        let names: Vec<_> = v.profile_status.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(
+            names,
+            v.profiles.iter().map(String::as_str).collect::<Vec<_>>()
+        );
+        assert!(v
+            .profile_status
+            .iter()
+            .all(|p| p.signin == SigninState::Unknown));
+        assert!(
+            v.profile_status
+                .iter()
+                .find(|p| p.name == "work")
+                .unwrap()
+                .running
+        );
+    }
+
+    #[test]
+    fn profile_signin_report_is_cleaned_and_merged() {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "h".into(), "0".into());
+        s.set_host_profiles(h, vec!["default".into(), "work".into()], vec![])
+            .unwrap();
+        let mut events = s.log.subscribe_from(None).0;
+        let kept = s
+            .set_profile_signin(
+                h,
+                ProfileStatusReport {
+                    profiles: vec![
+                        ProfileSignin {
+                            name: "default".into(),
+                            signin: SigninState::SignedIn,
+                            accounts: vec![google("owner@example.com", SigninState::SignedIn)],
+                            checked_at: Some(Utc::now()),
+                        },
+                        // Signed in with no usable account: the checks disagree.
+                        ProfileSignin {
+                            name: "work".into(),
+                            signin: SigninState::SignedIn,
+                            accounts: vec![google("not an email", SigninState::SignedIn)],
+                            checked_at: None,
+                        },
+                        ProfileSignin {
+                            name: "../bad".into(),
+                            signin: SigninState::SignedOut,
+                            accounts: vec![],
+                            checked_at: None,
+                        },
+                    ],
+                },
+            )
+            .unwrap();
+        assert_eq!(kept, 2);
+        let v = &s.list_hosts()[0];
+        let by = |n: &str| {
+            v.profile_status
+                .iter()
+                .find(|p| p.name == n)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(by("default").signin, SigninState::SignedIn);
+        assert_eq!(by("default").accounts[0].email, "owner@example.com");
+        assert_eq!(by("work").signin, SigninState::Unknown);
+        assert!(by("work").accounts.is_empty());
+        // A later partial report leaves other profiles alone.
+        s.set_profile_signin(
+            h,
+            ProfileStatusReport {
+                profiles: vec![ProfileSignin {
+                    name: "work".into(),
+                    signin: SigninState::SignedOut,
+                    accounts: vec![],
+                    checked_at: Some(Utc::now()),
+                }],
+            },
+        )
+        .unwrap();
+        let v = &s.list_hosts()[0];
+        let by = |n: &str| {
+            v.profile_status
+                .iter()
+                .find(|p| p.name == n)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(by("default").signin, SigninState::SignedIn);
+        assert_eq!(by("work").signin, SigninState::SignedOut);
+        // Change events carry the state, never the email.
+        let mut seen = Vec::new();
+        while let Ok(e) = events.try_recv() {
+            let j = serde_json::to_string(&e).unwrap();
+            assert!(!j.contains("owner@example.com"), "{j}");
+            if j.contains("host.profile_signin") {
+                seen.push(j);
+            }
+        }
+        assert_eq!(seen.len(), 3, "{seen:?}");
+        // A profile the host drops is forgotten.
+        s.set_host_profiles(h, vec!["default".into()], vec![])
+            .unwrap();
+        s.set_profile_signin(h, ProfileStatusReport::default())
+            .unwrap();
+        assert_eq!(s.list_hosts()[0].profile_status.len(), 1);
     }
 
     #[tokio::test]

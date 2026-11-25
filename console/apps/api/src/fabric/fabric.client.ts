@@ -57,6 +57,20 @@ export interface FabricHost {
   running_profiles: string[];
   draining?: boolean;
   last_seen: string;
+  /** Each profile's sign-in status (E48, #927); absent from fabrics older than it. */
+  profile_status?: FabricProfileStatus[];
+}
+
+/** A profile's identity sign-in state as the fabric reports it. */
+export type SigninState = 'signed_in' | 'signed_out' | 'expired' | 'unknown';
+
+/** One profile's sign-in status from `GET /v1/hosts` (the email is display data: never logged). */
+export interface FabricProfileStatus {
+  name: string;
+  running: boolean;
+  signin?: SigninState;
+  accounts?: { provider: string; email: string; state?: SigninState }[];
+  checked_at?: string | null;
 }
 
 const CONFIG_TTL_MS = 10_000;

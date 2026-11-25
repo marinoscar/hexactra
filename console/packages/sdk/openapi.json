@@ -79228,11 +79228,66 @@
                 },
                 "running": {
                   "type": "boolean"
+                },
+                "signin": {
+                  "type": "string",
+                  "enum": [
+                    "signed_in",
+                    "signed_out",
+                    "expired",
+                    "unknown"
+                  ],
+                  "description": "signed_in, signed_out, expired, or unknown (never checked, check failed, or the checks disagree)"
+                },
+                "accounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "description": "Identity provider (google)"
+                      },
+                      "email": {
+                        "type": "string",
+                        "description": "The account email, in full"
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "signed_in",
+                          "signed_out",
+                          "expired",
+                          "unknown"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "email",
+                      "state"
+                    ]
+                  }
+                },
+                "checkedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When the node last checked; null when it never did"
                 }
               },
               "required": [
                 "name",
-                "running"
+                "running",
+                "signin",
+                "accounts",
+                "checkedAt"
               ]
             }
           },
@@ -104801,6 +104856,12 @@
                     "maximum": 9007199254740991,
                     "description": "Hosts that are draining: they take no new run"
                   },
+                  "needsSignin": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Profiles, across every host, that are signed out of Google or whose session expired (a count; never an email)"
+                  },
                   "stale": {
                     "type": "boolean",
                     "description": "True when the fabric did not answer within 1.5 s: the hosts are the last ones read, and may be out of date"
@@ -104836,6 +104897,12 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "needsSignin": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "This host's profiles that need sign-in"
                         }
                       },
                       "required": [
@@ -104843,7 +104910,8 @@
                         "name",
                         "online",
                         "draining",
-                        "mode"
+                        "mode",
+                        "needsSignin"
                       ]
                     },
                     "description": "At most 6: online first, then by name"
@@ -104853,6 +104921,7 @@
                   "total",
                   "online",
                   "disabled",
+                  "needsSignin",
                   "stale",
                   "hosts"
                 ]

@@ -19,7 +19,7 @@ use axum::{
 };
 use hexactra_core::remote::{
     ActionRequest, ApiError, CreateSessionRequest, HostWork, OperationResult, OperationState,
-    RegisterHostRequest, RegisterHostResponse,
+    ProfileStatusReport, RegisterHostRequest, RegisterHostResponse,
 };
 use serde::Deserialize;
 use uuid::Uuid;
@@ -239,6 +239,10 @@ pub fn router(state: ApiState) -> Router {
         .route("/v1/hosts/register", post(register_host))
         .route("/v1/hosts/{host_id}/next", get(next_operation))
         .route("/v1/hosts/{host_id}/offline", post(host_offline))
+        .route(
+            "/v1/hosts/{host_id}/profile-status",
+            post(profile_status).layer(DefaultBodyLimit::max(PROFILE_STATUS_BODY_LIMIT)),
+        )
         .route(
             "/v1/hosts/{host_id}/operations/{op_id}/result",
             post(post_result).layer(DefaultBodyLimit::max(RESULT_BODY_LIMIT)),
@@ -482,6 +486,32 @@ async fn host_offline(
     check_host(p, host_id)?;
     s.store.set_host_offline(host_id)?;
     tracing::info!(%host_id, "host went offline");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Largest sign-in status report (100 profiles of a few accounts each).
+const PROFILE_STATUS_BODY_LIMIT: usize = 256 * 1024;
+
+/// The agent reports its profiles' sign-in status (E48, #927). A separate
+/// route, not the poll's query string, so account emails never appear in a
+/// URL or an access log. Only the count is logged; never an email.
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/{host_id}/profile-status",
+    tag = "agent",
+    params(("host_id" = Uuid, Path,)),
+    request_body = ProfileStatusReport,
+    responses((status = 204, description = "Recorded"), (status = 404, description = "Unknown host"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
+async fn profile_status(
+    State(s): State<ApiState>,
+    Extension(p): Extension<Principal>,
+    Path(host_id): Path<Uuid>,
+    Json(report): Json<ProfileStatusReport>,
+) -> Result<StatusCode, AppError> {
+    check_host(p, host_id)?;
+    let kept = s.store.set_profile_signin(host_id, report)?;
+    tracing::debug!(%host_id, profiles = kept, "profile sign-in status reported");
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -20,7 +20,7 @@ export class PrismaRunStore implements RunStorePort {
     private readonly userId: string,
     private readonly runId: string,
     private readonly lease: RunLease,
-    private readonly hooks: { run: StoreRun; session: FabricSession; sessionId: () => string | null },
+    private readonly hooks: { run: StoreRun; session: FabricSession; sessionId: () => string | null; beforeSettle?: () => Promise<void> },
   ) {
     this.db = d.prisma.forUser({ userId });
   }
@@ -126,11 +126,18 @@ export class PrismaRunStore implements RunStorePort {
     await this.d.tasks.transition(this.userId, this.runId, to, patch);
   }
 
-  pause(patch: { handoffId?: string | null } = {}): Promise<boolean> {
+  /** The Knowledge Graph's capture queue (#922) is flushed before the run pauses or finishes, so the compile job reads a whole trace. Never throws. */
+  private async settleCapture(): Promise<void> {
+    await this.hooks.beforeSettle?.().catch(() => undefined);
+  }
+
+  async pause(patch: { handoffId?: string | null } = {}): Promise<boolean> {
+    await this.settleCapture();
     return pauseRunRaw(this.d, this.userId, this.runId, patch);
   }
 
-  finish(to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: string; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean }): Promise<void> {
+  async finish(to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: string; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean }): Promise<void> {
+    await this.settleCapture();
     return finishRun(this.d, this.userId, this.runId, this.hooks.sessionId(), this.hooks.session, to, patch as { result?: string; error?: string; stopReason?: RunStopReason; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean });
   }
 }

@@ -37,8 +37,8 @@ const HOST: FleetHost = {
   mode: 'unattended',
   desktop: true,
   profiles: [
-    { name: 'default', running: false },
-    { name: 'travel', running: true },
+    { name: 'default', running: false, signin: 'unknown', accounts: [], checkedAt: null },
+    { name: 'travel', running: true, signin: 'unknown', accounts: [], checkedAt: null },
   ],
   lastSeen: '2026-11-17T00:00:00Z',
 };
