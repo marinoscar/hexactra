@@ -162,7 +162,7 @@ describe('DesktopPage', () => {
   });
 
   it('opens a profile at the Google sign-in on an unattended node', async () => {
-    const { platform } = renderPage({ ...host, profiles: [{ name: 'personal', running: false }] });
+    const { platform } = renderPage({ ...host, profiles: [{ name: 'personal', running: false, signin: 'unknown', accounts: [], checkedAt: null }] });
     await waitFor(() => expect(rfb.instances).toHaveLength(1));
     act(() => {
       (rfb.instances[0] as unknown as EventTarget).dispatchEvent(new Event('connect'));

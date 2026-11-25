@@ -59,7 +59,7 @@ const host = (id: string, name: string, extra: Partial<FleetHost> = {}): FleetHo
   viewerUrl: 'https://viewer.example.test/secret-path',
   mode: 'unattended',
   desktop: true,
-  profiles: [{ name: 'default', running: false }],
+  profiles: [{ name: 'default', running: false, signin: 'unknown' as const, accounts: [], checkedAt: null }],
   lastSeen: new Date().toISOString(),
   ...extra,
 });
