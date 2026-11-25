@@ -90,7 +90,9 @@ describe('the kgraph migrations', () => {
   it('exist and sort after every earlier migration', () => {
     expect(kg.length).toBeGreaterThanOrEqual(1);
     const all = readdirSync(dir).filter((d) => /^\d{14}_/.test(d)).sort();
-    expect(all.slice(-kg.length)).toEqual(kg);
+    // No other migration is interleaved with them; a later epic's own migration (E48.5's question_signin) may follow the last.
+    const first = all.indexOf(kg[0]!);
+    expect(all.slice(first, first + kg.length)).toEqual(kg);
   });
   it.each(kg)('%s creates, indexes or extends kg_ tables only', (folder) => {
     const sql = readFileSync(join(dir, folder, 'migration.sql'), 'utf8');
