@@ -44,7 +44,7 @@ const host: FleetHost = {
 
 let takeoverAnswer: unknown = null;
 
-function renderPage(h: FleetHost = host) {
+function renderPage(h: FleetHost = host, search = '') {
   const platform = createTestPlatformHost({
     permissions: ['fleet:read', 'fleet:desktop'],
     responses: {
@@ -60,7 +60,7 @@ function renderPage(h: FleetHost = host) {
   });
   const view = render(
     <PlatformHostProvider host={platform}>
-      <MemoryRouter initialEntries={[`/fleet/hosts/${ID}/desktop`]}>
+      <MemoryRouter initialEntries={[`/fleet/hosts/${ID}/desktop${search}`]}>
         <Routes>
           <Route path="/fleet/hosts/:id/desktop" element={<DesktopPage />} />
           <Route path="/fleet" element={<p>Fleet list</p>} />
@@ -170,6 +170,21 @@ describe('DesktopPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
     expect(await screen.findByText(/Chrome for "personal" is open at the Google sign-in/)).toBeInTheDocument();
     expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true);
+  });
+
+  it("preselects the profile the Fleet page's Sign in asked for (E48.3)", async () => {
+    const profiles: FleetHost['profiles'] = [
+      { name: 'default', running: false, signin: 'signed_in', accounts: [], checkedAt: null },
+      { name: 'personal', running: false, signin: 'signed_out', accounts: [], checkedAt: null },
+    ];
+    const { platform } = renderPage({ ...host, profiles }, '?profile=personal&signin=1');
+    expect(await screen.findByText(/To sign in "personal", use "Sign in to profile"/)).toBeInTheDocument();
+    await waitFor(() => expect(rfb.instances).toHaveLength(1));
+    act(() => {
+      (rfb.instances[0] as unknown as EventTarget).dispatchEvent(new Event('connect'));
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
+    await waitFor(() => expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true));
   });
 
   it('says nobody controls the desktop when the takeover answer is empty', async () => {

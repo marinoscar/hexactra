@@ -118,9 +118,10 @@ export const homeSummaryResponseSchema = z.object({
       total: z.number().int(),
       online: z.number().int(),
       disabled: z.number().int().describe('Hosts that are draining: they take no new run'),
+      needsSignin: z.number().int().describe('Profiles, across every host, that are signed out of Google or whose session expired (a count; never an email)'),
       stale: z.boolean().describe('True when the fabric did not answer within 1.5 s: the hosts are the last ones read, and may be out of date'),
       hosts: z
-        .array(z.object({ id: z.string(), name: z.string(), online: z.boolean(), draining: z.boolean(), mode: z.enum(['unattended', 'attended', 'container']).nullable() }))
+        .array(z.object({ id: z.string(), name: z.string(), online: z.boolean(), draining: z.boolean(), mode: z.enum(['unattended', 'attended', 'container']).nullable(), needsSignin: z.number().int().describe("This host's profiles that need sign-in") }))
         .describe('At most 6: online first, then by name'),
     })
     .nullable()
