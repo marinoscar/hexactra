@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { DEFAULT_PROFILE } from '../taskForm/values';
 import type { FleetHost } from '../types/fleet';
+import { ProfileSigninWarning } from './ProfileSigninWarning';
 
 export interface ProfilePickerProps {
   /** The fleet's machines; null when they are not known (no `fleet:read`, or the request failed): a text field then. */
@@ -93,6 +94,7 @@ export function ProfilePicker({ hosts, hostId, value, onChange, disabled, error,
           .
         </Alert>
       )}
+      {!missing && <ProfileSigninWarning hosts={hosts} hostId={hostId} profile={value} />}
     </>
   );
 }

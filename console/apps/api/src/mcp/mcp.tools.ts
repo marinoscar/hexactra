@@ -341,8 +341,9 @@ async function awaitQuestion(ctx: McpContext, qid: string, waitS: number, first?
 }
 
 /** A run as the tools return it: never its transcript or policy snapshot (the REST view omits them; this makes sure). */
-function stripRun<T extends Record<string, unknown>>(r: T): Omit<T, 'transcript' | 'policySnapshot' | 'policy_snapshot'> {
-  const { transcript: _t, policySnapshot: _p, policy_snapshot: _s, ...rest } = r;
+function stripRun<T extends Record<string, unknown>>(r: T): Omit<T, 'transcript' | 'policySnapshot' | 'policy_snapshot' | 'warnings'> {
+  // `warnings` (a run start's, E48.5) is for the console and the REST API: the tools' run shape is unchanged.
+  const { transcript: _t, policySnapshot: _p, policy_snapshot: _s, warnings: _w, ...rest } = r;
   return rest;
 }
 

@@ -1,6 +1,6 @@
 // The console's own alert rule kinds, evaluated by the platform alerts slice
 // (`@marinoscar/platform-api/alerts`) every minute: a browser host offline,
-// a schedule failing, runs exceeding their budgets, runs that stall, and a
+// a browser profile signed out of Google (E48.5), a schedule failing, runs exceeding their budgets, runs that stall, and a
 // single run that cost more than a limit (#408). Each returns one
 // observation per label set; one that stops being returned counts as clear,
 // so incidents resolve on their own.
@@ -16,7 +16,7 @@ import { RUN_READING_ALERT_KINDS } from './run-alert-kinds';
 /** What the kinds read. Ids are PERMANENT once rules of a kind exist. */
 export interface AlertSources {
   /** `null` when no fabric connection is configured yet (nothing to watch). */
-  hosts(): Promise<{ id: string; name: string; online: boolean; draining: boolean }[] | null>;
+  hosts(): Promise<AlertHost[] | null>;
   failingSchedules(minFailures: number): Promise<{ id: string; taskName: string; consecutiveFailures: number }[]>;
   /** Per user, since `since`: tokens and USD used, and runs stopped by a budget (`stop_reason`). */
   usage(since: Date): Promise<UserUsage[]>;
@@ -34,6 +34,16 @@ export interface AlertSources {
   cardUsage?(since: Date): Promise<CardUsage[]>;
   /** AI spend since the start of the current UTC month (#736): in total and per user, at the deployment's prices. Optional. */
   monthlyAiSpend?(now: Date): Promise<MonthlyAiSpend>;
+}
+
+/** A browser host as the kinds read it. */
+export interface AlertHost {
+  id: string;
+  name: string;
+  online: boolean;
+  draining: boolean;
+  /** Each profile's Google sign-in state (E48.5); absent from a source that predates it. Never an email. */
+  profiles?: { name: string; signin: 'signed_in' | 'signed_out' | 'expired' | 'unknown' }[];
 }
 
 /** AI spend this month (#736): USD and whether every call was priced; users by id only. */
@@ -153,6 +163,8 @@ function need(): AlertSources {
 
 export const HEXACTRA_ALERT_KINDS = {
   HOST_OFFLINE: 'hexactra_host_offline',
+  /** E48.5. The starter rule's key is `hexactra.profile_signed_out`. */
+  PROFILE_SIGNED_OUT: 'hexactra_profile_signed_out',
   SCHEDULE_FAILING: 'hexactra_schedule_failing',
   RUN_BUDGET: 'hexactra_run_budget',
   /** #408. Kind ids allow `[a-z0-9_]` only; the starter rule's key is `hexactra.run_stalled`. */
@@ -195,6 +207,51 @@ export const hostOfflineKind: AlertRuleKind<z.infer<typeof hostOfflineConfig>> =
     return out;
   },
   describe: (rule) => `A browser host is offline${rule.config.includeDraining ? ' (draining hosts included)' : ''}, or the fabric is unreachable`,
+};
+
+const profileSignedOutConfig = z.object({
+  /** An expired Google session (the browser knows the account, Google wants it signed in again) breaches too. */
+  includeExpired: z.boolean().default(true),
+  /** Only these profile names; empty (the default) watches every profile. */
+  profiles: z.array(z.string().min(1).max(32)).max(100).default([]),
+});
+export const profileSignedOutKind: AlertRuleKind<z.infer<typeof profileSignedOutConfig>> = {
+  id: HEXACTRA_ALERT_KINDS.PROFILE_SIGNED_OUT,
+  label: 'Browser profile signed out',
+  description: "A browser profile on a host is no longer signed in to Google (signed out, or its session expired): runs that need the owner's Google account will hit a sign-in page.",
+  configSchema: profileSignedOutConfig,
+  async evaluate(_ctx, rule) {
+    let hosts: Awaited<ReturnType<AlertSources['hosts']>>;
+    try {
+      hosts = await need().hosts();
+    } catch {
+      // The fabric being down is the host-offline rule's alert; a profile's last state is not known, so nothing changes here.
+      return [];
+    }
+    if (hosts === null) return [];
+    const only = new Set(rule.config.profiles);
+    const out: AlertObservation[] = [];
+    for (const h of hosts) {
+      for (const p of h.profiles ?? []) {
+        if (only.size > 0 && !only.has(p.name)) continue;
+        // `unknown` (never checked, the check failed, or the checks disagree) never breaches; like any label set that is
+        // no longer returned, it clears an open incident (the alert says what is known, not what was last seen).
+        if (p.signin === 'unknown') continue;
+        const breached = p.signin === 'signed_out' || (p.signin === 'expired' && rule.config.includeExpired);
+        // The host and the profile only: the account's email never goes into an alert (it can reach channels outside the console).
+        const state = p.signin === 'expired' ? 'its Google session expired' : p.signin === 'signed_out' ? 'it is signed out of Google' : 'it is signed in to Google';
+        out.push({
+          labels: { 'host.id': h.id, 'host.name': h.name, profile: p.name },
+          value: breached ? 1 : 0,
+          breached,
+          summary: `${rule.name}: profile ${p.name} on host ${h.name}: ${breached ? `${state}; sign in again from Fleet` : state}`,
+        });
+      }
+    }
+    return out;
+  },
+  describe: (rule) =>
+    `A browser profile${rule.config.profiles.length ? ` (${rule.config.profiles.join(', ')})` : ''} is signed out of Google${rule.config.includeExpired ? ' or its session expired' : ''}`,
 };
 
 const scheduleConfig = z.object({ minFailures: z.number().int().min(1).max(100).default(3) });
@@ -463,6 +520,7 @@ if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_K
 }
 
 registerAlertRuleKind(hostOfflineKind);
+registerAlertRuleKind(profileSignedOutKind);
 registerAlertRuleKind(scheduleFailingKind);
 registerAlertRuleKind(runBudgetKind);
 registerAlertRuleKind(runStalledKind);
@@ -480,6 +538,8 @@ registerAlertRuleKind(aiSpendMonthlyKind);
  */
 export const HEXACTRA_ALERT_RULES = [
   { key: 'hexactra.host_offline', name: 'Browser host offline', kind: HEXACTRA_ALERT_KINDS.HOST_OFFLINE, severity: 'critical', config: { includeDraining: false }, forSeconds: 120, enabled: true },
+  // E48.5: a profile that needs the owner to sign in to Google again; held 10 minutes so a sign-in in progress does not page anyone.
+  { key: 'hexactra.profile_signed_out', name: 'Browser profile signed out', kind: HEXACTRA_ALERT_KINDS.PROFILE_SIGNED_OUT, severity: 'warning', config: { includeExpired: true, profiles: [] }, forSeconds: 600, enabled: true },
   { key: 'hexactra.schedule_failing', name: 'Schedule failing', kind: HEXACTRA_ALERT_KINDS.SCHEDULE_FAILING, severity: 'warning', config: { minFailures: 3 }, forSeconds: 0, enabled: true },
   { key: 'hexactra.run_budget', name: 'Run budget exceeded', kind: HEXACTRA_ALERT_KINDS.RUN_BUDGET, severity: 'warning', config: { windowHours: 24, maxTokens: 2_000_000, maxCostUsd: null, maxBudgetStops: 5 }, forSeconds: 0, enabled: true },
   { key: 'hexactra.run_stalled', name: 'Runs stalling', kind: HEXACTRA_ALERT_KINDS.RUN_STALLED, severity: 'warning', config: { windowHours: 24, minStalls: 3 }, forSeconds: 0, enabled: true },

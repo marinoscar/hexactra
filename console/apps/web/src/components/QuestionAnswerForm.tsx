@@ -12,6 +12,7 @@ import {
   FormLabel,
   IconButton,
   InputAdornment,
+  Link,
   Radio,
   RadioGroup,
   Stack,
@@ -19,6 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 
 import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, textError } from '@app/shared/question-rules';
 
@@ -28,6 +30,7 @@ import { SaveLoginForm } from './SaveLoginForm';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
 import { ScanPicture } from './ScanPicture';
 import { ConnectionActionCard } from './ConnectionActionCard';
+import { signinHref } from './ProfileSigninWarning';
 import { NO_REMEMBER, RememberRuleField, amountError, rememberRuleOf, type RememberRuleState } from './RememberRuleField';
 
 export interface QuestionAnswerFormProps {
@@ -476,9 +479,21 @@ function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, 
     case 'takeover':
       primaryLabel = 'Done';
       field = (
-        <Typography variant="body2" color="text.secondary">
-          Take over the browser, do what is asked, then press Done.
-        </Typography>
+        <>
+          <Typography variant="body2" color="text.secondary">
+            Take over the browser, do what is asked, then press Done.
+          </Typography>
+          {q.signin && (
+            // A Google sign-in page (E48.5): signing the profile in for good, from the guided sign-in, keeps the next runs off this page.
+            <Typography variant="body2" sx={{ mt: 1 }} data-testid="question-signin-link">
+              This is Google's sign-in page.{' '}
+              <Link component={RouterLink} to={signinHref(q.signin.hostId, q.signin.profile)}>
+                Sign in “{q.signin.profile}” to Google
+              </Link>{' '}
+              on its machine, then press Done.
+            </Typography>
+          )}
+        </>
       );
       break;
     default:

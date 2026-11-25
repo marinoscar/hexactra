@@ -4,6 +4,7 @@ import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
+import { isGoogleSignInPage } from '@marinoscar/hexactra-browser-agent/surface';
 
 import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
@@ -91,6 +92,8 @@ export interface QuestionView {
   response: QuestionResponse | null;
   pageTitle: string | null;
   viewerUrl: string | null;
+  /** A takeover asked on Google's account sign-in (E48.5): the run's host and profile, for a link to its guided sign-in; null otherwise. */
+  signin?: QuestionSignin | null;
   createdAt: string;
   expiresAt: string;
   answeredAt: string | null;
@@ -106,6 +109,20 @@ export interface QuestionView {
   saveLogin: SaveLoginCard | null;
   /** scan (#924): the picture's source and the page's address as the browser reported it when asked; null for every other input. */
   scan: QuestionScan | null;
+}
+
+/** Where a takeover on Google's sign-in page can be fixed for good (E48.5): the machine and the browser profile of the run. */
+export interface QuestionSignin {
+  hostId: string;
+  profile: string;
+}
+
+const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+export function questionSigninOf(raw: unknown): QuestionSignin | null {
+  const v = (raw ?? null) as { hostId?: unknown; profile?: unknown } | null;
+  if (!v || typeof v.hostId !== 'string' || typeof v.profile !== 'string' || !PROFILE_NAME.test(v.profile) || v.hostId.length > 64) return null;
+  return { hostId: v.hostId, profile: v.profile };
 }
 
 /** A "Save this login?" proposal as the API returns it: the fabric's handoff id and the provider stay on the server. */
@@ -152,6 +169,7 @@ export function toQuestionView(q: Question): QuestionView {
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
     viewerUrl: q.viewerUrl,
+    signin: questionSigninOf(q.signin),
     createdAt: q.createdAt.toISOString(),
     expiresAt: q.expiresAt.toISOString(),
     answeredAt: q.answeredAt?.toISOString() ?? null,
@@ -362,11 +380,27 @@ export class QuestionsService {
     }
   }
 
+  /**
+   * A takeover asked on Google's account sign-in page (E48.5): the session's host and profile, so the card can link to
+   * that profile's guided sign-in. Read from the page URL the fabric reports and the fabric's session, never from model
+   * text; anything else, or a fabric that does not answer, is null. The agent is told nothing of it.
+   */
+  async signinFor(input: string, pageUrl: string | null | undefined, fabricSessionId: string | null): Promise<QuestionSignin | null> {
+    if (input !== 'takeover' || !fabricSessionId || !isGoogleSignInPage(pageUrl)) return null;
+    try {
+      const s = await this.fabric.request<{ host_id?: string; profile?: string }>('GET', `/v1/sessions/${encodeURIComponent(fabricSessionId)}`);
+      return questionSigninOf({ hostId: s.host_id, profile: s.profile ?? 'default' });
+    } catch {
+      return null;
+    }
+  }
+
   /** Record the question a fabric handoff asks (the goal runner's and external agents' handoffs). */
   async mirrorHandoff(owner: QuestionActor, spec: QuestionSpec, h: CreatedHandoff, opts: { askedBy: string; runId: string | null; fabricSessionId: string | null; client?: QuestionClient | null }): Promise<QuestionView> {
     const viewerUrl = h.viewerUrl && h.viewerUrl.length <= 2000 ? h.viewerUrl : await this.desktopLink(opts.fabricSessionId);
     // A scan's address is read from the browser now, by the server (#924): whatever the asker or the page says is not used.
     if (spec.input === 'scan') spec = { ...spec, scan: await scanFacts(this.fabric, opts.fabricSessionId, spec.scan?.source ?? 'page') };
+    const signin = await this.signinFor(spec.input, h.pageUrl, opts.fabricSessionId);
     const q = await this.db(owner.id).question.create({
       data: {
         ownerUserId: owner.id,
@@ -378,6 +412,7 @@ export class QuestionsService {
         ...this.specData(spec),
         pageTitle: h.pageTitle?.slice(0, 500) ?? null,
         viewerUrl,
+        signin: signin ? (signin as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         expiresAt: h.expiresAt ?? new Date(Date.now() + (await this.resolveTimeoutMs(spec))),
       },
     });
@@ -422,6 +457,7 @@ export class QuestionsService {
     }
     const options = h.choices?.length ? normalizeOptions(h.choices.map((c) => (typeof c === 'string' ? c.slice(0, 100) : c))) : null;
     const expires = h.expires_at ? new Date(h.expires_at) : new Date(Date.now() + QUESTION_TIMEOUT.defaultMs);
+    const signin = await this.signinFor(h.input, h.page?.url, h.session_id ?? null);
     try {
       return await this.db(userId).question.create({
         data: {
@@ -436,6 +472,7 @@ export class QuestionsService {
           pageTitle: h.page?.title?.slice(0, 500) ?? null,
           rememberLabel: h.remember?.label?.slice(0, 80) ?? null,
           viewerUrl: h.viewer_url ?? (await this.desktopLink(h.session_id ?? null)),
+          signin: signin ? (signin as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
           status: h.status === 'pending' ? 'pending' : h.status === 'expired' ? 'expired' : handoffOutcome(h) === 'cancelled' ? 'cancelled' : 'answered',
           expiresAt: Number.isNaN(expires.getTime()) ? new Date(Date.now() + QUESTION_TIMEOUT.defaultMs) : expires,
         },

@@ -80,6 +80,9 @@ model Question {
   /// Why the harness itself asked (#909): `stall` for a stall handoff (`onStall: 'ask_human'`); null for every other question.
   /// Set by the runner only, never from a request or model text. A benchmark tells a stall from a real question by it.
   source           String?        @db.VarChar(20)
+  /// A takeover asked on Google's account sign-in page (E48.5): `{ hostId, profile }` of the run's browser, so the card links
+  /// to the guided sign-in of that profile. Set by the server only, from the page URL the fabric reports; never from model text.
+  signin           Json?
   /// The page the agent was on (browser-bound), for display.
   pageTitle        String?        @map("page_title") @db.VarChar(500)
   /// The fabric's viewer of the host's browser, when it has one.

@@ -15,3 +15,22 @@ export function detectSignedOut(p: PageSnapshot): boolean {
   }
   return (password && button) || (PATH.test(`${path}/`) && password);
 }
+
+// Google's own account sign-in (E48.5): the account chooser, the email and password steps and a re-authentication.
+const GOOGLE_SIGNIN_HOST = 'accounts.google.com';
+const GOOGLE_SIGNIN_PATH = /^\/(?:v\d+\/)?(?:signin|ServiceLogin|AccountChooser|InteractiveLogin)(?:\/|$)/i;
+
+/**
+ * Whether a page is Google's account sign-in, from the URL the browser reports (never page text). A takeover
+ * asked on it can link the owner to the guided sign-in of the run's profile (E48.5); nothing the model sees changes.
+ */
+export function isGoogleSignInPage(url: string | null | undefined): boolean {
+  if (!url) return false;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  return u.protocol === 'https:' && u.hostname.toLowerCase() === GOOGLE_SIGNIN_HOST && GOOGLE_SIGNIN_PATH.test(u.pathname);
+}

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { ConnectedAppsService } from '../connected-apps/connected-apps.service';
 import { RequestClientService, clientColumns } from '../connected-apps/request-client';
 import { profileNameSchema } from '../fleet/fleet.schemas';
+import { ProfileSigninWarnings, type RunStartWarning } from '../fleet/signin-warnings';
 import { PoliciesService } from '../policies/policies.service';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { runView } from '../policies/policy-snapshot';
@@ -17,7 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 import { withCost } from '../tasks/run-cost';
 import { enqueueGoalRun } from './goal-runner.jobs';
-import { RunResponseDto } from '../openapi/console.responses';
+import { RunStartResponseDto } from '../openapi/console.responses';
 import { TaskRunStarter } from '../questions/task-run-starter';
 import { taskInputsField } from '../tasks/task-params.schemas';
 
@@ -61,11 +62,12 @@ export class RunsStartController {
     private readonly clients: RequestClientService,
     private readonly apps: ConnectedAppsService,
     private readonly starter: TaskRunStarter,
+    private readonly signin: ProfileSigninWarnings,
   ) {}
 
   /** Run a saved task now. */
   @Post('tasks/:id/runs')
-  @ApiDataResponse(RunResponseDto, { status: 201 })
+  @ApiDataResponse(RunStartResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
   @ApiBody({ type: RunTaskDto, required: false })
   async runTask(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Req() req: object, @Body() rawBody?: unknown) {
@@ -93,12 +95,14 @@ export class RunsStartController {
       },
     });
     await this.apps.afterStart(user.id, client, run);
-    return runView(withCost(run));
+    // Read once the run exists (never fails, at most a short deadline, nothing left running): a profile that needs a
+    // Google sign-in is a warning only (E48.5).
+    return withWarnings(runView(withCost(run)), await this.signin.forRun({ hostId: task.hostId ?? null, profile: task.profile }));
   }
 
   /** Run an ad-hoc goal (under the user's default agent policy unless `policyId` names one). */
   @Post('runs')
-  @ApiDataResponse(RunResponseDto, { status: 201 })
+  @ApiDataResponse(RunStartResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
   async start(@CurrentUser() user: Principal, @Body() body: StartRunDto, @Req() req: object) {
     await this.policies.assertAssignable(user.id, body.policyId);
@@ -123,6 +127,11 @@ export class RunsStartController {
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
     await this.apps.afterStart(user.id, client, run);
-    return runView(withCost(run));
+    return withWarnings(runView(withCost(run)), await this.signin.forRun({ hostId: body.hostId ?? null, profile: body.profile }));
   }
+}
+
+/** The run as before, plus `warnings` only when there is one: a start with nothing to say answers exactly as it did. */
+function withWarnings<T extends object>(view: T, warnings: RunStartWarning[]): T & { warnings?: RunStartWarning[] } {
+  return warnings.length ? { ...view, warnings } : view;
 }

@@ -10,7 +10,7 @@ import { InboxHistoryResponseDto, InboxItemResponseDto, OkResponseDto } from '..
 import { requestOutcomeWords } from '../questions/chat-request-record';
 import { maskSensitive } from '../tasks/mask';
 import { stepQuestionView, type StepQuestionView } from '../tasks/run-trace.view';
-import { QuestionsService, isOwnerCardInput, saveLoginCardOf, type SaveLoginCard } from '../questions/questions.service';
+import { QuestionsService, isOwnerCardInput, questionSigninOf, saveLoginCardOf, type QuestionSignin, type SaveLoginCard } from '../questions/questions.service';
 import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable, QuestionScan } from '../questions/questions.contract';
 import { RequestClientService } from '../connected-apps/request-client';
 
@@ -88,6 +88,8 @@ export interface InboxItem {
   risk: 'low' | 'high' | null;
   pageTitle: string | null;
   viewerUrl: string | null;
+  /** A takeover on Google's sign-in page (E48.5): the run's host and profile; left out for an MCP client. */
+  signin?: QuestionSignin | null;
   createdAt: string;
   expiresAt: string;
   /** False for a memory proposal (#553): no run waits on it. */
@@ -145,6 +147,8 @@ export class InboxController {
         risk: (q.risk as 'low' | 'high' | null) ?? null,
         pageTitle: q.pageTitle,
         viewerUrl: q.viewerUrl,
+        // The console's own card links a Google sign-in takeover to its guided sign-in; an MCP client's shape is unchanged.
+        ...(hideMemory ? {} : { signin: questionSigninOf(q.signin) }),
         createdAt: q.createdAt.toISOString(),
         expiresAt: q.expiresAt.toISOString(),
         blocking: q.blocking,

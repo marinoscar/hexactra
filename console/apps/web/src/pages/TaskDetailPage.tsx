@@ -6,6 +6,7 @@ import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-r
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { useFleetHosts } from '../components/MachinePicker';
+import { ProfileSigninWarning } from '../components/ProfileSigninWarning';
 import { describeActivity } from '../components/RunActivity';
 import { RunList } from '../components/RunList';
 import { getTaskDetail, getTaskRun, goalIsLong, nextSchedule, TASK_DETAIL_LIVE_REFRESH_MS, TASK_DETAIL_REFRESH_MS } from '../components/taskDetail';
@@ -189,7 +190,14 @@ function PolicyRows({ task, catalog }: { task: TaskWithSummary; catalog: PolicyC
 }
 
 function MachineRow({ task, hosts }: { task: TaskWithSummary; hosts: readonly FleetHost[] }) {
-  if (!task.hostId) return <Row term="Machine">Any available machine</Row>;
+  const signin = <ProfileSigninWarning hosts={hosts} hostId={task.hostId} profile={task.profile} dense={false} />;
+  if (!task.hostId)
+    return (
+      <Row term="Machine">
+        Any available machine
+        <Box sx={{ mt: 1, '&:empty': { display: 'none' } }}>{signin}</Box>
+      </Row>
+    );
   const host = hosts.find((h) => h.id === task.hostId);
   const name = host?.name ?? task.hostId.slice(0, 8);
   return (
@@ -201,6 +209,7 @@ function MachineRow({ task, hosts }: { task: TaskWithSummary; hosts: readonly Fl
           {name} is {machineState(host)} right now. {task.hostFallback ? 'Runs will use another available machine until it is back.' : 'Runs will fail until it is back.'}
         </Alert>
       )}
+      <Box sx={{ mt: 1, '&:empty': { display: 'none' } }}>{signin}</Box>
     </Row>
   );
 }

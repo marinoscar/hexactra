@@ -139,7 +139,7 @@ A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is
 | `credentials` | "Username or email" and "Password" in one form, then "Sign in" | The password field lets the phone's password manager fill a saved sign-in (`autocomplete="current-password"`); the browser may then offer to save it for the console's address, which you can decline |
 | `choice`, `multi_choice` | Full-width rows, at least 44 px tall, the whole row clickable | More than 8 options scroll inside a box; the buttons stay outside it. `multi_choice` says "2 of 3 selected" |
 | `confirm` | The `confirmLabel` and `denyLabel` buttons | `risk: high` (the default) asks "Are you sure?" as a second step |
-| `takeover` | "Open the browser", then "Done" | "Open the browser" is the main button until it has been pressed once |
+| `takeover` | "Open the browser", then "Done" | "Open the browser" is the main button until it has been pressed once. Asked on Google's own sign-in page (`accounts.google.com`, read from the URL the browser reported), the card adds a link to the guided sign-in of the run's machine and profile (`signin: { hostId, profile }` on the question and the console's inbox, E48.5), so the profile can be signed in for good. The page URL is not stored, and the agent is told nothing new |
 | `scan` | The live picture under its warning, then "Done, I scanned it" | Refreshed every 2 s; a tap opens it full screen; replaced by "Do not scan" when the browser left the site |
 | `none` | "Done" ("Approve" for kind `confirmation`) | |
 

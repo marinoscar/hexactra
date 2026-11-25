@@ -97,6 +97,8 @@ export interface AskedQuestion {
   rememberable?: Rememberable | null;
   /** A call through one of the owner's accounts this question asks to approve (E39.7): the card the server built. Null or absent for any other question. */
   action?: QuestionAction | null;
+  /** A takeover asked on Google's sign-in page (E48.5): the run's machine and profile, for a link to its guided sign-in. Set by the server. */
+  signin?: { hostId: string; profile: string } | null;
 }
 
 /** The scopes a saved approval may be limited to (#555). */

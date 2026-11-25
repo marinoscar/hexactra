@@ -7,6 +7,7 @@ import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import { ErrorBanner, useApiAction, useBreakpoint } from '../ui';
 import { MachinePicker, useFleetHosts, type MachineChoice } from './MachinePicker';
+import { ProfileSigninWarning } from './ProfileSigninWarning';
 
 /** The longest goal the API takes. */
 export const GOAL_MAX = 4000;
@@ -94,6 +95,7 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
             />
             <TextField label="Profile" value={profile} onChange={(e) => setProfile(e.target.value)} helperText="The browser profile (its sign-ins)." />
             <MachinePicker hosts={hosts} hostId={machine.hostId} hostFallback={machine.hostFallback} onChange={(change) => setMachine((m) => ({ ...m, ...change }))} />
+            <ProfileSigninWarning hosts={hosts} hostId={machine.hostId} profile={profile.trim() || 'default'} />
             {canPickPolicy && <PolicySelect catalog={catalog} value={policyId} onChange={setPolicyId} manageLink />}
             <Box>
               <FormControlLabel control={<Switch checked={record} onChange={(e) => setRecord(e.target.checked)} slotProps={{ input: { 'aria-describedby': 'new-run-record-help' } }} />} label="Record a video of this run" />

@@ -2,7 +2,7 @@
 export { detectBlocked } from './blocked';
 export { detectConsent, isConsentChoice } from './consent';
 export { detectOverlay } from './overlay';
-export { detectSignedOut } from './signed-out';
+export { detectSignedOut, isGoogleSignInPage } from './signed-out';
 export { pageSnapshot, snapshotScript, type PageSnapshot } from './snapshot';
 
 import { detectBlocked } from './blocked';
