@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b), `{scanQuestion}` (mock only, #924) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5), `{signinWaiting}` and `{signinDone}` (mock only, E48.4) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b), `{scanQuestion}` (mock only, #924) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5), `{signinWaiting}` and `{signinDone}` (mock only, E48.4; also the queue summary of E48.6) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -108,6 +108,9 @@ export const ROUTES = [
   // The desktop page in sign-in mode (E48.4): the banner while the person signs in, then "Signed in as" with the next steps.
   ['desktop-signin', '/fleet/hosts/{host}/desktop?signin={signinWaiting}'],
   ['desktop-signin-done', '/fleet/hosts/{host}/desktop?signin={signinDone}'],
+  // "Fix sign-ins" (E48.6): the queue grouped by host, then its summary after a run (mock only: the queue is seeded in the tab).
+  ['fleet-signin-queue', '/fleet/signin-queue'],
+  ['fleet-signin-queue-summary', '/fleet/signin-queue', { action: signinQueueSummary }],
   ['notes', '/notes'],
   // Settings (the user's hub and its pages).
   ['settings', '/settings'],
@@ -372,6 +375,32 @@ async function loadPictures(page) {
     window.scrollTo(0, 0);
   });
   await page.waitForTimeout(500);
+}
+
+/**
+ * `fleet-signin-queue-summary` (E48.6): seeds the tab's queue as if the person had run it (one busy, one timed out, one
+ * active on the completed fixture sign-in), then opens the queue page back from that sign-in, which shows the summary.
+ */
+async function signinQueueSummary(page) {
+  const fixtures = await import('./ui-screens.fixtures.mjs');
+  const host = fixtures.MOCK_IDS.host;
+  const doneId = fixtures.MOCK_IDS.signinDone;
+  const item = (profile, status, reason, runUrl = null) => ({ key: `${host}/${profile}`, hostId: host, hostName: 'mini-pc', profile, state: 'signed_out', checkedAt: null, status, reason, runUrl });
+  const queue = {
+    items: [
+      item('a-profile-with-a-very-long-name-0123', 'failed', 'Not finished within 15 minutes'),
+      item('default', 'pending', null),
+      item('travel', 'skipped', 'Busy with a run; sign it in when the run ends', '/runs/3333333a-3333-4333-8333-333333333333'),
+    ],
+    onNode: [{ key: 'cloud/default', hostName: 'cloud-box-with-a-long-host-name.example.test', profile: 'default', hint: 'No desktop: sign in with `hexactra fleet profile show`' }],
+    held: null,
+    active: { key: `${host}/default`, sessionId: doneId },
+    ran: true,
+  };
+  await page.evaluate((q) => window.sessionStorage.setItem('hexactra.fleet.signinQueue', JSON.stringify(q)), queue);
+  await page.goto(new URL(`/fleet/signin-queue?from=${doneId}`, page.url()).toString());
+  await page.getByTestId('queue-summary').waitFor({ timeout: 5_000 });
+  await page.waitForTimeout(300);
 }
 
 /** `run-trace-lightbox`: press the first picture of the run and wait for its dialog. */

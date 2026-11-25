@@ -43,7 +43,8 @@ type EndReason = 'cancelled' | 'timeout' | 'profile_gone' | 'replaced';
  * its desktop session in place when it ends. Starting a sign-in on a host whose lease the same person already holds adopts that
  * lease instead of taking a new one, and a still-open sign-in of that person on the same host is ended as `replaced` (the lease
  * passes to the new one). So a queue starts each profile with `keepLease: true`, and either starts the last one without it or
- * releases the lease itself (`DELETE /api/fleet/hosts/:id/takeover/:leaseId`).
+ * releases the lease itself (`DELETE /api/fleet/hosts/:id/takeover/:leaseId`). A kept-lease sign-in that times out still
+ * gives the lease back (the person left); one the page never released ends with the lease's own five-minute renewal window.
  *
  * The account email is display data for the person who started the sign-in: it is read live from the host's profile status
  * for the response, and never stored, logged, traced or put in an audit event.
@@ -224,7 +225,8 @@ export class ProfileSigninService {
     status: 'completed' | 'abandoned',
     opts: { reason?: EndReason; resultState?: FleetSigninState; keepLease?: boolean },
   ): Promise<ProfileSigninSession> {
-    const keep = opts.keepLease ?? row.keepLease;
+    // A timed-out sign-in always gives the desktop back: the person left, so no next profile will adopt the lease.
+    const keep = opts.reason === 'timeout' ? false : (opts.keepLease ?? row.keepLease);
     const claimed = await this.prisma.profileSigninSession.updateMany({
       where: { id: row.id, status: 'started' },
       data: { status, endedAt: new Date(), resultState: opts.resultState ?? null, endReason: status === 'abandoned' ? (opts.reason ?? null) : null, keepLease: keep },

@@ -118,6 +118,7 @@ async function login(email: string, role: string): Promise<{ token: string; id: 
 const auth = (t: string) => ({ authorization: `Bearer ${t}` });
 interface View {
   id: string;
+  keepLease: boolean;
   status: string;
   phase: string | null;
   leaseId: string | null;
@@ -283,5 +284,73 @@ describe('guided profile sign-in', () => {
     expect(lease).toBeNull();
     expect(leaseEvents).toEqual([`take ${first.leaseId}`, `release ${first.leaseId}`]);
     expect((await auditOf(second.id))[0]!.meta).toMatchObject({ adoptedLease: true });
+  });
+
+  // "Fix sign-ins" (E48.6, #932): the queue's own sequence of calls on one host.
+  const cancel = (token: string, id: string, payload: Record<string, unknown> = {}) =>
+    app.inject({ method: 'POST', url: `/api/fleet/signin-sessions/${id}/cancel`, headers: auth(token), payload });
+  const releaseTakeover = (token: string, leaseId: string) => app.inject({ method: 'DELETE', url: `/api/fleet/hosts/${HOST}/takeover/${leaseId}`, headers: auth(token) });
+
+  it('a queue keeps one lease across a completed, a skipped and a last profile on one host, then releases it at the end', async () => {
+    profiles.shop = { running: false, signin: 'expired', checkedAt: check() };
+    const owner = await login(`signin-queue-end-${Date.now()}@example.test`, 'admin');
+    const first = (await start(owner.token, 'default', HOST, { keepLease: true })).json<{ data: View }>().data;
+    profiles.default = { running: true, signin: 'signed_in', checkedAt: check() };
+    let v = await poll(owner.token, first.id);
+    if (v.status !== 'completed') v = await poll(owner.token, first.id);
+    expect(v).toMatchObject({ status: 'completed', resultState: 'signed_in', leaseId: first.leaseId });
+
+    // Skip: cancelled, the lease kept for the next profile on this host.
+    const second = (await start(owner.token, 'work', HOST, { keepLease: true })).json<{ data: View }>().data;
+    expect(second.leaseId).toBe(first.leaseId);
+    const skipped = (await cancel(owner.token, second.id, { keepLease: true })).json<{ data: View }>().data;
+    expect(skipped).toMatchObject({ status: 'abandoned', endReason: 'cancelled', leaseId: first.leaseId });
+    expect(lease?.lease_id).toBe(first.leaseId);
+
+    // The last profile, also started with keepLease (the queue does not know the person will finish it), then the end of the queue.
+    const third = (await start(owner.token, 'shop', HOST, { keepLease: true })).json<{ data: View }>().data;
+    expect(third.leaseId).toBe(first.leaseId);
+    profiles.shop = { running: true, signin: 'signed_in', checkedAt: check() };
+    v = await poll(owner.token, third.id);
+    if (v.status !== 'completed') v = await poll(owner.token, third.id);
+    expect(v.status).toBe('completed');
+    expect(lease?.lease_id).toBe(first.leaseId);
+    expect((await releaseTakeover(owner.token, first.leaseId!)).statusCode).toBeLessThan(300);
+    expect(lease).toBeNull();
+    // One takeover for the whole host, released once.
+    expect(leaseEvents).toEqual([`take ${first.leaseId}`, `release ${first.leaseId}`]);
+    // A skip never closes the browser; only a completed sign-in does.
+    expect(commands.map((c) => `${c.type} ${c.profile}`)).toEqual(['show_profile default', 'close_browser default', 'show_profile work', 'show_profile shop', 'close_browser shop']);
+    expect((await auditOf(second.id)).map((e) => e.meta)).toEqual([
+      expect.objectContaining({ adoptedLease: true, keepLease: true }),
+      expect.objectContaining({ reason: 'cancelled', leaseKept: true }),
+    ]);
+  });
+
+  it('a queue stopped mid-profile (cancel without keepLease) releases the kept lease', async () => {
+    const owner = await login(`signin-queue-stop-${Date.now()}@example.test`, 'admin');
+    const first = (await start(owner.token, 'default', HOST, { keepLease: true })).json<{ data: View }>().data;
+    const stopped = (await cancel(owner.token, first.id, { keepLease: false })).json<{ data: View }>().data;
+    expect(stopped).toMatchObject({ status: 'abandoned', endReason: 'cancelled', leaseId: null, keepLease: false });
+    expect(lease).toBeNull();
+    expect(leaseEvents).toEqual([`take ${first.leaseId}`, `release ${first.leaseId}`]);
+  });
+
+  it('a kept-lease sign-in that times out gives the lease back (the person left), by the job or by the next poll', async () => {
+    const owner = await login(`signin-queue-timeout-${Date.now()}@example.test`, 'admin');
+    const signins = app.get(ProfileSigninService, { strict: false });
+    const first = (await start(owner.token, 'default', HOST, { keepLease: true })).json<{ data: View }>().data;
+    await prisma.profileSigninSession.update({ where: { id: first.id }, data: { startedAt: new Date(Date.now() - SIGNIN_TIMEOUT_MS - 1000) } });
+    expect(await signins.expireDue()).toBeGreaterThanOrEqual(1);
+    expect(await prisma.profileSigninSession.findUniqueOrThrow({ where: { id: first.id } })).toMatchObject({ status: 'abandoned', endReason: 'timeout', keepLease: false });
+    expect(lease).toBeNull();
+    expect((await auditOf(first.id)).at(-1)!.meta).toMatchObject({ reason: 'timeout', leaseKept: false });
+
+    // The same through the page's poll.
+    const second = (await start(owner.token, 'work', HOST, { keepLease: true })).json<{ data: View }>().data;
+    await prisma.profileSigninSession.update({ where: { id: second.id }, data: { startedAt: new Date(Date.now() - SIGNIN_TIMEOUT_MS - 1000) } });
+    expect(await poll(owner.token, second.id)).toMatchObject({ status: 'abandoned', endReason: 'timeout', leaseId: null });
+    expect(lease).toBeNull();
+    expect(leaseEvents).toEqual([`take ${first.leaseId}`, `release ${first.leaseId}`, `take ${second.leaseId}`, `release ${second.leaseId}`]);
   });
 });
