@@ -22,6 +22,7 @@ import type { ElementType, ReactNode } from 'react';
 import { KEYBOARD_SENTINEL, SPECIAL_KEYSYMS, diffKeysyms } from '../components/remoteKeyboard';
 import { ProfileSigninBanner, useProfileSignin } from '../fleet/ProfileSigninBanner';
 import { profileInUseRun, signinDesktopPath, startProfileSignin } from '../fleet/signin';
+import { queuePath } from '../fleet/signinQueue';
 import type { FleetHost } from '../types/fleet';
 import { BOTTOM_BAR_HEIGHT, formatDateTime, useBreakpoint } from '../ui';
 
@@ -178,6 +179,8 @@ export function DesktopPage() {
   const signinParam = searchParams.get('signin');
   const signinId = signinParam && UUID.test(signinParam) ? signinParam : null;
   const signin = useProfileSignin(api, signinId);
+  /** Inside "Fix sign-ins" (`&queue=1`, E48.6): Skip and Next profile go back to the queue, which starts the next one. */
+  const inQueue = Boolean(signinId) && searchParams.get('queue') === '1';
   const signinActive = signin.session?.status === 'started';
   /** A sign-in that keeps its lease for the next profile (E48.6): leaving the page does not release it. */
   const keepLease = useRef(false);
@@ -315,6 +318,14 @@ export function DesktopPage() {
   const cancelSignin = async () => {
     await signin.cancel();
     setControl(null);
+  };
+
+  /** The queue's Skip: ends this sign-in, keeping the lease only for a next profile on this host, and moves on. */
+  const skipSignin = async () => {
+    if (!signinId) return;
+    if (signinActive) await signin.cancel({ keepLease: signin.session?.keepLease ?? false });
+    setControl(null);
+    navigate(queuePath(signinId));
   };
 
   // Keep the lease while the page is open.
@@ -527,7 +538,16 @@ export function DesktopPage() {
         </Stack>
       </Stack>
       {signinId && (
-        <ProfileSigninBanner session={signin.session} hostName={host?.name ?? null} error={signin.error} onCancel={() => void cancelSignin()} onBack={() => void close()} />
+        <ProfileSigninBanner
+          session={signin.session}
+          hostName={host?.name ?? null}
+          error={signin.error}
+          onCancel={() => void cancelSignin()}
+          onBack={() => (inQueue ? navigate(queuePath(signinId, 'stop')) : void close())}
+          backLabel={inQueue ? 'Back to the queue' : undefined}
+          onNext={inQueue ? () => navigate(queuePath(signinId)) : undefined}
+          onSkip={inQueue ? () => void skipSignin() : undefined}
+        />
       )}
       {status === 'offline' && host && (
         <Alert severity="warning">
