@@ -15,6 +15,7 @@ import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
@@ -174,6 +175,15 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         Icon: LeaderboardOutlinedIcon,
         path: '/admin/settings/benchmarks',
         permission: 'benchmarks:read',
+      },
+      // Web search (E50.5, #975): `system_settings:read` is what GET /api/web-search/admin enforces; saving and the deployment's key
+      // need `system_settings:write`, checked in the page.
+      {
+        title: 'Web search',
+        description: "The search providers the agent uses instead of a browser, whether everyone may use the deployment's key, users' own keys, the limits and the usage.",
+        Icon: TravelExploreOutlinedIcon,
+        path: '/admin/settings/web-search',
+        permission: 'system_settings:read',
       },
     ],
   },

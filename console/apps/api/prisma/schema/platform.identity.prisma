@@ -216,6 +216,9 @@ model User {
   agentCardGrants        AgentCardGrant[]        @relation("UserAgentCardGrants")
   agentCardGrantRequests AgentCardGrantRequest[] @relation("UserAgentCardGrantRequests")
 
+  // composed from app:web-search.prisma
+  webSearchUsage WebSearchUsage[]
+
   @@map("users")
 }
 
