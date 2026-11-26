@@ -10,7 +10,8 @@
 //       fail  on and not configured, or the last app test failed
 //   connections.accounts      pass: active accounts by provider; warn: accounts that need reconnecting, by provider
 //   connections.health_job    pass: `connections.health` succeeded in the last 26 h (or had nothing to do); warn: it did not; fail: its last run failed
-//   connections.mcp           pass: the switch and active servers; warn: servers that are unavailable or refused, tools changed awaiting review
+//   connections.mcp           pass: the switch and active servers; warn: servers that are unavailable or refused, or whose last stored
+//                             diagnosis (E50.12) failed, and tools changed awaiting review
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { DoctorCheckRegistry, EgressRegistry, egressDependency, type DoctorCheck, type DoctorCheckOutcome, type EgressContributor, type EgressDependency } from '@marinoscar/platform-api/doctor';
 
@@ -199,6 +200,7 @@ export class McpServersCheck implements DoctorCheck, OnModuleInit {
     private readonly doctor: DoctorCheckRegistry,
     private readonly prisma: PrismaService,
     private readonly apps: ConnectionApps,
+    private readonly history: DiagnosticsHistory,
   ) {}
 
   onModuleInit(): void {
@@ -208,16 +210,20 @@ export class McpServersCheck implements DoctorCheck, OnModuleInit {
   async run(): Promise<DoctorCheckOutcome> {
     try {
       this.apps.invalidate();
-      const [mcp, active, trouble, changed] = await Promise.all([
+      const [mcp, live, trouble, changed] = await Promise.all([
         this.apps.mcp(),
-        this.prisma.connection.count({ where: { provider: 'mcp', status: 'active' } }),
+        this.prisma.connection.findMany({ where: { provider: 'mcp', status: 'active' }, select: { id: true }, take: 5_000 }),
         this.prisma.connection.count({ where: { provider: 'mcp', status: { in: ['active', 'needs_reconnect'] }, statusReason: { in: [...MCP_TROUBLE_REASONS] } } }),
         this.prisma.connectionMcpTool.count({ where: { review: 'changed' } }),
       ]);
-      const data = { enabled: mcp.enabled, active, troubled: trouble, toolsChanged: changed };
-      if (trouble > 0 || changed > 0) {
+      const active = live.length;
+      // The stored history of the servers' diagnoses (E50.12's `McpDiagnostics`): how many last reports failed. A count only.
+      const failedReports = (await this.history.lastOverallCounts('connection', live.map((c) => c.id))).fail;
+      const data = { enabled: mcp.enabled, active, troubled: trouble, toolsChanged: changed, lastReportFailed: failedReports };
+      if (trouble > 0 || changed > 0 || failedReports > 0) {
         const parts = [
           ...(trouble > 0 ? [`${plural(trouble, 'server')} unavailable or refusing the sign-in`] : []),
+          ...(failedReports > 0 ? [`${plural(failedReports, 'server')} whose last diagnosis failed`] : []),
           ...(changed > 0 ? [`${plural(changed, 'tool')} changed and switched off until the owner reviews ${changed === 1 ? 'it' : 'them'}`] : []),
         ];
         return { status: 'warn', detail: `MCP servers are ${mcp.enabled ? 'on' : 'off'}: ${parts.join('; ')}.`, remedy: 'Each owner tests the server or reviews its tools on their Connections page.', data };

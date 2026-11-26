@@ -1,7 +1,7 @@
 // `/api/connections/mcp` and `/api/connections/:id/tools` (E39.9, #606): MCP servers the owner adds as connections, and the owner's switch
 // per tool. Every route is the caller's own. NOTHING HERE RETURNS A TOKEN, A HEADER VALUE OR A MESSAGE FROM A SERVER. No MCP tool of
 // Hexactra's own server lists, adds or uses them (docs/parity.md).
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, ParseUUIDPipe, Patch, Post, Put, Res } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -10,9 +10,12 @@ import type { FastifyReply } from 'fastify';
 import { ConnectionApps } from '../connection-apps.service';
 import { bindingCookieName, type StartResult } from '../connection-flow.service';
 import { ConnectionsService } from '../connections.service';
+import { MCP_RATE_LIMITER, type McpRateLimiter } from '../../mcp/mcp.rate-limit';
 import { McpCatalogService } from './mcp-catalog.service';
 import { McpConnectionsService, type McpAuthInput } from './mcp-connections.service';
-import { AddMcpDto, AddMcpResponseDto, McpAdminResponseDto, McpAuthDto, McpAuthResponseDto, McpCatalogResponseDto, ConnectionMcpStatusResponseDto, McpToolParamDto, McpToolResponseDto, SaveMcpAdminDto, SetToolModeDto } from './mcp.schemas';
+import { presetsFor } from './mcp-presets';
+import { McpTryService, TRY_RATE_LIMIT, tryRateLimited } from './mcp-try.service';
+import { AddMcpDto, AddMcpResponseDto, McpAdminResponseDto, McpAuthDto, McpAuthResponseDto, McpCatalogResponseDto, McpPresetResponseDto, TryResultResponseDto, TryToolDto, ConnectionMcpStatusResponseDto, McpToolParamDto, McpToolResponseDto, SaveMcpAdminDto, SetToolModeDto } from './mcp.schemas';
 
 const secure = () => (process.env.APP_URL ?? '').startsWith('https://');
 
@@ -32,6 +35,8 @@ export class McpConnectionsController {
     private readonly catalog: McpCatalogService,
     private readonly connections: ConnectionsService,
     private readonly apps: ConnectionApps,
+    private readonly tryer: McpTryService,
+    @Optional() @Inject(MCP_RATE_LIMITER) private readonly limiter?: McpRateLimiter,
   ) {}
 
   // Declared before `:id`.
@@ -42,6 +47,19 @@ export class McpConnectionsController {
   async status() {
     const s = await this.apps.mcp();
     return { enabled: s.enabled, restricted: s.allowedHosts.length > 0 };
+  }
+
+  @Get('mcp/presets')
+  @ApiDataResponse(McpPresetResponseDto, { isArray: true })
+  @Auth({ permissions: ['connections:read'] })
+  @ApiOperation({
+    summary: 'Well-known MCP servers to add',
+    description:
+      "A short, reviewed list the Add dialog offers so you pick a name instead of typing an address: each with its address, the kind of sign-in, the vendor's documentation and the date the address was checked against it. A preset only fills the form: the server is still tested before anything is kept, and every tool starts off. It never carries a secret. A preset on a host the administrator blocks (or does not allow) is left out; while MCP servers are switched off the list is empty.",
+  })
+  async presets() {
+    const s = await this.apps.mcp();
+    return s.enabled ? presetsFor(s) : [];
   }
 
   @Post('mcp')
@@ -92,6 +110,35 @@ export class McpConnectionsController {
   @ApiOperation({ summary: 'Decide what a tool may do', description: '`off` (default), `read` (called without asking; choose it only for a tool that only reads) or `write` (it changes something: it asks you each time unless you chose "Don\'t ask again"). The server\'s hints only suggest a default; you decide. Deciding clears the review flag.' })
   setMode(@CurrentUser('id') userId: string, @Param() p: McpToolParamDto, @Body() body: SetToolModeDto) {
     return this.catalog.setMode(userId, p.id, p.toolId, body.mode);
+  }
+
+  @Post(':id/tools/:toolId/try')
+  @HttpCode(200)
+  @ApiDataResponse(TryResultResponseDto)
+  @ApiResponse({ status: 409, description: '`TRY_READ_ONLY` (a `write` tool: trying it would change something with no approval card), `TRY_TOOL_OFF` (switch it to `read` first) or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled).' })
+  @ApiResponse({ status: 422, description: "`TRY_INVALID_ARGUMENTS`: the arguments do not satisfy the tool's own schema (`details.issues`, never values). Nothing was sent." })
+  @ApiResponse({ status: 429, description: `\`TRY_RATE_LIMITED\`: at most ${TRY_RATE_LIMIT} a minute for one connection.` })
+  @Auth({ permissions: ['connections:write'] })
+  @ApiOperation({
+    summary: 'Try a read tool of an MCP server',
+    description:
+      "Calls one tool you set to `read`, with the arguments given, exactly as a run would: the same checks (the switch, the connection active, the tool unchanged since you decided), the same redaction of every credential out and back, the same cleaning and cap of the result (here 4,000 characters). The answer is the server's words, to show as plain text. A `write` tool is refused. It grants nothing and is not a run; the audit names the connection and the tool, never the arguments or the result, and the result is not stored.",
+  })
+  async try(@CurrentUser('id') userId: string, @Param() p: McpToolParamDto, @Body() body: TryToolDto, @Res({ passthrough: true }) reply: FastifyReply) {
+    if (this.limiter) {
+      const v = await Promise.resolve(this.limiter.hit(`mcp-try:connection:${userId}:${p.id}`, TRY_RATE_LIMIT, 60_000)).catch(() => ({ allowed: true, retryAfterS: 0 }));
+      if (!v.allowed) throw tryRateLimited(v.retryAfterS);
+    }
+    const stop = new AbortController();
+    const onClose = () => {
+      if (!reply.raw.writableFinished) stop.abort();
+    };
+    reply.raw.once('close', onClose);
+    try {
+      return await this.tryer.try(userId, p.id, p.toolId, (body.arguments ?? {}) as Record<string, unknown>, stop.signal);
+    } finally {
+      reply.raw.off('close', onClose);
+    }
   }
 
   @Post(':id/mcp-auth')

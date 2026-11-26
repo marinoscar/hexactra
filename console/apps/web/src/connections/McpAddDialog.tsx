@@ -1,8 +1,8 @@
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Link, Stack, TextField, Typography } from '@mui/material';
 import { useEffect, useId, useState } from 'react';
 
 import { useBreakpoint } from '../ui';
-import { addMcpServer, setMcpToolMode, type Connection, type McpCatalog, type McpTool, type McpToolMode } from './api';
+import { addMcpServer, getMcpPresets, setMcpToolMode, type Connection, type McpCatalog, type McpPreset, type McpTool, type McpToolMode } from './api';
 import { McpAuthFields, useMcpAuthForm } from './McpAuthFields';
 import { McpToolList } from './McpToolList';
 import { mcpErrorWords } from './mcpWords';
@@ -33,6 +33,8 @@ export function McpAddDialog({ open, api, returnTo, onClose, onAdded }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<{ connection: Connection; catalog: McpCatalog } | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [presets, setPresets] = useState<McpPreset[]>([]);
+  const [preset, setPreset] = useState<McpPreset | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -43,8 +45,21 @@ export function McpAddDialog({ open, api, returnTo, onClose, onAdded }: Props) {
       setError(null);
       setAdded(null);
       setSaving(null);
+      setPreset(null);
+      // The presets only fill the form; a list that does not load leaves the form as it was.
+      getMcpPresets(api)
+        .then(setPresets)
+        .catch(() => setPresets([]));
     }
   }, [open]);
+
+  const pick = (p: McpPreset) => {
+    setPreset(p);
+    setUrl(p.url);
+    setLabel(p.name);
+    form.reset(p.auth);
+    if (p.auth === 'header' && p.headerName) form.setHeader(p.headerName);
+  };
 
   const input = form.input;
   const canAdd = url.trim().length >= 8 && input !== null && !busy;
@@ -115,6 +130,27 @@ export function McpAddDialog({ open, api, returnTo, onClose, onAdded }: Props) {
               <Alert severity="error" onClose={() => setError(null)} role="alert">
                 {error}
               </Alert>
+            )}
+            {presets.length > 0 && (
+              <Stack spacing={1}>
+                <Typography variant="subtitle2" component="h3">
+                  Well-known servers
+                </Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }} role="group" aria-label="Well-known servers">
+                  {presets.map((p) => (
+                    <Chip key={p.id} label={p.name} clickable color={preset?.id === p.id ? 'primary' : 'default'} variant={preset?.id === p.id ? 'filled' : 'outlined'} onClick={() => pick(p)} sx={{ minHeight: 36 }} />
+                  ))}
+                </Stack>
+                {preset && (
+                  <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                    {preset.notes}{' '}
+                    <Link href={preset.docsUrl} target="_blank" rel="noopener noreferrer">
+                      Its documentation
+                    </Link>{' '}
+                    (address checked {preset.verified}). It is still tested before anything is kept, and every tool starts off.
+                  </Typography>
+                )}
+              </Stack>
             )}
             <TextField label="Server address" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.test/mcp" required fullWidth autoComplete="off" helperText="Its Streamable HTTP endpoint. https only; no user name, password or ?query in it." slotProps={{ htmlInput: { maxLength: 2000 } }} />
             <TextField label="Name (optional)" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Notes, Home" fullWidth helperText="What you call it. Tasks and chats can name it, and its tools are listed under it." slotProps={{ htmlInput: { maxLength: 60 } }} />

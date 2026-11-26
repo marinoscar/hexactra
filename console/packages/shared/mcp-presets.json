@@ -1,0 +1,32 @@
+{
+  "$comment": "MCP server presets (E50.12, #982), reviewed like code. A preset only fills the Add dialog: the server is still tested before anything is kept, every tool starts off, and the administrator's host lists still apply (a preset on a blocked host is not offered). Never a secret, never a tool mode. Each address was checked against the vendor's own documentation on the date in `verified`; re-check it when you change an entry. apps/api/test/mcp-presets.spec.ts checks every entry's shape.",
+  "presets": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "auth": "bearer",
+      "docsUrl": "https://github.com/github/github-mcp-server",
+      "notes": "GitHub's remote MCP server. Sign in with a personal access token of yours (sent as a bearer token). Its OAuth sign-in needs an app registered for this console.",
+      "verified": "2026-11-26"
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "url": "https://mcp.sentry.dev/mcp",
+      "auth": "oauth",
+      "docsUrl": "https://github.com/getsentry/sentry-mcp",
+      "notes": "Sentry's hosted MCP server. You sign in at Sentry's own page.",
+      "verified": "2026-11-26"
+    },
+    {
+      "id": "cloudflare-docs",
+      "name": "Cloudflare documentation",
+      "url": "https://docs.mcp.cloudflare.com/mcp",
+      "auth": "none",
+      "docsUrl": "https://github.com/cloudflare/mcp-server-cloudflare",
+      "notes": "Searches Cloudflare's public documentation. Its documentation names no sign-in; the test when you add it says if one is needed.",
+      "verified": "2026-11-26"
+    }
+  ]
+}

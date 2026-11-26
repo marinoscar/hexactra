@@ -8,6 +8,7 @@ import { SEARCH_DIAGNOSTIC_CODES, SEARCH_REMEDIES } from '../src/web-search/web-
 import { CONNECTION_DIAGNOSTIC_CODES, RECONNECT_REASONS, outcomeOfError } from '../src/connections/connection-diagnostics.service';
 import { ConnectionError } from '../src/connections/connections.errors';
 import { CODE_PATTERN, closedCode, overall, sanitizeStages, stageDataSchema, stageDataStringSchema, type DiagnosticStage } from '../src/diagnostics/diagnostic-report';
+import { MCP_DIAGNOSTIC_CODES } from '../src/connections/mcp/mcp-diagnostics';
 import { DiagnosticsRegistry } from '../src/diagnostics/diagnostics.registry';
 import { REMEDY_CODES } from '../src/diagnostics/remedies';
 import { runStages } from '../src/diagnostics/stages';
@@ -170,8 +171,8 @@ describe('the remedy table (packages/shared/diagnostics.json)', () => {
   it('has an entry for every code a stage can return', () => {
     const registry = new DiagnosticsRegistry();
     const stageRunnerCodes = ['UNAVAILABLE', 'TIMEOUT', 'ABORTED', 'DEADLINE_EXCEEDED', 'UNKNOWN'];
-    // Web search (E50.13): its codes and the remedy keys it uses where its words differ.
-    const codes = [...CONNECTION_DIAGNOSTIC_CODES, ...RECONNECT_REASONS, ...stageRunnerCodes, ...registry.codes(), ...SEARCH_DIAGNOSTIC_CODES, ...Object.values(SEARCH_REMEDIES)];
+    // Web search (E50.13): its codes and the remedy keys it uses where its words differ; MCP servers (E50.12).
+    const codes = [...CONNECTION_DIAGNOSTIC_CODES, ...RECONNECT_REASONS, ...stageRunnerCodes, ...registry.codes(), ...MCP_DIAGNOSTIC_CODES, ...SEARCH_DIAGNOSTIC_CODES, ...Object.values(SEARCH_REMEDIES)];
     // Every code an adapter's probe answers today (the Test dialog shows them too).
     codes.push('UNAUTHORIZED', 'FORBIDDEN', 'RATE_LIMITED', 'API_DISABLED', 'NO_MAILBOX', 'NOT_FOUND', 'FAILED');
     // E50.11: Google's and Microsoft's own stages, the checks of the deployment's app, and the per-API remedy keys.

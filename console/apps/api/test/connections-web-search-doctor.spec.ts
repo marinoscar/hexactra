@@ -108,17 +108,22 @@ describe('connections.health_job', () => {
 });
 
 describe('connections.mcp', () => {
-  const run = (counts: { active: number; trouble: number; changed: number } | Error, enabled = true) => {
+  const run = (counts: { active: number; trouble: number; changed: number; failedReports?: number } | Error, enabled = true) => {
     const fail = counts instanceof Error;
     const { prisma } = readOnly({
-      connection: { count: async (q: { where: { statusReason?: unknown } }) => (fail ? Promise.reject(counts) : q.where.statusReason ? counts.trouble : counts.active) },
+      connection: {
+        count: async () => (fail ? Promise.reject(counts) : counts.trouble),
+        findMany: async () => (fail ? [] : Array.from({ length: counts.active }, (_, i) => ({ id: `c${i}` }))),
+      },
       connectionMcpTool: { count: async () => (fail ? 0 : counts.changed) },
     });
-    return new McpServersCheck(doctor(), prisma, apps('ready', { mcp: { enabled } }) as never).run();
+    const history = { lastOverallCounts: async (kind: string, ids: string[]) => ({ fail: fail || kind !== 'connection' ? 0 : Math.min(ids.length, counts.failedReports ?? 0), warn: 0 }) };
+    return new McpServersCheck(doctor(), prisma, apps('ready', { mcp: { enabled } }) as never, history as never).run();
   };
 
   it('pass: the switch and the active servers; warn: unavailable or refusing servers, changed tools; fail: it could not run', async () => {
-    expect(await run({ active: 2, trouble: 0, changed: 0 })).toEqual({ status: 'pass', detail: 'MCP servers are on: 2 active servers.', data: { enabled: true, active: 2, troubled: 0, toolsChanged: 0 } });
+    expect(await run({ active: 2, trouble: 0, changed: 0 })).toEqual({ status: 'pass', detail: 'MCP servers are on: 2 active servers.', data: { enabled: true, active: 2, troubled: 0, toolsChanged: 0, lastReportFailed: 0 } });
+    expect(await run({ active: 2, trouble: 0, changed: 0, failedReports: 1 })).toMatchObject({ status: 'warn', detail: expect.stringContaining('1 server whose last diagnosis failed'), data: { lastReportFailed: 1 } });
     expect(await run({ active: 0, trouble: 0, changed: 0 }, false)).toMatchObject({ status: 'pass', detail: 'MCP servers are switched off for the deployment.' });
     expect(await run({ active: 2, trouble: 1, changed: 3 })).toMatchObject({ status: 'warn', detail: expect.stringContaining('1 server unavailable or refusing the sign-in; 3 tools changed'), data: { troubled: 1, toolsChanged: 3 } });
     expect((await run(new Error('db'))).status).toBe('fail');
