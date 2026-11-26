@@ -1465,7 +1465,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
       },
-      "web": "/settings/connections"
+      "web": {
+        "none": "The web app's Test button runs the full diagnostic (connections.diagnose): it checks each capability the same way and names the API to enable"
+      }
     },
     {
       "id": "connections.diagnose",
@@ -1484,9 +1486,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
       },
-      "web": {
-        "none": "Not yet: the diagnostics panel of the Connections page comes with E50.14 (#984); the Test dialog shows the same remedy words today"
-      }
+      "web": "/settings/connections"
     },
     {
       "id": "connections.pause",
@@ -1638,7 +1638,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; keys are managed in the web app"
       },
-      "web": "/settings/web-search"
+      "web": "/settings/connections"
     },
     {
       "id": "service_credentials.admin",
@@ -1676,7 +1676,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; web search is set up in the web app"
       },
-      "web": "/settings/web-search"
+      "web": "/settings/connections"
     },
     {
       "id": "web_search.search",
@@ -1693,7 +1693,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; web search is set up in the web app"
       },
-      "web": "/settings/web-search"
+      "web": "/settings/connections"
     },
     {
       "id": "web_search.admin",

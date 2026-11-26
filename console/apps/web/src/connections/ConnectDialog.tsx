@@ -1,10 +1,21 @@
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, FormHelperText, FormLabel, Radio, RadioGroup, Stack, TextField, Typography } from '@mui/material';
+import { Alert, AlertTitle, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, FormHelperText, FormLabel, Radio, RadioGroup, Stack, TextField, Typography } from '@mui/material';
 import { useEffect, useId, useState } from 'react';
 
 import { useBreakpoint } from '../ui';
 import { authorize, type Capability, type Provider, type ProviderAvailability } from './api';
 import { CapabilityPicker } from './CapabilityPicker';
 import { PROVIDER_NAME } from './words';
+
+/** Once, before the first Google account (#681): the APIs the administrator's Google Cloud project must have enabled. */
+export const GOOGLE_CHECKLIST = ['Gmail API (mail)', 'Google Calendar API (calendar)', 'Google Drive API, Google Docs API and Google Sheets API (documents)'];
+const CHECKLIST_SEEN = 'hx.connections.googleChecklist';
+const seen = (): boolean => {
+  try {
+    return window.localStorage.getItem(CHECKLIST_SEEN) === '1';
+  } catch {
+    return false;
+  }
+};
 
 const REASON_WORDS: Record<NonNullable<ProviderAvailability['reason']>, string> = {
   not_installed: 'Not available on this deployment yet.',
@@ -17,7 +28,7 @@ const REASON_WORDS: Record<NonNullable<ProviderAvailability['reason']>, string> 
  * and returns to the page with a result banner. The kinds of account that work (and the ones that do not) are explained BEFORE
  * the owner starts.
  */
-export function ConnectDialog({ open, providers, api, returnTo, onClose, onError }: { open: boolean; providers: ProviderAvailability[]; api: Parameters<typeof authorize>[0]; returnTo: string; onClose: () => void; onError: (message: string) => void }) {
+export function ConnectDialog({ open, providers, hasGoogle = false, api, returnTo, onClose, onError }: { open: boolean; providers: ProviderAvailability[]; hasGoogle?: boolean; api: Parameters<typeof authorize>[0]; returnTo: string; onClose: () => void; onError: (message: string) => void }) {
   const { isPhone } = useBreakpoint();
   const titleId = useId();
   const firstReady = providers.find((p) => p.ready)?.provider ?? providers[0]?.provider ?? 'google';
@@ -25,6 +36,7 @@ export function ConnectDialog({ open, providers, api, returnTo, onClose, onError
   const [capabilities, setCapabilities] = useState<Capability[]>(['mail_read']);
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dismissed, setDismissed] = useState(seen);
 
   useEffect(() => {
     if (open) {
@@ -80,6 +92,30 @@ export function ConnectDialog({ open, providers, api, returnTo, onClose, onError
             </RadioGroup>
           </FormControl>
 
+          {chosen?.provider === 'google' && !hasGoogle && !dismissed && (
+            <Alert
+              severity="warning"
+              data-testid="google-checklist"
+              onClose={() => {
+                setDismissed(true);
+                try {
+                  window.localStorage.setItem(CHECKLIST_SEEN, '1');
+                } catch {
+                  // A private window: it shows again next time.
+                }
+              }}
+            >
+              <AlertTitle>Before the first Google account</AlertTitle>
+              Your administrator enables these in the Google Cloud project that owns the sign-in client (APIs &amp; Services, Library):
+              <Stack component="ul" spacing={0.25} sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
+                {GOOGLE_CHECKLIST.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </Stack>
+              If one is missing, Test names it.
+            </Alert>
+          )}
+
           {chosen && (
             <Alert severity="info" icon={false} aria-label={`Accounts that work with ${PROVIDER_NAME[chosen.provider]}`}>
               <Typography variant="subtitle2" component="p">
@@ -101,7 +137,7 @@ export function ConnectDialog({ open, providers, api, returnTo, onClose, onError
               What the agent may do with it
             </Typography>
             <CapabilityPicker value={capabilities} onChange={setCapabilities} />
-            <FormHelperText>Only what you tick is asked of {chosen?.displayName ?? 'the provider'}. You can change it later. A new chat can use it straight away (you choose that under New chats); a task has to be told to.</FormHelperText>
+            <FormHelperText>Only what you tick is asked of {chosen?.displayName ?? 'the provider'}. You can change it later. Every task and chat can use what is switched on.</FormHelperText>
           </div>
 
           <TextField label="Name (optional)" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Work, Personal" helperText="What you call this account. Tasks and chats can name it." slotProps={{ htmlInput: { maxLength: 60 } }} />

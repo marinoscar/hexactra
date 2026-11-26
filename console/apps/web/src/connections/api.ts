@@ -104,7 +104,8 @@ export interface Consent {
 }
 
 export interface TestResult {
-  results: { capability: Capability; ok: boolean; code: string | null }[];
+  /** `api` (with `API_DISABLED`): the provider's service to enable (`gmail.googleapis.com`), from a closed list. */
+  results: { capability: Capability; ok: boolean; code: string | null; api?: string }[];
 }
 
 export interface AdminProvider {
@@ -133,7 +134,6 @@ export const updateConnection = (api: PlatformApiClient, id: string, body: { lab
 
 export const pauseConnection = (api: PlatformApiClient, id: string) => api.post<Connection>(`/connections/${id}/pause`, {});
 export const resumeConnection = (api: PlatformApiClient, id: string) => api.post<Connection>(`/connections/${id}/resume`, {});
-export const testConnection = (api: PlatformApiClient, id: string) => api.post<TestResult>(`/connections/${id}/test`, {});
 export const removeConnection = (api: PlatformApiClient, id: string) => api.delete<{ revoked: boolean; clearedReferences: number }>(`/connections/${id}`);
 
 export const getAdminApps = (api: PlatformApiClient) => api.get<AdminProvider[]>('/connections/admin/apps');
