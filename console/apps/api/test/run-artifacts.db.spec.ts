@@ -41,7 +41,6 @@ async function chatWithPrevious(name: string) {
   const userId = await login(app, `artifacts-${name}-${stamp}@example.test`);
   const conn = await kit.connect(userId, 'Work', ['mail_read', 'mail_send']);
   const chat = await kit.prisma.conversation.create({ data: { userId, title: '' } });
-  await kit.prisma.conversationConnection.create({ data: { conversationId: chat.id, connectionId: conn.id, access: 'read_write' } });
   const prev = await kit.prisma.run.create({ data: { userId, conversationId: chat.id, goal: 'Find the miles balance', trigger: 'chat', origin: 'web', status: 'succeeded', result: 'Balance: 99,667 miles.', finishedAt: new Date() } });
   await kit.prisma.runStep.createMany({
     data: [
@@ -84,7 +83,6 @@ describe('attaching the previous job\'s picture (E41.4)', () => {
     const a = await chatWithPrevious('scope-a');
     // A second chat of the same owner, with no finished job: A's pictures are not "previous" for it.
     const otherChat = await kit.prisma.conversation.create({ data: { userId: a.userId, title: '' } });
-    await kit.prisma.conversationConnection.create({ data: { conversationId: otherChat.id, connectionId: a.conn.id, access: 'read_write' } });
     const other = await kit.prisma.run.create({ data: { userId: a.userId, conversationId: otherChat.id, goal: 'Email it', trigger: 'chat', origin: 'web' } });
     const m1 = scriptedModel([[SEND, FINISH]]);
     const r1 = kit.runner(m1, fakeFabric());

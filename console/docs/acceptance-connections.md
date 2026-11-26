@@ -33,12 +33,12 @@ Each step is a checklist. Tick what you saw.
 - [ ] Press **Test** on each account: one cheap read per switched-on capability passes, and the page shows no token and no scope string.
 - [ ] Note which **kinds** of account worked and which did not (a personal Gmail with the restricted permissions, a Workspace account, a personal Microsoft account, a work account that needed administrator approval). This settles the decision record's experiment matrix.
 - [ ] A **second account of the same provider** is a second connection (no duplicate); connecting the first again updates it.
-- [ ] **New chats** (Settings → Connections, and in any chat's settings): a new chat already lists your active Google and Microsoft accounts at **Read and change** (#680); set **Off**, start another chat: it lists none; set **Read only**: it lists them read only. An MCP server is never listed. An existing chat keeps what it had.
+- [ ] **Always available** (E50.17): the Connections page says "What is switched on here is available to the agent in every task and chat. Sending or changing something still asks you first." A new chat, a task and a one-off run each can use your active accounts (at the capabilities switched on) and the MCP tools you set to read or write; pause one account and the next run does not get it; resume it and it is back.
 
 ### 2. The example task
 
 - [ ] Create the task **"Pay the car loan"** in the web app (README, [Accounts and deliveries in the form](../README.md#accounts-and-deliveries-in-the-form)): a goal with **one parameter**, `{{Amount}}` (type money), and saved values or saved logins for the rest.
-- [ ] **Accounts the agent may use:** the Google or Microsoft account, **Read and change** (or Read only, if the task will not send).
+- [ ] **Tools and accounts:** nothing to choose: the section says the agent can use everything you switched on, and names the account (switch on only read capabilities if no run should send from it).
 - [ ] **Outputs** (Where the result goes, or the task's Outputs section): amount paid (money), confirmation number (text), payment date (date), remaining balance (money).
 - [ ] **Deliveries:** an **email** to yourself with the PDF report; a **spreadsheet row** (a new spreadsheet created on the first send, or one you pasted the link to), mapped from the outputs with **Fill from outputs**; a **folder** delivery with the PDF and the JSON trace.
 - [ ] **Send a test** for each delivery: an email marked `[TEST]` with no attachment, a row whose Run ID reads `TEST-...`, a `TEST.txt` in the folder. A wrong address is caught here.
@@ -74,8 +74,8 @@ The owner cannot make a provider lose an answer, so this step checks what can be
 
 ### 7. Agent tools
 
-- [ ] **A chat question answered from the calendar** with no run: Chat settings → Accounts this chat may use (read), ask "what is on my calendar today"; the thread shows an answer and **no Browser card**, and Runs shows no new run.
-- [ ] **A task that reads an email and fills a form from it**: it lists a mail account with **Read only**, reads the message with the mail tools, fills a form field from its text. The step list shows recipients and subject of each call and never a body. **Expect the attachment variant to be deferred:** `mail_attachment_to_browser` needs a fabric `upload_file` action that does not exist; the tool tells the model the host cannot take a file. Record the result as deferred with that reason.
+- [ ] **A chat question answered from the calendar** with no run: with the account's Calendar read switched on, ask "what is on my calendar today"; the thread shows an answer and **no Browser card**, and Runs shows no new run.
+- [ ] **A task that reads an email and fills a form from it**: with a mail account switched on **read only**, reads the message with the mail tools, fills a form field from its text. The step list shows recipients and subject of each call and never a body. **Expect the attachment variant to be deferred:** `mail_attachment_to_browser` needs a fabric `upload_file` action that does not exist; the tool tells the model the host cannot take a file. Record the result as deferred with that reason.
 - [ ] **A send to a new address asks.** The card shows the account, the recipients, the subject, the start of the body and the attachments, and is answered signed in.
 - [ ] **A remembered send to an approved address does not ask**; a send to another address, from another account or with another tool still does. (Tick **Don't ask again** with *these people*, send again, then send to someone else.)
 - [ ] Optional: do the same with an **MCP server** (see "Beyond the eleven", below).

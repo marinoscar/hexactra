@@ -3,7 +3,7 @@
 // can be decided here is decided here, from the server's own records and never from the model's words:
 //   * nothing at all while the deployment switch is off;
 //   * a tool is offered only when the owner enabled it (`read` or `write`), nothing is waiting for their review, the connection is theirs
-//     and active, and the task's access allows it (`read` access offers only `read` tools);
+//     and active (every enabled tool of every active server, E50.17: none is dropped);
 //   * at the moment of a call the tool is checked AGAIN against the stored snapshot: the same tool, the same hash, the same mode. A tool the
 //     owner switched off, or that a refresh changed, since the run started is refused, not called;
 //   * arguments are redacted of every credential before they leave; the result is redacted, cleaned and capped before a model reads it.
@@ -20,7 +20,7 @@ import { redactArgs, redactSecrets, wasRedacted } from './mcp-redact';
 import { normalizeResult } from './mcp-result';
 import { McpSecretStore } from './mcp-secrets';
 import { sanitizeDescription, sanitizeInstructions, sanitizeServerMessage, sanitizeTitle } from './mcp-text';
-import { MCP_CALL_TIMEOUT_MS, MCP_MAX_TOOLS_PER_RUN, type McpToolMode } from './mcp.constants';
+import { MCP_CALL_TIMEOUT_MS, type McpToolMode } from './mcp.constants';
 
 export interface McpRunTool {
   connectionId: string;
@@ -83,8 +83,9 @@ export class McpRunService {
   }
 
   /**
-   * The tools a run may be offered from the connections it lists, in the order of the list and then by name, at most 40 in all. `access`
-   * is the task's or chat's: `read` offers only the tools the owner marked read.
+   * The tools a run may be offered from its connections, in the order of the list and then by name: every one the owner enabled, none
+   * dropped (E50.17; over the per-run cap the runner defers them behind `open_toolbox`). `access` is the connection's own (`runConnections`):
+   * `read` when no tool of it is `write`.
    */
   async toolsFor(userId: string, selections: readonly { connectionId: string; access: 'read' | 'read_write' }[]): Promise<McpRunTool[]> {
     if (selections.length === 0 || !(await this.enabled())) return [];
@@ -98,7 +99,6 @@ export class McpRunService {
         const mode = t.mode === 'read' ? 'read' : t.mode === 'write' ? 'write' : null;
         if (!mode || (mode === 'write' && sel.access !== 'read_write')) continue;
         out.push({ connectionId: row.id, connectionLabel: row.label, name: t.name, title: t.title ? sanitizeTitle(t.title) || null : null, description: sanitizeDescription(t.description), inputSchema: t.inputSchema as Record<string, unknown>, hash: t.hash, mode, serverInstructions: sanitizeInstructions(readMcpConfig(row.config)?.server?.instructions ?? '') || null });
-        if (out.length >= MCP_MAX_TOOLS_PER_RUN) return out;
       }
     }
     return out;

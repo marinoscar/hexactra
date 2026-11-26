@@ -1027,9 +1027,7 @@ export const MCP_TOOLS: McpTool[] = [
         goal: a.goal,
         profile: a.profile,
         allowedDomains: a.allowed_domains,
-        // A task an AI app saves uses none of the owner's connections until the owner changes that in the console (#967).
-        connectionsMode: 'listed',
-        connections: [],
+        // A task has no connection list (E50.17): its runs use what the owner switched on; an AI app's own runs follow the app's `allowConnections`.
         ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}),
         ...(a.schedules !== undefined
           ? {

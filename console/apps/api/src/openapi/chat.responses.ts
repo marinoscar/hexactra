@@ -27,8 +27,8 @@ export const chatResponseSchema = z.object({
   useSavedIdentity: z.boolean().describe("Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"),
   useSavedCards: z.boolean().describe("Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"),
   recordVideo: z.boolean().describe("Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"),
-  connectionsMode: z.enum(['all', 'listed']).describe("Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`"),
-  connections: z.array(connectionSelectionViewSchema).describe('The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner\'s `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none).'),
+  connectionsMode: z.enum(['all', 'listed']).meta({ deprecated: true }).describe('Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools.'),
+  connections: z.array(connectionSelectionViewSchema).meta({ deprecated: true }).describe('Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.'),
   lastMessageAt: iso,
   createdAt: iso,
   updatedAt: iso,
@@ -70,7 +70,8 @@ export const chatTaskDraftResponseSchema = z.object({
   outputs: z.array(taskOutputResponseSchema).describe('The values a run of the task would return (E39.5), proposed from what the finished run reported (an amount paid, a confirmation number, a date). The owner reviews them in the task form. Empty when nothing is worth keeping.'),
   connections: z
     .array(z.object({ connectionId: z.uuid(), access: z.enum(['read', 'read_write']) }))
-    .describe("E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one."),
+    .meta({ deprecated: true })
+    .describe('Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools.'),
 });
 export class ChatTaskDraftResponseDto extends createZodDto(chatTaskDraftResponseSchema) {}
 

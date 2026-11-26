@@ -6,7 +6,7 @@ import type { TaskOutput } from '@app/shared/task-fields';
 import type { TaskParameter } from '@app/shared/task-params';
 
 import type { RunActivity } from '../components/RunActivity';
-import type { ConnectionSelection, ConnectionSelectionView, ConnectionsMode } from '../taskConnections/model';
+import type { ConnectionSelectionView, ConnectionsMode } from '../taskConnections/model';
 import type { RunStatus, RunStopReason } from './runs';
 
 export type ChatStatus = 'active' | 'archived';
@@ -32,9 +32,9 @@ export interface Chat {
   useSavedCards?: boolean;
   /** Record a video of the chat's runs (#906); absent from an older console: off. Not masked. */
   recordVideo?: boolean;
-  /** The accounts the chat may use, and how (E39.7, #604); absent from an older console: none. */
-  /** `all`: every account and tool the owner connected; `listed`: only `connections` (#969). Absent from an older console: `listed`. */
+  /** Deprecated (E50.17): always `all`; a chat may use everything the owner switched on. */
   connectionsMode?: ConnectionsMode;
+  /** Deprecated (E50.17): always empty. */
   connections?: ConnectionSelectionView[];
   lastMessageAt: string;
   createdAt: string;
@@ -137,7 +137,7 @@ export interface ChatDraftState {
 }
 
 /** What a chat's run settings dialog edits. */
-export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean; useSavedCards: boolean; recordVideo: boolean; /** Sent only when the owner changed them (E39.10, #969). */ connectionsMode?: ConnectionsMode; connections?: ConnectionSelection[] };
+export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'> & { useSavedLogins: boolean; useSavedIdentity: boolean; useSavedCards: boolean; recordVideo: boolean; };
 
 /** What became of an owner message passed to a run as guidance (#490): waiting for the agent's next step, read by it, or the run ended first. */
 export type ChatGuidanceState = 'queued' | 'delivered' | 'missed';

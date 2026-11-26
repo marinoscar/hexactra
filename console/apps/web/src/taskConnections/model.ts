@@ -1,17 +1,16 @@
-// Which accounts a task or a chat may use, and how (E39.10, #607; the API is E39.7, #604): the selection the form edits, its words, and the
-// hint about runs that need no browser. Pure. Nothing is available by default: an account is used only when it is in the list.
-import type { Capability, Connection } from '../connections/api';
-import { GROUPS, levelOf } from '../connections/words';
+// What the agent can use (E50.17, #987): every connection the owner switched on, in every task and chat. The per-task and per-chat lists of
+// E39.10 are gone; the deprecated wire types stay here while the API still answers them (always empty). Pure.
+import type { Connection } from '../connections/api';
 
 export type ConnectionAccess = 'read' | 'read_write';
-export type AccessChoice = 'none' | ConnectionAccess;
 
+/** Deprecated (E50.17): the shape of the old per-task and per-chat lists the API still accepts and ignores. */
 export interface ConnectionSelection {
   connectionId: string;
   access: ConnectionAccess;
 }
 
-/** What `GET /tasks/{id}` and `GET /chats/{id}` answer for each selected account. */
+/** Deprecated (E50.17): what `GET /tasks/{id}` and `GET /chats/{id}` answer in `connections`: always empty now. */
 export interface ConnectionSelectionView extends ConnectionSelection {
   label: string;
   provider: string;
@@ -21,96 +20,17 @@ export interface ConnectionSelectionView extends ConnectionSelection {
 
 export type NeedsBrowser = 'auto' | 'always' | 'never';
 
-/** `Task.connectionsMode` (#967): `all` every account and tool the owner connected, at what they switched on for it; `listed` only the task's list. */
+/** Deprecated (E50.17): `Task.connectionsMode` is always `all`. */
 export type ConnectionsMode = 'all' | 'listed';
 
-export const ALL_TOOLS_HELP =
-  'The agent can use every account and tool you connected, at what you switched on for each in Connections, and picks the right one for the job. It opens a browser only when the job needs a website. It asks before it sends or changes anything, unless you told it not to ask again.';
+export const ACCESS_WORDS: Record<'none' | ConnectionAccess, string> = { none: 'Not used', read: 'Read only', read_write: 'Read and change' };
 
-export const LIMITED_HELP = 'Limited to the accounts and tools switched on below.';
+/** The owner's connections that are switched on (active), by label: what every task and chat can use. */
+export const switchedOnNames = (connections: readonly Connection[]): string[] => connections.filter((c) => c.status === 'active').map((c) => c.label);
 
-/** The owner's connections a task in `all` mode uses: the active ones. */
-export const usableConnections = (connections: readonly Connection[]): Connection[] => connections.filter((c) => c.status === 'active');
-
-/** A limit that starts from what the task can use now: every active connection, read and change where it can change something. */
-export const limitFromAll = (connections: readonly Connection[]): ConnectionSelection[] =>
-  usableConnections(connections).map((c) => ({ connectionId: c.id, access: c.provider === 'mcp' || canChange(c) ? 'read_write' : 'read' }));
-
-/** One line for the collapsed section of a task. */
-export function toolsSummaryLine(mode: ConnectionsMode, selections: readonly ConnectionSelection[], connections: readonly Connection[] | null): string {
-  if (mode === 'listed') return `Limited. ${summaryLine(selections, connections)}`;
-  if (connections === null) return 'Everything you connected';
-  const usable = usableConnections(connections);
-  if (usable.length === 0) return 'Nothing connected yet: the agent uses the browser.';
-  return `Everything you connected: ${usable.map((c) => c.label).join(', ')}`;
-}
-
-export const ACCESS_WORDS: Record<AccessChoice, string> = { none: 'Not used', read: 'Read only', read_write: 'Read and change' };
-
-export const ACCOUNTS_HELP = 'The agent can only use accounts you switch on here. It asks before it sends or changes anything, unless you told it not to ask again.';
-
-export function accessOf(selections: readonly ConnectionSelection[], connectionId: string): AccessChoice {
-  return selections.find((s) => s.connectionId === connectionId)?.access ?? 'none';
-}
-
-/** The selections with `connectionId` set to `choice` (`none` removes it), keeping the order they were switched on. */
-export function withAccess(selections: readonly ConnectionSelection[], connectionId: string, choice: AccessChoice): ConnectionSelection[] {
-  const rest = selections.filter((s) => s.connectionId !== connectionId);
-  if (choice === 'none') return rest;
-  const at = selections.findIndex((s) => s.connectionId === connectionId);
-  if (at < 0) return [...rest, { connectionId, access: choice }];
-  const next = [...rest];
-  next.splice(at, 0, { connectionId, access: choice });
-  return next;
-}
-
-/** An account that can change something: one of its change switches is on. */
-export const canChange = (c: Pick<Connection, 'capabilities'>): boolean => c.capabilities.some((k) => k === 'mail_send' || k === 'mail_modify' || k === 'calendar_write' || k === 'docs_write');
-
-/** An account the agent can use now. */
-export const isUsable = (c: Pick<Connection, 'status'>): boolean => c.status === 'active';
-
-/** Why a choice is not offered for an account, in words, or null. */
-export function choiceBlocked(c: Connection, choice: AccessChoice, current: AccessChoice): string | null {
-  if (choice === 'none') return null;
-  if (!isUsable(c)) return current === choice ? null : c.status === 'paused' ? 'Paused: resume it first.' : 'It needs to be connected again first.';
-  // An MCP server has tools, not capabilities: the owner's per-tool decision (read or write) is what `read_write` unlocks.
-  if (choice === 'read_write' && c.provider !== 'mcp' && !canChange(c)) return 'No "change" permission is switched on for this account.';
-  return null;
-}
-
-/** One line for the collapsed section: "2 accounts: Work (read only), Personal (read and change)". */
-export function summaryLine(selections: readonly ConnectionSelection[], connections: readonly Connection[] | null): string {
-  if (selections.length === 0) return 'No accounts: the agent cannot use any of your mail, calendar or documents.';
-  const named = selections.map((s) => {
-    const label = connections?.find((c) => c.id === s.connectionId)?.label;
-    return `${label ?? 'An account'} (${s.access === 'read_write' ? 'read and change' : 'read only'})`;
-  });
-  return `${selections.length === 1 ? '1 account' : `${selections.length} accounts`}: ${named.join(', ')}`;
-}
-
-/** What an account can do, as chips: "Mail: read and write". */
-export function capabilityChips(c: Pick<Connection, 'capabilities'>): string[] {
-  const out: string[] = [];
-  for (const g of GROUPS) {
-    const level = levelOf(c.capabilities as readonly Capability[], g);
-    if (level) out.push(`${g.name}: ${level}`);
-  }
-  return out;
-}
-
-/** The request body's field: only what is switched on. */
-export const cleanSelections = (selections: readonly ConnectionSelection[]): ConnectionSelection[] => selections.map(({ connectionId, access }) => ({ connectionId, access }));
-
-export const selectionsOf = (views: readonly ConnectionSelectionView[] | undefined | null): ConnectionSelection[] => (views ?? []).map(({ connectionId, access }) => ({ connectionId, access }));
-
-const BROWSER_WORDS = /\b(https?:\/\/|www\.|website|web site|webpage|web page|log ?in|sign ?in|click|browse|portal|checkout|book|buy|order|pay|download|upload|fill)\b/i;
-const NO_BROWSER_WORDS = /\b(emails?|e-mails?|mail|inbox|calendar|meeting|events?|spreadsheet|sheet|documents?|docs?|summari[sz]e|summary|schedule)\b/i;
-
-/**
- * "Runs without a browser": informational only. True when the task has accounts switched on, `needsBrowser` is `auto` and the goal
- * names mail, a calendar or documents and nothing that sounds like a website.
- */
-export function looksBrowserless(goal: string, selections: readonly ConnectionSelection[], needsBrowser: NeedsBrowser): boolean {
-  return needsBrowser === 'auto' && selections.length > 0 && goal.trim().length > 0 && NO_BROWSER_WORDS.test(goal) && !BROWSER_WORDS.test(goal);
+/** One line for the folded section of the task form. */
+export function switchedOnSummary(connections: readonly Connection[] | null): string {
+  if (connections === null) return 'Everything you switched on';
+  const names = switchedOnNames(connections);
+  return names.length === 0 ? 'Nothing switched on yet: the agent uses the browser.' : `Everything you switched on: ${names.join(', ')}`;
 }

@@ -3,8 +3,7 @@ import { useTheme } from '@mui/material/styles';
 import { useEffect, useState } from 'react';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-import { AccountsSection } from '../taskConnections/AccountsSection';
-import { selectionsOf, toolsSummaryLine, type ConnectionSelection, type ConnectionsMode } from '../taskConnections/model';
+import { SwitchedOnTools } from '../taskConnections/AccountsSection';
 import { useConnections } from '../connections/useConnections';
 import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
@@ -14,7 +13,6 @@ import { MachinePicker, useFleetHosts } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { SuggestMemoriesSwitch } from '../memories/SuggestMemoriesSwitch';
 import { SavedLoginsToggle } from '../secrets/SavedLoginsSwitch';
-import { NewChatAccountsSetting } from '../connections/NewChatAccounts';
 
 export interface ChatSettingsDialogProps {
   open: boolean;
@@ -41,9 +39,6 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
   const accounts = useConnections(open);
   const canReadConnections = viewer.hasPermission('connections:read');
   const [values, setValues] = useState<ChatSettings>(() => settingsOf(chat));
-  const [selections, setSelections] = useState<ConnectionSelection[]>(() => selectionsOf(chat.connections));
-  const modeOf = (c: Chat): ConnectionsMode => (c.connectionsMode === 'all' ? 'all' : 'listed');
-  const [mode, setMode] = useState<ConnectionsMode>(() => modeOf(chat));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +46,6 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
   useEffect(() => {
     if (!open) return;
     setValues(settingsOf(chat));
-    setSelections(selectionsOf(chat.connections));
-    setMode(modeOf(chat));
     setError(null);
   }, [open, chat]);
 
@@ -60,12 +53,7 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
     setBusy(true);
     setError(null);
     try {
-      // The accounts go only when the owner changed them: an older answer must never switch them off by accident.
-      const before = selectionsOf(chat.connections);
-      const modeChanged = mode !== modeOf(chat);
-      const listChanged = mode === 'listed' && JSON.stringify(before) !== JSON.stringify(selections);
-      const accounts = !canReadConnections || (!modeChanged && !listChanged) ? {} : mode === 'all' ? { connectionsMode: 'all' as const } : { connectionsMode: 'listed' as const, connections: selections };
-      await onSave({ ...values, profile: values.profile.trim() || 'default', ...accounts });
+      await onSave({ ...values, profile: values.profile.trim() || 'default' });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the settings');
@@ -110,23 +98,12 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             cards={{ checked: values.useSavedCards, onChange: (useSavedCards) => setValues((v) => ({ ...v, useSavedCards })) }}
           />
           {canReadConnections && (
-            <Stack spacing={1} component="section" aria-label="Tools and accounts this chat may use">
+            <Stack spacing={1} component="section" aria-label="Tools and accounts">
               <Typography variant="subtitle2" component="h3">
                 Tools and accounts
               </Typography>
-              <Typography variant="body2" color="text.secondary" data-testid="chat-accounts-summary">
-                {toolsSummaryLine(mode, selections, accounts.connections)}
-              </Typography>
-              <AccountsSection
-                connections={accounts.connections}
-                failed={accounts.failed}
-                selections={selections}
-                onChange={setSelections}
-                disabled={busy}
-                mode={{ value: mode, onChange: (m, s) => (setMode(m), setSelections(s)), limitLabel: 'Limit this chat' }}
-              />
-              {/* A setting of the owner, not of this chat (#680): saved as soon as it is chosen. */}
-              <NewChatAccountsSetting disabled={busy} />
+              {/* Nothing to choose here (E50.17): everything the owner switched on is available to every chat. */}
+              <SwitchedOnTools connections={accounts.connections} failed={accounts.failed} />
             </Stack>
           )}
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}

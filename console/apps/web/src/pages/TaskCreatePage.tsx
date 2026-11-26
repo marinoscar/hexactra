@@ -35,10 +35,7 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
     parameters: Array.isArray(draft.parameters) ? draft.parameters.filter((p) => p && typeof p.key === 'string').map((p) => ({ ...p })) : [],
     // The outputs the draft proposes from what the finished run reported (E39.5): the owner reviews each row in the form.
     outputs: Array.isArray(draft.outputs) ? draft.outputs.filter((o) => o && typeof o.label === 'string').map((o) => ({ ...o, key: typeof o.key === 'string' ? o.key : '' })) : [],
-    // A drafted task uses everything the owner connected (#967). The accounts the chat's runs used (E41.5) are kept as the starting point
-    // of a limit, should the owner choose "Limit this task".
-    connectionsMode: 'all',
-    connections: Array.isArray(draft.connections) ? draft.connections.filter((c) => c && typeof c.connectionId === 'string').map((c) => ({ connectionId: c.connectionId, access: c.access === 'read_write' ? 'read_write' : 'read' })) : [],
+    // A drafted task has no account list (E50.17): every run uses what the owner switched on in Connections and tools.
   };
 }
 

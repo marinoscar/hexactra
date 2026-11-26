@@ -189,13 +189,12 @@ describe('the task form, opened from a chat', () => {
     expect(host.requests.some((r) => r.path.includes('task-link'))).toBe(false);
   });
 
-  it('a drafted task uses everything connected (#967); the accounts the chat used are kept only as the start of a limit', async () => {
+  it('a drafted task has no account list (E50.17): an old draft\'s accounts are dropped and never sent', async () => {
     const CONN = '55555555-5555-4555-8555-555555555555';
     const draft = { ...DRAFT, connections: [{ connectionId: CONN, access: 'read_write' as const }] };
-    expect(valuesFromDraft(draft).connections).toEqual([{ connectionId: CONN, access: 'read_write' }]);
-    expect(valuesFromDraft(DRAFT).connections).toEqual([]);
+    expect(valuesFromDraft(draft)).not.toHaveProperty('connections');
+    expect(valuesFromDraft(draft)).not.toHaveProperty('connectionsMode');
     const host = mount({ entry: { pathname: '/tasks/new', state: { chatDraft: draft, chatId: CHAT_ID } } });
-    expect(valuesFromDraft(draft).connectionsMode).toBe('all');
     await screen.findByLabelText(/^Name/);
     expect(screen.queryByText(/Taken from the chat/)).toBeNull();
     // Nothing is written until Save.

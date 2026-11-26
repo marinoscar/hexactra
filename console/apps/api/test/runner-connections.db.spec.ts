@@ -43,25 +43,28 @@ const WRITE_TOOLS = ['mail_draft', 'mail_send', 'mail_modify', 'calendar_create_
 const SEND = (to: string[], subject = 'Hello', body = 'Plain body.', connection: string | null = 'Work'): Call => ['mail_send', { connection, draft_id: null, to, cc: null, bcc: null, subject, body, reply_to_message_id: null, attachments: null }];
 const FINISH: Call = ['finish', { success: true, result: 'Done.' }];
 
-/** A user, a task that lists `connections` (each `[label, capabilities, access]`) and a queued run of it. */
+/**
+ * A user with `connections` (each `[label, capabilities, access]`; the access is what the switches give since E50.17: `read_write` when a
+ * change capability is on), a task with no connection list, and a queued run of it.
+ */
 async function setup(name: string, connections: [string, string[], 'read' | 'read_write'][], opts: { goal?: string; needsBrowser?: 'auto' | 'always' | 'never'; trigger?: 'manual' | 'schedule' } = {}) {
   const userId = await login(app, `rc-${name}-${stamp}@example.test`);
   const db = kit.prisma.forUser({ userId });
-  const made = await Promise.all(connections.map(([label, caps]) => kit.connect(userId, label, caps)));
-  const task = await db.task.create({ data: { userId, name: `Task ${name}`, goal: opts.goal ?? 'Do the owner\'s errand', needsBrowser: opts.needsBrowser ?? 'auto', confirmRiskyActions: false, connectionsMode: 'listed' } });
-  await kit.prisma.taskConnection.createMany({ data: made.map((c, i) => ({ taskId: task.id, connectionId: c.id, access: connections[i]![2] })) });
+  const made: { id: string; label: string }[] = [];
+  for (const [label, caps] of connections) made.push(await kit.connect(userId, label, caps));
+  const task = await db.task.create({ data: { userId, name: `Task ${name}`, goal: opts.goal ?? 'Do the owner\'s errand', needsBrowser: opts.needsBrowser ?? 'auto', confirmRiskyActions: false } });
   const run = await db.run.create({ data: { userId, taskId: task.id, trigger: opts.trigger ?? 'manual', goal: task.goal } });
   return { userId, db, task, run, conns: made };
 }
 
 describe('which connection tools a run is offered', () => {
-  it('offers none when the task lists no connection, only the read tools for read access, all for read and write', async () => {
+  it('offers none when the owner has no connection, only the read tools when only reading is switched on, all when changing is', async () => {
     const none = await setup('none', []);
     const model1 = scriptedModel([[FINISH]]);
     await kit.runner(model1, fakeFabric()).advance(none.run.id, none.userId, null);
     expect(model1.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual([]);
 
-    const readOnly = await setup('read', [['Work', ALL, 'read']]);
+    const readOnly = await setup('read', [['Work', READ, 'read']]);
     const model2 = scriptedModel([[FINISH]]);
     await kit.runner(model2, fakeFabric()).advance(readOnly.run.id, readOnly.userId, null);
     expect(model2.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(['connections_list', 'mail_search', 'mail_read', 'mail_attachment_to_browser', 'calendar_list', 'calendar_free_busy', 'docs_search', 'docs_read', 'sheet_read']);
@@ -72,7 +75,7 @@ describe('which connection tools a run is offered', () => {
     expect(model3.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(CONNECTION_TOOLS);
   });
 
-  it('#967: a task that is not limited has every active connection of its owner at what the owner switched on, and no other', async () => {
+  it('E50.17: every task has every active connection of its owner at what the owner switched on, and no other', async () => {
     const userId = await login(app, `rc-all-${stamp}@example.test`);
     const db = kit.prisma.forUser({ userId });
     await kit.connect(userId, 'Work', ALL);
@@ -96,7 +99,7 @@ describe('which connection tools a run is offered', () => {
     expect(fabric.sessions()).toBe(0);
   });
 
-  it('#969: a chat that is not limited gives its run every active connection of its owner, and an AI app\'s run none', async () => {
+  it('E50.17: a chat gives its run every active connection of its owner, even one stored as limited before (#969)', async () => {
     const userId = await login(app, `rc-chat-all-${stamp}@example.test`);
     const db = kit.prisma.forUser({ userId });
     await kit.connect(userId, 'Work', ALL);
@@ -110,6 +113,12 @@ describe('which connection tools a run is offered', () => {
     const snapshot = JSON.stringify((await db.run.findFirstOrThrow({ where: { id: run.id } })).policySnapshot);
     expect(snapshot).toContain('"Work"');
     expect(snapshot).not.toContain('"Old"');
+    // A chat limited under #969 (its mode and an empty list): the mode is not read any more.
+    const limited = await db.conversation.create({ data: { userId, title: 'Chat limited', connectionsMode: 'listed' } });
+    const run2 = await db.run.create({ data: { userId, conversationId: limited.id, trigger: 'manual', goal: 'Send the digest' } });
+    const model2 = scriptedModel([[FINISH]]);
+    await kit.runner(model2, fakeFabric()).advance(run2.id, userId, null);
+    expect(model2.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(CONNECTION_TOOLS);
   });
 
   it('follows the switches that are on: a connection with only the calendar offers only calendar tools', async () => {
@@ -119,7 +128,7 @@ describe('which connection tools a run is offered', () => {
     expect(model.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(['connections_list', 'calendar_list', 'calendar_free_busy', 'calendar_create_event', 'calendar_update_event', 'calendar_delete_event']);
   });
 
-  it("gives a hosted AI app's run none unless the app's limits allow connections, and the task lists them", async () => {
+  it("gives a hosted AI app's run none while the owner switched connections off for that app", async () => {
     const r = await setup('app', [['Work', ALL, 'read_write']]);
     const appLimits = { clientId: 'client-a', clientName: 'App A', allowedDomains: [], confirmPurchases: false, allowSavedLogins: false, allowSavedIdentity: false, allowSavedCards: false, allowConnections: false, policyId: null, allowedPolicyIds: [], appliedPolicyId: null, maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: null };
     await r.db.run.update({ where: { id: r.run.id }, data: { appLimits: appLimits as never, origin: 'mcp', trigger: 'mcp' } });
@@ -134,12 +143,12 @@ describe('which connection tools a run is offered', () => {
     expect(model2.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(CONNECTION_TOOLS);
   });
 
-  it('keeps the connections the run started with: a later change of the task does not alter a live run', async () => {
+  it('keeps the connections the run started with: a later flip of a switch does not alter the tools of a live run', async () => {
     const r = await setup('snap', [['Work', ALL, 'read_write']]);
     const model = scriptedModel([[['connections_list', {}]], [FINISH]]);
     const runner = kit.runner(model, fakeFabric());
     await runner.advance(r.run.id, r.userId, null);
-    await kit.prisma.taskConnection.deleteMany({ where: { taskId: r.task.id } });
+    await kit.prisma.connection.update({ where: { id: r.conns[0]!.id }, data: { capabilities: READ } });
     // The run continues in a new job: it still has what it started with.
     await r.db.run.update({ where: { id: r.run.id }, data: { status: 'running' } });
     await runner.advance(r.run.id, r.userId, null);
@@ -296,8 +305,8 @@ describe('changing something asks the owner first', () => {
     expect(model.inputs[1]).toContain('The owner declined this call');
   });
 
-  it('asks again for each tool and each account, and never covers a read-only account', async () => {
-    const r = await setup('tools', [['Work', ALL, 'read_write'], ['Home', ALL, 'read']]);
+  it('asks again for each tool and each account, and never covers an account with changing switched off', async () => {
+    const r = await setup('tools', [['Work', ALL, 'read_write'], ['Home', READ, 'read']]);
     const a = kit.fake.account(r.conns[0]!.id);
     const model = scriptedModel([[['calendar_create_event', { connection: 'Work', title: 'Lunch', start: '2026-11-20T12:00:00Z', end: '2026-11-20T13:00:00Z', time_zone: null, description: null, location: null, attendees: ['person-b@example.test'], notify_attendees: true, conference: null, calendar_id: null }]], [SEND(['person-b@example.test'], 'Hi', 'Body', 'Home')]]);
     const runner = kit.runner(model, fakeFabric());
@@ -309,7 +318,7 @@ describe('changing something asks the owner first', () => {
     expect(a.events).toHaveLength(0);
     await kit.answer(r.userId, r.run.id, { outcome: 'cancelled' });
     await runner.advance(r.run.id, r.userId, null);
-    // Home is read only for this task: the write is not allowed, and nothing is asked.
+    // Home has only reading switched on: the write is not allowed, and nothing is asked.
     expect(model.outputs[1]).toMatch(/not allowed to do that with this account/);
     expect(kit.fake.account(r.conns[1]!.id).sent).toHaveLength(0);
   });
@@ -426,9 +435,9 @@ describe('the account is explicit', () => {
     expect(model.outputs[2]).toMatch(/"nobody" is not one of this run's connections/);
   });
 
-  it('never picks a connection the task does not list, even for the owner\'s other accounts', async () => {
+  it('never picks a paused account', async () => {
     const r = await setup('other', [['Work', READ, 'read']]);
-    const unlisted = await kit.connect(r.userId, 'Secret', READ);
+    const unlisted = await kit.connect(r.userId, 'Secret', READ, { status: 'paused' });
     kit.fake.account(unlisted.id).addMessage({ subject: 'Not for this task' });
     const model = scriptedModel([[SEARCH('Secret'), SEARCH(unlisted.id), FINISH]]);
     await kit.runner(model, fakeFabric()).advance(r.run.id, r.userId, null);
@@ -684,8 +693,11 @@ describe('runs without a browser', () => {
 describe('what goes wrong becomes an instruction', () => {
   const SEARCH: Call = ['mail_search', { connection: null, from: null, to: null, subject: null, text: null, after: null, before: null, unread: null, has_attachment: null, label: null, limit: null, page_token: null }];
 
-  it('tells the model when an account must be connected again or is paused', async () => {
+  it('tells the model when an account must be connected again or is paused after the run started', async () => {
     const r = await setup('reconnect', [['Work', READ, 'read']]);
+    const pin = (runId: string) => r.db.run.update({ where: { id: runId }, data: { policySnapshot: { schemaVersion: 1, ref: 'builtin:balanced', name: 'Balanced', version: 1, builtin: true, source: 'system_default', spec: balancedSpec(), tiers: null, takenAt: new Date().toISOString(), connections: [{ connectionId: r.conns[0]!.id, access: 'read', label: 'Work', provider: 'google', capabilities: READ }] } as never } });
+    // The run started with the account active (its snapshot); it needs reconnecting since.
+    await pin(r.run.id);
     await kit.prisma.connection.update({ where: { id: r.conns[0]!.id }, data: { status: 'needs_reconnect', statusReason: 'GRANT_REVOKED' } });
     const model = scriptedModel([[SEARCH, ['connections_list', {}], FINISH]]);
     await kit.runner(model, fakeFabric()).advance(r.run.id, r.userId, null);
@@ -693,6 +705,7 @@ describe('what goes wrong becomes an instruction', () => {
     expect(JSON.parse(model.outputs[1]!).connections[0]).toMatchObject({ status: 'must be connected again by the owner', can: [] });
     await kit.prisma.connection.update({ where: { id: r.conns[0]!.id }, data: { status: 'paused' } });
     const run2 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, goal: r.task.goal } });
+    await pin(run2.id);
     const model2 = scriptedModel([[SEARCH, FINISH]]);
     await kit.runner(model2, fakeFabric()).advance(run2.id, r.userId, null);
     expect(model2.outputs[0]).toMatch(/is paused by the owner/);

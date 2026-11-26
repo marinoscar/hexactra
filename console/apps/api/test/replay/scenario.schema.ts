@@ -124,7 +124,7 @@ const connectionSchema = z.strictObject({
   ref: z.string().regex(/^c\d+$/).describe('The reference connections_list gives it: c1, c2, ... in the order of this list'),
   label: z.string().min(1),
   provider: z.enum(['google', 'microsoft', 'mcp']),
-  access: z.enum(['read', 'read_write']).default('read_write'),
+  access: z.enum(['read', 'read_write']).default('read_write').describe('Deprecated (E50.17): ignored. The access follows the switches: read and change when a change capability (an MCP write tool) is on.'),
   email: z.string().optional(),
   capabilities: z.array(z.enum(CAPABILITY_IDS)).default([]),
   defaultFor: z.array(z.string()).default([]),

@@ -10,6 +10,7 @@ import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -152,6 +153,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: AccountTreeOutlinedIcon,
         path: '/settings/kgraph',
         permission: 'kgraph:read',
+      },
+      // Web search (E50.5, #975). `web_search:read` is what GET /api/web-search/status enforces; your own key needs
+      // `connections:write` (the service credential routes) and the test search `web_search:write`, checked in the page.
+      {
+        title: 'Web search',
+        description: 'Whether the agent can search the web for you, which provider and key it uses, your own key, and a test search.',
+        Icon: TravelExploreOutlinedIcon,
+        path: '/settings/web-search',
+        permission: 'web_search:read',
       },
     ],
   },
