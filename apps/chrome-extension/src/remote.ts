@@ -305,6 +305,95 @@ export function pageType(selector: string, text: string, clear: boolean, submit:
   return {};
 }
 
+/**
+ * A code field split into boxes, one or a few characters each (E49.1): six
+ * `maxlength=1` inputs for an SMS code, for example. A value set by script
+ * ignores `maxlength` and never runs the site's per-key auto-advance, so
+ * `pageType` would put the whole code into the first box.
+ *
+ * - `prepare`: find the group of the target (none: `{ group: 0 }`, and the
+ *   caller types as before); clear it and focus its first box.
+ * - `verify`: whether the boxes now hold `text` (after real keys).
+ * - `fill`: fill box by box with a setter and key/input events, then verify.
+ *
+ * Self-contained: Chrome serialises this function into the page. The typed
+ * text never leaves it: the result has counts and a boolean only.
+ */
+export function pageCodeBoxes(op: 'prepare' | 'verify' | 'fill', selector: string, text: string, expectOrigin: string | null, focusLast: boolean) {
+  if (op !== 'verify' && expectOrigin !== null && location.origin !== expectOrigin) {
+    return { __error: 'origin_mismatch: the tab is no longer on the page the value was released for; nothing was typed' };
+  }
+  const el = document.querySelector(selector);
+  const chars = [...text];
+  const need = chars.length;
+  const find = (): HTMLInputElement[] | null => {
+    if (!(el instanceof HTMLInputElement)) return null;
+    const ml = el.maxLength;
+    // Code boxes only: a few characters each, a short code. A long name in a form of short fields is never split.
+    if (!(ml >= 1 && ml <= 4 && need > ml && need <= 12)) return null;
+    const shown = (i: HTMLElement) => {
+      for (let n: HTMLElement | null = i; n; n = n.parentElement) {
+        if (n.hidden) return false;
+        const s = getComputedStyle(n);
+        if (s.display === 'none' || s.visibility === 'hidden') return false;
+      }
+      return true;
+    };
+    const usable = (i: Element): i is HTMLInputElement =>
+      i instanceof HTMLInputElement && ['text', 'tel', 'number', 'password'].includes(i.type) && !i.disabled && !i.readOnly && i.maxLength === ml && shown(i);
+    let node = el.parentElement;
+    for (let depth = 0; node && depth < 6; depth++) {
+      const all = Array.from(node.querySelectorAll('input')).filter(usable);
+      const at = all.indexOf(el);
+      if (at >= 0 && all.length * ml >= need) {
+        // Aimed at a middle box: the group starts at its first box.
+        const from = (all.length - at) * ml >= need ? at : 0;
+        return all.slice(from, from + Math.ceil(need / ml));
+      }
+      if (node.tagName === 'FORM') break;
+      node = node.parentElement;
+    }
+    return null;
+  };
+  const setValue = (i: HTMLInputElement, v: string) => {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (set) set.call(i, v);
+    else i.value = v;
+  };
+  const group = find();
+  if (op === 'prepare') {
+    if (!group) return { group: 0 };
+    group[0].scrollIntoView({ block: 'center' });
+    for (const b of group) {
+      if (b.value === '') continue;
+      setValue(b, '');
+      b.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+    }
+    group[0].focus();
+    return { group: group.length };
+  }
+  // The page moved on (a site that submits on the last digit): nothing to check.
+  if (!group) return { gone: true };
+  let method: 'keys' | 'boxes' = 'keys';
+  if (op === 'fill') {
+    method = 'boxes';
+    const ml = group[0].maxLength;
+    group.forEach((b, k) => {
+      const part = chars.slice(k * ml, (k + 1) * ml).join('');
+      const key = { key: part.charAt(0), bubbles: true, cancelable: true };
+      b.focus();
+      b.dispatchEvent(new KeyboardEvent('keydown', key));
+      setValue(b, part);
+      b.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: part }));
+      b.dispatchEvent(new KeyboardEvent('keyup', key));
+      b.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  const held = group.map((b) => b.value).join('');
+  if (focusLast) group[group.length - 1].focus();
+  return { boxes: group.length, filled: Math.min([...held].length, need), matched: held === text, method };
+}
+
 export function pagePress(key: string, selector: string | null) {
   const target = (selector ? document.querySelector(selector) : document.activeElement) as HTMLElement | null;
   if (!target) return { __error: selector ? `no element matches ${selector}` : 'no focused element' };
@@ -573,6 +662,33 @@ async function viaCdp<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Type into a segmented code field `pageCodeBoxes` prepared (E49.1): real keys
+ * first, so the site's own auto-advance moves focus as for a person; then
+ * verify in the page, and fill box by box when the keys did not land (no
+ * auto-advance, or no debugger). The origin guard runs before every key and
+ * before the fallback. The result holds counts only, never the text.
+ */
+async function typeCodeBoxes(tab: chrome.tabs.Tab, action: { selector: string; text: string; submit?: boolean; expect_origin?: string }) {
+  const expect = action.expect_origin;
+  const guard = expect === undefined ? undefined : async () => assertTabOrigin(await resolveTab(tab.id), expect);
+  try {
+    await viaCdp(() => cdp.typeText(tab.id!, action.text, guard));
+  } catch (e) {
+    // A moved tab stops here; any other failure (no debugger) leaves the boxes to the fallback.
+    if (e instanceof Error && e.message.startsWith('origin_mismatch')) throw e;
+  }
+  const args = (op: 'verify' | 'fill'): ['verify' | 'fill', string, string, string | null, boolean] => [op, action.selector, action.text, expect ?? null, !!action.submit];
+  let r = await inPage(tab.id!, pageCodeBoxes, args('verify')).catch(() => ({ gone: true }) as const);
+  if (!('gone' in r) && !r.matched) r = await inPage(tab.id!, pageCodeBoxes, args('fill'));
+  if ('gone' in r) return { gone: true };
+  if (!r.matched) throw new ActionError(`the code field has ${r.boxes} boxes and took ${r.filled} of ${[...action.text].length} characters`);
+  if (action.submit) {
+    await viaCdp(() => cdp.pressKey(tab.id!, 'Enter')).catch(() => inPage(tab.id!, pagePress, ['Enter', null]));
+  }
+  return { boxes: r.boxes, filled: r.filled, method: r.method };
+}
+
 const DEFAULT_MAX_MARKS = 120;
 
 type ViewInfo = { width: number; height: number; dpr: number; url?: string; title?: string; marks?: { text?: string }[] };
@@ -678,6 +794,10 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     case 'type': {
       const tab = await resolveTab(action.tab_id);
       assertTabOrigin(tab, action.expect_origin);
+      if ([...action.text].length > 1) {
+        const prep = await inPage(tab.id!, pageCodeBoxes, ['prepare', action.selector, action.text, action.expect_origin ?? null, false]);
+        if (prep.group) return typeCodeBoxes(tab, action);
+      }
       const typeIt = () => inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
       return typeIt();
     }
