@@ -57,9 +57,11 @@ export interface RunFilters {
   origin: RunOrigin[];
   /** "Started by" an AI app: its OAuth client id (URL `app`), or null. */
   clientId: string | null;
+  /** The runs of one batch (E51.1, URL `batchId`), or null. */
+  batchId: string | null;
 }
 
-export const NO_FILTERS: RunFilters = { view: 'all', q: '', taskId: null, trigger: [], from: null, to: null, stopReason: [], policyId: null, origin: [], clientId: null };
+export const NO_FILTERS: RunFilters = { view: 'all', q: '', taskId: null, trigger: [], from: null, to: null, stopReason: [], policyId: null, origin: [], clientId: null, batchId: null };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -83,6 +85,7 @@ export function filtersFromParams(params: URLSearchParams): RunFilters {
   const to = params.get('to');
   const policyId = params.get('policyId')?.trim();
   const app = params.get('app');
+  const batchId = params.get('batchId');
   return {
     view: (RUN_VIEWS as readonly string[]).includes(view ?? '') ? (view as RunView) : 'all',
     q: (params.get('q') ?? '').slice(0, 200),
@@ -94,10 +97,11 @@ export function filtersFromParams(params: URLSearchParams): RunFilters {
     policyId: policyId ? policyId : null,
     origin: list(params.get('origin'), RUN_ORIGINS),
     clientId: app && UUID.test(app) ? app : null,
+    batchId: batchId && UUID.test(batchId) ? batchId : null,
   };
 }
 
-const FILTER_KEYS = ['view', 'q', 'taskId', 'trigger', 'from', 'to', 'stopReason', 'policyId', 'origin', 'app'] as const;
+const FILTER_KEYS = ['view', 'q', 'taskId', 'trigger', 'from', 'to', 'stopReason', 'policyId', 'origin', 'app', 'batchId'] as const;
 
 /** `params` with the filters written into it; a parameter that is not a filter is kept. */
 export function filtersToParams(filters: RunFilters, params: URLSearchParams = new URLSearchParams()): URLSearchParams {
@@ -113,6 +117,7 @@ export function filtersToParams(filters: RunFilters, params: URLSearchParams = n
   if (filters.policyId) next.set('policyId', filters.policyId);
   if (filters.origin.length) next.set('origin', filters.origin.join(','));
   if (filters.clientId) next.set('app', filters.clientId);
+  if (filters.batchId) next.set('batchId', filters.batchId);
   return next;
 }
 
@@ -125,7 +130,8 @@ export function activeFilterCount(filters: RunFilters, scoped = false, scopedApp
     (filters.from || filters.to ? 1 : 0) +
     (filters.stopReason.length && showsStopFilter(filters.view) ? 1 : 0) +
     (filters.policyId ? 1 : 0) +
-    (filters.origin.length || (filters.clientId && !scopedApp) ? 1 : 0)
+    (filters.origin.length || (filters.clientId && !scopedApp) ? 1 : 0) +
+    (filters.batchId ? 1 : 0)
   );
 }
 
@@ -215,6 +221,7 @@ export function apiFilter(filters: RunFilters, scope: RunListScope, timeZone: st
   if (filters.origin.length) out.origin = [...filters.origin];
   const clientId = scope.clientId ?? filters.clientId;
   if (clientId) out.clientId = clientId;
+  if (filters.batchId) out.batchId = filters.batchId;
   return out;
 }
 
@@ -276,5 +283,6 @@ export function matchesFilters(run: RunListItem, filters: RunFilters, scope: Run
   if (filters.origin.length && !filters.origin.includes((run.origin ?? 'web') as RunOrigin)) return false;
   const clientId = scope.clientId ?? filters.clientId;
   if (clientId && run.client?.id !== clientId) return false;
+  if (filters.batchId && run.batchId !== filters.batchId) return false;
   return true;
 }
