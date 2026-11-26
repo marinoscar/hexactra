@@ -70,6 +70,11 @@ export class FetchCache {
     return this.users.get(userId)?.size ?? 0;
   }
 
+  /** Drops every entry of one user (the diagnostics' own reads, which must reach the page each time). */
+  forget(userId: string): void {
+    this.users.delete(userId);
+  }
+
   clear(): void {
     this.users.clear();
   }

@@ -146,6 +146,27 @@ export const removeAdminApp = (api: PlatformApiClient, provider: Provider) => ap
 export const getMcpStatus = (api: PlatformApiClient) => api.get<{ enabled: boolean; restricted: boolean }>('/connections/mcp/status');
 export const addMcpServer = (api: PlatformApiClient, body: { url: string; label?: string; auth: McpAuthInput; returnTo?: string }) =>
   api.post<{ connection: Connection | null; catalog: McpCatalog | null; consent: Consent | null }>('/connections/mcp', body);
+/** A well-known MCP server the Add dialog offers (E50.12). It only fills the form; never a secret. */
+export interface McpPreset {
+  id: string;
+  name: string;
+  url: string;
+  auth: McpAuthKind;
+  headerName?: string;
+  docsUrl: string;
+  notes: string;
+  verified: string;
+}
+/** What trying a read tool answered (E50.12): the server's words, cleaned, redacted and capped. Show as plain text. */
+export interface McpTryResult {
+  ok: boolean;
+  code: string | null;
+  ms: number;
+  text: string;
+  truncated: boolean;
+}
+export const getMcpPresets = (api: PlatformApiClient) => api.get<McpPreset[]>('/connections/mcp/presets');
+export const tryMcpTool = (api: PlatformApiClient, id: string, toolId: string, args: Record<string, unknown>) => api.post<McpTryResult>(`/connections/${id}/tools/${toolId}/try`, { arguments: args });
 export const getMcpTools = (api: PlatformApiClient, id: string) => api.get<McpCatalog>(`/connections/${id}/tools`);
 export const refreshMcpTools = (api: PlatformApiClient, id: string) => api.post<McpCatalog>(`/connections/${id}/tools/refresh`, {});
 export const setMcpToolMode = (api: PlatformApiClient, id: string, toolId: string, mode: McpToolMode) => api.patch<McpTool>(`/connections/${id}/tools/${toolId}`, { mode });

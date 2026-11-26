@@ -12,7 +12,8 @@ import { WebToolError, type WebSearchHit, type WebSearchResult } from '@marinosc
 
 import { OutboundHttp, OutboundHttpError, type OutboundResponse } from '../../oauth-client/outbound-http';
 import type { DiagnosticStage } from '../diagnostic-stage';
-import { SearchProviderRegistry, type ProviderAuth, type SearchProvider, type SearchRequest } from '../search-provider';
+import { SearchProviderRegistry, type ProviderAuth, type ProviderDiagnoseOptions, type SearchProvider, type SearchRequest } from '../search-provider';
+import { DIAGNOSTIC_QUERY, probeHost, providerStages } from '../web-search-diagnostics';
 
 export const BRAVE_HOST = 'api.search.brave.com';
 export const BRAVE_ENDPOINT = `https://${BRAVE_HOST}/res/v1/web/search`;
@@ -157,27 +158,13 @@ export class BraveSearchProvider implements SearchProvider, OnModuleInit {
     return { provider: this.id, hits: braveHits(res.body, Math.max(1, Math.min(BRAVE_MAX_COUNT, req.count))), answer: null };
   }
 
-  /** The stub of E50.5: is there a key, and does one small search answer. E50.13 adds the rest. */
-  async diagnose(auth: ProviderAuth | null, signal: AbortSignal): Promise<DiagnosticStage[]> {
-    if (!auth || auth.kind !== 'api_key') {
-      return [
-        { id: 'config', status: 'fail', code: 'NO_KEY', remedy: 'web_search.set_key', ms: null },
-        { id: 'live_query', status: 'skipped', code: null, remedy: null, ms: null },
-      ];
-    }
-    const started = Date.now();
-    try {
-      const r = await this.search({ query: 'example', count: 1, freshness: null, site: null, signal }, auth);
-      return [
-        { id: 'config', status: 'pass', code: null, remedy: null, ms: null },
-        { id: 'live_query', status: 'pass', code: null, remedy: null, ms: Date.now() - started, data: { hits: r.hits.length, host: BRAVE_HOST } },
-      ];
-    } catch (e) {
-      const code = e instanceof WebToolError ? e.code : 'UNAVAILABLE';
-      return [
-        { id: 'config', status: 'pass', code: null, remedy: null, ms: null },
-        { id: 'live_query', status: code === 'RATE_LIMITED' ? 'warn' : 'fail', code, remedy: `web_search.${code.toLowerCase()}`, ms: Date.now() - started, data: { host: BRAVE_HOST } },
-      ];
-    }
+  /** `network` (a GET of the host's root, no key) and `live_query` (the fixed word, `count: 1`). Codes only (E50.13). */
+  async diagnose(auth: ProviderAuth, signal: AbortSignal, opts: ProviderDiagnoseOptions = {}): Promise<DiagnosticStage[]> {
+    return providerStages({
+      network: (s) => probeHost(this.http, `https://${BRAVE_HOST}/`, s),
+      query: (s) => this.search({ query: DIAGNOSTIC_QUERY, count: 1, freshness: null, site: null, signal: s }, auth),
+      signal,
+      liveQuery: opts.liveQuery ?? true,
+    });
   }
 }

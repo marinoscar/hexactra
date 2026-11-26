@@ -40,7 +40,19 @@ export class McpClientError extends Error {
   constructor(
     readonly kind: McpClientErrorKind,
     message: string,
-    readonly extra: { status?: number; rpcCode?: number; urlCode?: McpUrlRefusal; wwwAuthenticate?: string; serverMessage?: string } = {},
+    readonly extra: {
+      status?: number;
+      rpcCode?: number;
+      urlCode?: McpUrlRefusal;
+      wwwAuthenticate?: string;
+      serverMessage?: string;
+      /** `protocol`: why (E50.12): the answer was not the protocol at all, or the server speaks no revision this client speaks. */
+      protocolReason?: 'not_mcp' | 'revision';
+      /** `protocolReason: revision`: the revision the server offered, when it has the shape of one (`YYYY-MM-DD`). */
+      offered?: string;
+      /** `unavailable` from the transport: the system's error code (`ECONNREFUSED`, `CERT_HAS_EXPIRED`, `EPROTO`), never a message. */
+      netCode?: string;
+    } = {},
   ) {
     super(message);
     this.name = 'McpClientError';
@@ -83,6 +95,8 @@ interface RpcMessage {
   error?: { code?: number; message?: string; data?: unknown };
 }
 
+const REVISION_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** The JSON-RPC messages in a response body: one JSON value, an array of them, or a `text/event-stream` of `data:` events. */
@@ -110,7 +124,7 @@ export function parseMessages(contentType: string, body: string): RpcMessage[] {
   try {
     take(JSON.parse(body));
   } catch {
-    throw new McpClientError('protocol', 'The server did not answer in the protocol.');
+    throw new McpClientError('protocol', 'The server did not answer in the protocol.', { protocolReason: 'not_mcp' });
   }
   return out;
 }
@@ -146,12 +160,15 @@ export class McpClient {
   // ---- the methods ----
 
   /** Every tool the server lists, following the pages (at most 20) and keeping at most 500 usable entries. Entries that are not tools are skipped. */
-  async listTools(): Promise<{ tools: McpToolDescriptor[]; skipped: number }> {
+  /** `pages`: how many pages were read; `overCap`: the server offers more than {@link MCP_MAX_TOOLS} usable tools (the rest are not kept). */
+  async listTools(): Promise<{ tools: McpToolDescriptor[]; skipped: number; pages: number; overCap: boolean }> {
     const tools: McpToolDescriptor[] = [];
     let skipped = 0;
     let cursor: string | undefined;
+    let pages = 0;
     for (let page = 0; page < MCP_MAX_LIST_PAGES; page += 1) {
       const result = await this.request('tools/list', cursor ? { cursor } : {});
+      pages += 1;
       const list = isRecord(result) && Array.isArray(result.tools) ? result.tools : null;
       if (!list) throw new McpClientError('protocol', 'The server did not answer tools/list in the protocol.');
       for (const raw of list) {
@@ -162,7 +179,8 @@ export class McpClient {
       cursor = isRecord(result) && typeof result.nextCursor === 'string' && result.nextCursor ? result.nextCursor : undefined;
       if (!cursor || tools.length >= MCP_MAX_TOOLS) break;
     }
-    return { tools: tools.slice(0, MCP_MAX_TOOLS), skipped: skipped + Math.max(0, tools.length - MCP_MAX_TOOLS) };
+    const overCap = tools.length > MCP_MAX_TOOLS || (tools.length >= MCP_MAX_TOOLS && cursor !== undefined);
+    return { tools: tools.slice(0, MCP_MAX_TOOLS), skipped: skipped + Math.max(0, tools.length - MCP_MAX_TOOLS), pages, overCap };
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<McpCallResult> {
@@ -196,11 +214,18 @@ export class McpClient {
           asked = common;
           continue;
         }
+        // A server that refused every revision we asked for: a revision the client does not speak, with the newest it offered.
+        if (supported.length > 0 && !common) {
+          const offered = supported.find((v): v is string => typeof v === 'string' && REVISION_SHAPE.test(v));
+          throw new McpClientError('protocol', 'The server speaks no revision of the protocol this console speaks.', { protocolReason: 'revision', ...(offered ? { offered } : {}) });
+        }
         throw this.rpcError(res.message.error);
       }
       const result = res.message.result;
       const version = isRecord(result) && typeof result.protocolVersion === 'string' ? result.protocolVersion : null;
-      if (!version || !(MCP_CLIENT_VERSIONS as readonly string[]).includes(version)) throw new McpClientError('protocol', 'The server speaks no revision of the protocol this console speaks.');
+      if (!version || !(MCP_CLIENT_VERSIONS as readonly string[]).includes(version)) {
+        throw new McpClientError('protocol', 'The server speaks no revision of the protocol this console speaks.', { protocolReason: version ? 'revision' : 'not_mcp', ...(version && REVISION_SHAPE.test(version) ? { offered: version } : {}) });
+      }
       this.version = version;
       this.sessionId = res.headers['mcp-session-id'] ?? null;
       const si = isRecord(result) && isRecord(result.serverInfo) ? result.serverInfo : null;
@@ -237,7 +262,7 @@ export class McpClient {
         // The refusal is best effort.
       }
     }
-    if (!found) throw new McpClientError('protocol', 'The server did not answer the request.');
+    if (!found) throw new McpClientError('protocol', 'The server did not answer the request.', { protocolReason: 'not_mcp' });
     return { message: found, headers: res.headers };
   }
 
@@ -272,7 +297,7 @@ export class McpClient {
     if (res.status === 429 || res.status >= 500) throw new McpClientError('unavailable', 'The server is not available.', { status: res.status });
     if (res.status === 202 || res.status === 204) return res;
     if (res.status === 405 && method === 'DELETE') return res;
-    if (res.status !== 200) throw new McpClientError('protocol', 'The server answered in a way this console does not understand.', { status: res.status });
+    if (res.status !== 200) throw new McpClientError('protocol', 'The server answered in a way this console does not understand.', { status: res.status, protocolReason: 'not_mcp' });
     return res;
   }
 
@@ -285,8 +310,11 @@ export class McpClient {
         return new McpClientError('too_large', 'The server answered with more than the size limit.');
       case 'aborted':
         return new McpClientError('aborted', 'The call was cancelled.');
-      case 'network':
-        return new McpClientError('unavailable', 'The server could not be reached.');
+      case 'network': {
+        // The transport names the system's code in parentheses (`Network error (EPROTO).`): kept as a closed-shape code, never the message.
+        const net = /\(([A-Z][A-Z0-9_]{1,39})\)/.exec(e.message)?.[1];
+        return new McpClientError('unavailable', 'The server could not be reached.', net ? { netCode: net } : {});
+      }
       default:
         return new McpClientError('url_refused', e.message, { urlCode: e.code });
     }

@@ -13,7 +13,7 @@
 import { z } from 'zod';
 
 import type { QuestionAction } from '../../../../questions/questions.contract';
-import { checkArguments, schemaUsable, type ArgsCheck } from '../../../../connections/mcp/mcp-validate';
+import { checkArguments, offeredParameters, type ArgsCheck } from '../../../../connections/mcp/mcp-validate';
 import { redactArgs } from '../../../../connections/mcp/mcp-redact';
 import { labelSlug, modelToolName } from '../../../../connections/mcp/mcp-text';
 import { MCP_MAX_TOOLS_PER_RUN, MCP_TRUST_LINE } from '../../../../connections/mcp/mcp.constants';
@@ -232,15 +232,8 @@ async function buildMcp(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly
   const defs = await d.mcp.toolsFor(userId, chosen.map((c) => ({ connectionId: c.connectionId, access: c.access })));
   const usable: { def: McpRunTool; parameters: z.ZodTypeAny }[] = [];
   for (const def of defs) {
-    if (!schemaUsable(def.hash, def.inputSchema)) continue;
-    let parameters: z.ZodTypeAny;
-    try {
-      parameters = z.fromJSONSchema(def.inputSchema as never) as z.ZodTypeAny;
-      z.toJSONSchema(parameters, { unrepresentable: 'throw' });
-    } catch {
-      continue;
-    }
-    usable.push({ def, parameters });
+    const parameters = offeredParameters(def.hash, def.inputSchema);
+    if (parameters) usable.push({ def, parameters });
   }
   // Over the cap the trust line goes with `open_toolbox`, which is offered for the whole run; otherwise with the first tool, as before.
   const deferred = usable.length > MCP_MAX_TOOLS_PER_RUN;

@@ -128,12 +128,32 @@ describe('Brave Search', () => {
     expect(await codeOf(brave.search(req(), { kind: 'none', baseUrl: 'https://x.example.test' }))).toBe('NOT_CONFIGURED');
   });
 
-  it('diagnoses: no key, a working key and a refused one, with codes only', async () => {
-    const { brave } = setup();
+  it('diagnoses: network then one live query of the fixed word, with codes only (E50.13)', async () => {
+    const { brave, http } = setup();
     const signal = new AbortController().signal;
-    expect(await brave.diagnose(null, signal)).toEqual([expect.objectContaining({ id: 'config', status: 'fail', code: 'NO_KEY' }), expect.objectContaining({ id: 'live_query', status: 'skipped' })]);
-    expect((await brave.diagnose(auth(), signal))[1]).toMatchObject({ id: 'live_query', status: 'pass', data: { hits: 1, host: 'api.search.brave.com' } });
-    expect((await brave.diagnose({ kind: 'api_key', key: SecretBytes.from('BSAwrongkey000000') }, signal))[1]).toMatchObject({ status: 'fail', code: 'AUTH_REFUSED', remedy: 'web_search.auth_refused' });
+    const before = http.requests.length;
+    const ok = await brave.diagnose(auth(), signal);
+    expect(ok).toEqual([
+      expect.objectContaining({ id: 'network', status: 'pass', code: null, data: { host: 'api.search.brave.com' } }),
+      expect.objectContaining({ id: 'live_query', status: 'pass', code: null, data: expect.objectContaining({ hits: 1 }) }),
+    ]);
+    // The connect probe carries no key; the live query sends the fixed word with count 1, the key in the header.
+    expect(http.requests.slice(before)).toEqual([
+      expect.objectContaining({ url: 'https://api.search.brave.com/', tokenPresent: false }),
+      expect.objectContaining({ url: BRAVE_ENDPOINT, query: { q: 'weather', count: '1' }, tokenPresent: true }),
+    ]);
+    expect((await brave.diagnose({ kind: 'api_key', key: SecretBytes.from('BSAwrongkey000000') }, signal))[1]).toMatchObject({ status: 'fail', code: 'AUTH_REFUSED', remedy: 'SEARCH_KEY_REFUSED' });
+    http.stub({ status: 200 }).stub({ status: 429, headers: { 'x-ratelimit-remaining': '0, 10' } });
+    expect((await brave.diagnose(auth(), signal))[1]).toMatchObject({ status: 'warn', code: 'RATE_LIMITED' });
+    http.stub({ status: 200 }).stub({ status: 429, headers: { 'x-ratelimit-remaining': '1, 0' } });
+    expect((await brave.diagnose(auth(), signal))[1]).toMatchObject({ status: 'fail', code: 'QUOTA_EXCEEDED' });
+    http.stub({ status: 200 }).stub({ status: 200, body: { web: { results: [] } } });
+    expect((await brave.diagnose(auth(), signal))[1]).toMatchObject({ status: 'warn', code: 'NO_RESULTS' });
+    http.stub({ status: 0, error: 'unresolvable' });
+    expect(await brave.diagnose(auth(), signal)).toEqual([expect.objectContaining({ id: 'network', status: 'fail', code: 'UNRESOLVABLE' }), expect.objectContaining({ id: 'live_query', status: 'skipped' })]);
+    const n = http.requests.length;
+    expect((await brave.diagnose(auth(), signal, { liveQuery: false }))[1]).toMatchObject({ id: 'live_query', status: 'skipped', code: 'LIMIT_REACHED' });
+    expect(http.requests.length).toBe(n + 1); // the probe only
   });
 });
 

@@ -3,6 +3,7 @@
 // a call whose arguments do not satisfy it is rejected here, with the first problems named, and nothing is sent to the server.
 import Ajv2020 from 'ajv/dist/2020';
 import type { ValidateFunction } from 'ajv';
+import { z } from 'zod';
 
 const ajv = new Ajv2020({ strict: false, allErrors: true, allowUnionTypes: true, validateFormats: false, coerceTypes: false, useDefaults: false, removeAdditional: false });
 const compiled = new Map<string, ValidateFunction | null>();
@@ -37,4 +38,19 @@ export function checkArguments(key: string, schema: Record<string, unknown>, arg
 /** Whether a schema can be both offered to a model (as zod) and checked here. A tool that cannot is not offered. */
 export function schemaUsable(key: string, schema: Record<string, unknown>): boolean {
   return validatorFor(key, schema) !== null;
+}
+
+/**
+ * The parameters a run offers a model for a tool, or null when its schema cannot be both offered (as zod, representable in JSON Schema)
+ * and checked here. The runner skips a tool that is null; the MCP diagnostic counts them (`offered_cap`, E50.12), so none is dropped silently.
+ */
+export function offeredParameters(key: string, schema: Record<string, unknown>): z.ZodTypeAny | null {
+  if (!schemaUsable(key, schema)) return null;
+  try {
+    const parameters = z.fromJSONSchema(schema as never) as z.ZodTypeAny;
+    z.toJSONSchema(parameters, { unrepresentable: 'throw' });
+    return parameters;
+  } catch {
+    return null;
+  }
 }
