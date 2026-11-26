@@ -160,6 +160,12 @@ Design invariants to preserve when writing docs or code:
 - A Knowledge Graph change that adds or changes a send, a payment, a recipient, a site, an account or a credential is approved only by the owner, signed in, in the console; never by a webhook, the CLI, MCP or a hosted AI app.
 - A site fact (E46 phase 5) is data, never an instruction or a permission. A fact becomes active only by the owner's own act: approving it, or their opt-in auto-approve setting (`kgraph.autoApproveFacts`, off by default, E46.36) for facts derived from server records (kind navigation, timing or quirk); never for agent, MCP or imported text, and never for a sign-in fact. It never holds Secret Material, and it cannot widen a run's sites, accounts, recipients, secrets or approvals.
 - Reuse across goals only offers a matched procedure (exact registrable domain, active only); it runs only when the agent chooses it, through `executeTool`, and only with the tools its owner has switched on. With the everyday switch off, a chat or one-off run is byte-identical.
+- A skill (E51.3, #1008, console `docs/skills.md`) is written only by its owner's own act (the signed-in console or the owner's CLI). Never add an agent tool, a chat tool, an MCP tool, a webhook or an import from an address that creates or changes one.
+- A skill is guidance, never a permission: it cannot widen a run's allowed sites, switch a tool or connection on, add a recipient, release a secret, create a saved approval or skip a confirmation. No gate reads a skill.
+- A skill never holds Secret Material; its text never enters a step, the trace, a span, a log or an export (its name does).
+- A skill is not exposed through Hexactra's MCP server.
+- With no fitting active skill, a run is byte-identical: `console/apps/api/test/runner-characterisation.db.spec.ts` passes unchanged.
+- `skill_read` goes through `executeTool`, with Stop and Pause checked first.
 
 Planned monorepo layout (target, directories do not exist yet): Cargo workspace `crates/hexactra-{control,agent,worker,native-host,cli,mcp,core,telemetry}`, pnpm workspace `packages/{sdk,contracts}`, `apps/{chrome-extension,dashboard}`, `api/openapi.yaml` + `api/schemas/`, `deploy/`, `docs/`, `tests/`. Planned stack: Rust/Tokio/Axum/Clap/Serde/SQLite, React+TypeScript dashboard, OpenAPI-generated SDKs.
 
