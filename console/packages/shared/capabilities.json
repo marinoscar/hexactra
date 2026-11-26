@@ -1713,6 +1713,28 @@
       "web": "/admin/settings/web-search"
     },
     {
+      "id": "web_search.diagnose",
+      "description": "Diagnose web search: an ordered report (switches, credential tier, network, one live query of a fixed word counted as a call, today's limit, the page-reading check), each stage with a closed code and a remedy from the shared remedy table; for yourself, or for the deployment's key by an administrator; the last reports (E50.13)",
+      "rest": [
+        "POST /api/web-search/diagnose",
+        "GET /api/web-search/diagnostics",
+        "POST /api/web-search/admin/providers/{id}/diagnose",
+        "GET /api/web-search/admin/providers/{id}/diagnostics"
+      ],
+      "cli": {
+        "none": "Not yet: `search diagnose` comes with E50.15 (#985)"
+      },
+      "mcp": {
+        "none": "Deliberate: a diagnostic is about the owner's keys and the deployment's setup; it is read in the console, not by a hosted AI app (E50.13)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; web search is set up in the web app"
+      },
+      "web": {
+        "none": "Not yet: the diagnostics panel of the Web search pages comes with E50.14 (#984)"
+      }
+    },
+    {
       "id": "mail_triggers.read",
       "description": "List a task's email triggers (rules, account, status, runs today) and what a trigger did with each message it saw",
       "rest": [
