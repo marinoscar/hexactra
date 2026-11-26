@@ -35155,6 +35155,202 @@
         }
       }
     },
+    "/api/connections/admin/apps/{provider}/diagnose": {
+      "post": {
+        "description": "Checks the app before anyone connects, with no user: `app_config` (installed, a client id and a secret set; the switch off only warns), `redirect_uri` (the address the console sends is https and on the address you reached the console on; host names only), `discovery` (the provider's sign-in endpoints answer; Microsoft: the configured tenant exists), `client_check` (a token request with a deliberately invalid code tells a refused client id or secret from a good one; `skipped` with `NEEDS_A_SIGN_IN` when the answer cannot tell) and, for Google, `picker_key`. Stores the report (target kind `provider_app`, no user; the last 20 are kept) and returns it. Read calls only; nothing is issued. The report holds the client id's last four characters at most, never the secret.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "connectionsAdmin_diagnose",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "google",
+                "microsoft"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Test the deployment's app at a provider",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/admin/apps/{provider}/diagnostics": {
+      "get": {
+        "description": "Newest first: `limit` (default 5, at most 20). Codes, remedy keys, counts, host names and timings only.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "connectionsAdmin_history",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "google",
+                "microsoft"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many of the last reports (default 5, at most 20).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 5,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The last tests of the deployment's app at a provider",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
     "/api/connections/{id}/activity": {
       "get": {
         "description": "The agent's tool calls through the account and the deliveries sent through it, newest first (at most 15): the operation, when, whether it worked and the run. Never a subject, an address, a body, a cell or a file name.\n\n**Requires:** authentication, plus permission `connections:read`.",
@@ -40812,382 +41008,6 @@
           }
         ],
         "summary": "Web search usage of the deployment",
-        "tags": [
-          "Web search"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "system_settings:read"
-          ]
-        }
-      }
-    },
-    "/api/web-search/diagnose": {
-      "post": {
-        "description": "The report of the provider that answers for you (or `?provider=<id>`), with your effective key tier, stored with you as its owner (the last 20 are kept). Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `web_search:write`.",
-        "operationId": "webSearchDiagnostics_diagnose",
-        "parameters": [
-          {
-            "name": "provider",
-            "required": false,
-            "in": "query",
-            "description": "A provider id; default: the one that answers for you.",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,31}$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/DiagnosticReportResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed."
-          },
-          "429": {
-            "description": "`DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider."
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Diagnose web search for you",
-        "tags": [
-          "Web search"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "web_search:write"
-          ]
-        }
-      }
-    },
-    "/api/web-search/diagnostics": {
-      "get": {
-        "description": "Newest first, every provider: `limit` (default 5, at most 20). Codes, remedy keys, counts, timings and host names only.\n\n**Requires:** authentication, plus permission `web_search:read`.",
-        "operationId": "webSearchDiagnostics_history",
-        "parameters": [
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "How many of the last reports (default 5, at most 20).",
-            "schema": {
-              "minimum": 1,
-              "maximum": 20,
-              "default": 5,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/DiagnosticReportResponseDto"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Your last web search diagnostic reports",
-        "tags": [
-          "Web search"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "web_search:read"
-          ]
-        }
-      }
-    },
-    "/api/web-search/admin/providers/{id}/diagnose": {
-      "post": {
-        "description": "The report with the deployment tier ONLY (never a user's key), stored with no owner; the switches only warn here, so a key can be tested before search is switched on. The live query counts as one call of yours. Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
-        "operationId": "webSearchDiagnostics_diagnoseDeployment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/DiagnosticReportResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed."
-          },
-          "429": {
-            "description": "`DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider."
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Diagnose a search provider with the deployment's key",
-        "tags": [
-          "Web search"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "system_settings:write"
-          ]
-        }
-      }
-    },
-    "/api/web-search/admin/providers/{id}/diagnostics": {
-      "get": {
-        "description": "Newest first: `limit` (default 5, at most 20). The deployment tier only; no user.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
-        "operationId": "webSearchDiagnostics_historyDeployment",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "How many of the last reports (default 5, at most 20).",
-            "schema": {
-              "minimum": 1,
-              "maximum": 20,
-              "default": 5,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/DiagnosticReportResponseDto"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "A search provider's last deployment reports",
         "tags": [
           "Web search"
         ],
@@ -53230,6 +53050,18 @@
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
+              "SERVICE_CREDENTIAL_UNKNOWN",
+              "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
+              "SERVICE_CREDENTIAL_NO_ORGANIZATION",
+              "SERVICE_CREDENTIAL_INVALID",
+              "WEB_SEARCH_NOT_CONFIGURED",
+              "WEB_SEARCH_AUTH_REFUSED",
+              "WEB_SEARCH_RATE_LIMITED",
+              "WEB_SEARCH_QUOTA_EXCEEDED",
+              "WEB_SEARCH_UNAVAILABLE",
+              "WEB_SEARCH_LIMIT_REACHED",
+              "WEB_SEARCH_ABORTED",
+              "WEB_SEARCH_TEST_RATE_LIMITED",
               "TASK_BUILDER_NOT_FOUND",
               "TASK_BUILDER_ARCHIVED",
               "INVALID_TASK_SPEC",
@@ -53249,19 +53081,6 @@
               "DELIVERY_TEST_RATE_LIMITED",
               "RECIPIENT_NOT_CONFIRMED",
               "RECIPIENT_LIMIT",
-              "SERVICE_CREDENTIAL_UNKNOWN",
-              "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
-              "SERVICE_CREDENTIAL_NO_ORGANIZATION",
-              "SERVICE_CREDENTIAL_INVALID",
-              "WEB_SEARCH_NOT_CONFIGURED",
-              "WEB_SEARCH_AUTH_REFUSED",
-              "WEB_SEARCH_RATE_LIMITED",
-              "WEB_SEARCH_QUOTA_EXCEEDED",
-              "WEB_SEARCH_UNAVAILABLE",
-              "WEB_SEARCH_LIMIT_REACHED",
-              "WEB_SEARCH_ABORTED",
-              "WEB_SEARCH_TEST_RATE_LIMITED",
-              "WEB_SEARCH_PROVIDER_UNKNOWN",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -82147,6 +81966,20 @@
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
                   },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "warnAtPercent": {
                     "type": "integer",
                     "minimum": 10,
@@ -83208,6 +83041,20 @@
                           ],
                           "description": "Most a run may cost in US dollars. `null` means unlimited."
                         },
+                        "maxWebCalls": {
+                          "default": null,
+                          "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 10000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "warnAtPercent": {
                           "type": "integer",
                           "minimum": 10,
@@ -83735,6 +83582,20 @@
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
                   },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "warnAtPercent": {
                     "type": "integer",
                     "minimum": 10,
@@ -84048,6 +83909,20 @@
                       }
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
+                  },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "warnAtPercent": {
                     "type": "integer",
@@ -90360,6 +90235,10 @@
                     "string",
                     "null"
                   ]
+                },
+                "api": {
+                  "description": "With `API_DISABLED`: the API to enable at the provider (`gmail.googleapis.com`, `drive.googleapis.com`, ...), from a closed list.",
+                  "type": "string"
                 }
               },
               "required": [
@@ -90514,6 +90393,159 @@
           }
         },
         "additionalProperties": false
+      },
+      "DiagnosticReportResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "connection",
+                  "provider_app",
+                  "search_provider"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "cli",
+              "health_job"
+            ],
+            "description": "Who ran it: `owner`, `admin`, `cli` or the daily `health_job`."
+          },
+          "overall": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "skipped"
+            ],
+            "description": "`fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran."
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "finishedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,39}(:[a-z0-9_]{1,40})?$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "warn",
+                    "fail",
+                    "skipped"
+                  ]
+                },
+                "code": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z_]{0,39}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "remedy": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z_]{0,39}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ms": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "code",
+                "remedy",
+                "ms"
+              ],
+              "additionalProperties": false,
+              "description": "One stage, in order: `id` (`status`, `provider_installed`, `sign_in`, `capability:<name>`, `server`, `latency`, or a provider's own), `status` (`pass`, `warn`, `fail`, `skipped`), `code` (closed list, never provider text), `remedy` (a key of the remedy table, rendered by the client), `ms`, and `data` (counts, booleans, a host name or an id; never content, an address or a token)."
+            }
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "trigger",
+          "overall",
+          "startedAt",
+          "finishedAt",
+          "stages"
+        ]
       },
       "ConnectionActivityResponseDto": {
         "type": "object",
@@ -90824,159 +90856,6 @@
           "targetId",
           "overall",
           "at"
-        ]
-      },
-      "DiagnosticReportResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "target": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "connection",
-                  "provider_app",
-                  "search_provider"
-                ]
-              },
-              "id": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "id"
-            ]
-          },
-          "trigger": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "admin",
-              "cli",
-              "health_job"
-            ],
-            "description": "Who ran it: `owner`, `admin`, `cli` or the daily `health_job`."
-          },
-          "overall": {
-            "type": "string",
-            "enum": [
-              "pass",
-              "warn",
-              "fail",
-              "skipped"
-            ],
-            "description": "`fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran."
-          },
-          "startedAt": {
-            "type": "string",
-            "description": "ISO 8601 timestamp"
-          },
-          "finishedAt": {
-            "type": "string",
-            "description": "ISO 8601 timestamp"
-          },
-          "stages": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,39}(:[a-z0-9_]{1,40})?$"
-                },
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "pass",
-                    "warn",
-                    "fail",
-                    "skipped"
-                  ]
-                },
-                "code": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "pattern": "^[A-Z][A-Z_]{0,39}$"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "remedy": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "pattern": "^[A-Z][A-Z_]{0,39}$"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "ms": {
-                  "anyOf": [
-                    {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "data": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
-                  },
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 200,
-                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      }
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "id",
-                "status",
-                "code",
-                "remedy",
-                "ms"
-              ],
-              "additionalProperties": false,
-              "description": "One stage, in order: `id` (`status`, `provider_installed`, `sign_in`, `capability:<name>`, `server`, `latency`, or a provider's own), `status` (`pass`, `warn`, `fail`, `skipped`), `code` (closed list, never provider text), `remedy` (a key of the remedy table, rendered by the client), `ms`, and `data` (counts, booleans, a host name or an id; never content, an address or a token)."
-            }
-          }
-        },
-        "required": [
-          "id",
-          "target",
-          "trigger",
-          "overall",
-          "startedAt",
-          "finishedAt",
-          "stages"
         ]
       },
       "MailTriggerResponseDto": {
@@ -99345,6 +99224,35 @@
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
                     "description": "Time spent working, waits for a person excluded"
+                  },
+                  "web": {
+                    "description": "What the run did on the web (E50.7); absent when it made no web call",
+                    "type": "object",
+                    "properties": {
+                      "searches": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "reads": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Pages read with web_fetch"
+                      },
+                      "estimatedSearchCostUsd": {
+                        "description": "An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost",
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "searches",
+                      "reads",
+                      "estimatedSearchCostUsd"
+                    ]
                   }
                 },
                 "required": [
@@ -99691,6 +99599,20 @@
                               }
                             ],
                             "description": "Most a run may cost in US dollars. `null` means unlimited."
+                          },
+                          "maxWebCalls": {
+                            "default": null,
+                            "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10000
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "warnAtPercent": {
                             "type": "integer",
@@ -105325,6 +105247,10 @@
                   "type": "boolean",
                   "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
                 },
+                "allowWebSearch": {
+                  "type": "boolean",
+                  "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105343,6 +105269,7 @@
                 "allowSavedIdentity",
                 "allowSavedCards",
                 "allowConnections",
+                "allowWebSearch",
                 "paused"
               ]
             },
@@ -105707,6 +105634,10 @@
                 "type": "boolean",
                 "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
               },
+              "allowWebSearch": {
+                "type": "boolean",
+                "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105725,6 +105656,7 @@
               "allowSavedIdentity",
               "allowSavedCards",
               "allowConnections",
+              "allowWebSearch",
               "paused"
             ]
           },
@@ -105857,6 +105789,10 @@
             "type": "boolean",
             "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
           },
+          "allowWebSearch": {
+            "type": "boolean",
+            "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105875,6 +105811,7 @@
           "allowSavedIdentity",
           "allowSavedCards",
           "allowConnections",
+          "allowWebSearch",
           "paused"
         ]
       },
@@ -105949,6 +105886,9 @@
             "type": "boolean"
           },
           "allowConnections": {
+            "type": "boolean"
+          },
+          "allowWebSearch": {
             "type": "boolean"
           },
           "paused": {

@@ -341,6 +341,19 @@ What the owner sees: a bell and push notification **"Reconnect an account"**, th
 
 The daily job `connections.health` (Administration → Jobs; 04:17 UTC, server-only) refreshes connections that were neither used nor refreshed in the last 20 hours and flags the ones that fail, so a token does not die of inactivity.
 
+### A connection does not work: read its diagnostics
+
+1. **The owner** opens the connection's diagnostics (`POST /api/connections/{id}/diagnose`; the last reports at `GET /api/connections/{id}/diagnostics`). Each stage has a code and a remedy key whose words are in `packages/shared/diagnostics.json`. An administrator cannot read a user's report: ask the owner for the codes (they hold no content, address or token).
+2. **Read the first stage that is not `pass`** ([connections.md, the stages](../connections.md#what-needs-reconnect-means)):
+   - `sign_in` `GRANT_REVOKED` / `NO_REFRESH_TOKEN` / `TOKEN_STORE_FAILED`: [the owner reconnects](#a-connection-needs-reconnecting).
+   - `sign_in` `APP_CREDENTIALS_REFUSED`: the deployment's client id or secret is refused, for every owner. Test the app (below) and [rotate the secret](#rotate-the-providers-app-secret).
+   - `permissions` `PERMISSION_MISSING` (`data.capability` names it): the owner uses **Change what it can do** and ticks that permission.
+   - `capability:<name>` `API_DISABLED` (`data.api` names it, Google): enable that API in the Google Cloud project of the sign-in client (APIs & Services, Library, the API, Enable). Nothing to reconnect.
+   - `MAILBOX_NOT_FOUND`, `LICENSE_MISSING`, `ADMIN_CONSENT_REQUIRED` (Microsoft): the account's organization has to give it a mailbox or a licence, or approve the app; or the owner switches that capability off.
+   - `clock` `CLOCK_SKEW`: set the server to synchronise its clock (NTP).
+   - `token_lifetime` `REFRESH_STALE`: check that the `connections.health` job runs (Administration, Jobs).
+3. **Test the deployment's app** with no user: Administration, Connections, or `POST /api/connections/admin/apps/{google|microsoft}/diagnose` (`system_settings:write`). `client_check` `APP_CREDENTIALS_REFUSED` is a wrong or expired secret; `redirect_uri` `APP_URL_MISMATCH` means `APP_URL` is not the address the console is served on (the redirect URI registered at the provider must match it); `discovery` `TENANT_NOT_FOUND` is a Microsoft tenant setting that does not exist ([connections.md, the app's test](../connections.md#test-the-app-before-anyone-connects-e5011)).
+
 ### A connection will not complete (the owner approved everything and came back to an error)
 
 The owner passes the provider's consent screens, is returned to the console, and the Connections page shows a red banner. The banner names which way it failed (#670); the audit log says why. The callback is deliberately **not** in the nginx access log or the API request log, so the audit is the place to look.

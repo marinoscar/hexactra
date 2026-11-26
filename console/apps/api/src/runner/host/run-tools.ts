@@ -23,6 +23,11 @@ export interface RunToolsOptions<C extends AnyContext> {
   mcp: readonly RunnerTool<C>[];
   mcpFamilies?: readonly ToolFamily<C>[];
   /**
+   * Web search (E50.7): `web_search` and `web_fetch` and the web family, given ONLY when the run's snapshot says web search is on. Registered
+   * after the MCP tools and before `finish`; null or absent, the run is offered exactly the tools, in the order, it was before.
+   */
+  web?: { tools: readonly RunnerTool<C>[]; family: ToolFamily<C> } | null;
+  /**
    * The owner's learned procedures (E46.22): given ONLY when the run's Knowledge Graph mode is `reuse`, and registered after every other tool,
    * so a run with the feature off is offered exactly the tools, in the order, it was before.
    */
@@ -54,10 +59,12 @@ export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): T
   if (o.connections) registry.registerAll(connectionTools as unknown as RunnerTool<C>[]);
   // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.
   registry.registerAll(o.mcp);
+  // Web search (E50.7): offered to every run of an owner who set it up and switched it on, a run that never opens a browser too.
+  if (o.web) registry.registerAll(o.web.tools);
   registry.register(browserTools.finish as unknown as RunnerTool<C>);
   if (o.procedures) registry.registerAll(o.procedures.tools);
   const siteFacts = o.siteFacts && !noBrowser ? o.siteFacts : null;
   if (siteFacts) registry.registerAll(siteFacts.tools);
-  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : []), ...(siteFacts ? [siteFacts.family] : [])]);
+  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(o.web ? [o.web.family] : []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : []), ...(siteFacts ? [siteFacts.family] : [])]);
   return registry;
 }

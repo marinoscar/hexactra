@@ -3,13 +3,12 @@
 import { z } from 'zod';
 
 import { defineRunnerTool, digest } from '@marinoscar/hexactra-agent';
-import { callPort, holdsSecret } from '../call';
+import { callPort, holdsSecret, WEB_SPAN_ATTRS } from '../call';
 import type { WebContext } from '../context';
 import { WEB_SITE_GATE, type WebSiteRequest } from '../gates/web-site-gate';
 import { cleanUrl, formatSearch, providerId, searchErrorText, siteRefusal, WEB_SENTENCES } from '../results';
 
-/** The span attributes the web tools add (closed, content-free names; the host keeps only the names it allows). */
-export const WEB_SPAN_ATTRS = { provider: 'hexactra.web.provider', results: 'hexactra.web.results' } as const;
+export { WEB_SPAN_ATTRS };
 
 const DEFAULT_COUNT = 5;
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;

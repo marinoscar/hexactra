@@ -7080,6 +7080,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/admin/apps/{provider}/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the deployment's app at a provider
+         * @description Checks the app before anyone connects, with no user: `app_config` (installed, a client id and a secret set; the switch off only warns), `redirect_uri` (the address the console sends is https and on the address you reached the console on; host names only), `discovery` (the provider's sign-in endpoints answer; Microsoft: the configured tenant exists), `client_check` (a token request with a deliberately invalid code tells a refused client id or secret from a good one; `skipped` with `NEEDS_A_SIGN_IN` when the answer cannot tell) and, for Google, `picker_key`. Stores the report (target kind `provider_app`, no user; the last 20 are kept) and returns it. Read calls only; nothing is issued. The report holds the client id's last four characters at most, never the secret.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        post: operations["connectionsAdmin_diagnose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/apps/{provider}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The last tests of the deployment's app at a provider
+         * @description Newest first: `limit` (default 5, at most 20). Codes, remedy keys, counts, host names and timings only.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["connectionsAdmin_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{id}/activity": {
         parameters: {
             query?: never;
@@ -8110,94 +8154,6 @@ export interface paths {
          *     **Requires:** authentication, plus permission `system_settings:read`.
          */
         get: operations["webSearchAdmin_usage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/web-search/diagnose": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Diagnose web search for you
-         * @description The report of the provider that answers for you (or `?provider=<id>`), with your effective key tier, stored with you as its owner (the last 20 are kept). Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.
-         *
-         *     **Requires:** authentication, plus permission `web_search:write`.
-         */
-        post: operations["webSearchDiagnostics_diagnose"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/web-search/diagnostics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Your last web search diagnostic reports
-         * @description Newest first, every provider: `limit` (default 5, at most 20). Codes, remedy keys, counts, timings and host names only.
-         *
-         *     **Requires:** authentication, plus permission `web_search:read`.
-         */
-        get: operations["webSearchDiagnostics_history"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/web-search/admin/providers/{id}/diagnose": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Diagnose a search provider with the deployment's key
-         * @description The report with the deployment tier ONLY (never a user's key), stored with no owner; the switches only warn here, so a key can be tested before search is switched on. The live query counts as one call of yours. Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.
-         *
-         *     **Requires:** authentication, plus permission `system_settings:write`.
-         */
-        post: operations["webSearchDiagnostics_diagnoseDeployment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/web-search/admin/providers/{id}/diagnostics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A search provider's last deployment reports
-         * @description Newest first: `limit` (default 5, at most 20). The deployment tier only; no user.
-         *
-         *     **Requires:** authentication, plus permission `system_settings:read`.
-         */
-        get: operations["webSearchDiagnostics_historyDeployment"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10661,6 +10617,18 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
+             * @example SERVICE_CREDENTIAL_UNKNOWN
+             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
+             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
+             * @example SERVICE_CREDENTIAL_INVALID
+             * @example WEB_SEARCH_NOT_CONFIGURED
+             * @example WEB_SEARCH_AUTH_REFUSED
+             * @example WEB_SEARCH_RATE_LIMITED
+             * @example WEB_SEARCH_QUOTA_EXCEEDED
+             * @example WEB_SEARCH_UNAVAILABLE
+             * @example WEB_SEARCH_LIMIT_REACHED
+             * @example WEB_SEARCH_ABORTED
+             * @example WEB_SEARCH_TEST_RATE_LIMITED
              * @example TASK_BUILDER_NOT_FOUND
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
@@ -10680,19 +10648,6 @@ export interface components {
              * @example DELIVERY_TEST_RATE_LIMITED
              * @example RECIPIENT_NOT_CONFIRMED
              * @example RECIPIENT_LIMIT
-             * @example SERVICE_CREDENTIAL_UNKNOWN
-             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
-             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
-             * @example SERVICE_CREDENTIAL_INVALID
-             * @example WEB_SEARCH_NOT_CONFIGURED
-             * @example WEB_SEARCH_AUTH_REFUSED
-             * @example WEB_SEARCH_RATE_LIMITED
-             * @example WEB_SEARCH_QUOTA_EXCEEDED
-             * @example WEB_SEARCH_UNAVAILABLE
-             * @example WEB_SEARCH_LIMIT_REACHED
-             * @example WEB_SEARCH_ABORTED
-             * @example WEB_SEARCH_TEST_RATE_LIMITED
-             * @example WEB_SEARCH_PROVIDER_UNKNOWN
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -17162,6 +17117,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -17376,6 +17336,11 @@ export interface components {
                         maxOutputTokens: number | null;
                         /** @description Most a run may cost in US dollars. `null` means unlimited. */
                         maxCostUsd: number | null;
+                        /**
+                         * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                         * @default null
+                         */
+                        maxWebCalls?: number | null;
                         /** @description Warn the owner when any set budget reaches this percentage. */
                         warnAtPercent: number;
                     };
@@ -17514,6 +17479,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -17600,6 +17570,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -19117,6 +19092,8 @@ export interface components {
                 ok: boolean;
                 /** @description A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
                 code: string | null;
+                /** @description With `API_DISABLED`: the API to enable at the provider (`gmail.googleapis.com`, `drive.googleapis.com`, ...), from a closed list. */
+                api?: string;
             }[];
         };
         RemoveConnectionResponseDto: {
@@ -19155,6 +19132,40 @@ export interface components {
             clientSecret?: string;
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
+        };
+        DiagnosticReportResponseDto: {
+            /** Format: uuid */
+            id: string;
+            target: {
+                /** @enum {string} */
+                kind: "connection" | "provider_app" | "search_provider";
+                id: string;
+            };
+            /**
+             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
+             * @enum {string}
+             */
+            trigger: "owner" | "admin" | "cli" | "health_job";
+            /**
+             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
+             * @enum {string}
+             */
+            overall: "pass" | "warn" | "fail" | "skipped";
+            /** @description ISO 8601 timestamp */
+            startedAt: string;
+            /** @description ISO 8601 timestamp */
+            finishedAt: string;
+            stages: {
+                id: string;
+                /** @enum {string} */
+                status: "pass" | "warn" | "fail" | "skipped";
+                code: string | null;
+                remedy: string | null;
+                ms: number | null;
+                data?: {
+                    [key: string]: string | number | boolean;
+                };
+            }[];
         };
         ConnectionActivityResponseDto: {
             /** @description Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name. */
@@ -19223,40 +19234,6 @@ export interface components {
             overall: "pass" | "warn" | "fail" | "skipped";
             /** @description When its last report finished ("last checked"). */
             at: string;
-        };
-        DiagnosticReportResponseDto: {
-            /** Format: uuid */
-            id: string;
-            target: {
-                /** @enum {string} */
-                kind: "connection" | "provider_app" | "search_provider";
-                id: string;
-            };
-            /**
-             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
-             * @enum {string}
-             */
-            trigger: "owner" | "admin" | "cli" | "health_job";
-            /**
-             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
-             * @enum {string}
-             */
-            overall: "pass" | "warn" | "fail" | "skipped";
-            /** @description ISO 8601 timestamp */
-            startedAt: string;
-            /** @description ISO 8601 timestamp */
-            finishedAt: string;
-            stages: {
-                id: string;
-                /** @enum {string} */
-                status: "pass" | "warn" | "fail" | "skipped";
-                code: string | null;
-                remedy: string | null;
-                ms: number | null;
-                data?: {
-                    [key: string]: string | number | boolean;
-                };
-            }[];
         };
         MailTriggerResponseDto: {
             /** Format: uuid */
@@ -21501,6 +21478,14 @@ export interface components {
                     costKnown: boolean;
                     /** @description Time spent working, waits for a person excluded */
                     activeMs: number;
+                    /** @description What the run did on the web (E50.7); absent when it made no web call */
+                    web?: {
+                        searches: number;
+                        /** @description Pages read with web_fetch */
+                        reads: number;
+                        /** @description An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost */
+                        estimatedSearchCostUsd: number | null;
+                    };
                 };
             };
             /** @description What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed. */
@@ -21576,6 +21561,11 @@ export interface components {
                         maxOutputTokens: number | null;
                         /** @description Most a run may cost in US dollars. `null` means unlimited. */
                         maxCostUsd: number | null;
+                        /**
+                         * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                         * @default null
+                         */
+                        maxWebCalls?: number | null;
                         /** @description Warn the owner when any set budget reaches this percentage. */
                         warnAtPercent: number;
                     };
@@ -22868,6 +22858,8 @@ export interface components {
                 allowSavedCards: boolean;
                 /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
+                /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+                allowWebSearch: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -22969,6 +22961,8 @@ export interface components {
                 allowSavedCards: boolean;
                 /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
+                /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+                allowWebSearch: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -23007,6 +23001,8 @@ export interface components {
             allowSavedCards: boolean;
             /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
             allowConnections: boolean;
+            /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+            allowWebSearch: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -23023,6 +23019,7 @@ export interface components {
             allowSavedIdentity?: boolean;
             allowSavedCards?: boolean;
             allowConnections?: boolean;
+            allowWebSearch?: boolean;
             paused?: boolean;
         };
         UsageReportResponseDto: {
@@ -49487,6 +49484,116 @@ export interface operations {
             };
         };
     };
+    connectionsAdmin_diagnose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_history: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     connectionFiles_recent: {
         parameters: {
             query?: never;
@@ -52581,239 +52688,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["WebSearchUsageRowDto"][];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    webSearchDiagnostics_diagnose: {
-        parameters: {
-            query?: {
-                /** @description A provider id; default: the one that answers for you. */
-                provider?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["DiagnosticReportResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description `WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    webSearchDiagnostics_history: {
-        parameters: {
-            query?: {
-                /** @description How many of the last reports (default 5, at most 20). */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["DiagnosticReportResponseDto"][];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    webSearchDiagnostics_diagnoseDeployment: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["DiagnosticReportResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description `WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    webSearchDiagnostics_historyDeployment: {
-        parameters: {
-            query?: {
-                /** @description How many of the last reports (default 5, at most 20). */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["DiagnosticReportResponseDto"][];
                     };
                 };
             };

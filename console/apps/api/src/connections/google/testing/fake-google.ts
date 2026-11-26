@@ -196,6 +196,15 @@ export class FakeGoogle extends OutboundHttp {
   client = { id: 'fake-client-id', secret: 'fake-client-secret' };
   /** Milliseconds each request takes (to test abort). */
   latencyMs = 0;
+  /**
+   * E50.11: APIs switched off in the fake Cloud project, by service id (`gmail.googleapis.com`, `calendar-json.googleapis.com`,
+   * `drive.googleapis.com`, `docs.googleapis.com`, `sheets.googleapis.com`): a call to one answers Google's 403 SERVICE_DISABLED.
+   */
+  readonly disabledApis = new Set<string>();
+  /** E50.11: how far the fake's clock (its `Date` header) is ahead of the server's. */
+  clockSkewMs = 0;
+  /** E50.11: the discovery document answers this status instead of 200 (0: a lost connection). */
+  discoveryStatus = 200;
   private readonly stubs: { match: RegExp; stub: FakeStub | 'network' | 'timeout'; times: number }[] = [];
   private readonly codes = new Map<string, Code>();
   private readonly pending = new Map<string, Pending>();
@@ -242,7 +251,8 @@ export class FakeGoogle extends OutboundHttp {
     this.inFlight++;
     this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
     try {
-      return await this.handle(req);
+      const res = await this.handle(req);
+      return { ...res, headers: { date: new Date(Date.now() + this.clockSkewMs).toUTCString(), ...res.headers } };
     } finally {
       this.inFlight--;
     }
@@ -288,9 +298,39 @@ export class FakeGoogle extends OutboundHttp {
     return a ?? null;
   }
 
+  /** The service id of a request, as Google names it in a SERVICE_DISABLED answer. */
+  static serviceOf(host: string, path: string): string | null {
+    if (host === 'gmail.googleapis.com') return 'gmail.googleapis.com';
+    if (host === 'www.googleapis.com' && path.startsWith('/calendar/')) return 'calendar-json.googleapis.com';
+    if (host === 'www.googleapis.com' && (path.startsWith('/drive/') || path.startsWith('/upload/drive/'))) return 'drive.googleapis.com';
+    if (host === 'docs.googleapis.com') return 'docs.googleapis.com';
+    if (host === 'sheets.googleapis.com') return 'sheets.googleapis.com';
+    if (host === 'people.googleapis.com') return 'people.googleapis.com';
+    return null;
+  }
+
   private route(rec: RecordedRequest): OutboundResponse {
     const { host, path } = rec;
     if (host === 'oauth2.googleapis.com') return this.oauthEndpoint(rec);
+    if (host === 'accounts.google.com' && path === '/.well-known/openid-configuration') {
+      if (this.discoveryStatus === 0) throw new OutboundHttpError('network', 'Network error.');
+      return this.discoveryStatus === 200
+        ? json(200, { issuer: 'https://accounts.google.com', authorization_endpoint: 'https://accounts.google.com/o/oauth2/v2/auth', token_endpoint: 'https://oauth2.googleapis.com/token', userinfo_endpoint: 'https://openidconnect.googleapis.com/v1/userinfo' })
+        : json(this.discoveryStatus, {});
+    }
+    const service = FakeGoogle.serviceOf(host, path);
+    if (service && this.disabledApis.has(service)) {
+      // Google's documented shape: the ErrorInfo names the service; the message names the project (never read by the adapter).
+      return json(403, {
+        error: {
+          code: 403,
+          message: `${service} has not been used in project 123456789012 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/${service}/overview?project=123456789012 (fake message)`,
+          status: 'PERMISSION_DENIED',
+          errors: [{ reason: 'accessNotConfigured', domain: 'usageLimits', message: 'fake' }],
+          details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'SERVICE_DISABLED', domain: 'googleapis.com', metadata: { service, consumer: 'projects/123456789012' } }],
+        },
+      });
+    }
     const account = this.account(rec);
     if (!account) return gerr(401, 'UNAUTHENTICATED', 'authError', 'Invalid Credentials');
     if (host === 'openidconnect.googleapis.com') return json(200, { sub: account.sub, email: account.email, name: account.name, email_verified: true });

@@ -74,6 +74,7 @@ export const SEARCH_REMEDIES: Readonly<Record<string, string>> = {
   QUOTA_EXCEEDED: 'SEARCH_QUOTA_EXCEEDED',
   UNAVAILABLE: 'SEARCH_UNAVAILABLE',
   PRIVATE_TARGET: 'SEARCH_PRIVATE_TARGET',
+  PROVIDER_OFF: 'SEARCH_PROVIDER_OFF',
 };
 
 export const searchRemedy = (code: string | null | undefined): string | null => (code ? (SEARCH_REMEDIES[code] ?? code) : null);

@@ -6,6 +6,14 @@ import { isWebToolError, type WebToolErrorCode } from './ports';
 
 export type PortOutcome<T> = { ok: true; value: T } | { ok: false; code: WebToolErrorCode } | { ok: false; stopped: string };
 
+/** The span attributes the web tools add (closed, content-free names and values; the host keeps only the names it allows). */
+export const WEB_SPAN_ATTRS = { provider: 'hexactra.web.provider', results: 'hexactra.web.results', kind: 'hexactra.web.kind', outcome: 'hexactra.web.outcome' } as const;
+
+/** What a call to a port came to, for the span: `ok`, `stopped`, or the error code in lower case (`limit_reached`, `blocked`, ...). */
+function spanOutcome(ctx: WebContext, tool: string, outcome: string): void {
+  ctx.ports.telemetry.toolAttributes({ [WEB_SPAN_ATTRS.kind]: tool === 'web_fetch' ? 'fetch' : 'search', [WEB_SPAN_ATTRS.outcome]: outcome });
+}
+
 /** How long the run page says a web call may take. */
 export const WEB_CALL_TIMEOUT_MS = 30_000;
 
@@ -18,13 +26,18 @@ export async function callPort<T>(ctx: WebContext, tool: string, fn: (signal: Ab
   if (refused) return { ok: false, refused };
   await ctx.setActivity('acting', { action: { type: tool }, timeoutMs: WEB_CALL_TIMEOUT_MS });
   try {
-    return { ok: true, value: await fn(ctx.ports.control.abortSignal) };
+    const value = await fn(ctx.ports.control.abortSignal);
+    spanOutcome(ctx, tool, 'ok');
+    return { ok: true, value };
   } catch (e) {
     if (ctx.ports.control.requested) {
       ctx.state.stop = 'cancel';
+      spanOutcome(ctx, tool, 'stopped');
       return { ok: false, stopped: STOPPED_TEXT };
     }
-    return { ok: false, code: isWebToolError(e) ? e.code : 'UNAVAILABLE' };
+    const code = isWebToolError(e) ? e.code : 'UNAVAILABLE';
+    spanOutcome(ctx, tool, code.toLowerCase());
+    return { ok: false, code };
   } finally {
     await ctx.setActivity('thinking');
   }

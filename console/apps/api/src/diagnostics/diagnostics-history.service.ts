@@ -120,6 +120,19 @@ export class DiagnosticsHistory {
     return { fail: rows.filter((r) => r.overall === 'fail').length, warn: rows.filter((r) => r.overall === 'warn').length };
   }
 
+  /**
+   * The last reports of a target that has no owner (the deployment's app at a provider, E50.11), newest first. The caller has
+   * checked the administrator's permission; a target with an owner is read through {@link list}.
+   */
+  async listUnowned(kind: DiagnosticTargetKind, targetId: string, limit = DEFAULT_HISTORY): Promise<StoredDiagnosticReport[]> {
+    const rows = await this.prisma.connectionDiagnostic.findMany({
+      where: { targetKind: kind, targetId, userId: null },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: Math.min(Math.max(1, limit), KEEP_PER_TARGET),
+    });
+    return rows.map(toReport);
+  }
+
   /** For each of the owner's targets of this kind: the last overall status and time. One query. */
   async summary(userId: string, kind: DiagnosticTargetKind): Promise<DiagnosticSummary[]> {
     const rows = await this.prisma.forUser({ userId }).connectionDiagnostic.findMany({

@@ -164,7 +164,7 @@ export class WebSearchDiagnostics {
     const off = scope.kind === 'deployment' ? 'warn' : 'fail';
     if (!s.enabled) return { status: off, code: 'SEARCH_OFF' };
     if (user && !user.enabled) return { status: 'fail', code: 'SEARCH_OFF', remedy: 'SEARCH_OFF_BY_YOU' };
-    if (!providerSettingsOf(s, provider.id).enabled) return { status: off, code: 'PROVIDER_OFF' };
+    if (!providerSettingsOf(s, provider.id).enabled) return { status: off, code: 'PROVIDER_OFF', remedy: 'SEARCH_PROVIDER_OFF' };
     const at = s.order.indexOf(provider.id);
     if (at < 0) return { status: 'warn', code: 'NOT_IN_ORDER' };
     return { status: 'pass', data: { position: at + 1 } };

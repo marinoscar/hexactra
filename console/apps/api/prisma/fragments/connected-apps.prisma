@@ -35,6 +35,8 @@ model ConnectedAppSettings {
   allowSavedCards Boolean @default(false) @map("allow_saved_cards")
   /// Let this app's runs use the connections the owner switched on (E39.7). On by default for a new app (E50.17); a stored value is kept.
   allowConnections Boolean @default(true) @map("allow_connections")
+  /// Let this app's runs use web search (E50.7) when the owner set it up and switched it on. On by default.
+  allowWebSearch  Boolean  @default(true) @map("allow_web_search")
   /// Refuse new runs and sessions from this app without disconnecting it.
   paused            Boolean  @default(false)
   /// The scopes the owner was already told about (`app.connected`, `app.scope_added`), so a step-up announces only what it adds.

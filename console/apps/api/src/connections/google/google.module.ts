@@ -2,7 +2,9 @@ import { Module, type OnModuleInit } from '@nestjs/common';
 import { AppMetricsService } from '@marinoscar/platform-api/host';
 
 import { OAuthClientModule, OAuthClientService, OutboundHttp } from '../../oauth-client';
+import { DiagnosticsRegistry } from '../../diagnostics/diagnostics.registry';
 import { CapabilityProviderRegistry } from '../capability-provider.registry';
+import { ConnectionAppDiagnostics } from '../connection-app-diagnostics.service';
 import { ConnectionProviderRegistry } from '../connection-provider.registry';
 import { ConnectionTokensService } from '../connection-tokens.service';
 import { ConnectionsModule } from '../connections.module';
@@ -30,10 +32,14 @@ export class GoogleConnectionsModule implements OnModuleInit {
     private readonly capabilities: CapabilityProviderRegistry,
     private readonly adapter: GoogleConnectionAdapter,
     private readonly provider: GoogleCapabilityProvider,
+    private readonly diagnostics: DiagnosticsRegistry,
+    private readonly appDiagnostics: ConnectionAppDiagnostics,
   ) {}
 
   onModuleInit(): void {
     this.adapters.register(this.adapter);
     this.capabilities.register(this.provider);
+    // E50.11: the check of the deployment's app (a connection's own stages are the adapter's `diagnose`, so a test's adapter is used).
+    this.diagnostics.register('provider_app', 'google', this.appDiagnostics.diagnosable('google'));
   }
 }

@@ -96,7 +96,7 @@ describe('a user report', () => {
     expect(stage(off, 'switches').remedy).toBe('SEARCH_OFF');
     const mine = await setup({ user: { webSearch: { enabled: false } } }).user();
     expect(stage(mine, 'switches')).toMatchObject({ status: 'fail', code: 'SEARCH_OFF', remedy: 'SEARCH_OFF_BY_YOU' });
-    expect(stage(await setup({ settings: { order: ['alpha'], providers: { alpha: { enabled: false } } } }).user(), 'switches')).toMatchObject({ status: 'fail', code: 'PROVIDER_OFF' });
+    expect(stage(await setup({ settings: { order: ['alpha'], providers: { alpha: { enabled: false } } } }).user(), 'switches')).toMatchObject({ status: 'fail', code: 'PROVIDER_OFF', remedy: 'SEARCH_PROVIDER_OFF' });
     const t = setup({ settings: { order: [] } });
     await t.setKey('user', MARKER);
     const r = await t.user();

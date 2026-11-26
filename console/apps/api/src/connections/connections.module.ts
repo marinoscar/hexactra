@@ -15,6 +15,7 @@ import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry } from './connection-usage.registry';
 import { ConnectionActivityService } from './connection-activity.service';
 import { ConnectionDiagnosticsController } from './connection-diagnostics.controller';
+import { ConnectionAppDiagnostics } from './connection-app-diagnostics.service';
 import { ConnectionDiagnosticsService } from './connection-diagnostics.service';
 import { ConnectionFilesController } from './connection-files.controller';
 import { ConnectionFilesService } from './connection-files.service';
@@ -59,6 +60,7 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     ConnectionActivityService,
     ConnectionCapabilities,
     ConnectionDiagnosticsService,
+    ConnectionAppDiagnostics,
     ConnectionsHealth,
     ConnectionsHealthHandler,
     ConnectionsHealthTask,
@@ -76,7 +78,7 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     McpServersCheck,
     ConnectionsEgressContributor,
   ],
-  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionDiagnosticsService, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService],
+  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionDiagnosticsService, ConnectionAppDiagnostics, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService],
 })
 export class ConnectionsModule implements OnModuleInit {
   constructor(
