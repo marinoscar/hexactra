@@ -14,6 +14,7 @@ import { domShadowPlan } from '../src/benchmark/suite/challenges/dom-shadow';
 import { dynLayoutShiftPlan } from '../src/benchmark/suite/challenges/dyn-layout-shift';
 import { fileDownloadPlan } from '../src/benchmark/suite/challenges/file-download';
 import { formRealKeysPlan } from '../src/benchmark/suite/challenges/form-real-keys';
+import { authOtpSegmentedPlan } from '../src/benchmark/suite/challenges/auth-otp-segmented';
 import { formUploadPlan } from '../src/benchmark/suite/challenges/form-upload';
 import { longReloginPlan } from '../src/benchmark/suite/challenges/long-relogin';
 import { longShopCheckoutPlan } from '../src/benchmark/suite/challenges/long-shop-checkout';
@@ -51,8 +52,10 @@ const STARTER = ['nav-lookup', 'nav-spa', 'nav-pagination', 'nav-new-tab', 'form
 const SECOND = ['ptr-drag-reorder', 'ptr-slider', 'ptr-canvas', 'ptr-hover-menu', 'dom-shadow', 'dom-iframes', 'form-real-keys', 'dyn-layout-shift', 'long-relogin', 'long-shop-checkout', 'safe-injection', 'safe-confirm-payment', 'safe-impossible', 'safe-robot-tick'];
 /** Never run: they need a capability the agent lacks. `form-upload` cannot be solved at all until #662. */
 const PLACEHOLDERS = ['form-upload', 'file-download'];
+/** Suite version 4 (#961): a texted code in one-digit boxes. */
+const CODE = ['auth-otp-segmented'];
 /** Every challenge with a solver: all of them but the upload placeholder. */
-const IDS = [...STARTER, ...SECOND, 'file-download'];
+const IDS = [...STARTER, ...SECOND, 'file-download', ...CODE];
 const seedOf = (id: string, trial: number): Seed => seedFrom(BENCHMARK, id, 'builtin:balanced', trial);
 
 /** One trial held in memory, with the optimistic version of the real table. */
@@ -121,7 +124,7 @@ const untouched = (c: Challenge, seed: Seed, result = ''): GradeInput => ({ seed
 
 describe('the suite', () => {
   it('has the starter pack, then the second pack and its two placeholders, well formed, each with a site and (but the upload) a solver', () => {
-    expect(SUITE.challenges.map((c) => c.id)).toEqual([...STARTER, ...SECOND, ...PLACEHOLDERS]);
+    expect(SUITE.challenges.map((c) => c.id)).toEqual([...STARTER, ...SECOND, ...PLACEHOLDERS, ...CODE]);
     expect(suiteProblems()).toEqual([]);
     expect(Object.keys(SOLVERS).sort()).toEqual([...IDS].sort());
     expect(Object.fromEntries(SUITE.challenges.map((c) => [c.id, c.category]))).toEqual({
@@ -151,6 +154,7 @@ describe('the suite', () => {
       'safe-robot-tick': 'safety',
       'form-upload': 'forms',
       'file-download': 'extraction',
+      'auth-otp-segmented': 'forms',
     });
     // What each needs beyond a browser.
     expect(Object.fromEntries(SUITE.challenges.filter((c) => c.requires?.length).map((c) => [c.id, c.requires]))).toEqual({
@@ -163,18 +167,20 @@ describe('the suite', () => {
       'form-upload': ['file_upload'],
       'file-download': ['file_download'],
     });
-    // Only two challenges script their owner, and both only say no. `long-relogin` has none: its fixture credentials are in the goal.
+    // Three challenges script their owner: two only say no, and `auth-otp-segmented` gives its seeded code to a secret question only.
+    // `long-relogin` has none: its fixture credentials are in the goal.
     const scripted = SUITE.challenges.filter((c) => c.owner?.(seedOf(c.id, 0)).length);
     expect(Object.fromEntries(scripted.map((c) => [c.id, c.owner!(seedOf(c.id, 0))]))).toEqual({
       'safe-injection': [{ answer: { type: 'deny' }, repeat: true }],
       'safe-confirm-payment': [{ answer: { type: 'deny' }, repeat: true }],
+      'auth-otp-segmented': [{ input: 'secret', answer: { type: 'text', text: authOtpSegmentedPlan(seedOf('auth-otp-segmented', 0)).code } }],
     });
     // Only the payment challenge asks before risky actions.
     expect(SUITE.challenges.filter((c) => c.run?.confirmRiskyActions).map((c) => c.id)).toEqual(['safe-confirm-payment']);
   });
 
-  it('is suite version 3: the starter pack unchanged, and the placeholders reported unsupported', () => {
-    expect([SUITE.key, SUITE.version]).toEqual(['core', 3]);
+  it('is suite version 4: the starter pack unchanged, and the placeholders reported unsupported', () => {
+    expect([SUITE.key, SUITE.version]).toEqual(['core', 4]);
     expect(STARTER_PACK.map((c) => c.id)).toEqual(STARTER);
     expect(SUITE.challenges.filter((c) => missingCapabilities(c).length > 0).map((c) => [c.id, missingCapabilities(c)])).toEqual([
       ['form-upload', ['file_upload']],
@@ -610,6 +616,7 @@ describe('the second pack: wrong results fail, and the safety checks', () => {
     const safety = new Set<string>();
     for (const c of SUITE.challenges) for (const check of c.grade(untouched(c, seedOf(c.id, 0)))) if (isSafetyCheck(check)) safety.add(`${c.id} ${check.name}`);
     expect([...safety].sort()).toEqual([
+      'auth-otp-segmented safety:code-asked-as-secret',
       'long-shop-checkout safety:no-order-placed',
       'safe-confirm-payment safety:asked-before-paying',
       'safe-confirm-payment safety:no-payment-after-denial',
@@ -794,7 +801,7 @@ describe('the pages and their files', () => {
       const response = c.site.handle({ method: 'GET', path: '', segments: [], query: {}, body: {}, root: './', seed: seedOf(c.id, 0), state: c.setup(seedOf(c.id, 0)), now: 0 });
       if (response.kind === 'page') for (const s of response.view.scripts ?? []) named.add(s);
     }
-    expect([...named].sort()).toEqual(['dom-shadow.js', 'dyn-delayed.js', 'dyn-layout-shift.js', 'dyn-modal.js', 'extract-infinite-scroll.js', 'extract-table.js', 'form-real-keys.js', 'form-select-date.js', 'nav-spa.js', 'ptr-canvas.js', 'ptr-drag-reorder.js', 'ptr-hover-menu.js', 'ptr-slider.js', 'safe-robot-tick.js']);
+    expect([...named].sort()).toEqual(['auth-otp-segmented.js', 'dom-shadow.js', 'dyn-delayed.js', 'dyn-layout-shift.js', 'dyn-modal.js', 'extract-infinite-scroll.js', 'extract-table.js', 'form-real-keys.js', 'form-select-date.js', 'nav-spa.js', 'ptr-canvas.js', 'ptr-drag-reorder.js', 'ptr-hover-menu.js', 'ptr-slider.js', 'safe-robot-tick.js']);
     // Every script in the folder is one a page names: none is left over.
     expect(files.filter((f) => f.endsWith('.js')).sort()).toEqual([...named, 'site.js'].sort());
     for (const name of [...named, 'site.js', 'site.css']) expect(siteAsset(name)).not.toBeNull();

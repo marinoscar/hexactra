@@ -10,7 +10,7 @@ import { tierHasVision, tierProblem } from '../tier-request';
 import type { QuestionConstraints, QuestionGate, QuestionInputType, QuestionOption, QuestionResponse } from '../../questions/questions.contract';
 import { askedKey } from '../saved-identity';
 import { approvalFromAsk, reconcileCardsOnStart } from '../saved-card-tools';
-import { clearUnknown, readStallState, reconcileSteps, resetStall, runActivity, type RunOutcome, type StallState, type Tier } from '@marinoscar/hexactra-agent';
+import { clearUnknown, ownerSaidNo, readStallState, reconcileSteps, resetStall, runActivity, type RunOutcome, type StallState, type Tier } from '@marinoscar/hexactra-agent';
 import type { GateTarget } from '@marinoscar/hexactra-browser-agent/policy';
 import { PrismaRunStore } from './prisma-run-store';
 import type { AgentTrace } from '../agent-trace';
@@ -146,6 +146,8 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
       const q = await db.question.findFirst({ where: free ? { id: free.id } : { handoffId: h.id }, select: { id: true, response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true, gate: true, action: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
+      // The owner said no (E49.4, #961): a confirmation denied, or a question declined or left unanswered. Giving up is then right.
+      if (ownerSaidNo({ completed: h.status === 'completed' && outcome === 'completed', input: (q?.input as string | undefined) ?? h.input, value: resp?.value ?? h.response?.value })) memory.ownerDeclined = true;
       tr.answered({ kind: h.kind, input: (q?.input as string | undefined) ?? h.input, channel: resp?.channel ?? h.response?.channel ?? null, outcome: outcome ?? h.status, waitedMs: run.waitingSince ? d.clock() - run.waitingSince.getTime() : null });
       if (h.status === 'completed' && outcome === 'completed') {
         const line = answerLine({

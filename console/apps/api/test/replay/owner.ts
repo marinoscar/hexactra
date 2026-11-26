@@ -3,7 +3,7 @@
 // target the risk gate lets through once, the secret handoff `type_handoff_secret` types. The host's database round trip is not here: a
 // scenario checks the harness and the browser layer, not the question broker.
 import { answerLine } from '@marinoscar/hexactra-browser-agent/request-human-spec';
-import { clearUnknown, type HarnessMemory, type OpenedQuestion, type QuestionPort, type QuestionSpec } from '@marinoscar/hexactra-agent';
+import { clearUnknown, ownerSaidNo, type HarnessMemory, type OpenedQuestion, type QuestionPort, type QuestionSpec } from '@marinoscar/hexactra-agent';
 import { foldConnectionAnswer } from '../../src/runner/host/connections/answer';
 import type { RunMemory } from '../../src/runner/host/run-memory';
 import type { OwnerRule } from './scenario.schema';
@@ -92,6 +92,8 @@ export class OwnerScript {
         break;
     }
     q.answered = { rule, completed };
+    // As the host does (E49.4): a no is remembered, so a failed finish after it is not escalated.
+    if (ownerSaidNo({ completed, input, value })) memory.ownerDeclined = true;
     if (!completed) {
       const declined = (q.spec as { action?: unknown }).action;
       if (declined) {

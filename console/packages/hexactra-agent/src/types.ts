@@ -78,6 +78,10 @@ export interface HarnessMemory {
   stall?: StallState;
   stallsHere?: number;
   stallHandoffs?: number;
+  /** The run already escalated once instead of finishing as failed (E49.4, #961): a second failed finish ends it. */
+  escalatedBeforeGivingUp?: boolean;
+  /** The owner said no in this run (a confirmation denied, a question declined or left unanswered): a failed finish is then not escalated (E49.4). */
+  ownerDeclined?: boolean;
   progressStreak?: number;
   /** The nudge the next round's input carries. */
   pendingNudge?: string;
