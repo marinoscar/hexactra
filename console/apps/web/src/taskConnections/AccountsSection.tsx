@@ -1,4 +1,4 @@
-// "Accounts the agent may use" (E39.10, #607) for a chat, and "Tools and accounts" for a task (#967). A task uses every account and tool the
+// "Tools and accounts" for a task (#967) and a chat (#969). A task uses every account and tool the
 // owner connected, at what they switched on for each, unless the owner limits it; a chat lists its own. Hidden without `connections:read`;
 // read-only without write access. The task form asks nothing about the browser (#967): the agent opens one when the job needs a website.
 import { Alert, Box, Button, Chip, Link, Stack, Typography } from '@mui/material';
@@ -17,7 +17,7 @@ export interface AccountsSectionProps {
   onChange: (next: ConnectionSelection[]) => void;
   disabled?: boolean;
   /** A task (#967): everything the owner connected (`all`) unless limited (`listed`). A chat has no mode: it lists its own. */
-  mode?: { value: ConnectionsMode; onChange: (mode: ConnectionsMode, selections: ConnectionSelection[]) => void };
+  mode?: { value: ConnectionsMode; onChange: (mode: ConnectionsMode, selections: ConnectionSelection[]) => void; limitLabel?: string };
 }
 
 /** An MCP server's enabled tool count, or the chips of what an account can do. */
@@ -77,7 +77,7 @@ export function AccountsSection({ connections, failed = false, selections, onCha
         {!none && !failed && (
           <Box>
             <Button size="small" variant="text" disabled={disabled} onClick={() => mode.onChange('listed', selections.length > 0 ? [...selections] : limitFromAll(connections))}>
-              Limit this task
+              {mode.limitLabel ?? 'Limit this task'}
             </Button>
           </Box>
         )}

@@ -23,10 +23,15 @@ export async function runConnections(
   // A run an AI app started gets the owner's connections only when the owner allowed it for that app, and the task lists them.
   if (appLimits && appLimits.allowConnections !== true) return [];
   const include = { connection: { select: { id: true, userId: true, label: true, provider: true, capabilities: true } } } as const;
-  if (run.taskId) {
-    const task = await d.prisma.task.findFirst({ where: { id: run.taskId, userId: run.userId }, select: { connectionsMode: true } });
-    if (!task) return [];
-    if (task.connectionsMode !== 'listed') {
+  // The task's mode (#967), or the chat's (#969) for a run that is not a task's. An AI app's run never takes a chat's.
+  const owner = run.taskId
+    ? await d.prisma.task.findFirst({ where: { id: run.taskId, userId: run.userId }, select: { connectionsMode: true } })
+    : appLimits || !run.conversationId
+      ? null
+      : await d.prisma.conversation.findFirst({ where: { id: run.conversationId, userId: run.userId }, select: { connectionsMode: true } });
+  if (run.taskId || run.conversationId) {
+    if (!owner) return [];
+    if (owner.connectionsMode !== 'listed') {
       // `all`: read and change, so what the agent may do is exactly what the owner switched on for the connection. Every write still asks.
       const all = await d.prisma.connection.findMany({ where: { userId: run.userId, status: 'active' }, select: include.connection.select, orderBy: [{ label: 'asc' }, { id: 'asc' }] });
       return all.map((c) => ({ connectionId: c.id, access: 'read_write' as const, label: c.label, provider: c.provider, capabilities: capabilitiesOf(c) }));
