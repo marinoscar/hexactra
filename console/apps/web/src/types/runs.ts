@@ -93,6 +93,10 @@ export interface Run {
   /** The AI app that started it (#464); null when no app did. */
   client?: RunClient | null;
   actor?: string | null;
+  /** The batch the run is a row of (E51.1, #1006); null outside a batch, absent from an older console. */
+  batchId?: string | null;
+  /** The run's row in its batch, 1..n; null outside a batch. */
+  batchSeq?: number | null;
   goal: string;
   profile: string;
   result: string | null;
