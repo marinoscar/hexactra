@@ -32895,7 +32895,7 @@
     },
     "/api/secrets/vault/connect": {
       "post": {
-        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` and `allowServiceKeys` adds `vault:service_keys_read` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
         "operationId": "secrets_connect",
         "parameters": [],
         "requestBody": {
@@ -40355,9 +40355,116 @@
         }
       }
     },
+    "/api/service-credentials/{service}/{name}/move": {
+      "post": {
+        "description": "Moves your own key (E50.3) to `credential_store` (the console) or `secrets_provider` (your Vault or the built-in store, `secrets.provider`). It is read, written to the other side, and the old copy is removed only after the write is confirmed: a failed write leaves the key where it was. Into a remote Vault the console cannot write: add the key there as a \"Service key\" opened to the agent, then Move checks that the Vault answers with it and removes the console's copy. Out of a remote Vault the copy there stays (remove it in Vault). The value is never returned. Audited (`service_credential.moved`). Errors: `SERVICE_CREDENTIAL_NOT_SET`, `SERVICE_CREDENTIAL_NOT_IN_PROVIDER`, `SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE`.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "serviceCredentials_move",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveServiceCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoveServiceCredentialResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Move your own key between the console and your secrets provider",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
     "/api/service-credentials/{service}/{name}": {
       "put": {
-        "description": "Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "description": "Stores your own key for this service, encrypted, where your keys are kept (`serviceCredentials`: the console by default, or the built-in store; a key kept in your remote Vault is changed in Vault: `SERVICE_CREDENTIAL_PROVIDER_READ_ONLY`). Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
         "operationId": "serviceCredentials_setOwn",
         "parameters": [
           {
@@ -53249,10 +53356,21 @@
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
+              "SECRETS_VAULT_NOT_CONFIGURED",
+              "SECRETS_VAULT_URL_REFUSED",
+              "SECRETS_VAULT_DISCONNECT_FIRST",
+              "SECRETS_VAULT_NOT_CONNECTED",
+              "SECRETS_VAULT_NEEDS_RECONNECT",
+              "SECRETS_VAULT_UNAVAILABLE",
+              "SECRETS_VAULT_CONNECT_FAILED",
               "SERVICE_CREDENTIAL_UNKNOWN",
               "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
               "SERVICE_CREDENTIAL_NO_ORGANIZATION",
               "SERVICE_CREDENTIAL_INVALID",
+              "SERVICE_CREDENTIAL_NOT_SET",
+              "SERVICE_CREDENTIAL_NOT_IN_PROVIDER",
+              "SERVICE_CREDENTIAL_PROVIDER_READ_ONLY",
+              "SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE",
               "WEB_SEARCH_NOT_CONFIGURED",
               "WEB_SEARCH_AUTH_REFUSED",
               "WEB_SEARCH_RATE_LIMITED",
@@ -53265,13 +53383,6 @@
               "TASK_BUILDER_ARCHIVED",
               "INVALID_TASK_SPEC",
               "TASK_SPEC_INCOMPLETE",
-              "SECRETS_VAULT_NOT_CONFIGURED",
-              "SECRETS_VAULT_URL_REFUSED",
-              "SECRETS_VAULT_DISCONNECT_FIRST",
-              "SECRETS_VAULT_NOT_CONNECTED",
-              "SECRETS_VAULT_NEEDS_RECONNECT",
-              "SECRETS_VAULT_UNAVAILABLE",
-              "SECRETS_VAULT_CONNECT_FAILED",
               "INVALID_DELIVERY",
               "DELIVERY_NOT_FOUND",
               "TOO_MANY_DELIVERIES",
@@ -56410,6 +56521,37 @@
               "provider"
             ]
           },
+          "serviceCredentials": {
+            "type": "object",
+            "properties": {
+              "binding": {
+                "type": "string",
+                "enum": [
+                  "credential_store",
+                  "secrets_provider"
+                ],
+                "description": "Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store)."
+              },
+              "keys": {
+                "description": "Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "credential_store",
+                    "secrets_provider"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "binding"
+            ]
+          },
           "notifications": {
             "type": "object",
             "propertyNames": {
@@ -56967,6 +57109,37 @@
             "required": [
               "enabled",
               "provider"
+            ]
+          },
+          "serviceCredentials": {
+            "type": "object",
+            "properties": {
+              "binding": {
+                "type": "string",
+                "enum": [
+                  "credential_store",
+                  "secrets_provider"
+                ],
+                "description": "Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store)."
+              },
+              "keys": {
+                "description": "Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "credential_store",
+                    "secrets_provider"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "binding"
             ]
           },
           "notifications": {
@@ -57581,6 +57754,39 @@
                       }
                     ],
                     "description": "The search provider you prefer among the usable ones; `null` follows the deployment's order."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "serviceCredentials": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "binding": {
+                    "type": "string",
+                    "enum": [
+                      "credential_store",
+                      "secrets_provider"
+                    ]
+                  },
+                  "keys": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "credential_store",
+                        "secrets_provider"
+                      ]
+                    }
                   }
                 }
               },
@@ -64211,6 +64417,37 @@
                 "required": [
                   "enabled",
                   "provider"
+                ]
+              },
+              "serviceCredentials": {
+                "type": "object",
+                "properties": {
+                  "binding": {
+                    "type": "string",
+                    "enum": [
+                      "credential_store",
+                      "secrets_provider"
+                    ],
+                    "description": "Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store)."
+                  },
+                  "keys": {
+                    "description": "Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "credential_store",
+                        "secrets_provider"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "binding"
                 ]
               },
               "notifications": {
@@ -88631,6 +88868,10 @@
             "description": "Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default.",
             "type": "boolean"
           },
+          "allowServiceKeys": {
+            "description": "Also ask for `vault:service_keys_read` (contract 1.4): the console's own server may read the keys of outside services (a web search provider's) you keep in your Vault as a \"Service key\" opened to the agent, for its calls to that service. Never a login, never a page. A new consent. Off by default.",
+            "type": "boolean"
+          },
           "returnTo": {
             "description": "A path on this console to return to after the consent (default `/settings/secrets`).",
             "type": "string",
@@ -89164,9 +89405,17 @@
                   "type": "string",
                   "enum": [
                     "lookup",
-                    "release"
+                    "release",
+                    "service_key"
                   ],
-                  "description": "`lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed."
+                  "description": "`lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed. `service_key`: the console's own server read one of your keys of outside services (E50.3), for a call to that service."
+                },
+                "serviceKey": {
+                  "description": "For `service_key`: which key (`web_search.brave`). Never its value.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "runId": {
                   "anyOf": [
@@ -89241,14 +89490,15 @@
                         "mfa",
                         "form",
                         "purchase",
-                        "save_login"
+                        "save_login",
+                        "service_call"
                       ]
                     },
                     {
                       "type": "null"
                     }
                   ],
-                  "description": "Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup."
+                  "description": "Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved), or `service_call` (a key read for a call to its service). Null for a lookup."
                 },
                 "outcome": {
                   "type": "string",
@@ -89297,6 +89547,7 @@
                 "id",
                 "at",
                 "event",
+                "serviceKey",
                 "runId",
                 "site",
                 "loginName",
@@ -104592,6 +104843,54 @@
               "organization",
               "system"
             ]
+          },
+          "userBinding": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "vault",
+              "builtin"
+            ],
+            "description": "Where your own key is kept (E50.3): the console, your Vault or the built-in store."
+          },
+          "secretsProvider": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "enum": [
+                      "vault",
+                      "builtin"
+                    ],
+                    "description": "Your active secrets provider (`secrets.provider`)."
+                  },
+                  "writable": {
+                    "type": "boolean",
+                    "description": "The console can write a key there (the built-in store). Into a remote Vault you add the key yourself, then Move checks it."
+                  },
+                  "releasesEnabled": {
+                    "type": "boolean",
+                    "description": "The deployment's `secrets.agentUse` switch: off, no key is read from a secrets provider (the next tier answers)."
+                  },
+                  "ready": {
+                    "type": "boolean",
+                    "description": "The provider can answer now: the built-in store is offered, or your Vault is connected with `vault:service_keys_read`."
+                  }
+                },
+                "required": [
+                  "id",
+                  "writable",
+                  "releasesEnabled",
+                  "ready"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your secrets provider, for Move here; null when this deployment has none."
           }
         },
         "required": [
@@ -104600,7 +104899,9 @@
           "label",
           "binding",
           "tier",
-          "tiers"
+          "tiers",
+          "userBinding",
+          "secretsProvider"
         ]
       },
       "SetServiceCredentialDto": {
@@ -104615,6 +104916,45 @@
         },
         "required": [
           "value"
+        ],
+        "additionalProperties": false
+      },
+      "MoveServiceCredentialResponseDto": {
+        "type": "object",
+        "properties": {
+          "binding": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "vault",
+              "builtin"
+            ],
+            "description": "Where your key is kept now."
+          },
+          "sourceRemoved": {
+            "type": "boolean",
+            "description": "The old copy was removed. False when there was none, or it is in your remote Vault (remove it there)."
+          }
+        },
+        "required": [
+          "binding",
+          "sourceRemoved"
+        ]
+      },
+      "MoveServiceCredentialDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "secrets_provider"
+            ],
+            "description": "`credential_store`: the console. `secrets_provider`: your Vault or the built-in store."
+          }
+        },
+        "required": [
+          "to"
         ],
         "additionalProperties": false
       },

@@ -285,6 +285,11 @@ describe('the remote Vault', () => {
       const err = await search.search(who(s), { query: 'example widgets', count: 1, freshness: null, site: null, signal: new AbortController().signal }).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(WebToolError);
       expect((err as WebToolError).code).toBe('UNAVAILABLE');
+      // The port a run binds (E50.7, `forUser`) answers the same: the agent is told search is not available.
+      const runPort = await search.forUser(s.userId, s.orgId);
+      expect(runPort).not.toBeNull();
+      const viaRun = await runPort!.search({ query: 'example widgets', count: 1, freshness: null, site: null, signal: new AbortController().signal }).catch((e: unknown) => e);
+      expect((viaRun as WebToolError).code).toBe('UNAVAILABLE');
       // The connection is not marked broken by an outage.
       expect((await prisma.secretsConnection.findUniqueOrThrow({ where: { userId_provider: { userId: s.userId, provider: 'vault' } } })).status).toBe('connected');
     } finally {
