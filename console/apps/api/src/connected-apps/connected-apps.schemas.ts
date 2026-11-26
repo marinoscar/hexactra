@@ -22,6 +22,8 @@ export const APP_LIMIT_DEFAULTS = {
   allowSavedCards: false,
   // On by default (E50.17): what the owner switched on is available to every run, an app's too, unless the owner turns it off for the app.
   allowConnections: true,
+  // On by default (E50.7): web search the owner set up and switched on is available to an app's runs too, unless turned off here.
+  allowWebSearch: true,
   paused: false,
 } as const;
 
@@ -54,6 +56,9 @@ export const appLimitsSchema = z.object({
   allowConnections: z
     .boolean()
     .describe("Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."),
+  allowWebSearch: z
+    .boolean()
+    .describe("Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."),
   paused: z.boolean().describe('Refuse new runs and sessions from this app without disconnecting it.'),
 });
 export type AppLimits = z.infer<typeof appLimitsSchema>;
@@ -75,6 +80,7 @@ export const patchAppSettingsSchema = z
     allowSavedIdentity: z.boolean(),
     allowSavedCards: z.boolean(),
     allowConnections: z.boolean(),
+    allowWebSearch: z.boolean(),
     paused: z.boolean(),
   })
   .partial()

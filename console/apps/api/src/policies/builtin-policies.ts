@@ -2,7 +2,8 @@ import { agentPolicySpecSchema, type AgentPolicySpec, type Tier } from './agent-
 
 /**
  * The built-in policies (#401): code, not rows. Read-only; duplicate one to
- * edit a copy. They never pin a model. Bump `version` when a value changes.
+ * edit a copy. They never pin a model. Bump `version` when a value changes
+ * (version 2: `maxWebCalls`, E50.7).
  */
 export const BUILTIN_PREFIX = 'builtin:';
 export const BUILTIN_KEYS = ['economy', 'balanced', 'thorough', 'unlimited'] as const;
@@ -31,16 +32,18 @@ interface Row {
   calls: number | null;
   minutes: number | null;
   cost: number | null;
+  /** Web searches and page reads (E50.7): a refused call over it, never a stop. */
+  web: number | null;
   onStall: AgentPolicySpec['stall']['onStall'];
   escalations: number;
   screenshots: number;
 }
 
 const ROWS: readonly Row[] = [
-  { key: 'economy', name: 'Economy', description: 'Cheap and quick: starts on the fast tier, small budgets.', start: 'fast', max: 'standard', actions: 40, calls: 80, minutes: 10, cost: 0.5, onStall: 'nudge_then_escalate', escalations: 1, screenshots: 1 },
-  { key: 'balanced', name: 'Balanced', description: 'The default: the standard tier, escalating to frontier when stuck.', start: 'standard', max: 'frontier', actions: 60, calls: 120, minutes: 20, cost: 2, onStall: 'nudge_then_escalate', escalations: 2, screenshots: 2 },
-  { key: 'thorough', name: 'Thorough', description: 'Hard tasks: the frontier tier throughout, generous budgets, asks a person when stuck.', start: 'frontier', max: 'frontier', actions: 200, calls: 400, minutes: 60, cost: 10, onStall: 'ask_human', escalations: 0, screenshots: 3 },
-  { key: 'unlimited', name: 'Unlimited', description: 'No budget limits. Runs until it finishes, you stop it or it stalls.', start: 'standard', max: 'frontier', actions: null, calls: null, minutes: null, cost: null, onStall: 'nudge_then_escalate', escalations: 2, screenshots: 2 },
+  { key: 'economy', name: 'Economy', description: 'Cheap and quick: starts on the fast tier, small budgets.', start: 'fast', max: 'standard', actions: 40, calls: 80, minutes: 10, cost: 0.5, web: 10, onStall: 'nudge_then_escalate', escalations: 1, screenshots: 1 },
+  { key: 'balanced', name: 'Balanced', description: 'The default: the standard tier, escalating to frontier when stuck.', start: 'standard', max: 'frontier', actions: 60, calls: 120, minutes: 20, cost: 2, web: 30, onStall: 'nudge_then_escalate', escalations: 2, screenshots: 2 },
+  { key: 'thorough', name: 'Thorough', description: 'Hard tasks: the frontier tier throughout, generous budgets, asks a person when stuck.', start: 'frontier', max: 'frontier', actions: 200, calls: 400, minutes: 60, cost: 10, web: 100, onStall: 'ask_human', escalations: 0, screenshots: 3 },
+  { key: 'unlimited', name: 'Unlimited', description: 'No budget limits. Runs until it finishes, you stop it or it stalls.', start: 'standard', max: 'frontier', actions: null, calls: null, minutes: null, cost: null, web: null, onStall: 'nudge_then_escalate', escalations: 2, screenshots: 2 },
 ];
 
 function build(r: Row): BuiltinPolicy {
@@ -54,12 +57,13 @@ function build(r: Row): BuiltinPolicy {
       maxInputTokens: null,
       maxOutputTokens: null,
       maxCostUsd: r.cost,
+      maxWebCalls: r.web,
       warnAtPercent: 80,
     },
     stall: { maxConsecutiveFailures: 4, maxRepeatedAction: 3, noProgressActions: 10, onStall: r.onStall, maxEscalations: r.escalations },
     context: { screenshotsKept: r.screenshots, pruneBatch: 10, callsPerChunk: r.key === 'economy' ? 8 : 10, observationChars: 6000 },
   };
-  return { id: `${BUILTIN_PREFIX}${r.key}`, key: r.key, name: r.name, description: r.description, version: 1, spec: agentPolicySpecSchema.parse(spec) };
+  return { id: `${BUILTIN_PREFIX}${r.key}`, key: r.key, name: r.name, description: r.description, version: 2, spec: agentPolicySpecSchema.parse(spec) };
 }
 
 export const BUILTIN_POLICIES: readonly BuiltinPolicy[] = ROWS.map(build);

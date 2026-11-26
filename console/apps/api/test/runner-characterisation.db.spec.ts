@@ -21,6 +21,7 @@ import { RunSecretsService } from '../src/secrets/run-secrets.service';
 import { TasksService } from '../src/tasks/tasks.service';
 import { fakeSecretsFabric, FIXTURE, type SecretsFabric } from './support/fake-secrets-fabric';
 import { strictViolations } from './helpers/strict-schema';
+import { FakeWebFetch, FakeWebSearch } from '@marinoscar/hexactra-web-agent/testing';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -287,6 +288,38 @@ describe('goal runner characterisation (E38.5)', () => {
       [finish('Stopped at the limit.', false)],
     ]);
     const outcomes = [await runnerOf(fabric, s.ai).advance(run.id, userId, null)];
+    expect(await record(run.id, s.rounds, fabric, outcomes)).toMatchSnapshot();
+  });
+
+  // E50.7 (#977): the one fixture with web search set up and switched on. Its snapshot is new; the four above have no provider and are unchanged.
+  it('pins a run with web search on: the web family, the two tools, a search, a refused read and a read', async () => {
+    const userId = await login(`char-web-${stamp}@example.test`);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Look up', goal: 'Find the opening year', allowedDomains: ['history.example.test'], confirmRiskyActions: false } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: 'Find the opening year of the Example Bridge' } });
+    const fabric = fakeSecretsFabric('https://history.example.test/');
+    const search = new FakeWebSearch();
+    search.provider = 'brave';
+    search.results.set('Example Bridge opened', [
+      { title: 'Example Bridge', url: 'https://history.example.test/bridge', snippet: 'Opened in 1932.', publishedAt: null },
+      { title: 'Elsewhere', url: 'https://elsewhere.example.test/bridge', snippet: 'A copy.', publishedAt: null },
+    ]);
+    const fetch = new FakeWebFetch();
+    fetch.pages.set('https://history.example.test/bridge', { title: 'The bridge', text: 'The Example Bridge opened in 1932.' });
+    const s = scriptedAi([
+      [
+        ['web_search', { query: 'Example Bridge opened', count: null, freshness: null, site: null }],
+        ['web_fetch', { url: 'https://elsewhere.example.test/bridge', max_chars: null }],
+        ['web_fetch', { url: 'https://history.example.test/bridge', max_chars: null }],
+      ],
+      [finish('It opened in 1932.')],
+    ]);
+    const runner = runnerOf(fabric, s.ai);
+    runner.webSearch = { system: async () => ({ enabled: true, fetch: { enabled: true } }), userSettings: async () => ({ enabled: true, provider: null }), candidates: async () => [{ provider: { id: 'brave' }, tier: 'user' }], costOf: () => 0.005, forUser: async () => search } as never;
+    runner.webFetch = { forRun: async () => fetch } as never;
+    const outcomes = [await runner.advance(run.id, userId, null)];
+    expect(search.calls).toHaveLength(1);
+    expect(fetch.calls.map((c) => c.url)).toEqual(['https://history.example.test/bridge']);
     expect(await record(run.id, s.rounds, fabric, outcomes)).toMatchSnapshot();
   });
 });

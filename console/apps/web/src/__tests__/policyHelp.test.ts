@@ -64,7 +64,7 @@ describe('policy helper texts match the API', () => {
   });
 
   it('covers every budget, and the enums the editor offers are the API\'s', () => {
-    expect(Object.keys(section('budget').properties!).sort()).toEqual([...BUDGET_LIMIT_KEYS, 'warnAtPercent'].sort());
+    expect(Object.keys(section('budget').properties!).sort()).toEqual([...BUDGET_LIMIT_KEYS, 'maxWebCalls', 'warnAtPercent'].sort());
     expect(field('models', 'startTier').enum).toEqual([...TIERS]);
     expect(field('stall', 'onStall').enum).toEqual([...STALL_ACTIONS]);
   });

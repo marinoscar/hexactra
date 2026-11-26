@@ -6593,7 +6593,7 @@ export interface paths {
         put?: never;
         /**
          * Start connecting your Vault (OAuth 2.1 authorization code with PKCE)
-         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` and `allowServiceKeys` adds `vault:service_keys_read` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
+         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
          *
          *     **Requires:** authentication, plus permission `secrets:write`.
          */
@@ -7075,6 +7075,50 @@ export interface paths {
          *     **Requires:** authentication, plus permission `system_settings:write`.
          */
         delete: operations["connectionsAdmin_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/apps/{provider}/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the deployment's app at a provider
+         * @description Checks the app before anyone connects, with no user: `app_config` (installed, a client id and a secret set; the switch off only warns), `redirect_uri` (the address the console sends is https and on the address you reached the console on; host names only), `discovery` (the provider's sign-in endpoints answer; Microsoft: the configured tenant exists), `client_check` (a token request with a deliberately invalid code tells a refused client id or secret from a good one; `skipped` with `NEEDS_A_SIGN_IN` when the answer cannot tell) and, for Google, `picker_key`. Stores the report (target kind `provider_app`, no user; the last 20 are kept) and returns it. Read calls only; nothing is issued. The report holds the client id's last four characters at most, never the secret.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        post: operations["connectionsAdmin_diagnose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/apps/{provider}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The last tests of the deployment's app at a provider
+         * @description Newest first: `limit` (default 5, at most 20). Codes, remedy keys, counts, host names and timings only.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["connectionsAdmin_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7974,28 +8018,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/service-credentials/{service}/{name}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Move your own key between the console and your secrets provider
-         * @description Moves your own key (E50.3) to `credential_store` (the console) or `secrets_provider` (your Vault or the built-in store, `secrets.provider`). It is read, written to the other side, and the old copy is removed only after the write is confirmed: a failed write leaves the key where it was. Into a remote Vault the console cannot write: add the key there as a "Service key" opened to the agent, then Move checks that the Vault answers with it and removes the console's copy. Out of a remote Vault the copy there stays (remove it in Vault). The value is never returned. Audited (`service_credential.moved`). Errors: `SERVICE_CREDENTIAL_NOT_SET`, `SERVICE_CREDENTIAL_NOT_IN_PROVIDER`, `SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE`.
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        post: operations["serviceCredentials_move"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/service-credentials/{service}/{name}": {
         parameters: {
             query?: never;
@@ -8006,7 +8028,7 @@ export interface paths {
         get?: never;
         /**
          * Set your own key
-         * @description Stores your own key for this service, encrypted, where your keys are kept (`serviceCredentials`: the console by default, or the built-in store; a key kept in your remote Vault is changed in Vault: `SERVICE_CREDENTIAL_PROVIDER_READ_ONLY`). Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).
+         * @description Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).
          *
          *     **Requires:** authentication, plus permission `connections:write`.
          */
@@ -10595,6 +10617,18 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
+             * @example SERVICE_CREDENTIAL_UNKNOWN
+             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
+             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
+             * @example SERVICE_CREDENTIAL_INVALID
+             * @example WEB_SEARCH_NOT_CONFIGURED
+             * @example WEB_SEARCH_AUTH_REFUSED
+             * @example WEB_SEARCH_RATE_LIMITED
+             * @example WEB_SEARCH_QUOTA_EXCEEDED
+             * @example WEB_SEARCH_UNAVAILABLE
+             * @example WEB_SEARCH_LIMIT_REACHED
+             * @example WEB_SEARCH_ABORTED
+             * @example WEB_SEARCH_TEST_RATE_LIMITED
              * @example TASK_BUILDER_NOT_FOUND
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
@@ -10614,22 +10648,6 @@ export interface components {
              * @example DELIVERY_TEST_RATE_LIMITED
              * @example RECIPIENT_NOT_CONFIRMED
              * @example RECIPIENT_LIMIT
-             * @example SERVICE_CREDENTIAL_UNKNOWN
-             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
-             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
-             * @example SERVICE_CREDENTIAL_INVALID
-             * @example SERVICE_CREDENTIAL_NOT_SET
-             * @example SERVICE_CREDENTIAL_NOT_IN_PROVIDER
-             * @example SERVICE_CREDENTIAL_PROVIDER_READ_ONLY
-             * @example SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE
-             * @example WEB_SEARCH_NOT_CONFIGURED
-             * @example WEB_SEARCH_AUTH_REFUSED
-             * @example WEB_SEARCH_RATE_LIMITED
-             * @example WEB_SEARCH_QUOTA_EXCEEDED
-             * @example WEB_SEARCH_UNAVAILABLE
-             * @example WEB_SEARCH_LIMIT_REACHED
-             * @example WEB_SEARCH_ABORTED
-             * @example WEB_SEARCH_TEST_RATE_LIMITED
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -11658,17 +11676,6 @@ export interface components {
                 /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                 provider: string | null;
             };
-            serviceCredentials?: {
-                /**
-                 * @description Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store).
-                 * @enum {string}
-                 */
-                binding: "credential_store" | "secrets_provider";
-                /** @description Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved. */
-                keys?: {
-                    [key: string]: "credential_store" | "secrets_provider";
-                };
-            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -11799,17 +11806,6 @@ export interface components {
                 /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                 provider: string | null;
             };
-            serviceCredentials?: {
-                /**
-                 * @description Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store).
-                 * @enum {string}
-                 */
-                binding: "credential_store" | "secrets_provider";
-                /** @description Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved. */
-                keys?: {
-                    [key: string]: "credential_store" | "secrets_provider";
-                };
-            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -11934,13 +11930,6 @@ export interface components {
                 enabled?: boolean;
                 /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                 provider?: string | null;
-            } | null;
-            serviceCredentials?: {
-                /** @enum {string} */
-                binding?: "credential_store" | "secrets_provider";
-                keys?: {
-                    [key: string]: "credential_store" | "secrets_provider";
-                };
             } | null;
             notifications?: {
                 [key: string]: {
@@ -12126,6 +12115,11 @@ export interface components {
                 limits?: {
                     perRun?: number | null;
                     perUserPerDay?: number | null;
+                    fetchPerRun?: number | null;
+                };
+                fetch?: {
+                    enabled?: boolean;
+                    blockedHosts?: string[];
                 };
             };
             deliveries: {
@@ -12455,6 +12449,11 @@ export interface components {
                 limits?: {
                     perRun?: number | null;
                     perUserPerDay?: number | null;
+                    fetchPerRun?: number | null;
+                };
+                fetch?: {
+                    enabled?: boolean;
+                    blockedHosts?: string[];
                 };
             };
             deliveries?: {
@@ -12788,6 +12787,11 @@ export interface components {
                 limits?: {
                     perRun?: number | null;
                     perUserPerDay?: number | null;
+                    fetchPerRun?: number | null;
+                };
+                fetch?: {
+                    enabled?: boolean;
+                    blockedHosts?: string[];
                 };
             };
             deliveries?: {
@@ -13360,17 +13364,6 @@ export interface components {
                     enabled: boolean;
                     /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                     provider: string | null;
-                };
-                serviceCredentials?: {
-                    /**
-                     * @description Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store).
-                     * @enum {string}
-                     */
-                    binding: "credential_store" | "secrets_provider";
-                    /** @description Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved. */
-                    keys?: {
-                        [key: string]: "credential_store" | "secrets_provider";
-                    };
                 };
                 notifications?: {
                     [key: string]: {
@@ -17124,6 +17117,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -17338,6 +17336,11 @@ export interface components {
                         maxOutputTokens: number | null;
                         /** @description Most a run may cost in US dollars. `null` means unlimited. */
                         maxCostUsd: number | null;
+                        /**
+                         * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                         * @default null
+                         */
+                        maxWebCalls?: number | null;
                         /** @description Warn the owner when any set budget reaches this percentage. */
                         warnAtPercent: number;
                     };
@@ -17476,6 +17479,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -17562,6 +17570,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -18669,8 +18682,6 @@ export interface components {
             allowCards?: boolean;
             /** @description Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default. */
             allowIdentity?: boolean;
-            /** @description Also ask for `vault:service_keys_read` (contract 1.4): the console's own server may read the keys of outside services (a web search provider's) you keep in your Vault as a "Service key" opened to the agent, for its calls to that service. Never a login, never a page. A new consent. Off by default. */
-            allowServiceKeys?: boolean;
             /** @description A path on this console to return to after the consent (default `/settings/secrets`). */
             returnTo?: string;
         };
@@ -18824,12 +18835,10 @@ export interface components {
                 /** @description ISO 8601: when the fabric recorded it. */
                 at: string;
                 /**
-                 * @description `lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed. `service_key`: the console's own server read one of your keys of outside services (E50.3), for a call to that service.
+                 * @description `lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed.
                  * @enum {string}
                  */
-                event: "lookup" | "release" | "service_key";
-                /** @description For `service_key`: which key (`web_search.brave`). Never its value. */
-                serviceKey: string | null;
+                event: "lookup" | "release";
                 /** @description The run or chat browser it happened in, when it is yours and still exists. */
                 runId: string | null;
                 /** @description The host of the page, never a path or query. */
@@ -18838,8 +18847,8 @@ export interface components {
                 loginName: string | null;
                 /** @description Which field was typed. Never its value. */
                 field: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email" | "number" | "expiry" | "exp_month" | "exp_year" | "holder_name" | "security_code") | null;
-                /** @description Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved), or `service_call` (a key read for a call to its service). Null for a lookup. */
-                purpose: ("login" | "signup" | "password_change" | "mfa" | "form" | "purchase" | "save_login" | "service_call") | null;
+                /** @description Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup. */
+                purpose: ("login" | "signup" | "password_change" | "mfa" | "form" | "purchase" | "save_login") | null;
                 /** @description A closed code: `typed`, `selected`, `saved`, `ok`, or why nothing was typed or saved (`origin_mismatch`, `not_found`, `name_taken`, `disabled`, `rate_limited`, ...). */
                 outcome: string;
                 /** @description Nothing was typed: the fabric or the provider refused or failed. */
@@ -19083,6 +19092,8 @@ export interface components {
                 ok: boolean;
                 /** @description A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
                 code: string | null;
+                /** @description With `API_DISABLED`: the API to enable at the provider (`gmail.googleapis.com`, `drive.googleapis.com`, ...), from a closed list. */
+                api?: string;
             }[];
         };
         RemoveConnectionResponseDto: {
@@ -19121,6 +19132,40 @@ export interface components {
             clientSecret?: string;
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
+        };
+        DiagnosticReportResponseDto: {
+            /** Format: uuid */
+            id: string;
+            target: {
+                /** @enum {string} */
+                kind: "connection" | "provider_app" | "search_provider";
+                id: string;
+            };
+            /**
+             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
+             * @enum {string}
+             */
+            trigger: "owner" | "admin" | "cli" | "health_job";
+            /**
+             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
+             * @enum {string}
+             */
+            overall: "pass" | "warn" | "fail" | "skipped";
+            /** @description ISO 8601 timestamp */
+            startedAt: string;
+            /** @description ISO 8601 timestamp */
+            finishedAt: string;
+            stages: {
+                id: string;
+                /** @enum {string} */
+                status: "pass" | "warn" | "fail" | "skipped";
+                code: string | null;
+                remedy: string | null;
+                ms: number | null;
+                data?: {
+                    [key: string]: string | number | boolean;
+                };
+            }[];
         };
         ConnectionActivityResponseDto: {
             /** @description Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name. */
@@ -19189,40 +19234,6 @@ export interface components {
             overall: "pass" | "warn" | "fail" | "skipped";
             /** @description When its last report finished ("last checked"). */
             at: string;
-        };
-        DiagnosticReportResponseDto: {
-            /** Format: uuid */
-            id: string;
-            target: {
-                /** @enum {string} */
-                kind: "connection" | "provider_app" | "search_provider";
-                id: string;
-            };
-            /**
-             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
-             * @enum {string}
-             */
-            trigger: "owner" | "admin" | "cli" | "health_job";
-            /**
-             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
-             * @enum {string}
-             */
-            overall: "pass" | "warn" | "fail" | "skipped";
-            /** @description ISO 8601 timestamp */
-            startedAt: string;
-            /** @description ISO 8601 timestamp */
-            finishedAt: string;
-            stages: {
-                id: string;
-                /** @enum {string} */
-                status: "pass" | "warn" | "fail" | "skipped";
-                code: string | null;
-                remedy: string | null;
-                ms: number | null;
-                data?: {
-                    [key: string]: string | number | boolean;
-                };
-            }[];
         };
         MailTriggerResponseDto: {
             /** Format: uuid */
@@ -21467,6 +21478,14 @@ export interface components {
                     costKnown: boolean;
                     /** @description Time spent working, waits for a person excluded */
                     activeMs: number;
+                    /** @description What the run did on the web (E50.7); absent when it made no web call */
+                    web?: {
+                        searches: number;
+                        /** @description Pages read with web_fetch */
+                        reads: number;
+                        /** @description An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost */
+                        estimatedSearchCostUsd: number | null;
+                    };
                 };
             };
             /** @description What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed. */
@@ -21542,6 +21561,11 @@ export interface components {
                         maxOutputTokens: number | null;
                         /** @description Most a run may cost in US dollars. `null` means unlimited. */
                         maxCostUsd: number | null;
+                        /**
+                         * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                         * @default null
+                         */
+                        maxWebCalls?: number | null;
                         /** @description Warn the owner when any set budget reaches this percentage. */
                         warnAtPercent: number;
                     };
@@ -22633,45 +22657,10 @@ export interface components {
                     setAt: string | null;
                 };
             };
-            /**
-             * @description Where your own key is kept (E50.3): the console, your Vault or the built-in store.
-             * @enum {string}
-             */
-            userBinding: "credential_store" | "vault" | "builtin";
-            /** @description Your secrets provider, for Move here; null when this deployment has none. */
-            secretsProvider: {
-                /**
-                 * @description Your active secrets provider (`secrets.provider`).
-                 * @enum {string}
-                 */
-                id: "vault" | "builtin";
-                /** @description The console can write a key there (the built-in store). Into a remote Vault you add the key yourself, then Move checks it. */
-                writable: boolean;
-                /** @description The deployment's `secrets.agentUse` switch: off, no key is read from a secrets provider (the next tier answers). */
-                releasesEnabled: boolean;
-                /** @description The provider can answer now: the built-in store is offered, or your Vault is connected with `vault:service_keys_read`. */
-                ready: boolean;
-            } | null;
         };
         SetServiceCredentialDto: {
             /** @description The key. Write-only: it is never returned, not even in part. */
             value: string;
-        };
-        MoveServiceCredentialResponseDto: {
-            /**
-             * @description Where your key is kept now.
-             * @enum {string}
-             */
-            binding: "credential_store" | "vault" | "builtin";
-            /** @description The old copy was removed. False when there was none, or it is in your remote Vault (remove it there). */
-            sourceRemoved: boolean;
-        };
-        MoveServiceCredentialDto: {
-            /**
-             * @description `credential_store`: the console. `secrets_provider`: your Vault or the built-in store.
-             * @enum {string}
-             */
-            to: "credential_store" | "secrets_provider";
         };
         WebSearchStatusDto: {
             /** @description A search of yours would be made now. */
@@ -22766,6 +22755,14 @@ export interface components {
             limits: {
                 perRun: number | null;
                 perUserPerDay: number | null;
+                /** @description Pages `web_fetch` may read in one run; null: unlimited. */
+                fetchPerRun: number | null;
+            };
+            fetch: {
+                /** @description `web_fetch` reads public pages on the console server. */
+                enabled: boolean;
+                /** @description Hosts (or `*.suffix`) web_fetch never reads, at any redirect. */
+                blockedHosts: string[];
             };
             /** @description The providers this console has, with their default cost estimate. */
             installed: {
@@ -22792,6 +22789,11 @@ export interface components {
             limits?: {
                 perRun?: number | null;
                 perUserPerDay?: number | null;
+                fetchPerRun?: number | null;
+            };
+            fetch?: {
+                enabled?: boolean;
+                blockedHosts?: string[];
             };
         };
         WebSearchUsageRowDto: {
@@ -22856,6 +22858,8 @@ export interface components {
                 allowSavedCards: boolean;
                 /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
+                /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+                allowWebSearch: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -22957,6 +22961,8 @@ export interface components {
                 allowSavedCards: boolean;
                 /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
+                /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+                allowWebSearch: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -22995,6 +23001,8 @@ export interface components {
             allowSavedCards: boolean;
             /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
             allowConnections: boolean;
+            /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+            allowWebSearch: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -23011,6 +23019,7 @@ export interface components {
             allowSavedIdentity?: boolean;
             allowSavedCards?: boolean;
             allowConnections?: boolean;
+            allowWebSearch?: boolean;
             paused?: boolean;
         };
         UsageReportResponseDto: {
@@ -49475,6 +49484,116 @@ export interface operations {
             };
         };
     };
+    connectionsAdmin_diagnose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_history: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     connectionFiles_recent: {
         parameters: {
             query?: never;
@@ -52168,63 +52287,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_move: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MoveServiceCredentialDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["MoveServiceCredentialResponseDto"];
-                    };
-                };
             };
             /** @description Unauthorized - Invalid or missing token */
             401: {

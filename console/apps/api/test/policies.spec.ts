@@ -212,7 +212,7 @@ describe('policy resolution', () => {
 
   it('snapshots the policy with its name, version and spec', async () => {
     const snap = resolver.snapshot(await resolver.forRun({ userId: U }), new Date('2026-01-01T00:00:00Z'));
-    expect(snap).toMatchObject({ schemaVersion: 1, ref: 'builtin:balanced', name: 'Balanced', version: 1, builtin: true, source: 'system_default', tiers: null, takenAt: '2026-01-01T00:00:00.000Z' });
+    expect(snap).toMatchObject({ schemaVersion: 1, ref: 'builtin:balanced', name: 'Balanced', version: 2, builtin: true, source: 'system_default', tiers: null, takenAt: '2026-01-01T00:00:00.000Z' });
     expect(readSnapshot(JSON.parse(JSON.stringify(snap)))?.spec.budget.maxActions).toBe(60);
   });
 });
