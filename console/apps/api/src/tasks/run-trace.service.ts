@@ -22,6 +22,7 @@ import { FabricClient } from '../fabric/fabric.client';
 import { MCP_RATE_LIMITER, type McpRateLimiter } from '../mcp/mcp.rate-limit';
 import { TIERS, type Tier } from '../policies/agent-policy.schema';
 import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
+import { runWebUsage } from './run-web-usage';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskValue, SENSITIVE_PATTERNS_VERSION } from './mask';
@@ -249,6 +250,8 @@ export class RunTraceService {
           costUsd: Number(run.costUsd),
           costKnown: run.costKnown,
           activeMs: run.activeMs,
+          // The run's web searches and page reads (E50.7), with the search cost estimate apart from the AI cost. Absent without any.
+          ...((w) => (w ? { web: w } : {}))(runWebUsage(run.steps, snapshot)),
         },
       },
       outputs: outputsView(run.outputsSpec, run.outputs, TERMINAL_RUN_STATUSES.includes(run.status as RunStatus)),

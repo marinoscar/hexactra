@@ -48,7 +48,7 @@ export function evaluate(r: ScenarioResult): string[] {
 
 /** The families a scenario may name: those of the registered tools, `mcp` for any server, `mcp:<ref>` for one. */
 function knownFamily(r: ScenarioResult, family: string): boolean {
-  if (['browser', 'desktop', 'human', 'control', 'secrets', 'memory', 'accounts', 'mcp'].includes(family)) return true;
+  if (['browser', 'desktop', 'human', 'control', 'secrets', 'memory', 'accounts', 'mcp', 'web'].includes(family)) return true;
   return r.familiesOffered.includes(family) || r.scenario.connections.some((c) => `mcp:${c.ref}` === family);
 }
 
@@ -94,6 +94,14 @@ export function evaluateChoice(r: ScenarioResult, e: ChoiceExpect): string[] {
     );
     if (!hit) out.push(`sent: no message from ${want.connection} to ${want.to}${want.bodyIncludes ? ` mentioning "${want.bodyIncludes}"` : ''}${want.attachments !== undefined ? ` with ${want.attachments} attachment(s)` : ''} (sent: ${sent.length})`);
   }
+  // Web search (E50.7): what was offered, what the model read, and how many calls reached the web.
+  const first = r.model.requests[0]?.tools.map((t) => t.name) ?? [];
+  for (const name of e.offered ?? []) if (!first.includes(name)) out.push(`offered: ${name} was not offered in the first round`);
+  const everOffered = new Set(r.model.requests.flatMap((q) => q.tools.map((t) => t.name)));
+  for (const name of e.notOffered ?? []) if (everOffered.has(name)) out.push(`notOffered: ${name} was offered`);
+  for (const text of e.modelReadIncludes ?? []) if (!r.model.results.some((x) => x.includes(text))) out.push(`modelReadIncludes: no tool result contained "${text}"`);
+  for (const text of e.modelReadExcludes ?? []) if (r.model.results.some((x) => x.includes(text))) out.push(`modelReadExcludes: a tool result contained "${text}"`);
+  if (e.webCalls !== undefined && r.webCalls !== e.webCalls) out.push(`webCalls: expected ${e.webCalls}, ${r.webCalls} reached the web`);
   if (e.browserOpened !== undefined && r.site.actions.length > 0 !== e.browserOpened) out.push(`browserOpened: expected ${e.browserOpened}, ${r.site.actions.length} action(s) reached the browser`);
   return out;
 }
