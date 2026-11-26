@@ -273,8 +273,10 @@ export class RunBatchService implements OnModuleInit, OnModuleDestroy {
       // The claim, under the batch row's lock: no row running, the lowest pending one becomes running. Two callers queue up here,
       // so the second finds a row running and starts nothing (a row lock, not only a compare-and-set on the item).
       const claim = await this.prisma.$transaction(async (tx) => {
-        const locked = await tx.$queryRaw<{ status: string }[]>`SELECT status FROM run_batches WHERE id = ${batchId}::uuid FOR UPDATE`;
-        if (locked[0]?.status !== 'running') return 'busy' as const;
+        // A no-op UPDATE takes the row lock like SELECT ... FOR UPDATE, without raw SQL (as ChatService.append does).
+        await tx.runBatch.updateMany({ where: { id: batchId }, data: { total: { increment: 0 } } });
+        const locked = await tx.runBatch.findFirst({ where: { id: batchId }, select: { status: true } });
+        if (locked?.status !== 'running') return 'busy' as const;
         if (await tx.runBatchItem.findFirst({ where: { batchId, status: 'running' }, select: { id: true } })) return 'busy' as const;
         const pending = await tx.runBatchItem.findFirst({ where: { batchId, status: 'pending' }, orderBy: { seq: 'asc' } });
         if (!pending) return 'none' as const;

@@ -284,6 +284,7 @@ model Run {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
   batch        RunBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batchItem    RunBatchItem? @relation("RunBatchItemRun")
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   steps        RunStep[]
   chatMessages ChatMessage[]
@@ -440,6 +441,8 @@ model RunBatchItem {
   startedAt DateTime? @map("started_at") @db.Timestamptz
 
   batch RunBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  /// The row's run: deleting the run (retention, the owner) clears it; the row keeps its status.
+  run   Run?     @relation("RunBatchItemRun", fields: [runId], references: [id], onDelete: SetNull)
 
   @@unique([batchId, seq])
   @@map("run_batch_items")

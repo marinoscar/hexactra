@@ -78,3 +78,6 @@ ALTER TABLE "run_batches" ADD CONSTRAINT "run_batches_conversation_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "run_batch_items" ADD CONSTRAINT "run_batch_items_batch_id_fkey" FOREIGN KEY ("batch_id") REFERENCES "run_batches"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "run_batch_items" ADD CONSTRAINT "run_batch_items_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "runs"("id") ON DELETE SET NULL ON UPDATE CASCADE;
