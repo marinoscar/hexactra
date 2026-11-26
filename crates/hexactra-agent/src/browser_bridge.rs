@@ -22,7 +22,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use crate::signin::{parse_live_frame, SigninCheck};
+use crate::signin::{live_unknown_reason, parse_live_frame, SigninCheck};
 
 #[derive(Serialize)]
 struct RequestFrame<'a> {
@@ -244,6 +244,12 @@ impl BrowserBridge {
         // The live sign-in check (E48): only state and email cross, and the
         // frame is never logged (it holds the email).
         if let Some(check) = parse_live_frame(frame) {
+            // Why a check could not tell: a fixed value, never frame text.
+            if let Some(reason) = live_unknown_reason(frame) {
+                tracing::info!(reason = %reason, "live sign-in check could not tell");
+            } else if check.signin == hexactra_core::remote::SigninState::Unknown {
+                tracing::info!(reason = "inconsistent", "live sign-in check could not tell");
+            }
             let sink = self.lock().signin_sink.clone();
             match sink {
                 Some(sink) => sink(check),

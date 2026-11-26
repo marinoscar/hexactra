@@ -13,10 +13,11 @@
 //!   messaging. The agent asks it to check again every
 //!   [`LIVE_CHECK_INTERVAL`].
 //!
-//! [`SigninTracker`] combines them: the live result wins while the browser
-//! runs, the offline result is used when it is stopped (an account the live
-//! check last saw `expired` stays `expired`), and a failure or a
-//! disagreement is `unknown`, never `signed_out`.
+//! [`SigninTracker`] combines them: a definite live result wins while the
+//! browser runs, the offline result is used when it is stopped (an account
+//! the live check last saw `expired` stays `expired`), and a failure or a
+//! disagreement is `unknown`, never `signed_out`. A live check that failed
+//! does not hide an offline `signed_in` (#990).
 //!
 //! Privacy: an account email is display data for the owner. It is never put
 //! in a log line or a span here; [`ProfileAccount`]'s `Debug` redacts it.
@@ -176,6 +177,26 @@ pub fn parse_live_frame(frame: &[u8]) -> Option<SigninCheck> {
     Some(parse_live(&v).unwrap_or_else(SigninCheck::unknown))
 }
 
+/// Why the extension's live check could not tell (#990): the `reason` of a
+/// status frame whose `signin` is `unknown`, for the agent's log. Only a
+/// fixed set of values is returned (`http_<status>`, `timeout`, `network`,
+/// `parse`); anything else is `other`, so page or account text never
+/// reaches a log line. `None` when the frame is not an `unknown` status.
+pub fn live_unknown_reason(frame: &[u8]) -> Option<String> {
+    let v: Value = serde_json::from_slice(frame).ok()?;
+    if v.get("type").and_then(Value::as_str) != Some("profile_status")
+        || v.get("signin").and_then(Value::as_str) != Some("unknown")
+    {
+        return None;
+    }
+    let reason = v.get("reason").and_then(Value::as_str).unwrap_or("none");
+    let known = matches!(reason, "timeout" | "network" | "parse" | "none")
+        || reason
+            .strip_prefix("http_")
+            .is_some_and(|code| code.len() == 3 && code.bytes().all(|b| b.is_ascii_digit()));
+    Some(if known { reason } else { "other" }.to_string())
+}
+
 fn parse_state(v: &Value) -> Option<SigninState> {
     serde_json::from_value(v.clone()).ok()
 }
@@ -230,7 +251,16 @@ struct Entry {
 fn combine(e: &Entry, running: bool) -> SigninCheck {
     if running && e.live_current {
         if let Some(live) = &e.live {
-            return live.clone();
+            // A live check that failed says nothing: it does not hide an
+            // offline `signed_in` (#990). Over any other offline result it
+            // stays `unknown`, so a failure is never shown as signed out.
+            let offline_signed_in = e
+                .offline
+                .as_ref()
+                .is_some_and(|o| o.signin == SigninState::SignedIn);
+            if live.signin != SigninState::Unknown || !offline_signed_in {
+                return live.clone();
+            }
         }
     }
     let mut base = e.offline.clone().unwrap_or_else(SigninCheck::unknown);
@@ -635,6 +665,58 @@ mod tests {
         // A live failure is unknown, not signed out.
         t.set_live("default", SigninCheck::unknown());
         assert_eq!(t.status("default", true).signin, SigninState::Unknown);
+    }
+
+    #[test]
+    fn a_failed_live_check_does_not_hide_an_offline_signed_in() {
+        let t = SigninTracker::new();
+        t.set_offline(
+            "default",
+            signed_in(&[("a@example.com", SigninState::SignedIn)]),
+        );
+        t.set_live("default", SigninCheck::unknown());
+        let c = t.status("default", true);
+        assert_eq!(c.signin, SigninState::SignedIn);
+        assert_eq!(emails(&c), vec![("a@example.com", SigninState::SignedIn)]);
+        let r = t.report(&names(&["default"]), &names(&["default"]));
+        assert_eq!(r.profiles[0].signin, SigninState::SignedIn);
+        // A definite live result still wins.
+        t.set_live(
+            "default",
+            SigninCheck::new(SigninState::SignedOut, Vec::new()),
+        );
+        assert_eq!(t.status("default", true).signin, SigninState::SignedOut);
+        // No offline result at all: a live failure stays unknown.
+        let t = SigninTracker::new();
+        t.set_live("default", SigninCheck::unknown());
+        assert_eq!(t.status("default", true).signin, SigninState::Unknown);
+    }
+
+    #[test]
+    fn the_reason_of_a_live_unknown_is_a_fixed_value() {
+        let frame = |tail: &str| {
+            format!(r#"{{"type":"profile_status","signin":"unknown","accounts":[]{tail}}}"#)
+        };
+        for (tail, want) in [
+            (r#","reason":"http_403""#, "http_403"),
+            (r#","reason":"timeout""#, "timeout"),
+            (r#","reason":"network""#, "network"),
+            (r#","reason":"parse""#, "parse"),
+            ("", "none"),
+            (r#","reason":"a@example.com""#, "other"),
+            (r#","reason":"http_a@b""#, "other"),
+        ] {
+            assert_eq!(
+                live_unknown_reason(frame(tail).as_bytes()).as_deref(),
+                Some(want),
+                "{tail}"
+            );
+        }
+        assert!(live_unknown_reason(br#"{"type":"pong"}"#).is_none());
+        assert!(live_unknown_reason(
+            br#"{"type":"profile_status","signin":"signed_out","accounts":[]}"#
+        )
+        .is_none());
     }
 
     #[test]

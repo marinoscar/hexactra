@@ -11,7 +11,8 @@
 // Only `{ signin, accounts: [{ provider, email, state }] }` leaves this
 // module: never a cookie, a header or Google's response. Any failure
 // (network error, timeout, non-200, a body that does not parse) is
-// `unknown`, never `signed_out`.
+// `unknown`, never `signed_out`, with a `reason` from a fixed set
+// (`http_<status>`, `timeout`, `network`, `parse`) for the agent's log (#990).
 
 export const LIST_ACCOUNTS_URL = 'https://accounts.google.com/ListAccounts?gpsia=1&source=ChromiumBrowser&json=standard';
 export const SIGNIN_TIMEOUT_MS = 15_000;
@@ -26,9 +27,14 @@ export interface SigninAccount {
   state: 'signed_in' | 'expired';
 }
 
+/** Why a check is `unknown`: a fixed set, never text from Google's answer. */
+export type SigninUnknownReason = `http_${number}` | 'timeout' | 'network' | 'parse';
+
 export interface SigninResult {
   signin: SigninState;
   accounts: SigninAccount[];
+  /** Only with `unknown`. */
+  reason?: SigninUnknownReason;
 }
 
 /** The native message the agent receives. */
@@ -36,7 +42,10 @@ export interface ProfileStatusMessage extends SigninResult {
   type: 'profile_status';
 }
 
-const UNKNOWN: SigninResult = { signin: 'unknown', accounts: [] };
+function unknown(reason: SigninUnknownReason): SigninResult {
+  return { signin: 'unknown', accounts: [], reason };
+}
+const UNKNOWN: SigninResult = unknown('parse');
 
 function usableEmail(e: unknown): e is string {
   return typeof e === 'string' && e.length > 0 && e.length <= MAX_EMAIL && e.includes('@') && !/[\s\p{Cc}]/u.test(e);
@@ -88,10 +97,10 @@ export async function checkGoogleSignin(fetchImpl: typeof fetch = fetch, timeout
       cache: 'no-store',
       signal: ctrl.signal,
     });
-    if (resp.status !== 200) return UNKNOWN;
+    if (resp.status !== 200) return unknown(`http_${Math.trunc(Number(resp.status)) || 0}`);
     return parseListAccounts(await resp.text());
   } catch {
-    return UNKNOWN;
+    return unknown(ctrl.signal.aborted ? 'timeout' : 'network');
   } finally {
     clearTimeout(timer);
   }
@@ -103,6 +112,7 @@ export function profileStatusMessage(r: SigninResult): ProfileStatusMessage {
     type: 'profile_status',
     signin: r.signin,
     accounts: r.accounts.map((a) => ({ provider: 'google', email: a.email, state: a.state })),
+    ...(r.signin === 'unknown' && r.reason ? { reason: r.reason } : {}),
   };
 }
 
