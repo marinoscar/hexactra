@@ -129,6 +129,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     attributes: { unknown_steps: { kind: 'enum', values: ['0', '1+'] } },
   },
   {
+    key: 'runBatchErrors',
+    name: 'app.runs.batch.errors',
+    kind: 'counter',
+    unit: '{error}',
+    description: 'Errors of the batch service (E51.1): starting the next row, recording a row\'s end or reconciling a batch. A batch error never changes a run.',
+    attributes: { stage: { kind: 'enum', values: ['start_next', 'run_end', 'reconcile'] } },
+  },
+  {
     key: 'secretsCardUses',
     name: 'app.secrets.card_uses',
     kind: 'counter',
@@ -200,6 +208,11 @@ export class RunMetrics {
   /** A run recovered after an interruption (E38.3): whether any step was left `unknown`. */
   recovered(unknownSteps: number): void {
     this.metrics?.add('runsRecovered' as never, 1, { unknown_steps: unknownSteps > 0 ? '1+' : '0' });
+  }
+
+  /** A batch error (E51.1), by stage. */
+  batchError(stage: 'start_next' | 'run_end' | 'reconcile'): void {
+    this.metrics?.add('runBatchErrors' as never, 1, { stage });
   }
 
   handoff(): void {

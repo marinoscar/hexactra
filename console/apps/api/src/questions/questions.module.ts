@@ -17,6 +17,8 @@ import { QuestionsExpireHandler, QuestionsExpireTask } from './questions.jobs';
 import { QuestionsService } from './questions.service';
 import { RequestHistoryRetentionHandler, RequestHistoryRetentionTask } from './request-history.jobs';
 import { TaskRunStarter } from './task-run-starter';
+import { RunBatchService } from '../tasks/run-batch.service';
+import { RunBatchReconcileHandler, RunBatchReconcileTask } from '../tasks/run-batch.job';
 import { MemoryValueResolverService } from '../memories/memory-value.resolver';
 import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
 
@@ -33,6 +35,10 @@ import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
   providers: [
     QuestionsService,
     TaskRunStarter,
+    // Batch runs (E51.1): rows started one after another by TaskRunStarter.
+    RunBatchService,
+    RunBatchReconcileHandler,
+    RunBatchReconcileTask,
     // A task parameter's memory-backed default resolves from the owner's memories (#552, #551).
     { provide: MEMORY_VALUE_RESOLVER, useClass: MemoryValueResolverService },
     MemoryProposals,
@@ -48,6 +54,6 @@ import { MEMORY_VALUE_RESOLVER } from '../tasks/task-params';
     NotificationsQuestionChannel,
     WebhookQuestionChannel,
   ],
-  exports: [QuestionsService, TaskRunStarter, QuestionEvents, QuestionChannelRegistry, MemoryProposals],
+  exports: [QuestionsService, TaskRunStarter, RunBatchService, QuestionEvents, QuestionChannelRegistry, MemoryProposals],
 })
 export class QuestionsModule {}

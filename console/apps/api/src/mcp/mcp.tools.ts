@@ -9,7 +9,7 @@ import { procedureGetDescriptor, procedureRunDescriptor, proceduresListDescripto
 import { z } from 'zod';
 import type { UsageReport } from '../usage/usage.schemas';
 
-import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
+import { batchResponseSchema, fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
 import { schedulePreviewSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
 import { deliverySummarySchema } from '../deliveries/delivery.schemas';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
@@ -1092,6 +1092,47 @@ export const MCP_TOOLS: McpTool[] = [
     ui: { resourceUri: RUN_CARD_URI },
     call: (a, ctx) =>
       startAndFollow(ctx, a, () => ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, { ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}), ...(a.inputs !== undefined ? { inputs: a.inputs } : {}) })),
+  },
+  {
+    name: 'task_run_batch',
+    title: 'Run a saved task for several rows',
+    description:
+      "Run a saved task once per row of values, one run after another (the same job for several people or items, each with its own values). It starts at once and returns the batch; " +
+      "follow it with batch_status, and each run with run_status or run_wait (the batch's items carry run ids). rows: 2 to 25 objects, each with inputs for the task's {{parameters}} by key or label. " +
+      'Every row is checked before anything starts; a bad row refuses the whole batch and names the row. Each run asks before a send or a payment as a single run would. Never pass a sensitive parameter.',
+    input: z.object({
+      task_id: taskId,
+      rows: z
+        .array(z.object({ inputs: z.record(z.string().min(1).max(80), z.union([z.string().max(500), z.number()])).describe("This row's values, by key or label, e.g. { \"recipient\": \"Ana\" }.") }))
+        .min(2)
+        .max(25),
+      policy_id: policyIdParam.optional(),
+    }),
+    output: batchResponseSchema,
+    scope: 'runs:write',
+    effect: 'write',
+    openWorld: true,
+    async call(a, ctx) {
+      const rows = (a.rows as { inputs: Record<string, string | number> }[]).map((r) => ({ inputs: r.inputs }));
+      const b = await ctx.api<Record<string, unknown>>('POST', `/tasks/${String(a.task_id)}/batches`, { rows, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) });
+      return toolOutput({ text: b, structured: b, summary: `Batch ${String(b.id)}: ${String(b.total)} runs of "${String(b.taskName ?? '')}", ${String(b.status)}.` });
+    },
+  },
+  {
+    name: 'batch_status',
+    title: 'See a batch',
+    description: "Read a batch of runs: its status, each row's values (masked), run id and status, and the start of each run's result. Use it to follow task_run_batch.",
+    input: z.object({ batch_id: z.uuid().describe('The batch id task_run_batch returned.') }),
+    output: batchResponseSchema,
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const b = await ctx.api<Record<string, unknown>>('GET', `/batches/${String(a.batch_id)}`);
+      // A run's result comes from what the agent read on a page: marked untrusted.
+      return toolOutput({ text: b, structured: b, summary: `Batch ${String(b.id)}: ${String(b.summary)} (${String(b.status)}).`, untrusted: true });
+    },
   },
   {
     name: 'schedule_create',

@@ -3,6 +3,7 @@ import { Injectable, Optional, type OnModuleDestroy, type OnModuleInit } from '@
 import type { Prisma } from '@prisma/client';
 
 import { ApprovalRulesService } from '../approvals/approval-rules.service';
+import { RunBatchService } from '../tasks/run-batch.service';
 import { savedApprovalsLine } from '../approvals/approval-runner';
 import { PrismaService } from '../prisma/prisma.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
@@ -31,26 +32,65 @@ function resultText(run: { status: string; result: string | null; error: string 
 @Injectable()
 export class ChatResults implements OnModuleInit, OnModuleDestroy {
   private unregister?: () => void;
+  private unregisterBatch?: () => void;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly chats: ChatService,
     private readonly hooks: RunEndHooks,
     @Optional() private readonly approvals?: ApprovalRulesService,
+    @Optional() private readonly batches?: RunBatchService,
   ) {}
 
   onModuleInit(): void {
     this.unregister = this.hooks.register((userId, runId) => this.recordRunEnd(userId, runId));
+    this.unregisterBatch = this.batches?.onBatchEnd((userId, batchId) => this.recordBatchEnd(userId, batchId));
   }
 
   onModuleDestroy(): void {
     this.unregister?.();
+    this.unregisterBatch?.();
+  }
+
+  /**
+   * A chat's batch ended (E51.1): ONE summary message for the whole batch ("3 of 3 done", "2 done, 1 failed, 2 not started"), with
+   * the rows whose steps went ahead on saved approvals and, when a row ended with a step of unknown outcome, which row. Called once
+   * per batch (the batch's end is a compare-and-set).
+   */
+  async recordBatchEnd(userId: string, batchId: string): Promise<void> {
+    const view = await this.batches?.get(userId, batchId).catch(() => null);
+    if (!view?.conversationId) return;
+    const saved: string[] = [];
+    for (const item of view.items) {
+      if (!item.runId || !this.approvals) continue;
+      const line = savedApprovalsLine((await this.approvals.gateUsesOfRun(userId, item.runId).catch(() => [])) ?? []);
+      if (line) saved.push(`Row ${item.seq}: ${line}`);
+    }
+    const why =
+      view.stopReason === 'unknown_outcome' && view.stoppedAtSeq
+        ? `Row ${view.stoppedAtSeq} ended with a step that may or may not have happened, so the batch stopped. Check it before you run the rest.`
+        : view.stopReason === 'owner_stopped'
+          ? 'Stopped by you.'
+          : view.stopReason === 'row_failed' && view.stoppedAtSeq
+            ? `Row ${view.stoppedAtSeq} failed, so the batch stopped.`
+            : null;
+    const text = [view.summary, ...(why ? [why] : []), ...saved].join('\n');
+    const meta: Prisma.InputJsonObject = {
+      batchId,
+      batchSummary: true,
+      status: view.status,
+      counts: view.counts as unknown as Prisma.InputJsonObject,
+      ...(view.stopReason ? { stopReason: view.stopReason, stoppedAtSeq: view.stoppedAtSeq } : {}),
+      ...(saved.length ? { savedApprovals: saved.join('\n') } : {}),
+    };
+    await this.chats.append(view.conversationId, { role: 'assistant', kind: 'result', text: text.slice(0, RESULT_TEXT_MAX), meta });
   }
 
   /** The run ended: if a chat started it, say so in the chat. No-op for any other run and for a live one. */
   async recordRunEnd(userId: string, runId: string): Promise<void> {
     const run = await this.prisma.forUser({ userId }).run.findFirst({
-      where: { id: runId, conversationId: { not: null }, status: { in: [...TERMINAL_RUN_STATUSES] } },
+      // A batch's run writes no result of its own (E51.1): the batch writes one summary when it ends.
+      where: { id: runId, conversationId: { not: null }, batchId: null, status: { in: [...TERMINAL_RUN_STATUSES] } },
       select: { id: true, taskId: true, conversationId: true, policySnapshot: true, status: true, result: true, error: true, stopReason: true, costUsd: true, costKnown: true, stepCount: true, confirmedActions: true, outputs: true, outputsSpec: true, outputsComplete: true },
     });
     if (!run?.conversationId) return;
@@ -77,7 +117,7 @@ export class ChatResults implements OnModuleInit, OnModuleDestroy {
   /** Write the result of every finished run of the chat that has none yet. */
   async sync(userId: string, conversationId: string): Promise<void> {
     const missing = await this.prisma.forUser({ userId }).run.findMany({
-      where: { conversationId, status: { in: [...TERMINAL_RUN_STATUSES] }, chatMessages: { none: { kind: 'result' } } },
+      where: { conversationId, batchId: null, status: { in: [...TERMINAL_RUN_STATUSES] }, chatMessages: { none: { kind: 'result' } } },
       orderBy: { finishedAt: 'asc' },
       select: { id: true },
     });

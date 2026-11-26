@@ -47,9 +47,12 @@ export const runRetentionCeilingSchema = z.object({
     .nullable()
     .optional()
     .describe('The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner).'),
+  batchMaxRows: z.number().int().min(2).max(100).optional().describe('The most rows a batch of runs may have (E51.1). Absent: 25.'),
 });
 export type RunRetentionCeiling = z.infer<typeof runRetentionCeilingSchema>;
 export const runRetentionCeilingPatchSchema = runRetentionCeilingSchema.partial();
+/** The deployment default of `batchMaxRows` (E51.1). */
+export const DEFAULT_BATCH_MAX_ROWS = 25;
 /** The deployment default of `maxPausedHours` (E38.2). */
 export const DEFAULT_MAX_PAUSED_HOURS = 72;
 export const NO_RETENTION_CEILING: RunRetentionCeiling = { maxKeepDays: null, maxPausedHours: DEFAULT_MAX_PAUSED_HOURS };
