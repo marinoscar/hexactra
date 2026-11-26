@@ -62,6 +62,16 @@ export function mcpErrorWords(code: string | undefined, details: unknown): strin
       return 'That server does not speak MCP over Streamable HTTP (revisions 2025-03-26 and later).';
     case 'CONNECTION_UNAVAILABLE':
       return reason === 'redirect' ? 'The server redirected, and Hexactra does not follow redirects. Use the final address.' : 'The server could not be reached or did not answer in time.';
+    case 'TRY_READ_ONLY':
+      return 'Only a tool set to Read can be tried here: a Write tool would change something.';
+    case 'TRY_TOOL_OFF':
+      return 'This tool is off. Set it to Read to try it.';
+    case 'TRY_INVALID_ARGUMENTS': {
+      const issues = (details as { issues?: string[] } | undefined)?.issues ?? [];
+      return `The arguments do not fit the tool's parameters${issues.length ? ` (${issues.join('; ')})` : ''}. Nothing was sent.`;
+    }
+    case 'TRY_RATE_LIMITED':
+      return 'You tried this server six times in a minute. Wait a moment and try again.';
     case 'CONNECTION_LIMIT':
       return 'You have the most connections allowed. Remove one first.';
     default:

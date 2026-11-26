@@ -88,3 +88,10 @@ exports.REST_EXEMPT = Object.freeze(require('./capabilities.json').restExempt);
  * it and where. `diagnostics.json`, read by the API, the web app and the CLI.
  */
 exports.DIAGNOSTIC_REMEDIES = Object.freeze(require('./diagnostics.json').codes);
+
+/**
+ * The MCP server presets (E50.12): a short, reviewed list of well-known public servers the Add dialog offers. Data only: an address, the
+ * kind of sign-in and a documentation link, each checked against the vendor's own documentation on its `verified` date. Never a secret,
+ * never a tool mode. `mcp-presets.json`, served by the API (`GET /api/connections/mcp/presets`) after the administrator's host lists.
+ */
+exports.MCP_PRESETS = Object.freeze(require('./mcp-presets.json').presets.map((p) => Object.freeze({ ...p })));

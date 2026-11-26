@@ -1,4 +1,4 @@
-import { Box, Chip, List, ListItem, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Button, Chip, List, ListItem, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 
 import type { McpTool, McpToolMode } from './api';
 import { hintWords, MODE_HELP, MODE_WORDS, REVIEW_WORDS, suggestionWords } from './mcpWords';
@@ -12,6 +12,8 @@ interface Props {
   busyId?: string | null;
   disabled?: boolean;
   onChange: (tool: McpTool, mode: McpToolMode) => void;
+  /** E50.12: offers "Try" on each tool set to Read (only a read tool can be tried). */
+  onTry?: (tool: McpTool) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * its CLAIM: the description is shown as plain text (never as markup), the hints are worded as claims and only suggest a default. A
  * tool that is new, or changed since the owner decided, is marked and stays off until they decide again.
  */
-export function McpToolList({ tools, busyId, disabled, onChange }: Props) {
+export function McpToolList({ tools, busyId, disabled, onChange, onTry }: Props) {
   if (tools.length === 0) {
     return (
       <Typography color="text.secondary" sx={{ py: 2 }}>
@@ -58,6 +60,7 @@ export function McpToolList({ tools, busyId, disabled, onChange }: Props) {
               </Stack>
             )}
             <Box sx={{ mt: 1 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
               <ToggleButtonGroup
                 exclusive
                 size="small"
@@ -75,6 +78,12 @@ export function McpToolList({ tools, busyId, disabled, onChange }: Props) {
                   </ToggleButton>
                 ))}
               </ToggleButtonGroup>
+              {onTry && t.mode === 'read' && !t.review && (
+                <Button size="small" variant="outlined" onClick={() => onTry(t)} disabled={disabled} aria-label={`Try ${t.title ?? t.name}`} sx={TOUCH}>
+                  Try
+                </Button>
+              )}
+              </Stack>
               <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
                 {MODE_HELP[t.mode]} {suggestionWords(t)}
               </Typography>

@@ -72,6 +72,7 @@ const STAGE_TITLES: Record<string, string> = {
   live_query: 'A live search',
   daily_limit: "Today's limit",
   limit: "Today's limit",
+  limits: "Today's limit",
   fetch: 'Reading pages',
   web_fetch: 'Reading pages',
 };

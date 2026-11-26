@@ -31,6 +31,8 @@ export const CONNECTION_AUDIT = {
   mcpToolsRefreshed: 'connection.mcp_tools_refreshed',
   mcpToolMode: 'connection.mcp_tool_mode',
   mcpToolsQuarantined: 'connection.mcp_tools_quarantined',
+  // E50.12: the owner tried a read tool. The connection and the tool; never an argument's value or the result.
+  mcpToolTried: 'connection.mcp_tool_tried',
 } as const;
 
 export const CONNECTION_OUTCOMES = ['connected', 'reconnected', 'consent_added', 'denied', 'failed', 'refreshed', 'needs_reconnect', 'unavailable', 'removed', 'paused', 'resumed', 'tested', 'tools_listed', 'tools_changed'] as const;
