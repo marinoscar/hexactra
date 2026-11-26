@@ -61,8 +61,11 @@ export interface RevokeInput {
   hint: 'access_token' | 'refresh_token';
 }
 
-/** The answer of one cheap read call. `code` is a closed, data-free vocabulary (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
-export type ProbeResult = { ok: true } | { ok: false; code: string };
+/**
+ * The answer of one cheap read call. `code` is a closed, data-free vocabulary (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...).
+ * `api` (E50.11, #981): with `API_DISABLED`, the provider's service id from a closed list (`gmail.googleapis.com`), never its text.
+ */
+export type ProbeResult = { ok: true } | { ok: false; code: string; api?: string };
 
 export interface ProbeInput {
   capability: Capability;
@@ -77,6 +80,28 @@ export interface ConnectionDiagnoseInput {
   grantedScopes: readonly string[];
   /** The connection's access token, refreshed through the normal path when due. Throws `ConnectionError`. */
   accessToken(): Promise<string>;
+  signal: AbortSignal;
+  /**
+   * E50.11 (#981): the deployment's app as the refresh uses it (also while the switch is off), or null when its client id or secret
+   * is missing. Undefined: not known to the caller (the `app_config` stage then passes on what `provider_installed` already said).
+   */
+  app?: ProviderApp | null;
+  /** The administrator's switch for the provider. */
+  providerEnabled?: boolean;
+  /** The token's times as stored when the report started (before `sign_in` refreshed it). Never the token. */
+  token?: { expiresAt: Date | null; lastRefreshAt: Date | null; createdAt: Date };
+  /** The server's clock (tests replace it). */
+  clock?: () => number;
+}
+
+/** What a provider's check of the deployment's app gets (E50.11, #981): no user, no token. */
+export interface ProviderAppDiagnoseInput {
+  /** The client id, the secret (server side only: never in a stage) and the redirect address. */
+  app: ProviderApp;
+  /** The public address the administrator reached the console on (`https://console.example.test`), or null when not known. */
+  publicOrigin?: string | null;
+  /** Google only: the Picker API key the administrator saved (not a secret), or null. */
+  pickerApiKey?: string | null;
   signal: AbortSignal;
 }
 
@@ -103,6 +128,14 @@ export interface ConnectionProviderAdapter {
    */
   diagnose?(input: ConnectionDiagnoseInput): Promise<DiagnosticStage[]>;
   readonly diagnosticCodes?: readonly string[];
+  /**
+   * Optional (E50.11, #981): the stages of the deployment's app with no user (`redirect_uri`, `discovery`, `client_check`, and the
+   * provider's own), from the client id, the secret and the redirect address. Read calls only; never throws for a provider answer.
+   * `appDiagnosticCodes` lists every code it can return. The `app_config` stage before them is the console's
+   * (connection-app-diagnostics.service.ts).
+   */
+  diagnoseApp?(input: ProviderAppDiagnoseInput): Promise<DiagnosticStage[]>;
+  readonly appDiagnosticCodes?: readonly string[];
   /**
    * Optional (E39.4): tells apart the refusals the provider sends back on the authorization redirect (`error` and `error_description`):
    * the owner declined, or an administrator has to approve the app. `null` leaves it to the generic handling.

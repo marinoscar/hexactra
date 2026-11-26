@@ -10,6 +10,9 @@ import { CODE_PATTERN, closedCode, overall, sanitizeStages, stageDataSchema, sta
 import { DiagnosticsRegistry } from '../src/diagnostics/diagnostics.registry';
 import { REMEDY_CODES } from '../src/diagnostics/remedies';
 import { runStages } from '../src/diagnostics/stages';
+import { APP_CONFIG_CODES } from '../src/connections/connection-app-diagnostics.service';
+import { GOOGLE_APIS, GOOGLE_APP_DIAGNOSTIC_CODES, GOOGLE_DIAGNOSTIC_CODES } from '../src/connections/google/google-diagnostics';
+import { MICROSOFT_APP_DIAGNOSTIC_CODES, MICROSOFT_DIAGNOSTIC_CODES } from '../src/connections/microsoft/microsoft-diagnostics';
 
 const stage = (status: DiagnosticStage['status']): DiagnosticStage => ({ id: 'x', status, code: null, remedy: null, ms: null });
 
@@ -169,6 +172,8 @@ describe('the remedy table (packages/shared/diagnostics.json)', () => {
     const codes = [...CONNECTION_DIAGNOSTIC_CODES, ...RECONNECT_REASONS, ...stageRunnerCodes, ...registry.codes()];
     // Every code an adapter's probe answers today (the Test dialog shows them too).
     codes.push('UNAUTHORIZED', 'FORBIDDEN', 'RATE_LIMITED', 'API_DISABLED', 'NO_MAILBOX', 'NOT_FOUND', 'FAILED');
+    // E50.11: Google's and Microsoft's own stages, the checks of the deployment's app, and the per-API remedy keys.
+    codes.push(...GOOGLE_DIAGNOSTIC_CODES, ...GOOGLE_APP_DIAGNOSTIC_CODES, ...MICROSOFT_DIAGNOSTIC_CODES, ...MICROSOFT_APP_DIAGNOSTIC_CODES, ...APP_CONFIG_CODES, ...Object.values(GOOGLE_APIS));
     expect(codes.filter((c) => !REMEDY_CODES.has(c))).toEqual([]);
   });
 

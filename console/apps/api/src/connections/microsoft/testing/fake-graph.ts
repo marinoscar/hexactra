@@ -267,6 +267,10 @@ export class FakeGraph {
   clientId = 'fake-client-id';
   /** Scopes added to the next consent, as Microsoft returns them. */
   scopePrefix = false;
+  /** E50.11: tenants the identity platform does not know (AADSTS90002 at discovery and at the token endpoint). */
+  readonly unknownTenants = new Set<string>();
+  /** E50.11: how far the fake's clock (its `Date` header) is ahead of the server's. */
+  clockSkewMs = 0;
 
   addAccount(init: FakeAccountInit): FakeAccount {
     const a = new FakeAccount(init);
@@ -389,13 +393,23 @@ export class FakeGraph {
       }
       if (script.kind === 'respond') return script.response!();
     }
-    const res = await this.route(url, rec, raw);
+    const res = this.dated(await this.route(url, rec, raw));
     if (script?.kind === 'after') {
       if (script.response) return script.response();
       throw new TypeError('fetch failed');
     }
     return res;
   };
+
+  /** Every answer carries a `Date` header, as Microsoft's do. */
+  private dated(res: Response): Response {
+    try {
+      if (!res.headers.has('date')) res.headers.set('date', new Date(Date.now() + this.clockSkewMs).toUTCString());
+    } catch {
+      // an immutable header list (a redirect): left as it is
+    }
+    return res;
+  }
 
   private account(rec: Recorded): FakeAccount | Response {
     const m = /^Bearer (.+)$/.exec(rec.headers.authorization ?? '');
@@ -416,7 +430,14 @@ export class FakeGraph {
   // ---- login.microsoftonline.com ----
 
   private login(url: URL, rec: Recorded): Response {
+    const tenant = url.pathname.split('/')[1] ?? '';
+    const noTenant = (): Response => respond(400, { error: 'invalid_tenant', error_description: `AADSTS90002: fake description with ${FakeGraph.CONTENT_MARKER}`, error_codes: [90002] });
+    if (/^\/[^/]+\/v2\.0\/\.well-known\/openid-configuration$/.test(url.pathname) && rec.method === 'GET') {
+      if (this.unknownTenants.has(tenant)) return noTenant();
+      return respond(200, { issuer: `https://${FAKE_HOSTS.login}/{tenantid}/v2.0`, authorization_endpoint: `https://${FAKE_HOSTS.login}/${tenant}/oauth2/v2.0/authorize`, token_endpoint: `https://${FAKE_HOSTS.login}/${tenant}/oauth2/v2.0/token` });
+    }
     if (!/\/oauth2\/v2\.0\/token$/.test(url.pathname) || rec.method !== 'POST' || !rec.form) return err(404, 'NotFound');
+    if (this.unknownTenants.has(tenant)) return noTenant();
     const f = rec.form;
     const bad = (error: string, codes: number[] = []): Response => respond(400, { error, error_description: `AADSTS${codes[0] ?? 0}: fake description with ${FakeGraph.CONTENT_MARKER}`, error_codes: codes });
     if (f.client_id !== this.clientId || f.client_secret !== this.clientSecret) return respond(401, { error: 'invalid_client', error_description: 'AADSTS7000215: fake', error_codes: [7000215] });
