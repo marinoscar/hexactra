@@ -77,3 +77,14 @@ export interface Capability {
 export declare const CAPABILITIES: readonly Capability[];
 /** App REST operations that are not client capabilities, with the reason. */
 export declare const REST_EXEMPT: Readonly<Record<string, string>>;
+/** One entry of the diagnostics remedy table (`diagnostics.json`). */
+export interface DiagnosticRemedy {
+  readonly title: string;
+  readonly remedy: string;
+  /** Who can fix it. */
+  readonly who: 'owner' | 'admin';
+  /** Where to fix it: the owner's Connections page, Administration, or the provider's own console. */
+  readonly link?: 'settings' | 'admin' | 'provider_console';
+}
+/** The remedy table, keyed by code (`UNAVAILABLE`, `GRANT_REVOKED`, ...). */
+export declare const DIAGNOSTIC_REMEDIES: Readonly<Record<string, DiagnosticRemedy>>;

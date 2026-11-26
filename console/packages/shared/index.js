@@ -81,3 +81,10 @@ exports.ENABLED_SLICES = Object.freeze(resolveSliceIds(manifest.enabled));
 exports.CAPABILITIES = Object.freeze(require('./capabilities.json').capabilities);
 /** App REST operations that are not client capabilities, with the reason. */
 exports.REST_EXEMPT = Object.freeze(require('./capabilities.json').restExempt);
+
+/**
+ * The remedy table of diagnostics (E50.10): for each code a diagnostic stage or
+ * a connection test returns, its title, its remedy in plain words, who can fix
+ * it and where. `diagnostics.json`, read by the API, the web app and the CLI.
+ */
+exports.DIAGNOSTIC_REMEDIES = Object.freeze(require('./diagnostics.json').codes);

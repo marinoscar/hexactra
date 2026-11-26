@@ -933,7 +933,10 @@
       "tui": {
         "none": "A terminal cannot show the desktop the person signs in on; use the console"
       },
-      "web": ["/fleet/hosts/:id/desktop", "/fleet/signin-queue"]
+      "web": [
+        "/fleet/hosts/:id/desktop",
+        "/fleet/signin-queue"
+      ]
     },
     {
       "id": "fleet.agent",
@@ -1463,6 +1466,27 @@
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
       },
       "web": "/settings/connections"
+    },
+    {
+      "id": "connections.diagnose",
+      "description": "Diagnose a connection: an ordered list of checks (status, installed here, sign-in, each capability or the MCP server, the time taken), each with a closed code and a remedy from the shared remedy table; the last 20 reports per connection, and the last result of each connection (E50.10)",
+      "rest": [
+        "POST /api/connections/{id}/diagnose",
+        "GET /api/connections/{id}/diagnostics",
+        "GET /api/connections/diagnostics/summary"
+      ],
+      "cli": {
+        "none": "Not yet: `connections diagnose` comes with E50.15 (#985); `connections test` prints the same remedy words today"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly, and a diagnostic report is about the owner's accounts (E50.10, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": {
+        "none": "Not yet: the diagnostics panel of the Connections page comes with E50.14 (#984); the Test dialog shows the same remedy words today"
+      }
     },
     {
       "id": "connections.pause",
