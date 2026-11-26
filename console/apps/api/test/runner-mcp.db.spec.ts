@@ -89,7 +89,7 @@ async function setup(name: string, specs: Spec[], opts: { allowedDomains?: strin
     for (const [tool, mode] of Object.entries(s.modes)) if (mode !== 'off') await app.get(McpCatalogService).setMode(userId, id, tools.get(tool)!, mode);
     conns.push({ id, label: s.label, tools });
   }
-  const task = await db.task.create({ data: { userId, name: `Task ${name}`, goal: "Do the owner's errand", needsBrowser: 'never', confirmRiskyActions: false, ...(opts.allowedDomains ? { allowedDomains: opts.allowedDomains } : {}) } });
+  const task = await db.task.create({ data: { userId, name: `Task ${name}`, goal: "Do the owner's errand", needsBrowser: 'never', confirmRiskyActions: false, connectionsMode: 'listed', ...(opts.allowedDomains ? { allowedDomains: opts.allowedDomains } : {}) } });
   await kit.prisma.taskConnection.createMany({ data: conns.map((c, i) => ({ taskId: task.id, connectionId: c.id, access: specs[i]!.access })) });
   const run = await db.run.create({ data: { userId, taskId: task.id, trigger: 'manual', goal: task.goal } });
   return { userId, db, task, run, conns };
@@ -131,6 +131,13 @@ describe('which MCP tools a run is offered', () => {
     const m1 = scriptedModel([[FINISH]]);
     await kit.runner(m1, fakeFabric()).advance(unlisted.run.id, unlisted.userId, null);
     expect(mine(m1.offered[0]!)).toEqual([]);
+
+    // #967: the same task, no longer limited, has the server's enabled tools (it uses everything the owner connected).
+    await kit.prisma.task.update({ where: { id: unlisted.task.id }, data: { connectionsMode: 'all' } });
+    const again = await kit.prisma.run.create({ data: { userId: unlisted.userId, taskId: unlisted.task.id, trigger: 'manual', goal: 'g' } });
+    const mAll = scriptedModel([[FINISH]]);
+    await kit.runner(mAll, fakeFabric()).advance(again.id, unlisted.userId, null);
+    expect(mine(mAll.offered[0]!)).toEqual(['work_notes__add_note', 'work_notes__search_notes']);
 
     const appLimits = { clientId: 'client-a', clientName: 'App A', allowedDomains: [], confirmPurchases: false, allowSavedLogins: false, allowSavedIdentity: false, allowSavedCards: false, allowConnections: false, policyId: null, allowedPolicyIds: [], appliedPolicyId: null, maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: null };
     const viaApp = await setup('via-app', [{ label: 'Work notes', server: srv, modes: RW, access: 'read_write' }]);
@@ -531,7 +538,7 @@ describe('a tool that changes after the run started', () => {
       const t = TOOLS[0]!;
       const tool = await kit.prisma.connectionMcpTool.create({ data: { connectionId: conn.id, name: t.name, description: t.description!, inputSchema: t.inputSchema as never, annotations: {}, hash: 'h-rebind', suggested: 'read', mode: 'read' } });
       expect(tool.mode).toBe('read');
-      const task = await kit.prisma.forUser({ userId }).task.create({ data: { userId, name: 'Rebind', goal: 'g', needsBrowser: 'never', confirmRiskyActions: false } });
+      const task = await kit.prisma.forUser({ userId }).task.create({ data: { userId, name: 'Rebind', goal: 'g', needsBrowser: 'never', confirmRiskyActions: false, connectionsMode: 'listed' } });
       await kit.prisma.taskConnection.create({ data: { taskId: task.id, connectionId: conn.id, access: 'read' } });
       const run = await kit.prisma.forUser({ userId }).run.create({ data: { userId, taskId: task.id, trigger: 'manual', goal: 'g' } });
       // The hash the run registered is the stored one: sign the row with the catalogue's own hash so the call passes the snapshot check.

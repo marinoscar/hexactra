@@ -5,7 +5,7 @@ import type { TaskOutput } from '@app/shared/task-fields';
 import type { TaskParameter } from '@app/shared/task-params';
 
 import type { TaskSpend } from '../components/runBudget';
-import type { ConnectionSelectionView, NeedsBrowser } from '../taskConnections/model';
+import type { ConnectionSelectionView, ConnectionsMode, NeedsBrowser } from '../taskConnections/model';
 
 /** A task, as `GET /api/tasks` returns it. */
 export interface Task {
@@ -33,7 +33,9 @@ export interface Task {
   parameters?: TaskParameter[] | null;
   /** The values a run must return when it finishes (E39.5, #600); empty or null when the task has none. */
   outputs?: TaskOutput[] | null;
-  /** The accounts the agent may use in this task, and how (E39.7, #604); empty or absent: none. */
+  /** `all`: every account and tool the owner connected; `listed`: only `connections` (#967). Absent from an older console: `listed` when it lists some. */
+  connectionsMode?: ConnectionsMode;
+  /** The accounts a limited task may use, and how (E39.7, #604). */
   connections?: ConnectionSelectionView[] | null;
   /** Whether the task's runs open a browser (E39.7); absent: `auto`. */
   needsBrowser?: NeedsBrowser;

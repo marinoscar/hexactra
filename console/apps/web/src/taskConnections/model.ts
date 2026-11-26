@@ -21,6 +21,30 @@ export interface ConnectionSelectionView extends ConnectionSelection {
 
 export type NeedsBrowser = 'auto' | 'always' | 'never';
 
+/** `Task.connectionsMode` (#967): `all` every account and tool the owner connected, at what they switched on for it; `listed` only the task's list. */
+export type ConnectionsMode = 'all' | 'listed';
+
+export const ALL_TOOLS_HELP =
+  'The agent can use every account and tool you connected, at what you switched on for each in Connections, and picks the right one for the job. It opens a browser only when the job needs a website. It asks before it sends or changes anything, unless you told it not to ask again.';
+
+export const LIMITED_HELP = 'This task is limited to the accounts and tools switched on below.';
+
+/** The owner's connections a task in `all` mode uses: the active ones. */
+export const usableConnections = (connections: readonly Connection[]): Connection[] => connections.filter((c) => c.status === 'active');
+
+/** A limit that starts from what the task can use now: every active connection, read and change where it can change something. */
+export const limitFromAll = (connections: readonly Connection[]): ConnectionSelection[] =>
+  usableConnections(connections).map((c) => ({ connectionId: c.id, access: c.provider === 'mcp' || canChange(c) ? 'read_write' : 'read' }));
+
+/** One line for the collapsed section of a task. */
+export function toolsSummaryLine(mode: ConnectionsMode, selections: readonly ConnectionSelection[], connections: readonly Connection[] | null): string {
+  if (mode === 'listed') return `Limited. ${summaryLine(selections, connections)}`;
+  if (connections === null) return 'Everything you connected';
+  const usable = usableConnections(connections);
+  if (usable.length === 0) return 'Nothing connected yet: the agent uses the browser.';
+  return `Everything you connected: ${usable.map((c) => c.label).join(', ')}`;
+}
+
 export const ACCESS_WORDS: Record<AccessChoice, string> = { none: 'Not used', read: 'Read only', read_write: 'Read and change' };
 
 export const ACCOUNTS_HELP = 'The agent can only use accounts you switch on here. It asks before it sends or changes anything, unless you told it not to ask again.';

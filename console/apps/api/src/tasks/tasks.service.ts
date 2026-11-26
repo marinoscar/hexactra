@@ -132,7 +132,10 @@ export class TasksService {
    * `request` supplies the device time zone for a schedule that names none.
    */
   async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
-    const { policyId, schedules, parameters: defs, outputs: outputDefs, useSavedLogins, connections, ...fields } = input;
+    const { policyId, schedules, parameters: defs, outputs: outputDefs, useSavedLogins, connections: listed, connectionsMode: mode, ...fields } = input;
+    // #967: a task uses every connection the owner switched on, unless it is limited. A list sent without a mode is a limit (back-compat).
+    const connectionsMode = mode ?? (listed ? 'listed' : 'all');
+    const connections = connectionsMode === 'listed' ? listed : undefined;
     if (connections) await assertSelectable(this.prisma, userId, connections);
     // The goal's `{{Name}}` parameters (#552): inferred where not defined, checked (400 names the problem).
     const parameters = prepareParameters(fields.goal, defs);
@@ -145,6 +148,7 @@ export class TasksService {
     // Absent: the owner's `secrets.defaultUseSavedLogins` (E37.3), off unless they turned it on.
     const data = {
       ...fields,
+      connectionsMode,
       userId,
       hostId: fields.hostId ?? null,
       model: fields.model ?? null,
@@ -165,10 +169,13 @@ export class TasksService {
 
   /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
-    const { policyId, parameters: defs, outputs: outputDefs, connections, ...fields } = patch;
+    const { policyId, parameters: defs, outputs: outputDefs, connections: listed, connectionsMode: mode, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
+    // #967: a list sent without a mode limits the task to it; `all` clears the list; `listed` alone keeps the list there is.
+    const connectionsMode = mode ?? (listed ? 'listed' : undefined);
+    const connections = connectionsMode === 'all' ? [] : listed;
     if (connections) await assertSelectable(this.prisma, userId, connections);
-    const data: Prisma.TaskUpdateManyMutationInput = { ...fields };
+    const data: Prisma.TaskUpdateManyMutationInput = { ...fields, ...(connectionsMode ? { connectionsMode } : {}) };
     // A new goal or new definitions: the parameters are reconciled with the goal again (#552).
     if (fields.goal !== undefined || defs !== undefined) {
       const task = await this.getTask(userId, id);

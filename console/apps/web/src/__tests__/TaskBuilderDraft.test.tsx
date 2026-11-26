@@ -101,11 +101,12 @@ describe('The task form from the task builder', () => {
     await screen.findByLabelText(/^Name/);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent(host, 'POST', '/tasks')).toHaveLength(1));
+    // The browser is the agent's call (#967): a draft's `needsBrowser` is not saved.
+    expect(sent(host, 'POST', '/tasks')[0]!.body).not.toHaveProperty('needsBrowser');
     expect(sent(host, 'POST', '/tasks')[0]!.body).toMatchObject({
       name: 'Pay the water bill',
       allowedDomains: ['water.example.test'],
       confirmRiskyActions: true,
-      needsBrowser: 'always',
       schedules: [{ cron: '0 9 1 * *', timezone: 'America/Costa_Rica', enabled: true, concurrency: 'skip', policyId: null, inputs: { amount: '25' } }],
     });
     await waitFor(() => expect(sent(host, 'POST', `/task-builder/${BUILDER_ID}/task-link`)[0]?.body).toEqual({ taskId: TASK_ID }));
@@ -123,7 +124,8 @@ describe('The task form from the task builder', () => {
   it('maps a draft to form values, with safe defaults for what an odd draft lacks', () => {
     const v = valuesFromBuilderDraft(DRAFT);
     expect(v.schedules).toEqual([{ cron: '0 9 1 * *', timezone: 'America/Costa_Rica', enabled: true, concurrency: 'skip', policyId: null, inputs: { amount: '25' } }]);
-    expect(v.needsBrowser).toBe('always');
+    expect(v.needsBrowser).toBe('auto');
+    expect(v.connectionsMode).toBe('all');
     const odd = valuesFromBuilderDraft({ ...DRAFT, schedules: [{ cron: 5 } as never, ...Array.from({ length: 12 }, () => DRAFT.schedules![0]!)], needsBrowser: 'sometimes' as never, unattendedPayments: 'yes' as never });
     expect(odd.schedules).toHaveLength(10);
     expect(odd.needsBrowser).toBe('auto');
