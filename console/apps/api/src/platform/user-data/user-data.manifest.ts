@@ -66,6 +66,8 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'SecretsActivity', category: 'credentials' },
   { model: 'Connection', category: 'credentials' },
   { model: 'ConnectionFlow', category: 'credentials' },
+  // A connection's diagnostic reports (E50.10): with the connections.
+  { model: 'ConnectionDiagnostic', category: 'credentials' },
   { model: 'TaskDelivery', category: 'browser-tasks' },
   { model: 'RunDelivery', category: 'browser-tasks' },
   { model: 'DeliveryRecipient', category: 'browser-tasks' },

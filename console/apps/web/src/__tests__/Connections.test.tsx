@@ -11,7 +11,7 @@ import { AdminConnectionsPage } from '../pages/AdminConnectionsPage';
 import { ConnectionsPage } from '../pages/ConnectionsPage';
 import { ConnectionsMenuItem } from '../connections/ConnectionsMenuItem';
 import type { AdminProvider, Connection, ProviderAvailability } from '../connections/api';
-import { levelOf, outcomeBanner, GROUPS } from '../connections/words';
+import { levelOf, outcomeBanner, remedyWords, testCodeWords, GROUPS } from '../connections/words';
 import { MenuList } from '@mui/material';
 import { ConfirmProvider } from '../ui';
 import { mockViewport } from './matchMedia';
@@ -97,6 +97,15 @@ describe('the words', () => {
     expect(levelOf(['mail_read', 'mail_modify'], GROUPS[0]!)).toBe('read and organize');
     expect(levelOf(['mail_read', 'mail_send', 'mail_modify'], GROUPS[0]!)).toBe('read, send and organize');
     expect(levelOf(['calendar_read', 'calendar_write'], GROUPS[1]!)).toBe('read and write');
+  });
+
+  it('reads a test or diagnostic code from the remedy table the API and the CLI share (E50.10)', () => {
+    expect(testCodeWords(null)).toBe('Works');
+    expect(testCodeWords('FORBIDDEN')).toBe('The provider refused: the permission is missing');
+    expect(testCodeWords('GRANT_REVOKED')).toBe('The access was withdrawn');
+    expect(testCodeWords('NOT_A_CODE')).toBe('Failed');
+    expect(remedyWords('RATE_LIMITED')).toMatch(/Try again in a minute/);
+    expect(remedyWords(null)).toBeNull();
   });
 
   it('says what happened when the consent returns, from a closed set, naming what was not allowed', () => {

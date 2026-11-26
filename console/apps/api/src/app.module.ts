@@ -28,6 +28,7 @@ import { PoliciesModule } from './policies/policies.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { ConnectionsModule } from './connections/connections.module';
+import { DiagnosticsModule } from './diagnostics/diagnostics.module';
 import { GoogleConnectionsModule } from './connections/google/google.module';
 import { DeliveriesModule } from './deliveries/deliveries.module';
 import { MicrosoftConnectionsModule } from './connections/microsoft/microsoft.module';
@@ -73,6 +74,8 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     ApprovalsModule,
     // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
+    // Diagnostics (E50.10): the report shape, the providers' registry and the history (global; the routes are the connections').
+    DiagnosticsModule,
     // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MicrosoftConnectionsModule, MailTriggersModule] : []),
     // The built-in secrets store (E37.5): the Vault packages embedded. Mounted when the deployment has a store key (the
