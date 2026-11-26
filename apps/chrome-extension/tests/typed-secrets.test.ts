@@ -11,7 +11,8 @@ import { handleRequest, type BridgeRequest } from '../src/remote';
 import { REMEMBER_MAX, REMEMBER_MS, SECRET_MARK, forgetTyped, hasTyped, rememberTyped, scrubTyped } from '../src/typed-secrets';
 
 const CODE = '585774';
-const PASSWORD = 'Tr0ub4dor&3';
+// A fixture marker, not a credential: what the tests type as Secret Material.
+const PASSWORD = 'fixture-typed-value-73';
 
 describe('scrubTyped', () => {
   beforeEach(() => forgetTyped());
