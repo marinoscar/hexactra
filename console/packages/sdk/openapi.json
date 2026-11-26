@@ -35842,7 +35842,7 @@
     },
     "/api/connections/{id}/diagnose": {
       "post": {
-        "description": "Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, or `server` for an MCP server, with its tool count), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "description": "Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, Google and Microsoft; an MCP server has its own: `switch`, `address`, `network`, `initialize`, `sign_in`, `tool_list`, `tool_changes`, `enabled_tools`, `offered_cap`), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `connections:write`.",
         "operationId": "connectionDiagnostics_diagnose",
         "parameters": [
           {
@@ -50621,6 +50621,85 @@
         }
       }
     },
+    "/api/connections/mcp/presets": {
+      "get": {
+        "description": "A short, reviewed list the Add dialog offers so you pick a name instead of typing an address: each with its address, the kind of sign-in, the vendor's documentation and the date the address was checked against it. A preset only fills the form: the server is still tested before anything is kept, and every tool starts off. It never carries a secret. A preset on a host the administrator blocks (or does not allow) is left out; while MCP servers are switched off the list is empty.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "mcpConnections_presets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/McpPresetResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Well-known MCP servers to add",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
     "/api/connections/mcp": {
       "post": {
         "description": "Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.\n\n**Requires:** authentication, plus permission `connections:write`.",
@@ -50984,6 +51063,122 @@
           }
         ],
         "summary": "Decide what a tool may do",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/tools/{toolId}/try": {
+      "post": {
+        "description": "Calls one tool you set to `read`, with the arguments given, exactly as a run would: the same checks (the switch, the connection active, the tool unchanged since you decided), the same redaction of every credential out and back, the same cleaning and cap of the result (here 4,000 characters). The answer is the server's words, to show as plain text. A `write` tool is refused. It grants nothing and is not a run; the audit names the connection and the tool, never the arguments or the result, and the result is not stored.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "mcpConnections_try",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toolId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TryToolDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TryResultResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`TRY_READ_ONLY` (a `write` tool: trying it would change something with no approval card), `TRY_TOOL_OFF` (switch it to `read` first) or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled)."
+          },
+          "422": {
+            "description": "`TRY_INVALID_ARGUMENTS`: the arguments do not satisfy the tool's own schema (`details.issues`, never values). Nothing was sent."
+          },
+          "429": {
+            "description": "`TRY_RATE_LIMITED`: at most 6 a minute for one connection."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Try a read tool of an MCP server",
         "tags": [
           "Connections"
         ],
@@ -52851,6 +53046,10 @@
               "CONNECTION_MCP_AUTH_REQUIRED",
               "CONNECTION_MCP_PROTOCOL",
               "DIAGNOSTICS_RATE_LIMITED",
+              "TRY_READ_ONLY",
+              "TRY_TOOL_OFF",
+              "TRY_INVALID_ARGUMENTS",
+              "TRY_RATE_LIMITED",
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
@@ -114822,6 +115021,55 @@
           "restricted"
         ]
       },
+      "McpPresetResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The server's address, as its vendor documents it."
+          },
+          "auth": {
+            "type": "string",
+            "enum": [
+              "none",
+              "bearer",
+              "header",
+              "oauth"
+            ],
+            "description": "How it signs you in. A preset never carries a secret: you give the token, or sign in at the server."
+          },
+          "headerName": {
+            "description": "For `header`: the header the server reads its key from.",
+            "type": "string"
+          },
+          "docsUrl": {
+            "type": "string",
+            "description": "The vendor's own documentation of the server."
+          },
+          "notes": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "string",
+            "description": "The date (`YYYY-MM-DD`) the address was checked against that documentation."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url",
+          "auth",
+          "docsUrl",
+          "notes",
+          "verified"
+        ]
+      },
       "AddMcpResponseDto": {
         "type": "object",
         "properties": {
@@ -115667,6 +115915,56 @@
         "required": [
           "mode"
         ],
+        "additionalProperties": false
+      },
+      "TryResultResponseDto": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "The server answered and reported no error."
+          },
+          "code": {
+            "description": "Null when ok; `TOOL_ERROR` (the server reported an error), `REFUSED` (nothing was sent: the tool or connection changed), or the failure (`TIMEOUT`, `UNAVAILABLE`, `AUTH`, ...).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ms": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "text": {
+            "type": "string",
+            "description": "What a run would read: cleaned, redacted of every credential and capped at 4,000 characters. The server's words: show it as plain text."
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "code",
+          "ms",
+          "text",
+          "truncated"
+        ]
+      },
+      "TryToolDto": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "default": {},
+            "description": "The tool's arguments, checked against its own JSON schema before anything is sent.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
         "additionalProperties": false
       },
       "McpAuthResponseDto": {
