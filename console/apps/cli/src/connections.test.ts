@@ -98,7 +98,9 @@ describe('hexactra connections', () => {
     const calls = fakeApi({ 'GET /connections': [WORK, PERSONAL], [`POST /connections/${WORK.id}/test`]: { results: [{ capability: 'mail_read', ok: true, code: null }, { capability: 'calendar_read', ok: false, code: 'FORBIDDEN' }] } });
     const text = await run('connections', 'test', 'work');
     expect(text).toContain('ok    mail_read');
-    expect(text).toContain('FAIL  calendar_read  (FORBIDDEN)');
+    expect(text).toContain('FAIL  calendar_read  (FORBIDDEN: The provider refused: the permission is missing)');
+    // The remedy, from the table the API and the web app share.
+    expect(text).toMatch(/ask for the permission again/);
     expect(calls.at(-1)).toMatchObject({ method: 'POST', path: `/connections/${WORK.id}/test` });
     expect(process.exitCode).toBe(1);
   });

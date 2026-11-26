@@ -7212,6 +7212,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/diagnostics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The last diagnostic result of each of your connections
+         * @description For each of your connections that has a report: its last overall status (`pass`, `warn`, `fail`, `skipped`) and when it finished ("last checked"). One query, for the chips of the Connections page.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connectionDiagnostics_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnose a connection
+         * @description Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, or `server` for an MCP server, with its tool count), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connectionDiagnostics_diagnose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A connection's last diagnostic reports
+         * @description Newest first: `limit` (default 5, at most 20). Codes, remedy keys, counts and timings only.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connectionDiagnostics_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/mail-triggers": {
         parameters: {
             query?: never;
@@ -10503,6 +10569,7 @@ export interface components {
              * @example CONNECTION_MCP_EXISTS
              * @example CONNECTION_MCP_AUTH_REQUIRED
              * @example CONNECTION_MCP_PROTOCOL
+             * @example DIAGNOSTICS_RATE_LIMITED
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
@@ -19039,6 +19106,48 @@ export interface components {
             /** @description The browser API key the administrator set for the picker (a public key restricted to this console's address); null when none is set. */
             apiKey: string | null;
             expiresAt: string | null;
+        };
+        DiagnosticSummaryResponseDto: {
+            /** @description The connection's id. */
+            targetId: string;
+            /** @enum {string} */
+            overall: "pass" | "warn" | "fail" | "skipped";
+            /** @description When its last report finished ("last checked"). */
+            at: string;
+        };
+        DiagnosticReportResponseDto: {
+            /** Format: uuid */
+            id: string;
+            target: {
+                /** @enum {string} */
+                kind: "connection" | "provider_app" | "search_provider";
+                id: string;
+            };
+            /**
+             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
+             * @enum {string}
+             */
+            trigger: "owner" | "admin" | "cli" | "health_job";
+            /**
+             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
+             * @enum {string}
+             */
+            overall: "pass" | "warn" | "fail" | "skipped";
+            /** @description ISO 8601 timestamp */
+            startedAt: string;
+            /** @description ISO 8601 timestamp */
+            finishedAt: string;
+            stages: {
+                id: string;
+                /** @enum {string} */
+                status: "pass" | "warn" | "fail" | "skipped";
+                code: string | null;
+                remedy: string | null;
+                ms: number | null;
+                data?: {
+                    [key: string]: string | number | boolean;
+                };
+            }[];
         };
         MailTriggerResponseDto: {
             /** Format: uuid */
@@ -49597,6 +49706,164 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionDiagnostics_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticSummaryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionDiagnostics_diagnose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one connection. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionDiagnostics_history: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

@@ -5,12 +5,14 @@
 // implements neither `nodeResultSchema` nor `persistNodeResult`).
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import type { Connection } from '@prisma/client';
 import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type JobHandler } from '@marinoscar/platform-api/jobs';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ConnectionError } from './connections.errors';
 import { ConnectionFlowService } from './connection-flow.service';
 import { ConnectionTokensService } from './connection-tokens.service';
+import { ConnectionDiagnosticsService } from './connection-diagnostics.service';
 
 export const CONNECTIONS_HEALTH_JOB = 'connections.health';
 
@@ -22,6 +24,10 @@ const BATCH = 200;
 @Injectable()
 export class ConnectionsHealth {
   constructor(private readonly prisma: PrismaService) {}
+
+  row(id: string): Promise<Connection | null> {
+    return this.prisma.connection.findUnique({ where: { id } });
+  }
 
   /** Live connections (active or paused) that were neither used nor refreshed in the last {@link IDLE_AFTER_MS}. */
   async idle(now = new Date(), limit = BATCH): Promise<{ id: string; userId: string }[]> {
@@ -52,10 +58,21 @@ export class ConnectionsHealthHandler implements JobHandler, OnModuleInit {
     private readonly health: ConnectionsHealth,
     private readonly tokens: ConnectionTokensService,
     private readonly flows: ConnectionFlowService,
+    private readonly diagnostics: ConnectionDiagnosticsService,
   ) {}
 
   onModuleInit(): void {
     this.registry.register(this);
+  }
+
+  /** E50.10: a report (trigger `health_job`) of why the refresh failed, so the Connections page shows it. Asks the provider nothing more. */
+  private async report(id: string, failure: unknown): Promise<void> {
+    try {
+      const row = await this.health.row(id);
+      if (row) await this.diagnostics.diagnoseRow(row, 'health_job', { signInFailure: failure });
+    } catch (e) {
+      this.log.warn(`connection health report could not be stored (${e instanceof Error ? e.name : 'error'})`);
+    }
   }
 
   async process(): Promise<void> {
@@ -66,6 +83,7 @@ export class ConnectionsHealthHandler implements JobHandler, OnModuleInit {
       } catch (e) {
         // A failed grant is already flagged and notified by the token service; an unreachable provider changes nothing and is tried again tomorrow.
         if (!(e instanceof ConnectionError)) this.log.warn(`connection health check failed (${e instanceof Error ? e.name : 'error'})`);
+        await this.report(c.id, e);
       }
     }
   }

@@ -28,6 +28,7 @@ import { PoliciesModule } from './policies/policies.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { ConnectionsModule } from './connections/connections.module';
+import { DiagnosticsModule } from './diagnostics/diagnostics.module';
 import { ServiceCredentialsModule } from './service-credentials/service-credentials.module';
 import { WebSearchModule } from './web-search/web-search.module';
 import { GoogleConnectionsModule } from './connections/google/google.module';
@@ -75,6 +76,8 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     ApprovalsModule,
     // Secrets providers (E37.2): the owner's Vault, connected with OAuth. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
+    // Diagnostics (E50.10): the report shape, the providers' registry and the history (global; the routes are the connections').
+    DiagnosticsModule,
     // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MicrosoftConnectionsModule, MailTriggersModule] : []),
     // Service credentials (E50.2): the keys of outside services the console calls (a search provider), user, organization and deployment.

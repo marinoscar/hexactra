@@ -1,0 +1,34 @@
+// The history of diagnostics (E50.10, #980): one row per report of a connection, a deployment's provider app or a search provider,
+// the last 20 per target (older rows are deleted in the same write). A row holds the overall status and the validated stages:
+// codes, counts, timings, a host name or an API id. NEVER content, a provider's message, an email address, a URL path or a token.
+// "Last checked" of a connection is read from here (the `connections` table gets no column). A connection's reports are deleted
+// with it; a user's with the user (src/diagnostics/diagnostics.ownership.ts).
+
+model ConnectionDiagnostic {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// The owner; null for a deployment's target (an administrator's provider app or search provider), which has no owner.
+  userId     String?  @map("user_id") @db.Uuid
+  /// connection | provider_app | search_provider
+  targetKind String   @map("target_kind") @db.VarChar(20)
+  /// The connection's id, or a provider id for a deployment's target.
+  targetId   String   @map("target_id") @db.VarChar(80)
+  /// pass | warn | fail | skipped
+  overall    String   @db.VarChar(10)
+  /// The validated stages (src/diagnostics/diagnostic-report.ts, `sanitizeStages`).
+  stages     Json
+  /// owner | admin | cli | health_job
+  trigger    String   @db.VarChar(20)
+  /// When the report started.
+  startedAt  DateTime @map("started_at") @db.Timestamptz
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetKind, targetId, createdAt(sort: Desc)])
+  @@index([userId, targetKind])
+  @@map("connection_diagnostics")
+}
+
+extend model User {
+  connectionDiagnostics ConnectionDiagnostic[]
+}

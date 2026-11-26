@@ -144,6 +144,9 @@ model User {
   runDeliveries     RunDelivery[]
   deliveryRecipients DeliveryRecipient[]
 
+  // composed from app:diagnostics.prisma
+  connectionDiagnostics ConnectionDiagnostic[]
+
   // composed from app:documents.prisma
   documents Document[]
 
