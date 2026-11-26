@@ -39469,601 +39469,6 @@
         ]
       }
     },
-    "/api/service-credentials": {
-      "get": {
-        "description": "One entry per key the console can use (a web search provider's): for you, whether your own key, your organization's and the deployment's are stored and when, and which one your requests use now. **Never a key, nor any part of one.**\n\n**Requires:** authentication, plus permission `connections:read`.",
-        "operationId": "serviceCredentials_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ServiceCredentialResponseDto"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "The keys of outside services, and which tiers hold one",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:read"
-          ]
-        }
-      }
-    },
-    "/api/service-credentials/admin/{service}/{name}": {
-      "put": {
-        "description": "Stores the deployment's key for this service, encrypted. Write-only. Audited (`service_credential.set`, tier `system`).\n\n**Requires:** authentication, plus permission `system_settings:write`.",
-        "operationId": "serviceCredentials_setSystem",
-        "parameters": [
-          {
-            "name": "service",
-            "required": true,
-            "in": "path",
-            "description": "The service (`web_search`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "description": "The key within it (`brave`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetServiceCredentialDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Stored"
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Set the deployment's key",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "system_settings:write"
-          ]
-        }
-      },
-      "delete": {
-        "description": "Idempotent. Audited (`service_credential.removed`, tier `system`).\n\n**Requires:** authentication, plus permission `system_settings:write`.",
-        "operationId": "serviceCredentials_removeSystem",
-        "parameters": [
-          {
-            "name": "service",
-            "required": true,
-            "in": "path",
-            "description": "The service (`web_search`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "description": "The key within it (`brave`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Removed (or there was nothing to remove)"
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Remove the deployment's key",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "system_settings:write"
-          ]
-        }
-      }
-    },
-    "/api/service-credentials/org/{service}/{name}": {
-      "put": {
-        "description": "Stores your active organization's key for this service, encrypted. Write-only. Needs `org_ai_config:write` in that organization. Audited with the organization's id.\n\n**Requires:** authentication, plus permission `org_ai_config:write`.",
-        "operationId": "serviceCredentials_setOrg",
-        "parameters": [
-          {
-            "name": "service",
-            "required": true,
-            "in": "path",
-            "description": "The service (`web_search`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "description": "The key within it (`brave`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetServiceCredentialDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Stored"
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Set your organization's key",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "org_ai_config:write"
-          ]
-        }
-      },
-      "delete": {
-        "description": "Idempotent. Audited with the organization's id.\n\n**Requires:** authentication, plus permission `org_ai_config:write`.",
-        "operationId": "serviceCredentials_removeOrg",
-        "parameters": [
-          {
-            "name": "service",
-            "required": true,
-            "in": "path",
-            "description": "The service (`web_search`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "description": "The key within it (`brave`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Removed (or there was nothing to remove)"
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Remove your organization's key",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "org_ai_config:write"
-          ]
-        }
-      }
-    },
-    "/api/service-credentials/{service}/{name}": {
-      "put": {
-        "description": "Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
-        "operationId": "serviceCredentials_setOwn",
-        "parameters": [
-          {
-            "name": "service",
-            "required": true,
-            "in": "path",
-            "description": "The service (`web_search`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "description": "The key within it (`brave`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetServiceCredentialDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Stored"
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Set your own key",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:write"
-          ]
-        }
-      },
-      "delete": {
-        "description": "Idempotent. Audited (`service_credential.removed`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
-        "operationId": "serviceCredentials_removeOwn",
-        "parameters": [
-          {
-            "name": "service",
-            "required": true,
-            "in": "path",
-            "description": "The service (`web_search`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "required": true,
-            "in": "path",
-            "description": "The key within it (`brave`).",
-            "schema": {
-              "pattern": "^[a-z][a-z0-9_]{0,39}$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Removed (or there was nothing to remove)"
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "summary": "Remove your own key",
-        "tags": [
-          "Service credentials"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "connections:write"
-          ]
-        }
-      }
-    },
     "/api/connected-apps": {
       "get": {
         "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
@@ -52112,10 +51517,6 @@
               "DELIVERY_TEST_RATE_LIMITED",
               "RECIPIENT_NOT_CONFIRMED",
               "RECIPIENT_LIMIT",
-              "SERVICE_CREDENTIAL_UNKNOWN",
-              "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
-              "SERVICE_CREDENTIAL_NO_ORGANIZATION",
-              "SERVICE_CREDENTIAL_INVALID",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -55214,7 +54615,7 @@
                   "read",
                   "read_write"
                 ],
-                "description": "How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have."
+                "description": "Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse."
               }
             },
             "required": [
@@ -55748,7 +55149,7 @@
                   "read",
                   "read_write"
                 ],
-                "description": "How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have."
+                "description": "Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse."
               }
             },
             "required": [
@@ -56338,7 +55739,7 @@
                       "read",
                       "read_write"
                     ],
-                    "description": "How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have."
+                    "description": "Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse."
                   }
                 }
               },
@@ -62578,7 +61979,7 @@
                       "read",
                       "read_write"
                     ],
-                    "description": "How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have."
+                    "description": "Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse."
                   }
                 },
                 "required": [
@@ -89936,7 +89337,8 @@
               "all",
               "listed"
             ],
-            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
           },
           "connections": {
             "type": "array",
@@ -89980,7 +89382,8 @@
                 "status"
               ]
             },
-            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A task has no connection list."
           },
           "model": {
             "deprecated": true,
@@ -90665,7 +90068,8 @@
                     "all",
                     "listed"
                   ],
-                  "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+                  "deprecated": true,
+                  "description": "Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
                 },
                 "connections": {
                   "type": "array",
@@ -90709,7 +90113,8 @@
                       "status"
                     ]
                   },
-                  "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
+                  "deprecated": true,
+                  "description": "Deprecated (E50.17): always empty. A task has no connection list."
                 },
                 "model": {
                   "deprecated": true,
@@ -91633,7 +91038,8 @@
               "all",
               "listed"
             ],
-            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
           },
           "connections": {
             "type": "array",
@@ -91677,7 +91083,8 @@
                 "status"
               ]
             },
-            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A task has no connection list."
           },
           "model": {
             "deprecated": true,
@@ -92618,7 +92025,8 @@
               "all",
               "listed"
             ],
-            "description": "Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
           },
           "connections": {
             "maxItems": 25,
@@ -92646,7 +92054,8 @@
                 "access"
               ]
             },
-            "description": "The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list."
           },
           "recordVideo": {
             "default": false,
@@ -92837,7 +92246,8 @@
               "all",
               "listed"
             ],
-            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
           },
           "connections": {
             "type": "array",
@@ -92881,7 +92291,8 @@
                 "status"
               ]
             },
-            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A task has no connection list."
           },
           "model": {
             "deprecated": true,
@@ -93513,7 +92924,8 @@
               "all",
               "listed"
             ],
-            "description": "Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
           },
           "connections": {
             "maxItems": 25,
@@ -93541,7 +92953,8 @@
                 "access"
               ]
             },
-            "description": "The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list."
           },
           "recordVideo": {
             "type": "boolean",
@@ -93740,7 +93153,8 @@
               "all",
               "listed"
             ],
-            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it."
           },
           "connections": {
             "type": "array",
@@ -93784,7 +93198,8 @@
                 "status"
               ]
             },
-            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A task has no connection list."
           },
           "model": {
             "deprecated": true,
@@ -100010,7 +99425,7 @@
             "description": "The memories of `memoryIds` that still exist, with their labels (#553): the run page says \"Used: …\""
           },
           "suggestedConnections": {
-            "description": "E41.5: the owner's connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied.",
+            "description": "E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied.",
             "type": "array",
             "items": {
               "type": "object",
@@ -100036,6 +99451,13 @@
                     "chat"
                   ]
                 },
+                "fix": {
+                  "type": "string",
+                  "enum": [
+                    "resume",
+                    "capability"
+                  ]
+                },
                 "text": {
                   "type": "string"
                 }
@@ -100046,6 +99468,7 @@
                 "provider",
                 "site",
                 "scope",
+                "fix",
                 "text"
               ]
             }
@@ -102513,168 +101936,6 @@
         },
         "additionalProperties": false
       },
-      "ServiceCredentialResponseDto": {
-        "type": "object",
-        "properties": {
-          "service": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "binding": {
-            "type": "string",
-            "enum": [
-              "credential_store",
-              "vault",
-              "builtin"
-            ],
-            "description": "Where the answering key is kept."
-          },
-          "tier": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "user",
-                  "organization",
-                  "system"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The tier a request of yours would use now (user, then organization, then deployment), or `null`."
-          },
-          "tiers": {
-            "type": "object",
-            "properties": {
-              "user": {
-                "type": "object",
-                "properties": {
-                  "available": {
-                    "type": "boolean",
-                    "description": "A key may be stored at this tier for this reference (the organization tier needs an active organization)."
-                  },
-                  "set": {
-                    "type": "boolean",
-                    "description": "A key is stored at this tier."
-                  },
-                  "setAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ],
-                    "description": "When it was stored. Never a part of the key."
-                  }
-                },
-                "required": [
-                  "available",
-                  "set",
-                  "setAt"
-                ]
-              },
-              "organization": {
-                "type": "object",
-                "properties": {
-                  "available": {
-                    "type": "boolean",
-                    "description": "A key may be stored at this tier for this reference (the organization tier needs an active organization)."
-                  },
-                  "set": {
-                    "type": "boolean",
-                    "description": "A key is stored at this tier."
-                  },
-                  "setAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ],
-                    "description": "When it was stored. Never a part of the key."
-                  }
-                },
-                "required": [
-                  "available",
-                  "set",
-                  "setAt"
-                ]
-              },
-              "system": {
-                "type": "object",
-                "properties": {
-                  "available": {
-                    "type": "boolean",
-                    "description": "A key may be stored at this tier for this reference (the organization tier needs an active organization)."
-                  },
-                  "set": {
-                    "type": "boolean",
-                    "description": "A key is stored at this tier."
-                  },
-                  "setAt": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "description": "ISO 8601 timestamp"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ],
-                    "description": "When it was stored. Never a part of the key."
-                  }
-                },
-                "required": [
-                  "available",
-                  "set",
-                  "setAt"
-                ]
-              }
-            },
-            "required": [
-              "user",
-              "organization",
-              "system"
-            ]
-          }
-        },
-        "required": [
-          "service",
-          "name",
-          "label",
-          "binding",
-          "tier",
-          "tiers"
-        ]
-      },
-      "SetServiceCredentialDto": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4096,
-            "description": "The key. Write-only: it is never returned, not even in part."
-          }
-        },
-        "required": [
-          "value"
-        ],
-        "additionalProperties": false
-      },
       "ConnectedAppListResponseDto": {
         "type": "array",
         "items": {
@@ -102836,7 +102097,7 @@
                 },
                 "allowConnections": {
                   "type": "boolean",
-                  "description": "Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."
+                  "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
                 },
                 "paused": {
                   "type": "boolean",
@@ -103218,7 +102479,7 @@
               },
               "allowConnections": {
                 "type": "boolean",
-                "description": "Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."
+                "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
               },
               "paused": {
                 "type": "boolean",
@@ -103368,7 +102629,7 @@
           },
           "allowConnections": {
             "type": "boolean",
-            "description": "Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."
+            "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
           },
           "paused": {
             "type": "boolean",
@@ -107923,14 +107184,6 @@
                   "type": "boolean",
                   "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
                 },
-                "connectionsMode": {
-                  "type": "string",
-                  "enum": [
-                    "all",
-                    "listed"
-                  ],
-                  "description": "Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
-                },
                 "connections": {
                   "type": "array",
                   "items": {
@@ -107973,7 +107226,8 @@
                       "status"
                     ]
                   },
-                  "description": "The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none)."
+                  "deprecated": true,
+                  "description": "Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list."
                 },
                 "lastMessageAt": {
                   "type": "string",
@@ -108076,7 +107330,6 @@
                 "useSavedIdentity",
                 "useSavedCards",
                 "recordVideo",
-                "connectionsMode",
                 "connections",
                 "lastMessageAt",
                 "createdAt",
@@ -108173,14 +107426,6 @@
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
           },
-          "connectionsMode": {
-            "type": "string",
-            "enum": [
-              "all",
-              "listed"
-            ],
-            "description": "Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
-          },
           "connections": {
             "type": "array",
             "items": {
@@ -108223,7 +107468,8 @@
                 "status"
               ]
             },
-            "description": "The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none)."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list."
           },
           "lastMessageAt": {
             "type": "string",
@@ -108252,7 +107498,6 @@
           "useSavedIdentity",
           "useSavedCards",
           "recordVideo",
-          "connectionsMode",
           "connections",
           "lastMessageAt",
           "createdAt",
@@ -108331,14 +107576,6 @@
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it."
           },
-          "connectionsMode": {
-            "type": "string",
-            "enum": [
-              "all",
-              "listed"
-            ],
-            "description": "Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`."
-          },
           "connections": {
             "maxItems": 25,
             "type": "array",
@@ -108365,7 +107602,8 @@
                 "access"
               ]
             },
-            "description": "The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner)."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list."
           }
         }
       },
@@ -108443,14 +107681,6 @@
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
           },
-          "connectionsMode": {
-            "type": "string",
-            "enum": [
-              "all",
-              "listed"
-            ],
-            "description": "Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
-          },
           "connections": {
             "type": "array",
             "items": {
@@ -108493,7 +107723,8 @@
                 "status"
               ]
             },
-            "description": "The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none)."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list."
           },
           "lastMessageAt": {
             "type": "string",
@@ -108641,7 +107872,6 @@
           "useSavedIdentity",
           "useSavedCards",
           "recordVideo",
-          "connectionsMode",
           "connections",
           "lastMessageAt",
           "createdAt",
@@ -108732,14 +107962,6 @@
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it."
           },
-          "connectionsMode": {
-            "type": "string",
-            "enum": [
-              "all",
-              "listed"
-            ],
-            "description": "Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`."
-          },
           "connections": {
             "maxItems": 25,
             "type": "array",
@@ -108766,7 +107988,8 @@
                 "access"
               ]
             },
-            "description": "The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner)."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list."
           }
         }
       },
@@ -109108,7 +108331,8 @@
                 "access"
               ]
             },
-            "description": "E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools."
           }
         },
         "required": [
@@ -110850,7 +110074,8 @@
                 "access"
               ]
             },
-            "description": "E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one."
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools."
           },
           "unattendedPayments": {
             "type": "string",

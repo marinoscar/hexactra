@@ -7830,112 +7830,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/service-credentials": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The keys of outside services, and which tiers hold one
-         * @description One entry per key the console can use (a web search provider's): for you, whether your own key, your organization's and the deployment's are stored and when, and which one your requests use now. **Never a key, nor any part of one.**
-         *
-         *     **Requires:** authentication, plus permission `connections:read`.
-         */
-        get: operations["serviceCredentials_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/service-credentials/admin/{service}/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set the deployment's key
-         * @description Stores the deployment's key for this service, encrypted. Write-only. Audited (`service_credential.set`, tier `system`).
-         *
-         *     **Requires:** authentication, plus permission `system_settings:write`.
-         */
-        put: operations["serviceCredentials_setSystem"];
-        post?: never;
-        /**
-         * Remove the deployment's key
-         * @description Idempotent. Audited (`service_credential.removed`, tier `system`).
-         *
-         *     **Requires:** authentication, plus permission `system_settings:write`.
-         */
-        delete: operations["serviceCredentials_removeSystem"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/service-credentials/org/{service}/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set your organization's key
-         * @description Stores your active organization's key for this service, encrypted. Write-only. Needs `org_ai_config:write` in that organization. Audited with the organization's id.
-         *
-         *     **Requires:** authentication, plus permission `org_ai_config:write`.
-         */
-        put: operations["serviceCredentials_setOrg"];
-        post?: never;
-        /**
-         * Remove your organization's key
-         * @description Idempotent. Audited with the organization's id.
-         *
-         *     **Requires:** authentication, plus permission `org_ai_config:write`.
-         */
-        delete: operations["serviceCredentials_removeOrg"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/service-credentials/{service}/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Set your own key
-         * @description Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        put: operations["serviceCredentials_setOwn"];
-        post?: never;
-        /**
-         * Remove your own key
-         * @description Idempotent. Audited (`service_credential.removed`, tier `user`).
-         *
-         *     **Requires:** authentication, plus permission `connections:write`.
-         */
-        delete: operations["serviceCredentials_removeOwn"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -10409,10 +10303,6 @@ export interface components {
              * @example DELIVERY_TEST_RATE_LIMITED
              * @example RECIPIENT_NOT_CONFIRMED
              * @example RECIPIENT_LIMIT
-             * @example SERVICE_CREDENTIAL_UNKNOWN
-             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
-             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
-             * @example SERVICE_CREDENTIAL_INVALID
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -11430,7 +11320,7 @@ export interface components {
             };
             connections?: {
                 /**
-                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                 * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                  * @enum {string}
                  */
                 newChats: "off" | "read" | "read_write";
@@ -11554,7 +11444,7 @@ export interface components {
             };
             connections?: {
                 /**
-                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                 * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                  * @enum {string}
                  */
                 newChats: "off" | "read" | "read_write";
@@ -11673,7 +11563,7 @@ export interface components {
             } | null;
             connections?: {
                 /**
-                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                 * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                  * @enum {string}
                  */
                 newChats?: "off" | "read" | "read_write";
@@ -13035,7 +12925,7 @@ export interface components {
                 };
                 connections?: {
                     /**
-                     * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                     * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                      * @enum {string}
                      */
                     newChats: "off" | "read" | "read_write";
@@ -19038,11 +18928,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -19243,11 +19137,15 @@ export interface components {
                 /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
                 recordVideo: boolean;
                 /**
-                 * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+                 * @deprecated
+                 * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
                  * @enum {string}
                  */
                 connectionsMode: "all" | "listed";
-                /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+                /**
+                 * @deprecated
+                 * @description Deprecated (E50.17): always empty. A task has no connection list.
+                 */
                 connections: {
                     /**
                      * Format: uuid
@@ -19503,11 +19401,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -19780,11 +19682,15 @@ export interface components {
              */
             needsBrowser?: "auto" | "always" | "never";
             /**
-             * @description Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode?: "all" | "listed";
-            /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
+             */
             connections?: {
                 /**
                  * Format: uuid
@@ -19865,11 +19771,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -20066,11 +19976,15 @@ export interface components {
              */
             needsBrowser?: "auto" | "always" | "never";
             /**
-             * @description Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode?: "all" | "listed";
-            /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
+             */
             connections?: {
                 /**
                  * Format: uuid
@@ -20154,11 +20068,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -21604,7 +21522,7 @@ export interface components {
                 /** @enum {string} */
                 status: "active" | "superseded" | "archived";
             }[];
-            /** @description E41.5: the owner's connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied. */
+            /** @description E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied. */
             suggestedConnections?: {
                 /** Format: uuid */
                 connectionId: string;
@@ -21613,6 +21531,8 @@ export interface components {
                 site: string;
                 /** @enum {string} */
                 scope: "task" | "chat";
+                /** @enum {string} */
+                fix: "resume" | "capability";
                 text: string;
             }[];
         };
@@ -22183,48 +22103,6 @@ export interface components {
             /** @constant */
             neverForSite?: true;
         };
-        ServiceCredentialResponseDto: {
-            service: string;
-            name: string;
-            label: string;
-            /**
-             * @description Where the answering key is kept.
-             * @enum {string}
-             */
-            binding: "credential_store" | "vault" | "builtin";
-            /** @description The tier a request of yours would use now (user, then organization, then deployment), or `null`. */
-            tier: ("user" | "organization" | "system") | null;
-            tiers: {
-                user: {
-                    /** @description A key may be stored at this tier for this reference (the organization tier needs an active organization). */
-                    available: boolean;
-                    /** @description A key is stored at this tier. */
-                    set: boolean;
-                    /** @description When it was stored. Never a part of the key. */
-                    setAt: string | null;
-                };
-                organization: {
-                    /** @description A key may be stored at this tier for this reference (the organization tier needs an active organization). */
-                    available: boolean;
-                    /** @description A key is stored at this tier. */
-                    set: boolean;
-                    /** @description When it was stored. Never a part of the key. */
-                    setAt: string | null;
-                };
-                system: {
-                    /** @description A key may be stored at this tier for this reference (the organization tier needs an active organization). */
-                    available: boolean;
-                    /** @description A key is stored at this tier. */
-                    set: boolean;
-                    /** @description When it was stored. Never a part of the key. */
-                    setAt: string | null;
-                };
-            };
-        };
-        SetServiceCredentialDto: {
-            /** @description The key. Write-only: it is never returned, not even in part. */
-            value: string;
-        };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
             clientId: string;
@@ -22276,7 +22154,7 @@ export interface components {
                 allowSavedIdentity: boolean;
                 /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
                 allowSavedCards: boolean;
-                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
@@ -22377,7 +22255,7 @@ export interface components {
                 allowSavedIdentity: boolean;
                 /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
                 allowSavedCards: boolean;
-                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
@@ -22415,7 +22293,7 @@ export interface components {
             allowSavedIdentity: boolean;
             /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
             allowSavedCards: boolean;
-            /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+            /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
             allowConnections: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
@@ -23482,11 +23360,9 @@ export interface components {
                 /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
                 recordVideo: boolean;
                 /**
-                 * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
-                 * @enum {string}
+                 * @deprecated
+                 * @description Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.
                  */
-                connectionsMode: "all" | "listed";
-                /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
                 connections: {
                     /**
                      * Format: uuid
@@ -23563,11 +23439,9 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
-             * @enum {string}
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.
              */
-            connectionsMode: "all" | "listed";
-            /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
             connections: {
                 /**
                  * Format: uuid
@@ -23615,11 +23489,9 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
             recordVideo?: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`.
-             * @enum {string}
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
              */
-            connectionsMode?: "all" | "listed";
-            /** @description The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). */
             connections?: {
                 /**
                  * Format: uuid
@@ -23663,11 +23535,9 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
-             * @enum {string}
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.
              */
-            connectionsMode: "all" | "listed";
-            /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
             connections: {
                 /**
                  * Format: uuid
@@ -23749,11 +23619,9 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
             recordVideo?: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`.
-             * @enum {string}
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
              */
-            connectionsMode?: "all" | "listed";
-            /** @description The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). */
             connections?: {
                 /**
                  * Format: uuid
@@ -23856,7 +23724,10 @@ export interface components {
                 /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[];
-            /** @description E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools.
+             */
             connections: {
                 /** Format: uuid */
                 connectionId: string;
@@ -24302,7 +24173,10 @@ export interface components {
                 /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[];
-            /** @description E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools.
+             */
             connections: {
                 /** Format: uuid */
                 connectionId: string;
@@ -51167,366 +51041,6 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["QuestionResponseDto"];
                     };
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["ServiceCredentialResponseDto"][];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_setSystem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetServiceCredentialDto"];
-            };
-        };
-        responses: {
-            /** @description Stored */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_removeSystem: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed (or there was nothing to remove) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_setOrg: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetServiceCredentialDto"];
-            };
-        };
-        responses: {
-            /** @description Stored */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_removeOrg: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed (or there was nothing to remove) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_setOwn: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetServiceCredentialDto"];
-            };
-        };
-        responses: {
-            /** @description Stored */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    serviceCredentials_removeOwn: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The service (`web_search`). */
-                service: string;
-                /** @description The key within it (`brave`). */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed (or there was nothing to remove) */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

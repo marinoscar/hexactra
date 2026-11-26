@@ -31,7 +31,7 @@ export const MCP_TITLE_CHARS = 100;
 export const MCP_INSTRUCTIONS_CHARS = 300;
 /** A description is kept as the server sent it up to this length (shown to the owner as plain text). */
 export const MCP_STORED_DESCRIPTION_CHARS = 4_000;
-/** At most this many MCP tools are offered to the model in one run. */
+/** Over this many enabled MCP tools in one run, each server's tools wait behind `open_toolbox` (E50.17): none is dropped. */
 export const MCP_MAX_TOOLS_PER_RUN = 40;
 /** The model's tool names are at most this long (providers accept 64). */
 export const MCP_TOOL_NAME_CHARS = 64;

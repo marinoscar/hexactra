@@ -348,52 +348,27 @@ describe('POST /chats/:id/task-link', () => {
   });
 });
 
-describe('the accounts a drafted task proposes (E41.5)', () => {
-  async function connect(userId: string, label: string, provider: 'google' | 'microsoft' = 'google') {
-    return prisma.connection.create({ data: { userId, provider, accountId: `acct-${label}-${Date.now()}-${Math.random()}`, accountEmail: `${label.toLowerCase()}@example.test`, label, capabilities: ['mail_read', 'mail_send', 'calendar_read'], grantedScopes: [], status: 'active' } });
-  }
-
-  it('proposes only the chat\'s connections its runs used, at the access they needed, and writes nothing', async () => {
+describe('the accounts a drafted task proposes (E41.5, E50.17)', () => {
+  it('proposes none, whatever the runs used: a task has no account list, every run may use what the owner switched on', async () => {
     const alice = await login('accounts');
     const { chat, run } = await finishedChat(alice);
-    const [work, home, idle] = [await connect(alice.userId, 'Work'), await connect(alice.userId, 'Home'), await connect(alice.userId, 'Idle')];
-    await prisma.conversationConnection.createMany({ data: [work, home, idle].map((c) => ({ conversationId: chat.id, connectionId: c.id, access: 'read_write' })) });
-    await prisma.runStep.createMany({
-      data: [
-        { runId: run.id, seq: 1, kind: 'action', action: 'mail_search', args: { connection: 'Work' }, ok: true },
-        { runId: run.id, seq: 2, kind: 'action', action: 'mail_send', args: { connection: 'Work', to: ['person-b@example.test'] }, ok: true },
-        { runId: run.id, seq: 3, kind: 'action', action: 'calendar_list', args: { connection: 'Home' }, ok: true },
-        // A refused call does not count.
-        { runId: run.id, seq: 4, kind: 'action', action: 'mail_send', args: { connection: 'Home' }, ok: false },
-        // A label the chat does not list is never proposed.
-        { runId: run.id, seq: 5, kind: 'action', action: 'mail_search', args: { connection: 'Someone else' }, ok: true },
-      ],
-    });
+    await prisma.connection.create({ data: { userId: alice.userId, provider: 'google', accountId: `acct-work-${Date.now()}-${Math.random()}`, accountEmail: 'work@example.test', label: 'Work', capabilities: ['mail_read', 'mail_send'], grantedScopes: [], status: 'active' } });
+    await prisma.runStep.create({ data: { runId: run.id, seq: 1, kind: 'action', action: 'mail_send', args: { connection: 'Work', to: ['person-b@example.test'] }, ok: true } });
     const before = await prisma.taskConnection.count();
     const draft = await new ChatTaskDraftService(prisma, writer(new Error('no model')).ai).draft(alice.userId, chat.id, null);
-    expect(draft.connections).toEqual(expect.arrayContaining([{ connectionId: work.id, access: 'read_write' }, { connectionId: home.id, access: 'read' }]));
-    expect(draft.connections).toHaveLength(2);
-    expect(await prisma.taskConnection.count()).toBe(before);
-  });
-
-  it('proposes none when the chat\'s runs used no account', async () => {
-    const bob = await login('accounts-none');
-    const { chat } = await finishedChat(bob);
-    const c = await connect(bob.userId, 'Work');
-    await prisma.conversationConnection.create({ data: { conversationId: chat.id, connectionId: c.id, access: 'read' } });
-    const draft = await new ChatTaskDraftService(prisma, writer(new Error('no model')).ai).draft(bob.userId, chat.id, null);
     expect(draft.connections).toEqual([]);
+    expect(await prisma.taskConnection.count()).toBe(before);
   });
 });
 
 describe('"this could have used your account" (E41.5)', () => {
-  it('suggests the owner\'s unlisted Google account after a run that used Google Mail in the browser, and not once the run had one', async () => {
+  it('E50.17: says which switch to turn on after a run used Google Mail in the browser: resume a paused account, or switch Mail on', async () => {
     const carol = await login('suggest');
     const { chat, run } = await finishedChat(carol);
-    const marin = await prisma.connection.create({ data: { userId: carol.userId, provider: 'google', accountId: `acct-s-${stamp}`, accountEmail: 'marin@example.test', label: 'Marin', capabilities: ['mail_read', 'mail_send'], grantedScopes: [], status: 'active' } });
+    const marin = await prisma.connection.create({ data: { userId: carol.userId, provider: 'google', accountId: `acct-s-${stamp}`, accountEmail: 'marin@example.test', label: 'Marin', capabilities: ['mail_read', 'mail_send'], grantedScopes: [], status: 'paused' } });
     await prisma.runStep.create({ data: { runId: run.id, seq: 1, kind: 'action', action: 'navigate', args: { url: 'https://mail.google.com/mail/u/0/' }, ok: true } });
     const got = await suggestedConnections(prisma, carol.userId, { id: run.id, taskId: null, conversationId: chat.id, policySnapshot: null });
-    expect(got).toEqual([{ connectionId: marin.id, label: 'Marin', provider: 'google', site: 'Google Mail', scope: 'chat', text: 'This used the browser for Google Mail. You have "Marin" connected: allow it for this chat to do this without the browser.' }]);
+    expect(got).toEqual([{ connectionId: marin.id, label: 'Marin', provider: 'google', site: 'Google Mail', scope: 'chat', fix: 'resume', text: 'This used the browser for Google Mail. "Marin" is paused: resume it in Connections and tools to do this without the browser.' }]);
     // The chat's result card carries it (never the model).
     await prisma.chatMessage.deleteMany({ where: { conversationId: chat.id, kind: 'result' } });
     await app.get(ChatResults, { strict: false }).recordRunEnd(carol.userId, run.id);
@@ -402,7 +377,14 @@ describe('"this could have used your account" (E41.5)', () => {
     // The run page: GET /runs/:id.
     const res = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: { authorization: `Bearer ${carol.token}` } });
     expect(res.json<{ data: { suggestedConnections: { label: string }[] } }>().data.suggestedConnections.map((s) => s.label)).toEqual(['Marin']);
-    // A run that listed a Google mail account: nothing to suggest.
+    // Active with Mail switched off: it is in the run, without the capability.
+    await prisma.connection.update({ where: { id: marin.id }, data: { status: 'active', capabilities: ['calendar_read'] } });
+    const off = { connections: [{ connectionId: marin.id, access: 'read', label: 'Marin', provider: 'google', capabilities: ['calendar_read'] }] };
+    expect((await suggestedConnections(prisma, carol.userId, { id: run.id, taskId: null, conversationId: chat.id, policySnapshot: off })).map((x) => [x.fix, x.text])).toEqual([
+      ['capability', 'This used the browser for Google Mail. "Marin" has Mail switched off: switch it on in Connections and tools to do this without the browser.'],
+    ]);
+    // A run that had a Google mail account: nothing to suggest.
+    await prisma.connection.update({ where: { id: marin.id }, data: { capabilities: ['mail_read'] } });
     const snapshot = { connections: [{ connectionId: marin.id, access: 'read', label: 'Marin', provider: 'google', capabilities: ['mail_read'] }] };
     expect(await suggestedConnections(prisma, carol.userId, { id: run.id, taskId: null, conversationId: chat.id, policySnapshot: snapshot })).toEqual([]);
   });

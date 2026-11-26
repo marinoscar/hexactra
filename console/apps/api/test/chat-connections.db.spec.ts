@@ -68,10 +68,10 @@ const engine = (ai: AiService) =>
   new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), ai, undefined, undefined, undefined, undefined, undefined, app.get(ConnectionCapabilities));
 
 async function chatWithConnections(userId: string, conns: [string, string[], 'read' | 'read_write'][], text: string) {
-  const made = await Promise.all(conns.map(([label, caps]) => kit.connect(userId, label, caps)));
-  // Explicitly none (#680: a chat that says nothing takes the owner's default), then exactly the rows this test names.
-  const chat = await chats.create(userId, { connections: [] });
-  await prisma.conversationConnection.createMany({ data: made.map((c, i) => ({ conversationId: chat.id, connectionId: c.id, access: conns[i]![2] })) });
+  // E50.17: the chat has every connection the owner switched on; it lists none of its own.
+  const made: { id: string; label: string }[] = [];
+  for (const [label, caps] of conns) made.push(await kit.connect(userId, label, caps));
+  const chat = await chats.create(userId, {});
   await chats.postUserMessage(userId, chat.id, text);
   return { chat, made };
 }
@@ -96,20 +96,20 @@ describe('the chat answers from the owner\'s connections', () => {
 
   it('has only read tools: a chat with read and write access still cannot call a write tool', async () => {
     const userId = await login('write');
-    const { chat } = await chatWithConnections(userId, [['Work', ['mail_read', 'mail_send', 'mail_modify', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'], 'read_write']], 'Send Person B my report');
+    const { chat, made } = await chatWithConnections(userId, [['Work', ['mail_read', 'mail_send', 'mail_modify', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'], 'read_write']], 'Send Person B my report');
     const model = chatModel([['mail_send', { connection: 'Work', draft_id: null, to: ['person-b@example.test'], cc: null, bcc: null, subject: 'x', body: 'y', reply_to_message_id: null, attachments: null }]]);
     await engine(model.ai).run(chat.id, userId, null);
     const connectionTools = model.seen.names.filter((n) => /^(mail|calendar|docs|sheet|file|connections)_/.test(n));
     expect(connectionTools).toEqual(['mail_search', 'mail_read', 'calendar_list', 'calendar_free_busy', 'docs_search', 'docs_read', 'sheet_read']);
     expect(model.outputs[0]).toBe('(not offered: mail_send)');
-    expect(kit.fake.account((await prisma.conversationConnection.findFirstOrThrow({ where: { conversationId: chat.id } })).connectionId).sent).toHaveLength(0);
+    expect(kit.fake.account(made[0]!.id).sent).toHaveLength(0);
     // A read and write account is named as such (E41.3): the job can change things, the chat cannot.
     expect(model.seen.input).toContain('c1 "Work" (google: read and change)');
     // The list is pinned: it is exactly the read tools.
     expect(CHAT_CONNECTION_TOOLS.map((t) => t.name)).toEqual(['mail_search', 'mail_read', 'calendar_list', 'calendar_free_busy', 'docs_search', 'docs_read', 'sheet_read']);
   });
 
-  it('adds nothing for a chat without connections', async () => {
+  it('adds nothing for a chat whose owner has no connection', async () => {
     const userId = await login('none');
     const chat = await chats.create(userId, {});
     await chats.postUserMessage(userId, chat.id, 'Hello');
