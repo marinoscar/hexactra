@@ -27,9 +27,11 @@ import { ConnectionsService } from './connections.service';
 import { McpCatalogService } from './mcp/mcp-catalog.service';
 import { McpConnectionsService } from './mcp/mcp-connections.service';
 import { McpConnector } from './mcp/mcp-connector.service';
+import { McpDiagnostics } from './mcp/mcp-diagnostics';
 import { McpOAuthService } from './mcp/mcp-oauth.service';
 import { McpRunService } from './mcp/mcp-run.service';
 import { McpSecretStore } from './mcp/mcp-secrets';
+import { McpTryService } from './mcp/mcp-try.service';
 
 /**
  * Connections (E39.2, #599): the owner's accounts at Google and Microsoft, several per service, each with a label and its own
@@ -69,8 +71,10 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     McpOAuthService,
     McpConnectionsService,
     McpRunService,
+    McpDiagnostics,
+    McpTryService,
   ],
-  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionDiagnosticsService, ConnectionAppDiagnostics, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService],
+  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionDiagnosticsService, ConnectionAppDiagnostics, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService, McpTryService],
 })
 export class ConnectionsModule implements OnModuleInit {
   constructor(
