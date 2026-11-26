@@ -12119,6 +12119,11 @@ export interface components {
                 limits?: {
                     perRun?: number | null;
                     perUserPerDay?: number | null;
+                    fetchPerRun?: number | null;
+                };
+                fetch?: {
+                    enabled?: boolean;
+                    blockedHosts?: string[];
                 };
             };
             deliveries: {
@@ -12448,6 +12453,11 @@ export interface components {
                 limits?: {
                     perRun?: number | null;
                     perUserPerDay?: number | null;
+                    fetchPerRun?: number | null;
+                };
+                fetch?: {
+                    enabled?: boolean;
+                    blockedHosts?: string[];
                 };
             };
             deliveries?: {
@@ -12781,6 +12791,11 @@ export interface components {
                 limits?: {
                     perRun?: number | null;
                     perUserPerDay?: number | null;
+                    fetchPerRun?: number | null;
+                };
+                fetch?: {
+                    enabled?: boolean;
+                    blockedHosts?: string[];
                 };
             };
             deliveries?: {
@@ -22709,6 +22724,14 @@ export interface components {
             limits: {
                 perRun: number | null;
                 perUserPerDay: number | null;
+                /** @description Pages `web_fetch` may read in one run; null: unlimited. */
+                fetchPerRun: number | null;
+            };
+            fetch: {
+                /** @description `web_fetch` reads public pages on the console server. */
+                enabled: boolean;
+                /** @description Hosts (or `*.suffix`) web_fetch never reads, at any redirect. */
+                blockedHosts: string[];
             };
             /** @description The providers this console has, with their default cost estimate. */
             installed: {
@@ -22735,6 +22758,11 @@ export interface components {
             limits?: {
                 perRun?: number | null;
                 perUserPerDay?: number | null;
+                fetchPerRun?: number | null;
+            };
+            fetch?: {
+                enabled?: boolean;
+                blockedHosts?: string[];
             };
         };
         WebSearchUsageRowDto: {
