@@ -20,6 +20,13 @@ describe('browserInstructions', () => {
     expect(text.endsWith('Tool notes:\n- a note')).toBe(true);
   });
 
+  it('tells the agent how to type a code split into boxes, and never to read a typed field back (E49.2, #959)', () => {
+    const text = browserInstructions(['other'], { families: [browserFamily] });
+    expect(text).toContain('When the code is split across several boxes, pass the first box: the tool fills every box and says how many.');
+    expect(text).toContain("After typing a secret, never read a field's value back (run_javascript, read_text)");
+    expect(text).toContain('Never say a code was wrong or expired unless the page says so.');
+  });
+
   it('with no browser family reads no browser how-to', () => {
     const text = browserInstructions(['other'], { families: [accounts] });
     expect(text).not.toContain('How to see');

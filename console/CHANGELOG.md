@@ -134,6 +134,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The agent types a code split into boxes in one step, and never reads a typed field back** (#959, console 1.144.4; E49.2, epic #957).
+  - `type_handoff_secret` and `type_text` tell the model to pass a code field's first box. They report what the fabric did ("Typed the secret into 6 code boxes.", or that the page moved on), never the value.
+  - A code the boxes refused says to look at the page before asking for a new one.
+  - The sign-in instructions add three rules: never read a field's value back after typing a secret, look at the page if it did not move on, and never say a code was wrong or expired unless the page says so.
+  - The extension side shipped in #962 (E49.1). The tool descriptions and the instructions changed, so `runner-characterisation.db.spec.ts` was updated deliberately: those three texts only.
+
 - **`hexactra agent status` shows which agent and which Chrome extension a node runs** (#963, console 1.144.3; E49.5, epic #957).
   - An unattended-only node showed no version at all, and neither mode showed the extension.
   - Both blocks now show `Agent: <version> (<commit>)` and `Extension: <bundled>`, plus the extension that last connected and when.

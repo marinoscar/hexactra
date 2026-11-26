@@ -12,6 +12,7 @@ import { requestHuman } from '../src/tools/request-human';
 import { answerLine } from '../src/request-human-spec';
 import { typeHandoffSecret } from '../src/tools/type-secret';
 import { observeElements } from '../src/tools/observe';
+import { typeText } from '../src/tools/type';
 
 type Run = ReturnType<typeof fakeBrowserRun>;
 const call = (run: Run, tool: unknown, args: unknown) => executeTool(run.ctx, tool as never, args, new GatePipeline(run.gates as never) as never);
@@ -147,6 +148,52 @@ describe('look, request_human, finish, observe_elements and type_handoff_secret'
     expect(run.store.rows()).toMatchObject([{ seq: 1, action: 'type', phase: 'done', ok: true, summary: 'typed the secret', args: { selector: '#otp', submit: true } }]);
     expect(run.ctx.memory.secretHandoffId).toBeNull();
     expect(await call(run, typeHandoffSecret, { selector: '#otp', submit: true, parameter: null })).toMatch(/^No secret is available/);
+  });
+});
+
+describe('a code split into boxes (E49.2, #959)', () => {
+  const withSecret = () => {
+    const run = fakeBrowserRun();
+    run.ctx.memory.secretHandoffId = 'handoff-9';
+    return run;
+  };
+
+  it('type_handoff_secret says how many boxes the fabric filled, and records it', async () => {
+    const run = withSecret();
+    run.browser.secretOp = { state: 'succeeded', result: { boxes: 6, filled: 6, method: 'keys' } };
+    expect(await call(run, typeHandoffSecret, { selector: '#txtCode1', submit: false, parameter: null })).toBe('Typed the secret into 6 code boxes.');
+    expect(run.store.rows()).toMatchObject([{ action: 'type', ok: true, summary: 'typed the secret into 6 code boxes' }]);
+  });
+
+  it('type_handoff_secret says when the page moved on after the last character', async () => {
+    const run = withSecret();
+    run.browser.secretOp = { state: 'succeeded', result: { gone: true } };
+    expect(await call(run, typeHandoffSecret, { selector: '#txtCode1', submit: false, parameter: null })).toBe('Typed the secret; the page moved on after the last character.');
+  });
+
+  it('a code the boxes refused says to look at the page before asking for a new one', async () => {
+    const run = withSecret();
+    run.browser.secretOp = { state: 'failed', error: 'the code field has 6 boxes and took 1 of 6 characters' };
+    expect(await call(run, typeHandoffSecret, { selector: '#txtCode1', submit: false, parameter: null })).toBe(
+      'Failed: the code field has 6 boxes and took 1 of 6 characters. Look at the page: ask the person for a new code only if the page says this one was wrong or has expired.',
+    );
+    // Any other failure reads as before.
+    const other = withSecret();
+    other.browser.secretOp = { state: 'failed', error: 'no element matches #x' };
+    expect(await call(other, typeHandoffSecret, { selector: '#x', submit: false, parameter: null })).toBe('Failed: no element matches #x');
+  });
+
+  it('type_text reports code boxes too, and a plain field still reads "ok"', async () => {
+    const run = fakeBrowserRun();
+    expect(await call(run, typeText, { selector: '#q', text: 'shoes', submit: false })).toBe('ok');
+    run.browser.results.set('type', { boxes: 4, filled: 4, method: 'boxes' });
+    expect(await call(run, typeText, { selector: '#c1', text: 'AB12', submit: false })).toBe('typed into 4 code boxes');
+    expect(run.store.rows().map((r) => r.summary)).toEqual(['done', 'typed into 4 code boxes']);
+  });
+
+  it('the tools and the instructions tell the model to pass the first box and never read a typed field back', () => {
+    expect(typeHandoffSecret.description).toMatch(/pass the first box/);
+    expect(typeText.description).toMatch(/pass the first box/);
   });
 });
 
