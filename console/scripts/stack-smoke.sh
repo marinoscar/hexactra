@@ -146,7 +146,9 @@ done
 dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'ci-cli-host .*online=true' >/dev/null \
   || { kill "$agent_pid" 2>/dev/null; cat "$agent_tmp/agent.log" >&2; fail "the CLI-installed agent did not come online over /fabric/"; }
 agent_status=$("${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent status) || fail "hexactra agent status"
-grep -q 'Host:     ci-cli-host' <<<"$agent_status" || fail "hexactra agent status: $agent_status"
+# Labels are padded to line up the block; match the spacing loosely (#963 widened it). The agent's version is shown too.
+grep -qE '^Host: +ci-cli-host' <<<"$agent_status" || fail "hexactra agent status: $agent_status"
+grep -qE '^Agent: +[0-9]+\.[0-9]+\.[0-9]+ \([0-9a-f]{7}\)' <<<"$agent_status" || fail "hexactra agent status shows no agent version: $agent_status"
 kill "$agent_pid" 2>/dev/null || true
 "${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent uninstall --yes --keep-host >/dev/null || fail "hexactra agent uninstall"
 [ ! -e "$agent_tmp/home/config/hexactra/host-credential.json" ] || fail "uninstall left the host credential"

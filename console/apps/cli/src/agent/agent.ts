@@ -27,7 +27,7 @@ import {
   type UnattendedState,
 } from './unattended.js';
 import { agentEnv, unitFile, type AgentConfig } from './service.js';
-import { bundleVersions, connectedExtension, type NodeVersions } from './versions.js';
+import { bundleVersions, connectedExtension, releasedExtension, type NodeVersions } from './versions.js';
 
 /** What `hexactra agent install` recorded (no secret: the credential is its own 0600 file). */
 export interface AgentState extends AgentConfig {
@@ -354,8 +354,13 @@ export async function agentStatus(d: AgentDeps): Promise<AgentStatus> {
       fleetError = e instanceof Error ? e.message : String(e);
     }
   }
+  // Google Chrome installs the extension by policy (the released, build-stamped copy); Chrome for Testing loads the bundle's.
   const versions: NodeVersions | null = state
-    ? { ...bundleVersions(activeBundle), connected: state.service ? connectedExtension(d.exec, UNIT_NAME, 'user') : null }
+    ? {
+        ...bundleVersions(activeBundle),
+        released: state.browserKind === 'google-chrome' ? await releasedExtension(d.paths.chromePolicyFile, d.fetch) : null,
+        connected: state.service ? connectedExtension(d.exec, UNIT_NAME, 'user') : null,
+      }
     : null;
   return { installed: !!state, state, activeBundle, service, fleet, fleetError, versions };
 }
@@ -609,6 +614,13 @@ export interface UnattendedStatus {
   units: Record<string, string>;
   /** The agent and extension the node runs (E49.5): its recorded bundle, and its own agent's journal. */
   versions: NodeVersions | null;
+}
+
+/** The unattended node's status with the extension version its Google Chrome installs by policy (a network read, so async). */
+export async function unattendedStatusWithRelease(d: AgentDeps): Promise<UnattendedStatus> {
+  const u = unattendedStatus(d);
+  if (u.versions) u.versions.released = await releasedExtension(d.paths.chromePolicyFile, d.fetch);
+  return u;
 }
 
 export function unattendedStatus(d: AgentDeps): UnattendedStatus {

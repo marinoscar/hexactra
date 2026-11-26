@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ExecResult } from './agent.js';
+import type { Fetch } from './bundle.js';
+import { EXTENSION_ID } from './googleChrome.js';
 
 /**
  * Which agent and which Chrome extension a node runs (E49.5, #963), for
@@ -13,8 +15,13 @@ import type { ExecResult } from './agent.js';
 export interface NodeVersions {
   /** From the bundle's `BUNDLE.json`. */
   agent: { version: string; commit: string } | null;
-  /** The extension the bundle ships (`extension/manifest.json`). */
+  /**
+   * The extension the bundle ships (`extension/manifest.json`). It carries no build number (`0.2.0`): Google Chrome installs the
+   * signed copy by policy instead, stamped `0.2.0.<build>`, so with a policy `released` is the version that matters.
+   */
   extension: string | null;
+  /** The version the browser's policy installs, read from the release's `updates.xml`; `null`: no policy, or not reachable now. */
+  released?: string | null;
   /** The extension that last connected to the agent, from its journal. `null`: none found or the journal is unreadable. */
   connected: { version: string; at: string } | null;
 }
@@ -82,6 +89,30 @@ export function connectedExtension(exec: Exec, unit: string, scope: 'user' | 'sy
   return null;
 }
 
+/**
+ * The extension version Google Chrome installs by policy (E49.5): the `version` of the `updates.xml` the policy's `update_url` names.
+ * Read with a short timeout; any failure (no policy, offline, not the expected document) is `null`, never an error.
+ */
+export async function releasedExtension(policyFile: string, fetch: Fetch, timeoutMs = 3_000): Promise<string | null> {
+  let url: string | null = null;
+  try {
+    const policy = JSON.parse(readFileSync(policyFile, 'utf8')) as { ExtensionSettings?: Record<string, { update_url?: unknown }> };
+    const u = policy.ExtensionSettings?.[EXTENSION_ID]?.update_url;
+    url = typeof u === 'string' && /^https?:\/\//.test(u) ? u : null;
+  } catch {
+    return null;
+  }
+  if (!url) return null;
+  try {
+    const res = await Promise.race([fetch(url), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs).unref?.())]);
+    if (!res.ok) return null;
+    const xml = await res.text();
+    return /<updatecheck\b[^>]*\bversion=['"]([0-9.]{1,40})['"]/.exec(xml)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Compares dotted versions (`0.2.0.111`); a missing part counts as 0. */
 export function versionAtLeast(have: string, want: string): boolean {
   const a = have.split('.').map((n) => Number.parseInt(n, 10) || 0);
@@ -95,10 +126,12 @@ export function versionAtLeast(have: string, want: string): boolean {
 /** The words for both versions, shared by `agent status` and the TUI. `older`: the connected extension is older than the bundle's. */
 export function describeVersions(v: NodeVersions): { agent: string; extension: string; older: boolean; connected: boolean } {
   const agent = v.agent ? `${v.agent.version} (${v.agent.commit.slice(0, 7)})` : 'unknown (the installed bundle has no BUNDLE.json)';
-  let extension = v.extension ?? 'unknown';
-  const older = !!(v.connected && v.extension && !versionAtLeast(v.connected.version, v.extension));
+  // With a policy, Chrome installs the released, build-stamped copy; without one (Chrome for Testing) it loads the bundle's.
+  const expected = v.released ?? v.extension;
+  let extension = v.released ? `${v.released} (latest release)` : v.extension ? `${v.extension} (bundled)` : 'unknown';
+  const older = !!(v.connected && expected && !versionAtLeast(v.connected.version, expected));
   if (v.connected) {
-    extension += `, connected ${v.connected.version} at ${v.connected.at}${older ? ' (older: the browser has not restarted since the update)' : ''}`;
+    extension += `, connected ${v.connected.version} at ${v.connected.at}${older ? ' (older: the browser takes the new one when it next starts; check again after the next run)' : ''}`;
   } else {
     extension += ', no connection found in the agent log (none yet, or the log is not readable)';
   }

@@ -142,7 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`hexactra agent status` shows which agent and which Chrome extension a node runs** (#963, console 1.144.3; E49.5, epic #957).
   - An unattended-only node showed no version at all, and neither mode showed the extension.
-  - Both blocks now show `Agent: <version> (<commit>)` and `Extension: <bundled>`, plus the extension that last connected and when.
+  - Both blocks now show `Agent: <version> (<commit>)` and the extension: the version Google Chrome installs by policy (read from the release's `updates.xml`, e.g. `0.2.0.111 (latest release)`) or, without a policy, the bundle's own (`(bundled)`), plus the extension that last connected and when.
     - Read on the machine, from the installed bundle and that mode's own agent log (the unattended log with `sudo -n` when needed).
     - Flagged when the connected extension is older than the bundled one.
     - Shown as unknown, never an error, when a source can't be read.
