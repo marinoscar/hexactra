@@ -222,7 +222,23 @@ export class ConnectionDiagnosticsService {
       (adapter?.diagnose
         ? {
             codes: adapter.diagnosticCodes ?? [],
-            diagnose: (t, ctx) => adapter.diagnose!({ capabilities: capabilitiesOf(t.connection), grantedScopes: t.connection.grantedScopes, accessToken: t.accessToken, signal: ctx.signal }),
+            diagnose: async (t, ctx) => {
+              // E50.11: the app as the refresh uses it (null when its client id or secret is missing), the switch and the token's times.
+              const provider = adapter.id;
+              const app = await this.apps.app(provider, { ignoreSwitch: true }).catch(() => null);
+              const providerEnabled = (await this.apps.system())[provider].enabled;
+              const c = t.connection;
+              return adapter.diagnose!({
+                capabilities: capabilitiesOf(c),
+                grantedScopes: c.grantedScopes,
+                accessToken: t.accessToken,
+                signal: ctx.signal,
+                app,
+                providerEnabled,
+                token: { expiresAt: c.accessExpiresAt, lastRefreshAt: c.lastRefreshAt, createdAt: c.createdAt },
+                clock: this.clock,
+              });
+            },
           }
         : undefined);
 

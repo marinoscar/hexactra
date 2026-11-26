@@ -1,0 +1,17 @@
+{
+  "name": "chat: no saved task fits",
+  "description": "The owner has a task, but the job is another one: the turn starts a run with a complete goal, as before (E51.2, #1007).",
+  "tasks": [
+    {
+      "name": "Send a text",
+      "goal": "Send a text message to {{Recipient}} saying {{Message}}",
+      "parameters": [
+        { "key": "recipient", "label": "Recipient", "type": "text", "required": true },
+        { "key": "message", "label": "Message", "type": "text", "required": true }
+      ]
+    }
+  ],
+  "message": "Book a table for two at restaurant.example.test tomorrow at 19:00",
+  "script": [["start_run", { "goal": "Book a table for two at restaurant.example.test for tomorrow at 19:00.", "expects": "browser" }]],
+  "expect": { "tool": "start_run", "goalIncludes": ["restaurant.example.test"], "inputIncludes": ["- Send a text — values:"] }
+}
