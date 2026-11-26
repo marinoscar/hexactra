@@ -11,7 +11,10 @@ import { createApp } from '../src/main';
 import { OutboundHttp } from '../src/oauth-client/outbound-http';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { BraveSearchProvider } from '../src/web-search/providers/brave.provider';
+import { WebFetchService } from '../src/web-search/fetch/web-fetch.service';
 import { FakeBrave } from '../src/web-search/testing/fake-brave';
+import { FakeWeb } from '../src/web-search/testing/fake-web';
+import { FETCH_CHECK_URL } from '../src/web-search/web-search-diagnostics';
 
 const savedKey = process.env.SECRETS_ENCRYPTION_KEY;
 process.env.SECRETS_ENCRYPTION_KEY ||= Buffer.alloc(32, 7).toString('base64');
@@ -23,6 +26,7 @@ const SYSTEM_KEY = `${MARKER}system`;
 let app: NestFastifyApplication;
 let prisma: PrismaService;
 let fake: FakeBrave;
+let web: FakeWeb;
 let admin: Session;
 const responses: string[] = [];
 const userIds: string[] = [];
@@ -64,6 +68,9 @@ beforeAll(async () => {
   prisma = app.get(PrismaService);
   fake = new FakeBrave([USER_KEY, SYSTEM_KEY]);
   Object.assign(app.get(BraveSearchProvider, { strict: false }), { http: fake });
+  // The real page reader (E50.6), over the fake web: the `fetch` stage reads the fixed page through it.
+  web = new FakeWeb().html(FETCH_CHECK_URL, '<html><head><title>Example Domain</title></head><body><p>For use in documentation.</p></body></html>');
+  Object.assign(app.get(WebFetchService, { strict: false }), { http: web });
   admin = await login('wsd-admin', 'admin');
   expect((await call(admin, 'PUT', '/api/web-search/admin', { enabled: true, order: ['brave'], shareDeploymentKey: false, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: 300 }, providers: { brave: { enabled: true, costPerCallUsd: null } } })).status).toBe(200);
 }, 120_000);
@@ -109,7 +116,8 @@ describe('reports', () => {
     const r = await call(s, 'POST', '/api/web-search/diagnose?provider=brave');
     expect(r.status).toBe(200);
     const report = data<Report>(r);
-    expect(brief(report)).toEqual(['switches:pass', 'credential:pass', 'network:pass', 'live_query:pass', 'limits:pass', 'fetch:skipped']);
+    expect(brief(report)).toEqual(['switches:pass', 'credential:pass', 'network:pass', 'live_query:pass', 'limits:pass', 'fetch:pass']);
+    expect(web.requestsTo('example.com').length).toBeGreaterThan(0);
     expect(report).toMatchObject({ trigger: 'owner', overall: 'pass' });
     expect(report.stages[1]!.data).toEqual({ tier: 'user', binding: 'credential_store' });
     expect(fake.requests.slice(before)).toEqual([expect.objectContaining({ url: 'https://api.search.brave.com/', tokenPresent: false }), expect.objectContaining({ query: { q: 'weather', count: '1' }, tokenPresent: true })]);
@@ -128,7 +136,7 @@ describe('reports', () => {
     const s = await login('wsd-unshared');
     expect((await call(admin, 'PUT', '/api/service-credentials/admin/web_search/brave', { value: SYSTEM_KEY })).status).toBe(204);
     const dep = data<Report>(await call(admin, 'POST', '/api/web-search/admin/providers/brave/diagnose'));
-    expect(brief(dep)).toEqual(['switches:pass', 'credential:warn:DEPLOYMENT_KEY_NOT_SHARED', 'network:pass', 'live_query:pass', 'limits:pass', 'fetch:skipped']);
+    expect(brief(dep)).toEqual(['switches:pass', 'credential:warn:DEPLOYMENT_KEY_NOT_SHARED', 'network:pass', 'live_query:pass', 'limits:pass', 'fetch:pass']);
     expect(dep.trigger).toBe('admin');
     expect(await prisma.connectionDiagnostic.count({ where: { targetKind: 'search_provider', targetId: 'brave', userId: null } })).toBe(1);
     expect(data<Report[]>(await call(admin, 'GET', '/api/web-search/admin/providers/brave/diagnostics'))).toHaveLength(1);
@@ -138,6 +146,16 @@ describe('reports', () => {
     const user = data<Report>(await call(s, 'POST', '/api/web-search/diagnose'));
     expect(user.stages[1]).toMatchObject({ status: 'fail', code: 'KEY_MISSING' });
     expect(JSON.stringify(user)).not.toMatch(/system|NOT_SHARED/);
+  });
+
+  it('the fetch stage is skipped (FETCH_OFF) while the administrator has web_fetch off: nothing is read', async () => {
+    const s = await login('wsd-fetchoff');
+    expect((await call(admin, 'PUT', '/api/web-search/admin', { fetch: { enabled: false } })).status).toBe(200);
+    const before = web.requests.length;
+    const r = data<Report>(await call(s, 'POST', '/api/web-search/diagnose'));
+    expect(r.stages.find((st) => st.id === 'fetch')).toMatchObject({ status: 'skipped', code: 'FETCH_OFF' });
+    expect(web.requests.length).toBe(before);
+    expect((await call(admin, 'PUT', '/api/web-search/admin', { fetch: { enabled: true } })).status).toBe(200);
   });
 
   it('at most 6 reports a minute for one provider', async () => {

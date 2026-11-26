@@ -14,7 +14,10 @@ import { SearchProviderRegistry } from '../src/web-search/search-provider';
 import { FakeSearchProvider } from '../src/web-search/testing/fake-search-provider';
 import { DIAGNOSTIC_QUERY, FETCH_CHECK_URL, SEARCH_DIAGNOSTIC_CODES, SEARCH_REMEDIES, transportOutcome } from '../src/web-search/web-search-diagnostics';
 import { WebSearchDiagnostics, type WebFetchDiagnosticHook } from '../src/web-search/web-search-diagnostics.service';
-import type { WebSearchSystemSettings } from '../src/web-search/web-search.settings';
+import { resolveWebSearchSystemSettings, type WebSearchSystemSettings } from '../src/web-search/web-search.settings';
+import { DIAGNOSTIC_FETCH_CACHE_KEY, WebFetchDiagnosticBinding } from '../src/web-search/fetch/web-fetch.diagnostic';
+import { WebFetchService } from '../src/web-search/fetch/web-fetch.service';
+import { FakeWeb } from '../src/web-search/testing/fake-web';
 import { WebSearchService } from '../src/web-search/web-search.service';
 import type { WebSearchUsage } from '../src/web-search/web-search.usage';
 import { OutboundHttpError } from '../src/oauth-client/outbound-http';
@@ -191,14 +194,55 @@ describe('a user report', () => {
     expect(stage(await unl.user(), 'limits')).toMatchObject({ status: 'pass', data: { calls: 1, unlimited: true } });
   });
 
-  it('fetch: FETCH_OFF (warn), BLOCKED, UNAVAILABLE; skipped while web_fetch is not installed', async () => {
-    const off = setup({ fetch: { enabled: async () => false, read: jest.fn() } });
-    expect(stage(await off.user(), 'fetch')).toMatchObject({ status: 'warn', code: 'FETCH_OFF' });
+  it('fetch: skipped with FETCH_OFF when off (nothing read), BLOCKED, UNAVAILABLE; skipped while no hook is bound', async () => {
+    const read = jest.fn();
+    const off = setup({ fetch: { enabled: async () => false, read } });
+    expect(stage(await off.user(), 'fetch')).toMatchObject({ status: 'skipped', code: 'FETCH_OFF', remedy: 'FETCH_OFF' });
+    expect(read).not.toHaveBeenCalled();
     const blocked = setup({ fetch: { enabled: async () => true, read: async () => Promise.reject(new WebToolError('BLOCKED')) } });
     expect(stage(await blocked.user(), 'fetch')).toMatchObject({ status: 'fail', code: 'BLOCKED', data: { host: 'example.com' } });
     const down = setup({ fetch: { enabled: async () => true, read: async () => Promise.reject(new WebToolError('UNAVAILABLE')) } });
     expect(stage(await down.user(), 'fetch')).toMatchObject({ status: 'fail', code: 'UNAVAILABLE', remedy: 'FETCH_UNAVAILABLE' });
     expect(stage(await setup({ fetch: null }).user(), 'fetch')).toMatchObject({ status: 'skipped', code: null, data: { installed: false } });
+  });
+});
+
+describe('the fetch stage through the real page reader (WebFetchService over the fake web)', () => {
+  const reader = (settings: WebSearchSystemSettings, web = new FakeWeb()) => {
+    const webSearch = { system: async () => resolveWebSearchSystemSettings(settings) } as unknown as WebSearchService;
+    const fetcher = new WebFetchService(web as never, webSearch, { add: jest.fn(), record: jest.fn() } as never);
+    return { binding: new WebFetchDiagnosticBinding(fetcher, webSearch), web, fetcher };
+  };
+
+  it('pass: the fixed page is read once per report, never from the cache, and nothing is kept', async () => {
+    const r = reader({ order: ['alpha'] });
+    r.web.html(FETCH_CHECK_URL, '<html><head><title>Example Domain</title></head><body><p>This domain is for use in documentation.</p></body></html>');
+    const t = setup({ fetch: r.binding });
+    const first = await t.user();
+    expect(stage(first, 'fetch')).toMatchObject({ status: 'pass', code: null, data: { host: 'example.com' } });
+    await t.user();
+    expect(r.web.requestsTo('example.com')).toHaveLength(2);
+    expect(r.fetcher.cache.size(DIAGNOSTIC_FETCH_CACHE_KEY)).toBe(0);
+    expect(r.web.requests.every((q) => !Object.keys(q.headers).some((h) => /cookie|authorization/i.test(h)))).toBe(true);
+  });
+
+  it('skipped when webSearch.fetch.enabled is off; BLOCKED by the blocked hosts or a private address; UNAVAILABLE on an error', async () => {
+    const off = reader({ order: ['alpha'], fetch: { enabled: false } });
+    expect(stage(await setup({ fetch: off.binding }).user(), 'fetch')).toMatchObject({ status: 'skipped', code: 'FETCH_OFF' });
+    expect(off.web.requests).toHaveLength(0);
+
+    const blocked = reader({ order: ['alpha'], fetch: { blockedHosts: ['example.com'] } });
+    expect(stage(await setup({ fetch: blocked.binding }).user(), 'fetch')).toMatchObject({ status: 'fail', code: 'BLOCKED' });
+    expect(blocked.web.requests).toHaveLength(0);
+
+    const priv = reader({ order: ['alpha'] });
+    priv.web.resolve('example.com', ['10.0.0.5']);
+    expect(stage(await setup({ fetch: priv.binding }).user(), 'fetch')).toMatchObject({ status: 'fail', code: 'BLOCKED' });
+    expect(priv.web.requests).toHaveLength(0);
+
+    const down = reader({ order: ['alpha'] });
+    down.web.page(FETCH_CHECK_URL, { status: 503, body: 'down' });
+    expect(stage(await setup({ fetch: down.binding }).user(), 'fetch')).toMatchObject({ status: 'fail', code: 'UNAVAILABLE', remedy: 'FETCH_UNAVAILABLE' });
   });
 });
 

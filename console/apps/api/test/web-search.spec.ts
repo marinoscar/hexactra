@@ -159,7 +159,7 @@ describe('Brave Search', () => {
 
 describe('the settings', () => {
   it('defaults: on, Brave first, the deployment key shared, user keys allowed, 30 a run and 300 a day', () => {
-    expect(resolveWebSearchSystemSettings(null)).toEqual({ enabled: true, providers: {}, order: ['brave'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: 300 } });
+    expect(resolveWebSearchSystemSettings(null)).toEqual({ enabled: true, providers: {}, order: ['brave'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: 300, fetchPerRun: 30 }, fetch: { enabled: true, blockedHosts: [] } });
     expect(webSearchUserOf(null)).toEqual({ enabled: true, provider: null });
     expect(webSearchUserOf({ webSearch: { enabled: false } })).toEqual({ enabled: false, provider: null });
     expect(webSearchUserOf({ webSearch: { enabled: 'yes' } })).toEqual({ enabled: true, provider: null });
@@ -168,7 +168,7 @@ describe('the settings', () => {
   it('merges a patch: fields left out kept, null limits unlimited, providers per id and field', () => {
     let s: WebSearchSystemSettings = mergeWebSearchSystemSettings(undefined, { providers: { brave: { costPerCallUsd: 0.004 } }, limits: { perUserPerDay: null } });
     s = mergeWebSearchSystemSettings(s, { providers: { brave: { enabled: false } }, order: ['brave', 'alpha', 'brave'] });
-    expect(resolveWebSearchSystemSettings(s)).toEqual({ enabled: true, providers: { brave: { enabled: false, costPerCallUsd: 0.004, baseUrl: null } }, order: ['brave', 'alpha'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: null } });
+    expect(resolveWebSearchSystemSettings(s)).toEqual({ enabled: true, providers: { brave: { enabled: false, costPerCallUsd: 0.004, baseUrl: null } }, order: ['brave', 'alpha'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: null, fetchPerRun: 30 }, fetch: { enabled: true, blockedHosts: [] } });
     expect(mergeWebSearchSystemSettings(s, undefined)).toEqual(s);
   });
 

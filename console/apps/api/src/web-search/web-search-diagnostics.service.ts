@@ -23,8 +23,8 @@ export const SEARCH_REPORT_DEADLINE_MS = 20_000;
 export const SEARCH_STAGE_DEADLINE_MS = 12_000;
 
 /**
- * What the `fetch` stage needs from `web_fetch` in the host (E50.6, #976, binds it in this module with `useExisting`). Unbound,
- * `web_fetch` is not installed here and the stage is `skipped`.
+ * What the `fetch` stage needs from `web_fetch` in the host: bound to `WebFetchDiagnosticBinding` (`fetch/web-fetch.diagnostic.ts`,
+ * over `WebFetchService`, E50.6) in `WebSearchModule`. Unbound, the stage is `skipped` (`installed: false`).
  */
 export interface WebFetchDiagnosticHook {
   /** The deployment's `webSearch.fetch.enabled`. */
@@ -220,7 +220,8 @@ export class WebSearchDiagnostics {
 
   private async fetch(signal: AbortSignal): Promise<StageOutcome> {
     if (!this.fetchHook) return { status: 'skipped', data: { installed: false } };
-    if (!(await this.fetchHook.enabled())) return { status: 'warn', code: 'FETCH_OFF' };
+    // Switched off by the administrator: nothing is read; the agent opens pages in the browser instead.
+    if (!(await this.fetchHook.enabled())) return { status: 'skipped', code: 'FETCH_OFF' };
     try {
       await this.fetchHook.read(FETCH_CHECK_URL, signal);
       return { status: 'pass', data: { host: FETCH_CHECK_HOST } };
