@@ -20,6 +20,7 @@ import { recordPause, recordPull, recordStart, recordStop } from './recorder.js'
 import { isGoogleAccountsUrl, reportSignin } from './signin.js';
 import { MASK_ID, MASK_UNAVAILABLE, MAX_MASK_BOXES, loadSensitivePatterns, maskText, pageClearMask, pageMask, pageNextFrame, type MaskPattern } from './mask.js';
 import { pageWebauthnArm, pageWebauthnPending, pageWebauthnResolve, type BuiltCredential } from './webauthn.js';
+import { rememberTyped, scrubTyped } from './typed-secrets.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
 
@@ -978,6 +979,9 @@ export function answerBudget(deadline: number, now = Date.now()): number {
 }
 
 /** Handle one request frame and build the response frame. */
+/** The actions whose result carries what the page holds: a typed secret is replaced with `[secret]` in them (E49.3). */
+const READS_PAGE = new Set<string>(['evaluate', 'text', 'elements']);
+
 export async function handleRequest(req: BridgeRequest): Promise<BridgeResponse> {
   const deadline = req.deadline_ms ?? Date.now() + DEFAULT_NAV_TIMEOUT_MS;
   const budget = answerBudget(deadline);
@@ -998,10 +1002,14 @@ export async function handleRequest(req: BridgeRequest): Promise<BridgeResponse>
   };
   try {
     await applyAllowedDomains(req.allowed_domains);
-    const result = await Promise.race([executeAction(req.action, deadline), late]);
+    const a = req.action;
+    // A secret the fabric types is remembered, so a later read cannot hand it back (E49.3).
+    if ((a.type === 'type' || a.type === 'type_keys') && a.sensitive) rememberTyped(a.text);
+    const raw = await Promise.race([executeAction(a, deadline), late]);
+    const result = READS_PAGE.has(a.type) ? scrubTyped(raw) : raw;
     return withBlocked({ type: 'response', id: req.id, ok: true, result });
   } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
+    const error = scrubTyped(e instanceof Error ? e.message : String(e));
     return withBlocked({ type: 'response', id: req.id, ok: false, error });
   } finally {
     clearTimeout(timer);
