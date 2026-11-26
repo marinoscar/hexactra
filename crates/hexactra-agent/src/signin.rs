@@ -24,7 +24,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -472,17 +472,110 @@ pub fn list_profiles(profiles_dir: &Path) -> Vec<String> {
     v
 }
 
+/// Where the daemon keeps the outcome of its last sign-in report (#998),
+/// inside the profiles directory (not a profile: [`list_profiles`] lists
+/// directories only).
+pub const REPORT_FILE: &str = ".signin-report.json";
+
+pub fn report_file(profiles_dir: &Path) -> PathBuf {
+    profiles_dir.join(REPORT_FILE)
+}
+
+/// The outcome of the last sign-in report to the control plane, for
+/// `doctor` (#998). Holds no email and no profile name: only whether the
+/// control plane accepted it, its HTTP status, and since when.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReportOutcome {
+    pub ok: bool,
+    /// The HTTP status of a rejected report; `None` when accepted or when
+    /// the control plane did not answer.
+    pub http_status: Option<u16>,
+    /// When this outcome started (the first report of the streak).
+    pub since: DateTime<Utc>,
+}
+
+impl ReportOutcome {
+    fn same(&self, ok: bool, http_status: Option<u16>) -> bool {
+        self.ok == ok && self.http_status == http_status
+    }
+}
+
+/// Records a report's outcome in `path` when it differs from the one there
+/// (best effort: a write failure is logged, never fatal).
+#[derive(Debug)]
+pub struct ReportRecorder {
+    path: PathBuf,
+    last: Mutex<Option<ReportOutcome>>,
+}
+
+impl ReportRecorder {
+    pub fn new(path: PathBuf) -> Self {
+        let last = read_report_outcome(&path);
+        Self {
+            path,
+            last: Mutex::new(last),
+        }
+    }
+
+    pub fn record(&self, ok: bool, http_status: Option<u16>) {
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if last.as_ref().is_some_and(|o| o.same(ok, http_status)) {
+            return;
+        }
+        let outcome = ReportOutcome {
+            ok,
+            http_status: if ok { None } else { http_status },
+            since: Utc::now(),
+        };
+        let tmp = self.path.with_extension("json.tmp");
+        let write = serde_json::to_vec(&outcome)
+            .map_err(std::io::Error::other)
+            .and_then(|b| std::fs::write(&tmp, b))
+            .and_then(|_| std::fs::rename(&tmp, &self.path));
+        if let Err(e) = write {
+            tracing::debug!(error = %e, "could not record the sign-in report outcome");
+        }
+        *last = Some(outcome);
+    }
+}
+
+pub fn read_report_outcome(path: &Path) -> Option<ReportOutcome> {
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+/// `doctor`'s line for the last sign-in report, or `None` when the daemon
+/// never reported (no file).
+pub fn report_line(profiles_dir: &Path) -> Option<String> {
+    let o = read_report_outcome(&report_file(profiles_dir))?;
+    let since = o.since.format("%Y-%m-%d %H:%M UTC");
+    Some(match (o.ok, o.http_status) {
+        (true, _) => format!("ok   reports: the control plane accepts sign-in reports (since {since})"),
+        (false, Some(404)) => format!(
+            "warn reports: the control plane does not accept sign-in reports (HTTP 404, since {since}): update the server (hexactra deploy update)"
+        ),
+        (false, Some(code)) => {
+            format!("warn reports: sign-in reports are failing (HTTP {code}, since {since})")
+        }
+        (false, None) => format!(
+            "warn reports: sign-in reports are failing (the control plane did not answer, since {since})"
+        ),
+    })
+}
+
 /// `hexactra-agent doctor`'s sign-in lines: one per profile, from the
 /// offline check. Shown on the owner's own terminal, so the email is
 /// printed in full here (and nowhere in the logs).
 pub fn doctor_lines(profiles_dir: &Path) -> Vec<String> {
-    list_profiles(profiles_dir)
+    let mut lines: Vec<String> = list_profiles(profiles_dir)
         .into_iter()
         .map(|name| {
             let c = offline_signin_dir(&profiles_dir.join(&name));
             doctor_line(&name, &c)
         })
-        .collect()
+        .collect();
+    lines.extend(report_line(profiles_dir));
+    lines
 }
 
 fn doctor_line(name: &str, c: &SigninCheck) -> String {
@@ -829,6 +922,52 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(1), t.changed())
             .await
             .unwrap();
+    }
+
+    #[test]
+    fn the_report_outcome_is_recorded_on_change_and_printed() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(report_line(dir.path()).is_none(), "never reported: no line");
+        let r = ReportRecorder::new(report_file(dir.path()));
+        r.record(false, Some(404));
+        let first = read_report_outcome(&report_file(dir.path())).unwrap();
+        let line = report_line(dir.path()).unwrap();
+        assert!(
+            line.starts_with(
+                "warn reports: the control plane does not accept sign-in reports (HTTP 404"
+            ),
+            "{line}"
+        );
+        assert!(line.contains("hexactra deploy update"));
+        // The same outcome again keeps its start time.
+        r.record(false, Some(404));
+        assert_eq!(
+            read_report_outcome(&report_file(dir.path())).unwrap(),
+            first
+        );
+        r.record(false, None);
+        assert!(report_line(dir.path()).unwrap().contains("did not answer"));
+        r.record(false, Some(500));
+        assert!(report_line(dir.path()).unwrap().contains("HTTP 500"));
+        r.record(true, None);
+        assert!(report_line(dir.path())
+            .unwrap()
+            .starts_with("ok   reports: the control plane accepts"));
+        // Only the outcome is stored: no email, no profile name.
+        let raw = std::fs::read_to_string(report_file(dir.path())).unwrap();
+        let v: Value = serde_json::from_str(&raw).unwrap();
+        let mut keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort();
+        assert_eq!(keys, vec!["http_status", "ok", "since"]);
+        // A recorder started later reads the last outcome and does not rewrite it.
+        let before = read_report_outcome(&report_file(dir.path())).unwrap();
+        ReportRecorder::new(report_file(dir.path())).record(true, None);
+        assert_eq!(
+            read_report_outcome(&report_file(dir.path())).unwrap(),
+            before
+        );
+        // It is not mistaken for a profile.
+        assert_eq!(list_profiles(dir.path()), vec!["default".to_string()]);
     }
 
     #[test]

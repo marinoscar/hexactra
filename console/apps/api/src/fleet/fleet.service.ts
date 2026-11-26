@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 
 import { FabricClient, FabricError, type FabricHost } from '../fabric/fabric.client';
-import type { FleetCommandResult, FleetEnrollment, FleetHost, FleetProfile, FleetSigninState } from './fleet.schemas';
+import type { FleetCommandResult, FleetEnrollment, FleetHost, FleetProfile, FleetSigninReporting, FleetSigninState } from './fleet.schemas';
 
 interface FabricCommandView {
   id: string;
@@ -49,9 +49,20 @@ function toProfile(name: string, running: boolean, s: NonNullable<FabricHost['pr
   };
 }
 
+/**
+ * Why the host's profiles may show no sign-in status (#998). A fabric older than E48 sends no
+ * `profile_status` at all; a newer one sends it, and a profile the node never reported has no check time.
+ */
+export function signinReporting(h: Pick<FabricHost, 'profile_status'>, profiles: Pick<FleetProfile, 'checkedAt'>[]): FleetSigninReporting {
+  if (!Array.isArray(h.profile_status)) return 'fabric_outdated';
+  if (profiles.length > 0 && profiles.every((p) => p.checkedAt === null)) return 'not_reported';
+  return 'ok';
+}
+
 export function toHost(h: FabricHost): FleetHost {
   const running = new Set(h.running_profiles ?? []);
   const status = new Map((h.profile_status ?? []).map((p) => [p.name, p]));
+  const profiles = (h.profiles ?? []).map((name) => toProfile(name, running.has(name), status.get(name)));
   return {
     id: h.id,
     name: h.name,
@@ -63,7 +74,8 @@ export function toHost(h: FabricHost): FleetHost {
     viewerUrl: h.viewer_url ?? null,
     mode: h.mode ?? null,
     desktop: h.desktop ?? false,
-    profiles: (h.profiles ?? []).map((name) => toProfile(name, running.has(name), status.get(name))),
+    profiles,
+    signinReporting: signinReporting(h, profiles),
     lastSeen: h.last_seen,
   };
 }

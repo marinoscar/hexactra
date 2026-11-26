@@ -556,6 +556,12 @@ export function profileSigninChecks(d: AgentDeps, profilesDir: string, opts: { b
   }
   const out: DoctorCheck[] = [];
   for (const line of r.stdout.split('\n')) {
+    // Whether the control plane accepts the node's sign-in reports (#998).
+    const rep = /^(ok|warn)\s+reports: (.*)$/.exec(line.trim());
+    if (rep) {
+      out.push({ name: 'sign-in reports', ok: true, warning: rep[1] === 'warn', detail: rep[2]! });
+      continue;
+    }
     const m = /^(ok|warn)\s+profile ([^:]+): (\S+) \((.*)\)$/.exec(line.trim());
     if (!m) continue;
     out.push({ name: `profile ${m[2]}`, ok: true, warning: m[1] === 'warn', detail: m[4]! });
