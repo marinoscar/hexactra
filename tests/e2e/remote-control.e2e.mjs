@@ -593,8 +593,13 @@ try {
       const typedSecret = await call('browser_type_secret', { handoff_id: outcome.handoff_id, selector: '#q', submit: true });
       assert.equal(typedSecret.isError, false, JSON.stringify(typedSecret));
       assert.ok(!JSON.stringify(typedSecret).includes('424242'));
-      // The page got it; the agent only learns that by reading the page.
-      assert.match((await call('browser_text', { selector: '#out' })).content[0].text, /searched: 424242/);
+      // The page got it. Reading the page back says so, but not the value: the
+      // extension replaces a typed secret with [secret] in what it reads (E49.3,
+      // #960). It replaces only the exact value, so "[secret]" here proves the
+      // page holds exactly the code.
+      const readBack = (await call('browser_text', { selector: '#out' })).content[0].text;
+      assert.match(readBack, /searched: \[secret\]/);
+      assert.ok(!readBack.includes('424242'), readBack);
       const again = await call('browser_type_secret', { handoff_id: outcome.handoff_id, selector: '#q' });
       assert.equal(again.isError, true);
       assert.match(again.content[0].text, /secret_unavailable/);
@@ -619,7 +624,9 @@ try {
       for (const [what, body] of [['type-secret output', JSON.stringify(typedOp)], ['operation view', opView], ['handoff view', handoffView]]) {
         assert.ok(!body.includes('424242'), `${what} leaks the secret: ${body}`);
       }
-      assert.match(await ok('text', '--selector', '#out'), /searched: 424242/);
+      const cliReadBack = await ok('text', '--selector', '#out');
+      assert.match(cliReadBack, /searched: \[secret\]/);
+      assert.ok(!cliReadBack.includes('424242'), cliReadBack);
 
       // The handoff.created event carried the page the agent was on.
       const codeEvent = channel.events.find((e) => e.type === 'handoff.created' && e.data.handoff.kind === 'code');
