@@ -14,7 +14,7 @@ import { uniqueLabel } from '../connection-labels';
 import { McpClientError } from './mcp-client';
 import { McpCatalogService, type McpCatalog } from './mcp-catalog.service';
 import { readMcpConfig, type McpConfig } from './mcp-config';
-import { McpConnector, disabledError, toConnectionError } from './mcp-connector.service';
+import { McpConnector, disabledError, toConnectionError, type OpenOptions } from './mcp-connector.service';
 import { McpOAuthService } from './mcp-oauth.service';
 import { McpSecretStore } from './mcp-secrets';
 import { accountIdOf, hostLabel } from './mcp-account';
@@ -148,13 +148,17 @@ export class McpConnectionsService {
     return { connection: updated, consent: null };
   }
 
-  /** `POST /connections/:id/test` for a server: it answers `initialize`, and its tools list. Nothing is stored or changed. */
-  async test(userId: string, row: Connection): Promise<void> {
-    const { client } = await this.connector.open(row).catch((e: unknown) => {
+  /**
+   * `POST /connections/:id/test` for a server: it answers `initialize`, and its tools list. Nothing is stored or changed (a refused
+   * sign-in sets `statusReason`). Returns how many tools it listed (a diagnostic's count, E50.10). `opts` bounds it (a diagnostic's stage).
+   */
+  async test(userId: string, row: Connection, opts: OpenOptions = {}): Promise<{ tools: number }> {
+    const { client } = await this.connector.open(row, opts).catch((e: unknown) => {
       throw toConnectionError(e, row.label);
     });
+    let tools = 0;
     try {
-      await client.listTools();
+      tools = (await client.listTools()).tools.length;
     } catch (e) {
       if (e instanceof McpClientError && e.kind === 'auth') await this.prisma.connection.updateMany({ where: { id: row.id, status: 'active' }, data: { statusReason: 'AUTH_REFUSED' } });
       throw toConnectionError(e, row.label);
@@ -162,6 +166,7 @@ export class McpConnectionsService {
       await client.close();
     }
     this.events.count('mcp', 'tested');
+    return { tools };
   }
 
   /** Before a connection is removed: the OAuth grant is revoked (best effort) and every secret kept for it is deleted. Returns whether the revocation is confirmed. */

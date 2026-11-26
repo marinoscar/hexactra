@@ -28,6 +28,7 @@ import { capabilitiesOf, toView, type ConnectionView } from './connection-view';
 import { McpCatalogService } from './mcp/mcp-catalog.service';
 import { McpConnectionsService } from './mcp/mcp-connections.service';
 import { readMcpConfig } from './mcp/mcp-config';
+import { DiagnosticsHistory } from '../diagnostics/diagnostics-history.service';
 
 export interface UpdateInput {
   label?: string;
@@ -63,6 +64,7 @@ export class ConnectionsService {
     private readonly events: ConnectionEvents,
     private readonly mcp: McpConnectionsService,
     private readonly mcpCatalog: McpCatalogService,
+    private readonly diagnostics: DiagnosticsHistory,
   ) {}
 
   private db(userId: string) {
@@ -259,6 +261,7 @@ export class ConnectionsService {
     await this.usage.clear(userId, id);
     await this.store.clearTokens(userId, id);
     await this.prisma.connection.deleteMany({ where: { id, userId } });
+    await this.diagnostics.deleteTarget('connection', id);
     await this.events.audit(userId, CONNECTION_AUDIT.removed, id, { provider: row.provider, capabilities: row.capabilities, revoked, clearedReferences: used.length });
     this.events.count(row.provider, 'removed');
     return { revoked, clearedReferences: used.length };
@@ -270,6 +273,7 @@ export class ConnectionsService {
     const used = await this.usage.list(userId, row.id);
     await this.usage.clear(userId, row.id);
     await this.prisma.connection.deleteMany({ where: { id: row.id, userId } });
+    await this.diagnostics.deleteTarget('connection', row.id);
     await this.events.audit(userId, CONNECTION_AUDIT.removed, row.id, { provider: 'mcp', revoked, clearedReferences: used.length });
     this.events.count('mcp', 'removed');
     return { revoked, clearedReferences: used.length };

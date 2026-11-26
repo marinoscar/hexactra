@@ -1,7 +1,14 @@
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
+import { DIAGNOSTIC_REMEDIES } from '@app/shared';
+
 import { consoleApi } from './console-api.js';
+
+/** A test's or a diagnostic's code in words, from the remedy table the API and the web app share (`diagnostics.json`, E50.10). */
+export function remedyTitle(code: string): string {
+  return DIAGNOSTIC_REMEDIES[code]?.title ?? 'Failed';
+}
 
 /** A connection as `GET /api/connections` returns it: capability names, never a token or a scope string. */
 export interface ConnectionView {
@@ -96,7 +103,11 @@ export const connectionsCommand: CliCommandRegistration = (program: Command) => 
       const c = await findConnection(ref);
       const r = await consoleApi().post<{ results: { capability: string; ok: boolean; code: string | null }[] }>(`/connections/${c.id}/test`, {});
       if (o.json) return out(JSON.stringify(r, null, 2));
-      for (const x of r.results) out(`${x.ok ? 'ok  ' : 'FAIL'}  ${x.capability}${x.code ? `  (${x.code})` : ''}`);
+      for (const x of r.results) {
+        out(`${x.ok ? 'ok  ' : 'FAIL'}  ${x.capability}${x.code ? `  (${x.code}: ${remedyTitle(x.code)})` : ''}`);
+        const remedy = x.code ? DIAGNOSTIC_REMEDIES[x.code]?.remedy : undefined;
+        if (!x.ok && remedy) out(`      ${remedy}`);
+      }
       if (r.results.length === 0) out(c.provider === 'mcp' ? 'The server answered and listed its tools.' : 'Nothing is switched on for this connection.');
       if (r.results.some((x) => !x.ok)) process.exitCode = 1;
     });

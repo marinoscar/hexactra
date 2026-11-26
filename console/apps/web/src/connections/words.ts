@@ -1,5 +1,7 @@
 // Plain words for the Connections pages (E39.2, #599): what each capability lets the agent do, how a group reads ("read" or "read
 // and write"), what a status and a reason code mean to the owner, and what the page says when the consent comes back.
+import { DIAGNOSTIC_REMEDIES } from '@app/shared';
+
 import type { Capability, CapabilityGroup, Connection, ConnectionStatus, Provider } from './api';
 
 export const PROVIDER_NAME: Record<Provider, string> = { google: 'Google', microsoft: 'Microsoft' };
@@ -70,23 +72,15 @@ export function reasonWords(c: Pick<Connection, 'status' | 'statusReason'>): str
 }
 
 /** The test's reason codes in words. */
+/** A test's or a diagnostic's code in words: the title of its entry in the remedy table the API and the CLI share (`@app/shared`, `diagnostics.json`). */
 export function testCodeWords(code: string | null): string {
-  switch (code) {
-    case null:
-      return 'Works';
-    case 'FORBIDDEN':
-      return 'The provider refused: the permission is missing';
-    case 'UNAUTHORIZED':
-      return 'The sign-in was refused';
-    case 'UNAVAILABLE':
-      return 'The provider could not be reached';
-    case 'API_DISABLED':
-      return 'The service is switched off in your administrator\'s app at the provider';
-    case 'RATE_LIMITED':
-      return 'The provider asked to slow down; try again in a minute';
-    default:
-      return 'Failed';
-  }
+  if (code === null) return 'Works';
+  return DIAGNOSTIC_REMEDIES[code]?.title ?? 'Failed';
+}
+
+/** What the owner can do about a code (the remedy table), or null for a code it does not know. */
+export function remedyWords(code: string | null): string | null {
+  return code === null ? null : (DIAGNOSTIC_REMEDIES[code]?.remedy ?? null);
 }
 
 export interface Outcome {

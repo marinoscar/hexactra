@@ -7,6 +7,7 @@
 // adapter receives it must not log, and what it returns must not carry a provider message.
 import type { OAuthTokens } from '../oauth-client';
 import type { Capability, ConnectionProviderId } from './connections.constants';
+import type { DiagnosticStage } from '../diagnostics/diagnostic-report';
 
 /** The deployment's registered app at the provider (bring your own app: the administrator creates it). */
 export interface ProviderApp {
@@ -68,6 +69,17 @@ export interface ProbeInput {
   accessToken: string;
 }
 
+/** What a provider's own diagnostic gets (E50.10, #980; decision record docs/decisions/web-search.md §4). */
+export interface ConnectionDiagnoseInput {
+  /** The capabilities switched on for the connection. */
+  capabilities: readonly Capability[];
+  /** What the provider granted (permission ids, never shown to anyone as text from the provider). */
+  grantedScopes: readonly string[];
+  /** The connection's access token, refreshed through the normal path when due. Throws `ConnectionError`. */
+  accessToken(): Promise<string>;
+  signal: AbortSignal;
+}
+
 export interface ConnectionProviderAdapter {
   readonly id: ConnectionProviderId;
   /** The least permissions the capabilities need (scopes at Google, permissions at Microsoft), from the decision record (E39.1). */
@@ -84,6 +96,13 @@ export interface ConnectionProviderAdapter {
   capabilitiesGranted(scopes: readonly string[]): Capability[];
   /** One cheap read call for a capability (`POST /api/connections/{id}/test`). Never throws for a provider answer. */
   probe(input: ProbeInput): Promise<ProbeResult>;
+  /**
+   * Optional (E50.10; the stages are E50.11): the provider's own ordered diagnostic stages (sign-in, permissions, each capability),
+   * read calls only. Never throws for a provider answer: a failure is a stage. Without it, a report falls back to {@link probe} per
+   * capability. `diagnosticCodes` lists every code it can return (each has a remedy entry).
+   */
+  diagnose?(input: ConnectionDiagnoseInput): Promise<DiagnosticStage[]>;
+  readonly diagnosticCodes?: readonly string[];
   /**
    * Optional (E39.4): tells apart the refusals the provider sends back on the authorization redirect (`error` and `error_description`):
    * the owner declined, or an administrator has to approve the app. `null` leaves it to the generic handling.
