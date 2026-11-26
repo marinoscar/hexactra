@@ -1195,7 +1195,8 @@ describe('the goal runner enforces budgets (#404)', () => {
     expect(await a.db.run.findFirstOrThrow({ where: { id: a.run.id } })).toMatchObject({ status: 'succeeded', stopReason: 'finished' });
 
     const b = await budgetRun(`stop-failed-finish-${stamp}@example.test`, {});
-    const bad = scriptedAi([[['finish', { success: false, result: 'could not' }]]]);
+    // A failed finish escalates once first (E49.4, #961); the second ends the run.
+    const bad = scriptedAi([[['finish', { success: false, result: 'could not' }]], [['finish', { success: false, result: 'could not' }]]]);
     expect(await runnerOf(b.prisma, bad.ai, fakeFabric()).advance(b.run.id, b.userId, null)).toBe('failed');
     expect(await b.db.run.findFirstOrThrow({ where: { id: b.run.id } })).toMatchObject({ status: 'failed', stopReason: 'finished' });
 
@@ -1807,7 +1808,8 @@ describe('task outputs (E39.5, #600)', () => {
 
   it('a failed run stores the outputs it gave, validated, and may omit the rest', async () => {
     const { userId, prisma, db, run } = await outputsRun(`outputs-failed-${stamp}@example.test`);
-    const { ai, outputs } = recordingAi([[finish(false, { confirmation_number: 'C-2', amount_paid: 'n/a' }, 'Payment page was down.')]]);
+    // A failed finish escalates once first (E49.4, #961); the second ends the run.
+    const { ai, outputs } = recordingAi([[finish(false, { confirmation_number: 'C-2', amount_paid: 'n/a' }, 'Payment page was down.')], [finish(false, { confirmation_number: 'C-2', amount_paid: 'n/a' }, 'Payment page was down.')]]);
     expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
     // A failure is never refused.
     expect(outputs[0]).toBe('Finished.');
@@ -1818,7 +1820,8 @@ describe('task outputs (E39.5, #600)', () => {
 
   it('a failed finish with no outputs at all still ends the run, every required output not found', async () => {
     const { userId, prisma, db, run } = await outputsRun(`outputs-omit-${stamp}@example.test`);
-    const { ai } = recordingAi([[finish(false, undefined, 'Could not sign in.')]]);
+    // A failed finish escalates once first (E49.4, #961); the second ends the run.
+    const { ai } = recordingAi([[finish(false, undefined, 'Could not sign in.')], [finish(false, undefined, 'Could not sign in.')]]);
     expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
     const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
     expect(done.outputsComplete).toBe(false);

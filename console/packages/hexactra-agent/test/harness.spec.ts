@@ -314,6 +314,62 @@ describe('the loop: a scripted goal runs to completion with only the harness and
   });
 });
 
+describe('escalate once before finishing as failed (E49.4, #961)', () => {
+  const profile = () => textProfile<Ctx>([echo as never, finish as never]) as never;
+
+  it('a failed finish with a stronger tier allowed escalates, undoes the finish and goes on with a nudge', async () => {
+    const model = new ScriptedModel([
+      [['finish', { success: false, result: 'The code did not work.' }]],
+      [['echo', { text: 'looked again' }], ['finish', { success: true, result: 'Paid.' }]],
+    ]);
+    const run = fakeRun({ model });
+    expect(await runLoop(run.ctx, profile())).toBe('succeeded');
+    expect(run.store.finished).toEqual({ to: 'succeeded', patch: { result: 'Paid.', stopReason: 'finished' } });
+    // The give-up is in the trace, then the move to the frontier tier, then the rest of the run.
+    expect(run.store.rows().map((r) => `${r.kind}:${r.ok}`)).toEqual(['finish:false', 'routing:true', 'action:true', 'finish:true', 'end:true']);
+    expect(run.ctx.tier).toBe('frontier');
+    expect(run.store.memory).toMatchObject({ escalations: 1, escalatedBeforeGivingUp: true });
+    // The second round ran on the stronger tier, and its input carries the nudge with the model's own words.
+    expect(model.requests[1]!.route).toMatchObject({ label: 'frontier', params: { model: 'fake-frontier' } });
+    expect(String(model.requests[1]!.input)).toContain('You were about to finish without reaching the goal ("The code did not work.")');
+  });
+
+  it('only once: a second failed finish ends the run as failed', async () => {
+    const model = new ScriptedModel([[['finish', { success: false, result: 'No.' }]], [['finish', { success: false, result: 'Still no.' }]]]);
+    const run = fakeRun({ model });
+    expect(await runLoop(run.ctx, profile())).toBe('failed');
+    expect(run.store.finished).toMatchObject({ to: 'failed', patch: { result: 'Still no.', error: 'The agent could not reach the goal' } });
+    expect(model.requests).toHaveLength(2);
+  });
+
+  it('a run already on its max tier, or one out of escalations, finishes as failed at once', async () => {
+    // The fake run starts on the standard tier.
+    for (const policy of [{ maxTier: 'standard' }, { stall: { maxConsecutiveFailures: 5, maxRepeatedAction: 4, noProgressActions: 12, onStall: 'nudge_then_escalate', maxEscalations: 0 } }] as const) {
+      const model = new ScriptedModel([[['finish', { success: false, result: 'Cannot.' }]]]);
+      const run = fakeRun({ model, policy: policy as never });
+      expect(await runLoop(run.ctx, profile())).toBe('failed');
+      expect(model.requests).toHaveLength(1);
+      expect(run.store.rows().map((r) => r.kind)).not.toContain('routing');
+    }
+  });
+
+  it('never after the owner said no: a denied or declined question ends the run as failed, with no retry', async () => {
+    const model = new ScriptedModel([[['finish', { success: false, result: 'The owner declined the payment.' }]]]);
+    const run = fakeRun({ model });
+    run.ctx.memory.ownerDeclined = true;
+    expect(await runLoop(run.ctx, profile())).toBe('failed');
+    expect(model.requests).toHaveLength(1);
+    expect(run.store.rows().map((r) => r.kind)).not.toContain('routing');
+  });
+
+  it('a success is never second-guessed', async () => {
+    const model = new ScriptedModel([[['finish', { success: true, result: 'Done.' }]]]);
+    const run = fakeRun({ model });
+    expect(await runLoop(run.ctx, profile())).toBe('succeeded');
+    expect(run.store.memory?.escalatedBeforeGivingUp).toBeUndefined();
+  });
+});
+
 describe('checkpoints and crash recovery', () => {
   it('saves the memory and the chunk usage, and says so when another job holds the run', async () => {
     const run = fakeRun({ memory: { log: ['1. echo → ok'], chunks: 2 } });

@@ -276,7 +276,7 @@ describe('goal runner characterisation (E38.5)', () => {
     const fabric = fakeSecretsFabric('https://shop.example.test/start');
     // The default policy allows far more than this; the snapshot's budget is lowered to two actions.
     const spec = balancedSpec();
-    const snapshot = { schemaVersion: 1, ref: 'char', name: 'Char', version: 1, builtin: false, source: 'system_default', spec: { ...spec, budget: { ...spec.budget, actions: 2 } }, tiers: null, takenAt: '2026-11-19T00:00:00.000Z' };
+    const snapshot = { schemaVersion: 1, ref: 'char', name: 'Char', version: 1, builtin: false, source: 'system_default', spec: { ...spec, budget: { ...spec.budget, maxActions: 2 } }, tiers: null, takenAt: '2026-11-19T00:00:00.000Z' };
     await db.run.update({ where: { id: run.id }, data: { policySnapshot: snapshot as never } });
     const s = scriptedAi([
       [

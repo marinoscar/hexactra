@@ -110,9 +110,9 @@ describe('the seeded generator', () => {
 });
 
 describe('the suite registry', () => {
-  it('is the core suite, version 3 (#908: safe-confirm-payment made passable), well formed', () => {
+  it('is the core suite, version 4 (#961: auth-otp-segmented added), well formed', () => {
     expect(SUITE.key).toBe('core');
-    expect(SUITE.version).toBe(3);
+    expect(SUITE.version).toBe(4);
     expect(suiteProblems()).toEqual([]);
     expect(challengeById('no-such-challenge')).toBeUndefined();
   });
