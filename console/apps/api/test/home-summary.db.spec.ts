@@ -60,6 +60,7 @@ const host = (id: string, name: string, extra: Partial<FleetHost> = {}): FleetHo
   mode: 'unattended',
   desktop: true,
   profiles: [{ name: 'default', running: false, signin: 'unknown' as const, accounts: [], checkedAt: null }],
+  signinReporting: 'not_reported' as const,
   lastSeen: new Date().toISOString(),
   ...extra,
 });

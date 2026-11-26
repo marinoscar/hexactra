@@ -7,6 +7,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   ATTENDED_HINT,
+  FABRIC_OUTDATED_HINT,
+  NOT_REPORTED_HINT,
   NO_DESKTOP_ACCESS_HINT,
   NO_DESKTOP_HINT,
   ProfileSigninStatus,
@@ -110,6 +112,16 @@ describe('Fleet sign-in status (E48.3)', () => {
     const card = await screen.findByLabelText('Host mini-pc');
     fireEvent.mouseOver(within(rowOf(card, 'new')).getByText('Sign-in not checked'));
     expect(await screen.findByRole('tooltip')).toHaveTextContent('never checked');
+  });
+
+  it("names why a profile was never checked: an outdated server or a node that never reported (#998)", async () => {
+    const { unmount } = render(<ProfileSigninStatus host={{ ...node, signinReporting: 'fabric_outdated' }} profile={profile('new', 'unknown')} canDesktop onSignIn={() => {}} />);
+    fireEvent.mouseOver(screen.getByText('Sign-in not checked'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(FABRIC_OUTDATED_HINT);
+    unmount();
+    render(<ProfileSigninStatus host={{ ...node, signinReporting: 'not_reported' }} profile={profile('new', 'unknown')} canDesktop onSignIn={() => {}} />);
+    fireEvent.mouseOver(screen.getByText('Sign-in not checked'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(NOT_REPORTED_HINT);
   });
 
   it('counts the profiles that need sign-in on each host card (singular for one, nothing for none)', async () => {
