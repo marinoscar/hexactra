@@ -4,6 +4,16 @@
 import type { TuiTone } from '@marinoscar/platform-cli/tui/ui';
 
 import type { AgentStatus, DoctorCheck, UnattendedStatus } from '../agent.js';
+import { describeVersions, type NodeVersions } from '../versions.js';
+
+/** The Version and Extension rows (E49.5). */
+function versionRows(v: NodeVersions): PanelRow[] {
+  const d = describeVersions(v);
+  return [
+    { label: 'Version', value: d.agent, ...(v.agent ? {} : { tone: 'warning' as const }) },
+    { label: 'Extension', value: d.extension, tone: d.older ? 'warning' : d.connected ? 'success' : 'dim' },
+  ];
+}
 
 export interface PanelRow {
   label: string;
@@ -65,7 +75,7 @@ export function panels(status: AgentStatus | null, node: UnattendedStatus | null
       title: st.attended ? 'Agent · attended (your Chrome and desktop)' : 'Agent · this user',
       rows: [
         { label: 'Host', value: `${st.name} (${short(st.hostId)})` },
-        { label: 'Version', value: `${st.version} (${st.commit.slice(0, 7)})` },
+        ...(status.versions ? versionRows(status.versions) : [{ label: 'Version', value: `${st.version} (${st.commit.slice(0, 7)})` }]),
         { label: 'Browser', value: browser + (st.sandboxHelper ? ' · setuid sandbox' : '') },
         st.service
           ? { label: 'Service', value: `${active ?? 'unknown'} (${status.service?.sub ?? 'unknown'})`, tone: unitTone(active ?? '') }
@@ -81,6 +91,7 @@ export function panels(status: AgentStatus | null, node: UnattendedStatus | null
         { label: 'Host', value: `${s.name} (${short(s.hostId)})` },
         { label: 'Desktop', value: `:${s.display} ${s.resolution} · user hexactra` },
         { label: 'Graphics', value: s.gpu ? `${s.gpu.driver} (${s.gpu.renderNode})` : 'software rendering', tone: s.gpu ? 'success' : 'warning' },
+        ...(node.versions ? versionRows(node.versions) : []),
         ...Object.entries(node.units).map(([unit, state]) => ({ label: unit.replace('hexactra-', '').replace('.service', ''), value: state, tone: unitTone(state) })),
       ],
     });
