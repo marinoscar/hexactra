@@ -20,6 +20,7 @@ import { RunTimeline } from './RunTimeline';
 import { softBudgetNotice } from './runBudget';
 import { UsedSavedLogins } from './UsedSavedLogins';
 import { UsedSavedCards } from './UsedSavedCards';
+import { UsingTask } from './UsingTask';
 import { SuggestedConnections, type SuggestedConnection } from './SuggestedConnections';
 import type { RunFrame } from './useRunFrame';
 
@@ -205,6 +206,7 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
   if (!live) {
     return (
       <CardShell title={title} label={label} status={run ? <StatusChip status={run.status} stopReason={run.stopReason} size="small" /> : undefined}>
+        <UsingTask message={message} />
         {goal}
         <UsedSavedLogins logins={run?.usedSavedLogins} />
         <UsedSavedCards cards={run?.usedSavedCards?.map(cardEntry)} />
@@ -229,6 +231,8 @@ export function BrowserCard({ message, run, frame, frameHidden, now, paneOpen, o
         </Typography>
       }
     >
+      {/* A task's run (#1007): its limits are the task's, so the card says which task. */}
+      <UsingTask message={message} />
       <Box ref={anchor}>
         {/* Open: the picture is in the browser pane, one fetch feeds both. */}
         {!paneOpen && !noBrowser && <BrowserFrame frame={frame} activity={run.activity} hidden={frameHidden} now={now} />}
