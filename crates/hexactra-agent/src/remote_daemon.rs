@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::browser_bridge::BrowserBridge;
 use crate::desktop_tunnel::DesktopBridge;
 use crate::pool::{BrowserPool, PoolConfig};
-use crate::signin::{SigninCheck, SigninTracker};
+use crate::signin::{ReportRecorder, SigninCheck, SigninTracker};
 
 /// Daemon configuration.
 #[derive(Debug, Clone)]
@@ -208,15 +208,16 @@ async fn announce_offline(client: &HostClient, current: &CurrentHost) {
     }
 }
 
-/// Send one sign-in report. Returns whether it was accepted. The body holds
-/// account emails, so only the profile count and the HTTP status are
-/// logged; a failure is logged once per streak (`was_failing`).
+/// Send one sign-in report. Returns `Ok` when accepted, else the HTTP
+/// status (`None`: no answer). The body holds account emails, so only the
+/// profile count and the HTTP status are logged; a failure is logged once
+/// per streak (`was_failing`).
 async fn send_signin_report(
     client: &HostClient,
     host_id: Uuid,
     report: &ProfileStatusReport,
     was_failing: bool,
-) -> bool {
+) -> Result<(), Option<u16>> {
     let profiles = report.profiles.len();
     let status = match tokio::time::timeout(
         Duration::from_secs(10),
@@ -226,17 +227,19 @@ async fn send_signin_report(
     {
         Ok(Ok(())) => {
             tracing::debug!(profiles, "reported profile sign-in status");
-            return true;
+            return Ok(());
         }
         Ok(Err(e)) => e.status(),
         Err(_) => None,
     };
     if was_failing {
         tracing::debug!(profiles, status = ?status, "reporting profile sign-in status failed again");
+    } else if status == Some(404) {
+        tracing::warn!(profiles, status = ?status, "reporting profile sign-in status failed: the control plane does not accept sign-in reports (older than the agent?); update the server; will retry");
     } else {
         tracing::warn!(profiles, status = ?status, "reporting profile sign-in status failed; will retry");
     }
-    false
+    Err(status)
 }
 
 /// Report the profiles' sign-in status (E48, #928): whenever a check
@@ -249,6 +252,7 @@ async fn signin_reporter<F, Fut>(
     current: CurrentHost,
     tracker: Arc<SigninTracker>,
     every: Duration,
+    recorder: Option<ReportRecorder>,
     mut tick: F,
 ) where
     F: FnMut() -> Fut,
@@ -259,7 +263,11 @@ async fn signin_reporter<F, Fut>(
         let report = tick().await;
         let host_id = *current.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(host_id) = host_id {
-            failing = !send_signin_report(&client, host_id, &report, failing).await;
+            let sent = send_signin_report(&client, host_id, &report, failing).await;
+            failing = sent.is_err();
+            if let Some(r) = &recorder {
+                r.record(sent.is_ok(), sent.err().flatten());
+            }
         }
         tokio::select! {
             _ = tracker.changed() => {}
@@ -289,6 +297,7 @@ fn spawn_attach_signin(
         current.clone(),
         tracker,
         every,
+        None,
         move || {
             let bridge = bridge.clone();
             let t = t.clone();
@@ -505,6 +514,9 @@ async fn run_launch_mode(
             current.clone(),
             pool.signin().clone(),
             cfg.poll_wait.min(Duration::from_secs(10)),
+            Some(ReportRecorder::new(crate::signin::report_file(
+                pool.profiles_dir(),
+            ))),
             move || {
                 let pool = pool.clone();
                 async move { pool.signin_tick().await }
@@ -711,11 +723,14 @@ mod tests {
         set_current(&current, Uuid::new_v4());
         let tracker = Arc::new(SigninTracker::new());
         let t = tracker.clone();
+        let dir = tempfile::tempdir().unwrap();
+        let file = crate::signin::report_file(dir.path());
         tokio::spawn(signin_reporter(
             client,
             current,
             tracker,
             Duration::from_millis(50),
+            Some(ReportRecorder::new(file.clone())),
             move || {
                 let t = t.clone();
                 async move {
@@ -729,5 +744,19 @@ mod tests {
             let (_, body) = next_report(&mut reports).await;
             assert_eq!(body["profiles"][0]["signin"], SigninState::Unknown.as_str());
         }
+        // The rejection is recorded for `doctor` (#998).
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let outcome = loop {
+            if let Some(o) = crate::signin::read_report_outcome(&file) {
+                break o;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "no outcome recorded"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(!outcome.ok);
+        assert_eq!(outcome.http_status, Some(500));
     }
 }

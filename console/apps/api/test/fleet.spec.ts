@@ -74,6 +74,20 @@ describe('FleetService', () => {
     const out = withoutSignin(h) as { profiles: unknown[] };
     expect(out.profiles).toEqual([{ name: 'default', running: false }]);
     expect(JSON.stringify(out)).not.toContain('owner@example.com');
+    // The host-level sign-in field stays on REST too (#998).
+    expect(out).not.toHaveProperty('signinReporting');
+  });
+
+  it('says why a host may show no sign-in status (#998)', () => {
+    const base = { id: 'h5', name: 'node', version: '1', online: true, browser_connected: true, on_demand: true, profiles: ['default', 'work'], running_profiles: [], last_seen: '2026-11-15T00:00:00Z' };
+    // A fabric older than E48 sends no profile_status at all.
+    expect(toHost(base).signinReporting).toBe('fabric_outdated');
+    // A newer fabric whose node never reported: every profile unchecked.
+    expect(toHost({ ...base, profile_status: [{ name: 'default', running: false, signin: 'unknown', checked_at: null }] }).signinReporting).toBe('not_reported');
+    // One profile checked is enough.
+    expect(toHost({ ...base, profile_status: [{ name: 'default', running: false, signin: 'signed_in', accounts: [{ provider: 'google', email: 'a@example.com', state: 'signed_in' }], checked_at: '2026-11-26T18:00:00Z' }] }).signinReporting).toBe('ok');
+    // A host with no profiles has nothing to report.
+    expect(toHost({ ...base, profiles: [], profile_status: [] }).signinReporting).toBe('ok');
   });
 
   it('maps the host mode and desktop capability', async () => {
