@@ -168,7 +168,7 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     name: 'app.runs.tool_calls',
     kind: 'counter',
     unit: '{call}',
-    description: 'Tool calls of a browser agent (E41.1), by tool family (`browser`, `desktop`, `accounts`, `mcp`, `human`, `control`, ...) and outcome (`ok`, `error`, `refused` by a gate). Every MCP server is the literal `mcp`: never a connection, run or user in a label.',
+    description: 'Tool calls of a browser agent (E41.1), by tool family (`browser`, `desktop`, `accounts`, `mcp`, `web`, `human`, `control`, ...) and outcome (`ok`, `error`, `refused` by a gate). Every MCP server is the literal `mcp`: never a connection, run or user in a label.',
     attributes: { family: { kind: 'free' }, outcome: { kind: 'enum', values: TOOL_CALL_OUTCOMES } },
   },
 ];

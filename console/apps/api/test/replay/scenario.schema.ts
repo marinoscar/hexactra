@@ -84,7 +84,7 @@ const harnessSchema = z.strictObject({
   resumeAfterPause: z.boolean().optional(),
   scriptAfterPause: z.array(chunkSchema).optional(),
   budget: z
-    .partialRecord(z.enum(['maxActions', 'maxModelCalls', 'maxActiveMinutes', 'maxInputTokens', 'maxOutputTokens', 'maxCostUsd']), z.number().nullable())
+    .partialRecord(z.enum(['maxActions', 'maxModelCalls', 'maxActiveMinutes', 'maxInputTokens', 'maxOutputTokens', 'maxCostUsd', 'maxWebCalls']), z.number().nullable())
     .optional()
     .describe('Limits for this run, over the policy\'s'),
   maxJobs: z.number().int().min(1).optional(),
@@ -143,6 +143,16 @@ const sentSchema = z.strictObject({
   attachments: z.number().int().min(0).optional().describe('Exactly this many attachments'),
 });
 
+// Web search (E50.7, #977): the real web tools over the web toolset's fakes, with invented results and pages.
+const webHitSchema = z.strictObject({ title: z.string(), url: z.string().describe('An https address of an invented host'), snippet: z.string().default('') });
+const webSchema = z.strictObject({
+  on: z.boolean().default(true).describe("The owner's web search switch (a provider is set up): off, web_search and web_fetch are not offered"),
+  fetch: z.boolean().default(true).describe("The administrator's web_fetch switch"),
+  results: z.record(z.string(), z.array(webHitSchema)).default({}).describe('What a query answers (exact query); any other query has no results'),
+  pages: z.record(z.string(), z.strictObject({ title: z.string().nullable().default(null), text: z.string() })).default({}).describe('What web_fetch reads, by address; an injection scenario puts hostile text here'),
+  blocked: z.array(z.string()).default([]).describe('Addresses a server cannot read (sign-in, a bot check): web_fetch says to open them in the browser'),
+});
+
 /** Tool choice (E41.1, #698): which tools and families a run used, and what it sent. */
 const choiceFields = {
   toolsUsed: z.array(z.string()).optional().describe('Each named tool was called at least once'),
@@ -150,6 +160,11 @@ const choiceFields = {
   firstToolFamily: z.string().optional().describe('The family of the first tool call that is not control or human'),
   sent: z.array(sentSchema).optional().describe('What the fake mailboxes sent'),
   browserOpened: z.boolean().optional().describe('Whether any action reached the browser'),
+  offered: z.array(z.string()).optional().describe('Each named tool was offered in the first round (E50.7)'),
+  notOffered: z.array(z.string()).optional().describe('No named tool was offered in any round (E50.7)'),
+  modelReadIncludes: z.array(z.string()).optional().describe('Texts some tool result the model read contains'),
+  modelReadExcludes: z.array(z.string()).optional().describe('Texts no tool result the model read contains (a result filtered out)'),
+  webCalls: z.number().int().min(0).optional().describe('Exactly this many calls reached the search provider and the page reader (E50.7)'),
 };
 const choiceSchema = z.strictObject({ ...choiceFields, finishIncludes: z.string().optional() });
 
@@ -191,6 +206,7 @@ export const scenarioSchema = z.strictObject({
   script: z.array(chunkSchema).default([]).describe('Scripted mode: the model\'s tool calls, one list per model call. Ignored in live mode.'),
   harness: harnessSchema.default({}),
   connections: z.array(connectionSchema).default([]).describe('The owner\'s accounts and MCP servers this run lists (E41.1)'),
+  web: webSchema.optional().describe("Web search (E50.7): set up for this owner, with these results and pages. Absent: not set up, the tools are not offered"),
   needsBrowser: z.enum(['auto', 'never', 'always']).default('auto').describe('A task that never opens a browser is offered no browser tool'),
   context: z.string().optional().describe('"Earlier in this conversation": what a chat\'s earlier jobs found, as the run reads it'),
   previousJob: z

@@ -98,10 +98,16 @@ export const ATTR = {
   connectionProvider: 'hexactra.connection.provider',
   connectionCapability: 'hexactra.connection.capability',
   connectionEffect: 'hexactra.connection.effect',
+  // A web search or page read (E50.7): the provider id, how many results were shown, `search` or `fetch`, and the outcome (`ok`, `stopped`,
+  // or the error code in lower case). Never the query, an address or text.
+  webProvider: 'hexactra.web.provider',
+  webResults: 'hexactra.web.results',
+  webKind: 'hexactra.web.kind',
+  webOutcome: 'hexactra.web.outcome',
 } as const;
 
 /** The only attributes a tool may add to its own span with `toolAttributes`: closed, content-free names. */
-export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect, ATTR.artifactSource, ATTR.artifactRun];
+export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect, ATTR.artifactSource, ATTR.artifactRun, ATTR.webProvider, ATTR.webResults, ATTR.webKind, ATTR.webOutcome];
 
 /** Why a span link exists (`hexactra.link.type`). */
 export const LINK = { previousJob: 'previous_job', startedBy: 'started_by' } as const;

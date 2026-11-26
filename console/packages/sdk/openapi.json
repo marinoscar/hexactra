@@ -53249,6 +53249,18 @@
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
+              "SERVICE_CREDENTIAL_UNKNOWN",
+              "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
+              "SERVICE_CREDENTIAL_NO_ORGANIZATION",
+              "SERVICE_CREDENTIAL_INVALID",
+              "WEB_SEARCH_NOT_CONFIGURED",
+              "WEB_SEARCH_AUTH_REFUSED",
+              "WEB_SEARCH_RATE_LIMITED",
+              "WEB_SEARCH_QUOTA_EXCEEDED",
+              "WEB_SEARCH_UNAVAILABLE",
+              "WEB_SEARCH_LIMIT_REACHED",
+              "WEB_SEARCH_ABORTED",
+              "WEB_SEARCH_TEST_RATE_LIMITED",
               "TASK_BUILDER_NOT_FOUND",
               "TASK_BUILDER_ARCHIVED",
               "INVALID_TASK_SPEC",
@@ -53268,18 +53280,6 @@
               "DELIVERY_TEST_RATE_LIMITED",
               "RECIPIENT_NOT_CONFIRMED",
               "RECIPIENT_LIMIT",
-              "SERVICE_CREDENTIAL_UNKNOWN",
-              "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
-              "SERVICE_CREDENTIAL_NO_ORGANIZATION",
-              "SERVICE_CREDENTIAL_INVALID",
-              "WEB_SEARCH_NOT_CONFIGURED",
-              "WEB_SEARCH_AUTH_REFUSED",
-              "WEB_SEARCH_RATE_LIMITED",
-              "WEB_SEARCH_QUOTA_EXCEEDED",
-              "WEB_SEARCH_UNAVAILABLE",
-              "WEB_SEARCH_LIMIT_REACHED",
-              "WEB_SEARCH_ABORTED",
-              "WEB_SEARCH_TEST_RATE_LIMITED",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -82165,6 +82165,20 @@
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
                   },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "warnAtPercent": {
                     "type": "integer",
                     "minimum": 10,
@@ -83226,6 +83240,20 @@
                           ],
                           "description": "Most a run may cost in US dollars. `null` means unlimited."
                         },
+                        "maxWebCalls": {
+                          "default": null,
+                          "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 10000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "warnAtPercent": {
                           "type": "integer",
                           "minimum": 10,
@@ -83753,6 +83781,20 @@
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
                   },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "warnAtPercent": {
                     "type": "integer",
                     "minimum": 10,
@@ -84066,6 +84108,20 @@
                       }
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
+                  },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "warnAtPercent": {
                     "type": "integer",
@@ -99367,6 +99423,35 @@
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
                     "description": "Time spent working, waits for a person excluded"
+                  },
+                  "web": {
+                    "description": "What the run did on the web (E50.7); absent when it made no web call",
+                    "type": "object",
+                    "properties": {
+                      "searches": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "reads": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Pages read with web_fetch"
+                      },
+                      "estimatedSearchCostUsd": {
+                        "description": "An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost",
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "searches",
+                      "reads",
+                      "estimatedSearchCostUsd"
+                    ]
                   }
                 },
                 "required": [
@@ -99713,6 +99798,20 @@
                               }
                             ],
                             "description": "Most a run may cost in US dollars. `null` means unlimited."
+                          },
+                          "maxWebCalls": {
+                            "default": null,
+                            "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10000
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "warnAtPercent": {
                             "type": "integer",
@@ -105347,6 +105446,10 @@
                   "type": "boolean",
                   "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
                 },
+                "allowWebSearch": {
+                  "type": "boolean",
+                  "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105365,6 +105468,7 @@
                 "allowSavedIdentity",
                 "allowSavedCards",
                 "allowConnections",
+                "allowWebSearch",
                 "paused"
               ]
             },
@@ -105729,6 +105833,10 @@
                 "type": "boolean",
                 "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
               },
+              "allowWebSearch": {
+                "type": "boolean",
+                "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105747,6 +105855,7 @@
               "allowSavedIdentity",
               "allowSavedCards",
               "allowConnections",
+              "allowWebSearch",
               "paused"
             ]
           },
@@ -105879,6 +105988,10 @@
             "type": "boolean",
             "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
           },
+          "allowWebSearch": {
+            "type": "boolean",
+            "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105897,6 +106010,7 @@
           "allowSavedIdentity",
           "allowSavedCards",
           "allowConnections",
+          "allowWebSearch",
           "paused"
         ]
       },
@@ -105971,6 +106085,9 @@
             "type": "boolean"
           },
           "allowConnections": {
+            "type": "boolean"
+          },
+          "allowWebSearch": {
             "type": "boolean"
           },
           "paused": {

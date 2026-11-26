@@ -5,6 +5,7 @@ import type { FabricSession } from '../fabric-session';
 import type { RunConnectionsInfo } from './connections/memory';
 import type { BrowserExt } from '@marinoscar/hexactra-browser-agent/context';
 import type { RunContext } from '@marinoscar/hexactra-agent';
+import type { WebHostExt } from '@marinoscar/hexactra-web-agent';
 import type { UsedSavedCard } from '../saved-cards';
 import type { UsedSavedIdentity } from '../saved-identity';
 import type { UsedSavedLogin } from '../saved-logins';
@@ -18,7 +19,7 @@ export interface UsedSaved {
   cards: UsedSavedCard[];
 }
 
-export interface HostExt extends BrowserExt {
+export interface HostExt extends BrowserExt, WebHostExt {
   d: HostDeps;
   db: ReturnType<HostDeps['prisma']['forUser']>;
   /** The fabric session of the run: the saved-secret tools call the provider operations of the browser host through it. */
