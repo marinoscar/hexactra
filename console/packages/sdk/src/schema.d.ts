@@ -11663,6 +11663,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            chat?: {
+                /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                useSavedTasks: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11793,6 +11797,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            chat?: {
+                /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                useSavedTasks: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11917,6 +11925,10 @@ export interface components {
             } | null) | null;
             approvals?: {
                 paused?: boolean;
+            } | null;
+            chat?: {
+                /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                useSavedTasks?: boolean;
             } | null;
             connections?: {
                 /**
@@ -13351,6 +13363,10 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
+                };
+                chat?: {
+                    /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                    useSavedTasks: boolean;
                 };
                 connections?: {
                     /**
