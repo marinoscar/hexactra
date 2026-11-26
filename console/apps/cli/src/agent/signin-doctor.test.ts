@@ -42,4 +42,27 @@ describe('profile sign-in checks', () => {
     const d = { paths: { current: '/nonexistent' }, exec: () => { throw new Error('not called'); } } as unknown as AgentDeps;
     expect(profileSigninChecks(d, '/p')).toEqual([]);
   });
+
+  it("reads an unattended node's private profiles as the node user, without a prompt (#991)", () => {
+    const { d, calls, current } = deps('ok   profile default: signed_in (signed in to Google as owner@example.com)');
+    const bin = join(current, 'bin', 'hexactra-agent');
+    const checks = profileSigninChecks(d, '/nonexistent/hexactra/profiles', { bin, runAs: 'hexactra' });
+    expect(calls).toEqual([['sudo', '-n', '-u', 'hexactra', bin, 'doctor', '--profiles-dir', '/nonexistent/hexactra/profiles']]);
+    expect(checks).toEqual([{ name: 'profile default', ok: true, warning: false, detail: 'signed in to Google as owner@example.com' }]);
+  });
+
+  it('reads them directly when this user can', () => {
+    const { d, calls, current } = deps('');
+    const bin = join(current, 'bin', 'hexactra-agent');
+    profileSigninChecks(d, current, { bin, runAs: 'hexactra' });
+    expect(calls).toEqual([[bin, 'doctor', '--profiles-dir', current]]);
+  });
+
+  it('says how to read them when sudo needs a password, rather than nothing', () => {
+    const { d, current } = deps('', 1);
+    const bin = join(current, 'bin', 'hexactra-agent');
+    expect(profileSigninChecks(d, '/nonexistent/p', { bin, runAs: 'hexactra' })).toEqual([
+      { name: 'profiles', ok: true, warning: true, detail: `sign-in status needs hexactra's access: run \`sudo -u hexactra ${bin} doctor --profiles-dir /nonexistent/p\`` },
+    ]);
+  });
 });
