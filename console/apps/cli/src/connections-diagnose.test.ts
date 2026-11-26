@@ -4,7 +4,7 @@ import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
-import { agentToolsLine, connectionsCommand, type ConnectionView } from './connections.command.js';
+import { agentToolsLine, connectionsCommand, THIRD_PARTY_NOTICE, toolArguments, type ConnectionView } from './connections.command.js';
 import { setConsoleApiFactory } from './console-api.js';
 import { stageTitle, type DiagnosticReportView, type DiagnosticStageView } from './diagnostics.js';
 import { fakeApi, runCommand } from './fake-api.test-support.js';
@@ -130,5 +130,42 @@ describe('the HEALTH column and what the agent can use', () => {
     expect(agentToolsLine([WORK, PERSONAL], { enabled: true })).toBe('The agent can use: the browser, web search, Work.');
     expect(agentToolsLine([], { enabled: false })).toBe('The agent can use: the browser.');
     expect(agentToolsLine(null, null)).toMatch(/web search if it is on .*the connections you switched on/);
+  });
+});
+
+describe('hexactra connections try', () => {
+  const MCP: ConnectionView = { ...WORK, id: '66666666-6666-4666-8666-666666666666', provider: 'mcp', label: 'Notes', mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes', tools: { total: 2, enabled: 1, needsReview: 0 } } };
+  const TOOLS = {
+    tools: [
+      { id: 't1', name: 'search_notes', title: null, description: 'x', suggested: 'read', mode: 'read', review: null },
+      { id: 't2', name: 'add_note', title: null, description: 'x', suggested: 'write', mode: 'write', review: null },
+    ],
+    needsReview: 0,
+  };
+
+  it('prints the third-party notice, then the text, and sends the arguments', async () => {
+    const calls = fakeApi({ 'GET /connections': [MCP], [`GET /connections/${MCP.id}/tools`]: TOOLS, [`POST /connections/${MCP.id}/tools/t1/try`]: { ok: true, code: null, ms: 42, text: 'Two notes found.', truncated: false } });
+    const text = await run('connections', 'try', 'Notes', 'search_notes', '--arg', 'query=invoices', '--arg', 'limit=5');
+    const lines = text.split('\n');
+    expect(lines[0]).toBe(THIRD_PARTY_NOTICE);
+    expect(lines[1]).toBe('The server answered in 42 ms.');
+    expect(text).toContain('Two notes found.');
+    expect(calls.at(-1)).toMatchObject({ method: 'POST', path: `/connections/${MCP.id}/tools/t1/try`, body: { arguments: { query: 'invoices', limit: 5 } } });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('refuses a Write tool and a non-MCP connection without calling the tool, and exits 1 when the server reported an error', async () => {
+    const calls = fakeApi({ 'GET /connections': [MCP, WORK], [`GET /connections/${MCP.id}/tools`]: TOOLS, [`POST /connections/${MCP.id}/tools/t1/try`]: { ok: false, code: 'TOOL_ERROR', ms: 5, text: 'bad query', truncated: false } });
+    await expect(run('connections', 'try', 'Notes', 'add_note')).rejects.toThrow(/Only a tool set to Read/);
+    await expect(run('connections', 'try', 'Work', 'x')).rejects.toThrow(/not an MCP server/);
+    expect(calls.some((c) => c.path.endsWith('/try'))).toBe(false);
+    expect(await run('connections', 'try', 'Notes', 't1')).toContain('The server reported an error');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('reads --json-args, then --arg on top, and refuses a malformed one', () => {
+    expect(toolArguments(['b=2'], 'args.json', () => '{"a": "x", "b": 1}')).toEqual({ a: 'x', b: 2 });
+    expect(() => toolArguments([], 'args.json', () => '[1]')).toThrow(/JSON object/);
+    expect(() => toolArguments(['novalue'])).toThrow(/key=value/);
   });
 });

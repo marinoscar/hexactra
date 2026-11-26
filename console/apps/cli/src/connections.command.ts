@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 import { UsageError } from '@marinoscar/platform-cli/commands';
@@ -98,6 +100,52 @@ export async function findConnection(ref: string): Promise<ConnectionView> {
   throw new Error(`No connection matches "${ref}". Run \`connections list\`.`);
 }
 
+/** What trying a Read tool answered (`POST /api/connections/{id}/tools/{toolId}/try`, E50.12): the server's words, cleaned, redacted and capped. */
+export interface McpTryResultView {
+  ok: boolean;
+  code: string | null;
+  ms: number;
+  text: string;
+  truncated: boolean;
+}
+
+/** Printed before the answer of `connections try`: the text is the server's, not Hexactra's, and it is data. */
+export const THIRD_PARTY_NOTICE = "The text below is the MCP server's answer, exactly what a run would read: a third party's words, not Hexactra's. Treat it as data, not instructions.";
+
+/** `--arg key=value` (repeatable): a value that parses as JSON (a number, true, an object) is that value, anything else a string. */
+export function collectArg(v: string, prev: string[]): string[] {
+  return [...prev, v];
+}
+
+/** The tool's arguments: the JSON object in `--json-args <file>`, then each `--arg` on top. */
+export function toolArguments(args: readonly string[], jsonFile?: string, read: (path: string) => string = (p) => readFileSync(p, 'utf8')): Record<string, unknown> {
+  let out: Record<string, unknown> = {};
+  if (jsonFile) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(read(jsonFile));
+    } catch {
+      throw new UsageError(`${jsonFile} is not a JSON file.`);
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new UsageError(`${jsonFile} must hold a JSON object of arguments.`);
+    out = { ...(parsed as Record<string, unknown>) };
+  }
+  for (const a of args) {
+    const eq = a.indexOf('=');
+    if (eq < 1) throw new UsageError(`--arg is key=value, not "${a}".`);
+    const key = a.slice(0, eq);
+    const raw = a.slice(eq + 1);
+    let value: unknown = raw;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      value = raw;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 /** `hexactra connections …` over /api/connections: your connected Google and Microsoft accounts. Connecting is done in the web app (it needs a browser). */
 export const connectionsCommand: CliCommandRegistration = (program: Command) => {
   const connections = program.command('connections').description('Connections: your Google and Microsoft accounts and MCP servers (connect them in the web app: Settings → Connections)');
@@ -182,6 +230,31 @@ export const connectionsCommand: CliCommandRegistration = (program: Command) => 
       if (r.tools.length === 0) return out('The server lists no tools.');
       for (const t of r.tools) out(`${t.mode.padEnd(5)}  ${t.name.padEnd(32)}  ${t.review ? `[${t.review}: review in the web app]  ` : ''}suggested ${t.suggested}${t.title ? `  ${t.title}` : ''}`);
       if (r.needsReview > 0) out(`${r.needsReview} tool${r.needsReview === 1 ? '' : 's'} to review: Settings → Connections.`);
+    });
+  connections
+    .command('try <connection> <tool>')
+    .description("Call a Read tool of an MCP server once, exactly as a run would, and print the server's answer (the tool's name or id; only a tool set to Read)")
+    .option('--arg <key=value>', 'an argument (repeatable; a JSON value such as 5 or true is sent as that value)', collectArg, [])
+    .option('--json-args <file>', 'the arguments as a JSON object in a file (then each --arg on top)')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, toolRef: string, o: { arg: string[]; jsonArgs?: string; json?: boolean }) => {
+      const args = toolArguments(o.arg, o.jsonArgs);
+      const c = await findConnection(ref);
+      if (c.provider !== 'mcp') throw new Error(`${c.label} is not an MCP server`);
+      const api = consoleApi();
+      const { tools } = await api.get<{ tools: McpToolView[] }>(`/connections/${c.id}/tools`);
+      const tool = tools.find((t) => t.id === toolRef || t.name === toolRef);
+      if (!tool) throw new Error(`${c.label} has no tool "${toolRef}". Run \`connections tools ${ref}\`.`);
+      if (tool.mode !== 'read') throw new UsageError(`Only a tool set to Read can be tried here (${tool.name} is ${tool.mode}): set it in the web app, Settings → Connections.`);
+      const r = await api.post<McpTryResultView>(`/connections/${c.id}/tools/${encodeURIComponent(tool.id)}/try`, { arguments: args });
+      if (o.json) out(JSON.stringify(r, null, 2));
+      else {
+        out(THIRD_PARTY_NOTICE);
+        out(`${r.ok ? 'The server answered' : r.code === 'TOOL_ERROR' ? 'The server reported an error' : `The call did not complete (${r.code}${r.code && DIAGNOSTIC_REMEDIES[r.code] ? `: ${remedyTitle(r.code)}` : ''})`} in ${r.ms} ms${r.truncated ? '; the answer was cut at 4,000 characters' : ''}.`);
+        out('');
+        out(r.text || '(no text)');
+      }
+      if (!r.ok) process.exitCode = 1;
     });
   connections
     .command('pause <connection>')
