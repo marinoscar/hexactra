@@ -99,6 +99,7 @@ exports[`GET /runs/{id}/export sends a JSON attachment (no data envelope) that v
         "maxInputTokens": null,
         "maxModelCalls": 120,
         "maxOutputTokens": null,
+        "maxWebCalls": 30,
         "warnAtPercent": 80,
       },
       "context": {
@@ -121,7 +122,7 @@ exports[`GET /runs/{id}/export sends a JSON attachment (no data envelope) that v
         "onStall": "nudge_then_escalate",
       },
     },
-    "version": 1,
+    "version": 2,
   },
   "run": {
     "client": {
