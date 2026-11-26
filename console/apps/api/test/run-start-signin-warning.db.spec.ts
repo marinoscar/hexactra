@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JobsService } from '@marinoscar/platform-api/jobs';
+import { GOAL_RUN_JOB } from '../src/runner/goal-run.enqueue';
 
 import { FabricClient, type FabricHost } from '../src/fabric/fabric.client';
 import { createApp } from '../src/main';
@@ -117,7 +118,8 @@ describe('POST /runs on a profile that needs a Google sign-in', () => {
     const slow = await start({ hostId: HOME });
     expect(Date.now() - t0).toBeLessThan(5_000);
     expect('warnings' in slow).toBe(false);
-    expect(enqueue).toHaveBeenCalledTimes(5);
+    // Only the run jobs: the app's every-minute housekeeping crons also call `enqueue`, and a minute can turn during this test.
+    expect(enqueue.mock.calls.filter(([job]) => (job as { type?: string }).type === GOAL_RUN_JOB)).toHaveLength(5);
     // The fabric call itself is bounded and cancelled at the deadline: nothing outlives the run start.
     const [opts] = hosts.mock.lastCall as [{ timeoutMs: number; retries: number; signal: AbortSignal }];
     expect(opts).toMatchObject({ timeoutMs: 1_500, retries: 0 });

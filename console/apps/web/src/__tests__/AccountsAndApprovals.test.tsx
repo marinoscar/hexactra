@@ -205,65 +205,72 @@ afterEach(() => {
   restore = null;
 });
 
-describe('the accounts section of the task form', () => {
+describe('the tools and accounts section of the task form (#967)', () => {
   it('is hidden without connections:read', async () => {
     mountForm('/tasks/new', ['tasks:read', 'tasks:write', 'runs:write', 'agent_policies:read', 'fleet:read']);
     await screen.findByRole('heading', { name: 'Outputs' });
-    expect(screen.queryByRole('heading', { name: 'Accounts the agent may use' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Tools and accounts/ })).toBeNull();
   });
 
-  it('is folded with a one-line summary, opens to the choices and the help, and sends the accounts switched on', async () => {
+  it('a new task uses everything connected: no choice to make, no browser question, and nothing about accounts is sent', async () => {
     const { sent } = mountForm('/tasks/new', PERMS);
-    const toggle = await screen.findByRole('button', { name: /Accounts the agent may use/ });
+    const toggle = await screen.findByRole('button', { name: /Tools and accounts/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByTestId('accounts-summary')).toHaveTextContent('No accounts: the agent cannot use any of your mail, calendar or documents.');
+    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Everything you connected: Work, Personal, Reader'));
     fireEvent.click(toggle);
-    expect(await screen.findByText(/The agent can only use accounts you switch on here. It asks before it sends or changes anything, unless you told it not to ask again./)).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Read only: Work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Read and change: Personal' }));
-    expect(screen.getByTestId('accounts-summary')).toHaveTextContent('2 accounts: Work (read only), Personal (read and change)');
+    expect(await screen.findByText(/The agent can use every account and tool you connected/)).toBeInTheDocument();
+    expect(screen.getByTestId(`uses-${WORK}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`uses-${PAUSED}`)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Read only: Work' })).toBeNull();
+    expect(screen.queryByLabelText('Does this task use a browser?')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Inbox digest' } });
     fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Summarise my unread email each morning' } });
-    expect(await screen.findByTestId('browserless-hint')).toHaveTextContent('Runs without a browser');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent('POST', '/tasks')).toHaveLength(1));
-    expect(sent('POST', '/tasks')[0]!.body).toMatchObject({ connections: [{ connectionId: WORK, access: 'read' }, { connectionId: PERSONAL, access: 'read_write' }] });
-    expect(sent('POST', '/tasks')[0]!.body).not.toHaveProperty('needsBrowser');
+    const body = sent('POST', '/tasks')[0]!.body;
+    expect(body).not.toHaveProperty('connections');
+    expect(body).not.toHaveProperty('connectionsMode');
+    expect(body).not.toHaveProperty('needsBrowser');
   });
 
-  it('a task with no account sends no `connections` at all', async () => {
+  it('"Limit this task" starts from everything usable and sends the limit', async () => {
     const { sent } = mountForm('/tasks/new', PERMS);
-    await screen.findByRole('button', { name: /Accounts the agent may use/ });
-    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Plain' } });
-    fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Open the site' } });
+    fireEvent.click(await screen.findByRole('button', { name: /Tools and accounts/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Limit this task' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Read only: Work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not used: Personal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not used: Reader' }));
+    expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Limited. 1 account: Work (read only)');
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Inbox digest' } });
+    fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Summarise my unread email' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent('POST', '/tasks')).toHaveLength(1));
-    expect(sent('POST', '/tasks')[0]!.body).not.toHaveProperty('connections');
+    expect(sent('POST', '/tasks')[0]!.body).toMatchObject({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read' }] });
   });
 
-  it('edits a saved task: the summary names the accounts, and only a change is sent', async () => {
+  it('edits a limited task: the summary names the accounts, and a change sends the mode with the list', async () => {
     const { sent } = mountForm(`/tasks/${TASK_ID}/edit`, PERMS);
-    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('1 account: Work (read only)'));
-    fireEvent.click(screen.getByRole('button', { name: /Accounts the agent may use/ }));
+    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Limited. 1 account: Work (read only)'));
+    fireEvent.click(screen.getByRole('button', { name: /Tools and accounts/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Read and change: Work' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent('PATCH', `/tasks/${TASK_ID}`)).toHaveLength(1));
-    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ connections: [{ connectionId: WORK, access: 'read_write' }] });
+    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read_write' }] });
   });
 
-  it('switching every account off sends an empty list', async () => {
+  it('"Use everything I connected" removes the limit', async () => {
     const { sent } = mountForm(`/tasks/${TASK_ID}/edit`, PERMS);
-    fireEvent.click(await screen.findByRole('button', { name: /Accounts the agent may use/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Not used: Work' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tools and accounts/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use everything I connected' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent('PATCH', `/tasks/${TASK_ID}`)).toHaveLength(1));
-    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ connections: [] });
+    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ connectionsMode: 'all' });
   });
 
   it('keeps the accounts a task has when the list of accounts could not be loaded, and says so', async () => {
     mountForm(`/tasks/${TASK_ID}/edit`, PERMS, { 'GET /connections': () => { throw Object.assign(new Error('down'), { status: 500 }); } });
-    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent(/^1 account/));
-    fireEvent.click(screen.getByRole('button', { name: /Accounts the agent may use/ }));
+    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent(/1 account/));
+    fireEvent.click(screen.getByRole('button', { name: /Tools and accounts/ }));
     expect(await screen.findByText(/Your accounts could not be loaded/)).toBeInTheDocument();
   });
 });

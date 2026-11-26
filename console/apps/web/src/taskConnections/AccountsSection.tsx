@@ -1,11 +1,13 @@
-// "Accounts the agent may use" (E39.10, #607): which of the owner's connected accounts this task or chat may use, and how. Off until
-// switched on. Hidden without `connections:read`; read-only without write access.
-import { Alert, FormControl, FormHelperText, InputLabel, Link, MenuItem, Select, Stack, Typography } from '@mui/material';
+// "Accounts the agent may use" (E39.10, #607) for a chat, and "Tools and accounts" for a task (#967). A task uses every account and tool the
+// owner connected, at what they switched on for each, unless the owner limits it; a chat lists its own. Hidden without `connections:read`;
+// read-only without write access. The task form asks nothing about the browser (#967): the agent opens one when the job needs a website.
+import { Alert, Box, Button, Chip, Link, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { AccountChoices } from '../connections/AccountChoices';
 import type { Connection } from '../connections/api';
-import { ACCOUNTS_HELP, looksBrowserless, type ConnectionSelection, type NeedsBrowser } from './model';
+import { ProviderMark } from '../connections/ProviderMark';
+import { ACCOUNTS_HELP, ALL_TOOLS_HELP, LIMITED_HELP, capabilityChips, limitFromAll, usableConnections, type ConnectionSelection, type ConnectionsMode } from './model';
 
 export interface AccountsSectionProps {
   /** `null` while loading. */
@@ -14,49 +16,88 @@ export interface AccountsSectionProps {
   selections: readonly ConnectionSelection[];
   onChange: (next: ConnectionSelection[]) => void;
   disabled?: boolean;
-  /** A task also chooses whether its runs open a browser; a chat does not. */
-  browser?: { value: NeedsBrowser; onChange: (v: NeedsBrowser) => void; goal: string };
+  /** A task (#967): everything the owner connected (`all`) unless limited (`listed`). A chat has no mode: it lists its own. */
+  mode?: { value: ConnectionsMode; onChange: (mode: ConnectionsMode, selections: ConnectionSelection[]) => void };
 }
 
-const BROWSER_WORDS: Record<NeedsBrowser, string> = {
-  auto: 'Only when it needs one (recommended)',
-  always: 'Always open a browser',
-  never: 'Never open a browser',
-};
+/** An MCP server's enabled tool count, or the chips of what an account can do. */
+function whatItDoes(c: Connection): string[] {
+  if (c.provider === 'mcp') {
+    const n = c.mcp?.tools.enabled ?? 0;
+    return [`${n} tool${n === 1 ? '' : 's'} switched on`];
+  }
+  return capabilityChips(c);
+}
 
-export function AccountsSection({ connections, failed = false, selections, onChange, disabled = false, browser }: AccountsSectionProps) {
+function EverythingList({ connections }: { connections: readonly Connection[] }) {
+  const usable = usableConnections(connections);
+  return (
+    <Stack component="ul" spacing={1} sx={{ listStyle: 'none', m: 0, p: 0 }} aria-label="Accounts and tools the agent may use">
+      {usable.map((c) => (
+        <Box component="li" key={c.id} data-testid={`uses-${c.id}`} sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', minWidth: 0 }}>
+          <Box sx={{ pt: 0.25, flexShrink: 0 }}>
+            <ProviderMark provider={c.provider} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{c.label}</Typography>
+            <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
+              {whatItDoes(c).map((w) => (
+                <Chip key={w} size="small" label={w} />
+              ))}
+            </Stack>
+          </Box>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+export function AccountsSection({ connections, failed = false, selections, onChange, disabled = false, mode }: AccountsSectionProps) {
   if (connections === null) return <Typography color="text.secondary">Loading your accounts…</Typography>;
+  const none = connections.length === 0 && !failed;
+  const connectLink = (
+    <Typography color="text.secondary">
+      You have not connected an account or a tool yet.{' '}
+      <Link component={RouterLink} to="/settings/connections">
+        Connect one
+      </Link>{' '}
+      to let the agent read your mail or calendar, write a document, or use a tool you add.
+    </Typography>
+  );
+  const failedNote = failed && <Alert severity="warning">Your accounts could not be loaded. Saving keeps the accounts this already has.</Alert>;
+
+  if (mode && mode.value === 'all') {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="body2" color="text.secondary">
+          {ALL_TOOLS_HELP}
+        </Typography>
+        {failedNote}
+        {none ? connectLink : <EverythingList connections={connections} />}
+        {!none && !failed && (
+          <Box>
+            <Button size="small" variant="text" disabled={disabled} onClick={() => mode.onChange('listed', selections.length > 0 ? [...selections] : limitFromAll(connections))}>
+              Limit this task
+            </Button>
+          </Box>
+        )}
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">
-        {ACCOUNTS_HELP}
+        {mode ? LIMITED_HELP : ACCOUNTS_HELP}
       </Typography>
-      {failed && <Alert severity="warning">Your accounts could not be loaded. Saving keeps the accounts this already has.</Alert>}
-      {connections.length === 0 && !failed ? (
-        <Typography color="text.secondary">
-          You have not connected an account yet.{' '}
-          <Link component={RouterLink} to="/settings/connections">
-            Connect one
-          </Link>{' '}
-          to let the agent read your mail or calendar, or add a row to a spreadsheet.
-        </Typography>
-      ) : (
-        <AccountChoices connections={connections} selections={selections} onChange={onChange} disabled={disabled} />
-      )}
-      {browser && (
-        <FormControl size="small" disabled={disabled} sx={{ maxWidth: 420 }}>
-          <InputLabel id="needs-browser-label">Does this task use a browser?</InputLabel>
-          <Select labelId="needs-browser-label" label="Does this task use a browser?" value={browser.value} onChange={(e) => browser.onChange(e.target.value as NeedsBrowser)}>
-            {(Object.keys(BROWSER_WORDS) as NeedsBrowser[]).map((k) => (
-              <MenuItem key={k} value={k}>
-                {BROWSER_WORDS[k]}
-              </MenuItem>
-            ))}
-          </Select>
-          {looksBrowserless(browser.goal, selections, browser.value) && (
-            <FormHelperText data-testid="browserless-hint">Runs without a browser: this looks like a job for your accounts alone, so no machine is used unless the agent needs one.</FormHelperText>
-          )}
-        </FormControl>
+      {failedNote}
+      {none ? connectLink : <AccountChoices connections={connections} selections={selections} onChange={onChange} disabled={disabled} />}
+      {mode && (
+        <Box>
+          <Button size="small" variant="text" disabled={disabled} onClick={() => mode.onChange('all', [])}>
+            Use everything I connected
+          </Button>
+        </Box>
       )}
     </Stack>
   );

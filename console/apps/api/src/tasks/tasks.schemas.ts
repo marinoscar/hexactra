@@ -24,6 +24,10 @@ export type UnattendedPayments = (typeof UNATTENDED_PAYMENTS)[number];
 export const NEEDS_BROWSER = ['auto', 'always', 'never'] as const;
 export type NeedsBrowser = (typeof NEEDS_BROWSER)[number];
 
+/** `Task.connectionsMode` (#967): `all` the owner's active connections at what they switched on for each; `listed` only the task's list. */
+export const CONNECTIONS_MODE = ['all', 'listed'] as const;
+export type ConnectionsMode = (typeof CONNECTIONS_MODE)[number];
+
 const taskFields = {
   name: z.string().trim().min(1).max(200),
   goal: z.string().trim().min(1).max(4000),
@@ -65,6 +69,11 @@ const taskFields = {
     .describe(
       "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened.",
     ),
+  connectionsMode: z
+    .enum(CONNECTIONS_MODE)
+    .describe(
+      "Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.",
+    ),
   connections: connectionSelectionsField,
   recordVideo: z
     .boolean()
@@ -94,6 +103,7 @@ export const createTaskSchema = z.object({
   useSavedCards: taskFields.useSavedCards.optional(),
   unattendedPayments: taskFields.unattendedPayments.default('ask'),
   needsBrowser: taskFields.needsBrowser.default('auto'),
+  connectionsMode: taskFields.connectionsMode.optional(),
   connections: taskFields.connections.optional(),
   recordVideo: taskFields.recordVideo.default(false),
   schedules: taskSchedulesField.optional(),

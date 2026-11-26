@@ -436,14 +436,14 @@ function mcpParameters(raw: unknown): z.infer<typeof mcpTaskParameterSchema>[] {
 
 /** A task as a tool returns it: its parameters without their defaults' values (#552). */
 function mcpTask<T extends Record<string, unknown>>(t: T): T {
-  // A hosted AI app is never told which accounts the owner connected or which a task may use (E39.7): `connections` and `needsBrowser` stay on REST.
+  // A hosted AI app is never told which accounts the owner connected or which a task may use (E39.7): `connections`, `connectionsMode` (#967) and `needsBrowser` stay on REST.
   // Nor whether a task records video (epic #755): the switch and the recording stay on REST and the console.
-  const { connections: _connections, needsBrowser: _needsBrowser, recordVideo: _recordVideo, ...rest } = t;
+  const { connections: _connections, connectionsMode: _connectionsMode, needsBrowser: _needsBrowser, recordVideo: _recordVideo, ...rest } = t;
   return rest && 'parameters' in rest ? ({ ...rest, parameters: mcpParameters(rest.parameters) } as unknown as T) : (rest as unknown as T);
 }
 
 /** The task shapes MCP returns: what the REST task carries, without the connection fields (E39.7). */
-const mcpTaskOutput = taskWithSummarySchema.omit({ connections: true, needsBrowser: true, recordVideo: true });
+const mcpTaskOutput = taskWithSummarySchema.omit({ connections: true, connectionsMode: true, needsBrowser: true, recordVideo: true });
 
 /** One task as tasks_list answers it: its fields, the goal cut short, and the summary facts the tasks card shows. */
 const taskListItemSchema = z.object({
@@ -1026,6 +1026,9 @@ export const MCP_TOOLS: McpTool[] = [
         goal: a.goal,
         profile: a.profile,
         allowedDomains: a.allowed_domains,
+        // A task an AI app saves uses none of the owner's connections until the owner changes that in the console (#967).
+        connectionsMode: 'listed',
+        connections: [],
         ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}),
         ...(a.schedules !== undefined
           ? {
@@ -1054,7 +1057,7 @@ export const MCP_TOOLS: McpTool[] = [
       allowed_domains: allowedDomains.optional(),
       policy_id: policyIdParam.nullable().optional().describe("The task's agent policy; null makes it follow the user's default policy."),
     }),
-    output: taskResponseSchema.omit({ connections: true, needsBrowser: true, recordVideo: true }).extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
+    output: taskResponseSchema.omit({ connections: true, connectionsMode: true, needsBrowser: true, recordVideo: true }).extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'destructive',
     openWorld: false,

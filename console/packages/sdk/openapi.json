@@ -89331,6 +89331,14 @@
             "type": "boolean",
             "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -89373,7 +89381,7 @@
                 "status"
               ]
             },
-            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
+            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
           },
           "model": {
             "deprecated": true,
@@ -89942,6 +89950,7 @@
           "unattendedPayments",
           "needsBrowser",
           "recordVideo",
+          "connectionsMode",
           "connections",
           "model",
           "policyId",
@@ -90051,6 +90060,14 @@
                   "type": "boolean",
                   "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
                 },
+                "connectionsMode": {
+                  "type": "string",
+                  "enum": [
+                    "all",
+                    "listed"
+                  ],
+                  "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+                },
                 "connections": {
                   "type": "array",
                   "items": {
@@ -90093,7 +90110,7 @@
                       "status"
                     ]
                   },
-                  "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
+                  "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
                 },
                 "model": {
                   "deprecated": true,
@@ -90662,6 +90679,7 @@
                 "unattendedPayments",
                 "needsBrowser",
                 "recordVideo",
+                "connectionsMode",
                 "connections",
                 "model",
                 "policyId",
@@ -91010,6 +91028,14 @@
             "type": "boolean",
             "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -91052,7 +91078,7 @@
                 "status"
               ]
             },
-            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
+            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
           },
           "model": {
             "deprecated": true,
@@ -91621,6 +91647,7 @@
           "unattendedPayments",
           "needsBrowser",
           "recordVideo",
+          "connectionsMode",
           "connections",
           "model",
           "policyId",
@@ -91986,6 +92013,14 @@
             ],
             "description": "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened."
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "description": "Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list."
+          },
           "connections": {
             "maxItems": 25,
             "type": "array",
@@ -92197,6 +92232,14 @@
             "type": "boolean",
             "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -92239,7 +92282,7 @@
                 "status"
               ]
             },
-            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
+            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
           },
           "model": {
             "deprecated": true,
@@ -92508,6 +92551,7 @@
           "unattendedPayments",
           "needsBrowser",
           "recordVideo",
+          "connectionsMode",
           "connections",
           "model",
           "policyId",
@@ -92864,6 +92908,14 @@
             ],
             "description": "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened."
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "description": "Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list."
+          },
           "connections": {
             "maxItems": 25,
             "type": "array",
@@ -93083,6 +93135,14 @@
             "type": "boolean",
             "description": "Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "description": "Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -93125,7 +93185,7 @@
                 "status"
               ]
             },
-            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
+            "description": "The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`."
           },
           "model": {
             "deprecated": true,
@@ -93703,6 +93763,7 @@
           "unattendedPayments",
           "needsBrowser",
           "recordVideo",
+          "connectionsMode",
           "connections",
           "model",
           "policyId",

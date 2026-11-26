@@ -18927,7 +18927,12 @@ export interface components {
             needsBrowser: "auto" | "always" | "never";
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
-            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            /**
+             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @enum {string}
+             */
+            connectionsMode: "all" | "listed";
+            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
             connections: {
                 /**
                  * Format: uuid
@@ -19127,7 +19132,12 @@ export interface components {
                 needsBrowser: "auto" | "always" | "never";
                 /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
                 recordVideo: boolean;
-                /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+                /**
+                 * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+                 * @enum {string}
+                 */
+                connectionsMode: "all" | "listed";
+                /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
                 connections: {
                     /**
                      * Format: uuid
@@ -19382,7 +19392,12 @@ export interface components {
             needsBrowser: "auto" | "always" | "never";
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
-            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            /**
+             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @enum {string}
+             */
+            connectionsMode: "all" | "listed";
+            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
             connections: {
                 /**
                  * Format: uuid
@@ -19654,6 +19669,11 @@ export interface components {
              * @enum {string}
              */
             needsBrowser?: "auto" | "always" | "never";
+            /**
+             * @description Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.
+             * @enum {string}
+             */
+            connectionsMode?: "all" | "listed";
             /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
             connections?: {
                 /**
@@ -19734,7 +19754,12 @@ export interface components {
             needsBrowser: "auto" | "always" | "never";
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
-            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            /**
+             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @enum {string}
+             */
+            connectionsMode: "all" | "listed";
+            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
             connections: {
                 /**
                  * Format: uuid
@@ -19930,6 +19955,11 @@ export interface components {
              * @enum {string}
              */
             needsBrowser?: "auto" | "always" | "never";
+            /**
+             * @description Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.
+             * @enum {string}
+             */
+            connectionsMode?: "all" | "listed";
             /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
             connections?: {
                 /**
@@ -20013,7 +20043,12 @@ export interface components {
             needsBrowser: "auto" | "always" | "never";
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
-            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            /**
+             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @enum {string}
+             */
+            connectionsMode: "all" | "listed";
+            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
             connections: {
                 /**
                  * Format: uuid

@@ -34,7 +34,7 @@ import { syncDeliveries, type CreatedSecret } from '../deliveries/sync';
 import { deliveryErrorText } from '../deliveries/drafts';
 import { useTaskDeliveries } from '../deliveries/useTaskDeliveries';
 import { AccountsSection } from '../taskConnections/AccountsSection';
-import { summaryLine, type ConnectionSelection, type NeedsBrowser } from '../taskConnections/model';
+import { toolsSummaryLine, type ConnectionSelection, type ConnectionsMode } from '../taskConnections/model';
 import { CollapsedSection } from '../taskForm/CollapsedSection';
 import { AllowedSitesInput } from './AllowedSitesInput';
 import { MachinePicker } from './MachinePicker';
@@ -290,7 +290,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
           ? summarize(deliveries.drafts[0]!, accounts.connections ?? [])
           : `${deliveries.drafts.length} deliveries after each run`;
   const setConnections = (connections: ConnectionSelection[]) => setFields({ connections });
-  const setNeedsBrowser = (needsBrowser: NeedsBrowser) => setFields({ needsBrowser });
+  const setConnectionsMode = (connectionsMode: ConnectionsMode, connections: ConnectionSelection[]) => setFields({ connectionsMode, connections });
 
   const values: TaskFormValues = useMemo(() => ({ ...fields, schedules: rows.filter((r) => !r.removed).map((r) => r.draft) }), [fields, rows]);
   const dirty = isDirty(values, form.initial) || deliveries.dirty;
@@ -582,9 +582,9 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
 
         {canReadConnections && (
           <CollapsedSection
-            title="Accounts the agent may use"
+            title="Tools and accounts"
             anchor="accounts"
-            summary={accounts.connections === null && fields.connections.length > 0 ? 'Loading your accounts…' : summaryLine(fields.connections, accounts.connections)}
+            summary={toolsSummaryLine(fields.connectionsMode, fields.connections, accounts.connections)}
             open={accountsOpen}
             onToggle={setAccountsOpen}
           >
@@ -594,7 +594,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
               selections={fields.connections}
               onChange={setConnections}
               disabled={busy}
-              browser={{ value: fields.needsBrowser, onChange: setNeedsBrowser, goal: fields.goal }}
+              mode={{ value: fields.connectionsMode, onChange: setConnectionsMode }}
             />
           </CollapsedSection>
         )}

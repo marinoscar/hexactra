@@ -117,6 +117,9 @@ model Task {
   /// Whether the task's runs open a browser (E39.7): `auto` opens it when the first browser tool is called if the run has connections (a
   /// run without any connection is a browser job and opens it at the start, as before), `always` opens it at the start, `never` offers no browser tool.
   needsBrowser   String   @default("auto") @map("needs_browser") @db.VarChar(8)
+  /// Which of the owner's connections the task's runs may use (#967): `all` (the default) every active connection, at what the owner
+  /// switched on for it (an account's capabilities, an MCP server's enabled tools); `listed` only the `task_connections` rows, each at its access.
+  connectionsMode String  @default("all") @map("connections_mode") @db.VarChar(8)
   /// Record a video of the run's browser tab (epic #755, docs/recordings.md): an opt-in, off by default. The video is NOT masked,
   /// owner-only and never exported. A run copies it to `runs.record_video` when it is created.
   recordVideo    Boolean  @default(false) @map("record_video")

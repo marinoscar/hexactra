@@ -35,7 +35,9 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
     parameters: Array.isArray(draft.parameters) ? draft.parameters.filter((p) => p && typeof p.key === 'string').map((p) => ({ ...p })) : [],
     // The outputs the draft proposes from what the finished run reported (E39.5): the owner reviews each row in the form.
     outputs: Array.isArray(draft.outputs) ? draft.outputs.filter((o) => o && typeof o.label === 'string').map((o) => ({ ...o, key: typeof o.key === 'string' ? o.key : '' })) : [],
-    // The chat's accounts its runs used (E41.5): preselected; nothing is listed on the task until the owner saves it.
+    // A drafted task uses everything the owner connected (#967). The accounts the chat's runs used (E41.5) are kept as the starting point
+    // of a limit, should the owner choose "Limit this task".
+    connectionsMode: 'all',
     connections: Array.isArray(draft.connections) ? draft.connections.filter((c) => c && typeof c.connectionId === 'string').map((c) => ({ connectionId: c.connectionId, access: c.access === 'read_write' ? 'read_write' : 'read' })) : [],
   };
 }
@@ -50,7 +52,6 @@ export function valuesFromBuilderDraft(draft: TaskBuilderDraft): TaskFormValues 
   return {
     ...base,
     unattendedPayments: draft.unattendedPayments === 'allow' ? 'allow' : 'ask',
-    needsBrowser: draft.needsBrowser === 'always' || draft.needsBrowser === 'never' ? draft.needsBrowser : 'auto',
     recordVideo: draft.recordVideo === true,
     schedules,
   };
@@ -112,7 +113,6 @@ export function TaskCreatePage() {
     : fromBuilder
       ? (taskId: string) => api.post(`/task-builder/${fromBuilder.builderId}/task-link`, { taskId }).then(() => undefined)
       : undefined;
-  const proposedAccounts = (fromChat?.chatDraft.connections?.length ?? 0) > 0 || (fromBuilder?.builderDraft.connections?.length ?? 0) > 0;
 
   return (
     <PageContainer width="default">
@@ -124,11 +124,6 @@ export function TaskCreatePage() {
         actions={[{ key: 'builder', label: builder.starting ? 'Starting…' : 'Build with AI', Icon: AutoAwesomeIcon, onClick: () => void builder.start(goal ?? undefined), disabled: builder.starting, hidden: !TASK_BUILDER_ENABLED || Boolean(fromChat || fromBuilder || from) }]}
       />
       <ErrorBanner error={error} onClose={() => setError(null)} />
-      {proposedAccounts && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          {fromChat ? 'Taken from the chat: check which accounts this task may use.' : 'Proposed by the task builder: check which accounts this task may use.'}
-        </Alert>
-      )}
       {warnings.map((w) => (
         <Alert key={w} severity="warning" sx={{ mb: 2 }}>
           {w}

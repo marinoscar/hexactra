@@ -1,7 +1,8 @@
-// Which connections a run may use (E39.7), fixed when the run starts. A run has the connections its task lists, or (for a run that is not a
-// task's) the chat that started it, each `read` or `read_write`. A task lists its own (none until it does); a chat has what the owner's default or the owner gave it
-// (#680); an AI app's run gets none unless the owner allowed connections for that app. The list is written onto the policy snapshot at the first advance, so a later change of the
-// task, the chat or the connection's switches never alters a live run (the hub still re-reads the connection's state at every call).
+// Which connections a run may use (E39.7), fixed when the run starts. A task's run has every active connection of the owner, at what the owner
+// switched on for each (an account's capabilities, an MCP server's enabled tools), unless the task is limited to a list (#967: `connectionsMode`).
+// A run that is not a task's has what its chat lists (the owner's default or the owner's own choice, #680); an AI app's run gets none unless the
+// owner allowed connections for that app. The list is written onto the policy snapshot at the first advance, so a later change of the task, the
+// chat or the connection's switches never alters a live run (the hub still re-reads the connection's state at every call).
 import { capabilitiesOf } from '../../../connections/connection-view';
 import { isConnectionAccess } from '../../../connections/agent-connections';
 import type { SnapshotAppLimits, SnapshotConnection } from '../../../policies/policy-snapshot';
@@ -22,6 +23,15 @@ export async function runConnections(
   // A run an AI app started gets the owner's connections only when the owner allowed it for that app, and the task lists them.
   if (appLimits && appLimits.allowConnections !== true) return [];
   const include = { connection: { select: { id: true, userId: true, label: true, provider: true, capabilities: true } } } as const;
+  if (run.taskId) {
+    const task = await d.prisma.task.findFirst({ where: { id: run.taskId, userId: run.userId }, select: { connectionsMode: true } });
+    if (!task) return [];
+    if (task.connectionsMode !== 'listed') {
+      // `all`: read and change, so what the agent may do is exactly what the owner switched on for the connection. Every write still asks.
+      const all = await d.prisma.connection.findMany({ where: { userId: run.userId, status: 'active' }, select: include.connection.select, orderBy: [{ label: 'asc' }, { id: 'asc' }] });
+      return all.map((c) => ({ connectionId: c.id, access: 'read_write' as const, label: c.label, provider: c.provider, capabilities: capabilitiesOf(c) }));
+    }
+  }
   const rows = run.taskId
     ? await d.prisma.taskConnection.findMany({ where: { taskId: run.taskId, task: { userId: run.userId } }, include, orderBy: [{ connection: { label: 'asc' } }, { id: 'asc' }] })
     : appLimits || !run.conversationId

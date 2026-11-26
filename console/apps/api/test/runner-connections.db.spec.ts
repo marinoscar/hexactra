@@ -48,7 +48,7 @@ async function setup(name: string, connections: [string, string[], 'read' | 'rea
   const userId = await login(app, `rc-${name}-${stamp}@example.test`);
   const db = kit.prisma.forUser({ userId });
   const made = await Promise.all(connections.map(([label, caps]) => kit.connect(userId, label, caps)));
-  const task = await db.task.create({ data: { userId, name: `Task ${name}`, goal: opts.goal ?? 'Do the owner\'s errand', needsBrowser: opts.needsBrowser ?? 'auto', confirmRiskyActions: false } });
+  const task = await db.task.create({ data: { userId, name: `Task ${name}`, goal: opts.goal ?? 'Do the owner\'s errand', needsBrowser: opts.needsBrowser ?? 'auto', confirmRiskyActions: false, connectionsMode: 'listed' } });
   await kit.prisma.taskConnection.createMany({ data: made.map((c, i) => ({ taskId: task.id, connectionId: c.id, access: connections[i]![2] })) });
   const run = await db.run.create({ data: { userId, taskId: task.id, trigger: opts.trigger ?? 'manual', goal: task.goal } });
   return { userId, db, task, run, conns: made };
@@ -70,6 +70,30 @@ describe('which connection tools a run is offered', () => {
     const model3 = scriptedModel([[FINISH]]);
     await kit.runner(model3, fakeFabric()).advance(full.run.id, full.userId, null);
     expect(model3.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(CONNECTION_TOOLS);
+  });
+
+  it('#967: a task that is not limited has every active connection of its owner at what the owner switched on, and no other', async () => {
+    const userId = await login(app, `rc-all-${stamp}@example.test`);
+    const db = kit.prisma.forUser({ userId });
+    await kit.connect(userId, 'Work', ALL);
+    await kit.connect(userId, 'Cal', ['calendar_read']);
+    await kit.connect(userId, 'Old', ALL, { status: 'paused' });
+    const other = await login(app, `rc-all-other-${stamp}@example.test`);
+    await kit.connect(other, 'Theirs', ALL);
+    const task = await db.task.create({ data: { userId, name: 'Task all', goal: 'Send the digest', confirmRiskyActions: false } });
+    expect(task.connectionsMode).toBe('all');
+    const run = await db.run.create({ data: { userId, taskId: task.id, trigger: 'manual', goal: task.goal } });
+    const model = scriptedModel([[['connections_list', {}]], [FINISH]]);
+    const fabric = fakeFabric();
+    await kit.runner(model, fabric).advance(run.id, userId, null);
+    expect(model.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(CONNECTION_TOOLS);
+    const snapshot = JSON.stringify((await db.run.findFirstOrThrow({ where: { id: run.id } })).policySnapshot);
+    expect(snapshot).toContain('"Work"');
+    expect(snapshot).toContain('"Cal"');
+    expect(snapshot).not.toContain('"Old"');
+    expect(snapshot).not.toContain('"Theirs"');
+    // A job its accounts can do opens no browser: the run has connections, so the browser waits for a browser tool.
+    expect(fabric.sessions()).toBe(0);
   });
 
   it('follows the switches that are on: a connection with only the calendar offers only calendar tools', async () => {
