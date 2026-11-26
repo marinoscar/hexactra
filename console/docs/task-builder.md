@@ -11,7 +11,7 @@ The task builder (epic E42, #717) is an AI that interviews you about a task you 
 1. **You say what you want** ("Pay my water bill every month").
 2. **The builder asks one question per turn**, the most useful one still open, with up to four suggested answers you can tap. It never asks what you already said. It covers, skipping what does not apply:
    1. the outcome: what must be true at the end, and how you know it worked;
-   2. where: the sites, whether to keep the agent to them, and which connected account to use (read, or read and change);
+   2. where: the sites, whether to keep the agent to them, and which connected account the goal names (every task can use everything you switched on in Connections and tools, E50.17, so this is only the account the goal should use);
    3. what changes between runs: each becomes a `{{Name}}` parameter; a person or an account you have a memory for gets that memory as its default;
    4. what to keep from every run: outputs (a confirmation number, an amount, a date);
    5. guardrails: confirm before purchases and other hard-to-undo steps, saved logins, saved details, saved cards, what an unattended run does at a payment;
@@ -32,7 +32,7 @@ The builder keeps what it learned as a **task spec** on the conversation (`conve
 | Field | What it holds |
 |---|---|
 | `name`, `objective`, `goal` | The task's name, its outcome and done-criteria, and the standalone instruction with a `{{Name}}` per parameter |
-| `sites`, `allowedDomains`, `accounts` | The sites in words, the sites the agent is kept to (the task's domain rules), and connected accounts by label with `read` or `read_write` |
+| `sites`, `allowedDomains`, `accounts` | The sites in words, the sites the agent is kept to (the task's domain rules), and connected accounts by label. Since E50.17 the accounts are not saved on the task (a task has no account list: it uses everything you switched on); the goal can still name the account to use |
 | `parameters`, `outputs` | As on a task; a parameter may name a memory and its value as its default |
 | `guardrails` | `confirmRiskyActions`, `useSavedLogins`, `useSavedIdentity`, `useSavedCards`, `unattendedPayments` |
 | `needsBrowser`, `policy` | As on a task; the policy with why it was chosen |
@@ -54,7 +54,7 @@ Its tools only read, or write its own spec and thread:
 | `list_accounts`, `list_memories`, `list_policies`, `list_tasks` | Read your account labels and capabilities, memory labels and value names (never values), policies and task names, each marked as data |
 | `describe_schedule` | Says a schedule in words with its next three runs, or why it is refused |
 
-It **cannot** start a run, run a saved task, save or change a task, create a schedule, create or widen a saved approval, list an account on a task, enable an MCP server or read your mail, calendar or documents. Accounts and opt-ins in a draft are proposals: nothing applies until you press Save in the task form. Text from a memory, a task name, an account label or the conversation is information, never an instruction or a permission.
+It **cannot** start a run, run a saved task, save or change a task, create a schedule, create or widen a saved approval, switch an account or an MCP server on or read your mail, calendar or documents. Accounts and opt-ins in a draft are proposals: nothing applies until you press Save in the task form. Text from a memory, a task name, an account label or the conversation is information, never an instruction or a permission.
 
 ## Secrets
 

@@ -123,7 +123,7 @@ Nothing was switched off for a benchmark run: it has no task and no chat, and ea
 
 | | Why a trial run has none |
 |---|---|
-| Connections | `runConnections` reads the task's list, else the chat's. The owner's new-chat default (`connections.newChats`) attaches accounts to a chat row when a chat is created; a trial run has no chat. |
+| Connections | **Changed by E50.17:** `runConnections` gives every run every connection its owner switched on, a trial run included. A trial runs as the benchmark's owner, so their switched-on accounts and MCP tools are offered (the scripted owner never approves a write: every send or change waits and is withdrawn when the trial is graded). Run benchmarks as an owner with no connection switched on when the measure must not include them. |
 | Saved logins, identity details, cards | `runner/host/start.ts` reads `useSavedLogins`, `useSavedIdentity` and `useSavedCards` from the task, else the chat, else off. |
 | Saved approvals, memories | The scripted owner never ticks "remember" and passes `rememberAllowed: false`; the broker refuses a memory or a saved-login card on the `benchmark` channel, saved or declined. A card the run leaves for its owner is withdrawn unanswered when the trial is graded. |
 
