@@ -85,3 +85,9 @@ export const usageRowSchema = z.object({
   estimatedCostUsd: z.number().describe('An ESTIMATE, from the cost per call in force when each call was made.'),
 });
 export class WebSearchUsageRowDto extends createZodDto(usageRowSchema) {}
+
+/** `?provider=` of `POST /api/web-search/diagnose` (E50.13). */
+export const searchDiagnoseQuerySchema = z
+  .object({ provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).optional().describe('A provider id; default: the one that answers for you.') })
+  .strict();
+export class SearchDiagnoseQueryDto extends createZodDto(searchDiagnoseQuerySchema) {}

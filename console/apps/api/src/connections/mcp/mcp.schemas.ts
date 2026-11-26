@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { MAX_LABEL_LENGTH } from '../connections.constants';
 import { connectionViewSchema } from '../connections.schemas';
 import { headerName } from './mcp-config';
-import { MCP_TOOL_MODES } from './mcp.constants';
+import { MCP_AUTH_KINDS, MCP_TOOL_MODES } from './mcp.constants';
 
 const label = z
   .string()
@@ -75,6 +75,35 @@ export class McpToolParamDto extends createZodDto(toolParamSchema) {}
 
 export const setToolModeSchema = z.object({ mode: z.enum(MCP_TOOL_MODES).describe('`off`, `read` (the tool only reads: it is called without asking) or `write` (it changes something: it asks you first).') }).strict();
 export class SetToolModeDto extends createZodDto(setToolModeSchema) {}
+
+// ---- presets and trying a tool (E50.12) ----
+
+export const mcpPresetSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  url: z.string().describe('The server\'s address, as its vendor documents it.'),
+  auth: z.enum(MCP_AUTH_KINDS).describe('How it signs you in. A preset never carries a secret: you give the token, or sign in at the server.'),
+  headerName: z.string().optional().describe('For `header`: the header the server reads its key from.'),
+  docsUrl: z.string().describe('The vendor\'s own documentation of the server.'),
+  notes: z.string(),
+  verified: z.string().describe('The date (`YYYY-MM-DD`) the address was checked against that documentation.'),
+});
+export class McpPresetResponseDto extends createZodDto(mcpPresetSchema) {}
+
+export const tryToolSchema = z
+  .object({ arguments: z.record(z.string(), z.unknown()).default({}).describe("The tool's arguments, checked against its own JSON schema before anything is sent.") })
+  .strict()
+  .refine((b) => JSON.stringify(b.arguments).length <= 32_000, 'At most 32,000 characters of arguments');
+export class TryToolDto extends createZodDto(tryToolSchema) {}
+
+export const tryResultSchema = z.object({
+  ok: z.boolean().describe('The server answered and reported no error.'),
+  code: z.string().nullable().describe('Null when ok; `TOOL_ERROR` (the server reported an error), `REFUSED` (nothing was sent: the tool or connection changed), or the failure (`TIMEOUT`, `UNAVAILABLE`, `AUTH`, ...).'),
+  ms: z.number().int(),
+  text: z.string().describe('What a run would read: cleaned, redacted of every credential and capped at 4,000 characters. The server\'s words: show it as plain text.'),
+  truncated: z.boolean(),
+});
+export class TryResultResponseDto extends createZodDto(tryResultSchema) {}
 
 // ---- the administrator ----
 
