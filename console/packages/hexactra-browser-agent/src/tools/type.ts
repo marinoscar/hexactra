@@ -8,7 +8,7 @@ export const typeText = defineRunnerTool({
   name: 'type_text',
   group: 'browser',
   family: 'browser',
-  description: 'Type text into an input (not secrets: use type_handoff_secret for those).',
+  description: 'Type text into an input (not secrets: use type_handoff_secret for those). For a code split across several one-character boxes, pass the first box.',
   parameters: z.object({ selector: z.string().max(2000), text: z.string().max(10_000), submit: z.boolean() }),
   execute: (ctx: BrowserContext, { selector, text, submit }) => act(ctx, { type: 'type', selector, text, clear: true, submit }),
 });

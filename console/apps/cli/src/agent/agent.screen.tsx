@@ -13,7 +13,7 @@ import {
   serviceControl,
   unattendedControl,
   unattendedLogs,
-  unattendedStatus,
+  unattendedStatusWithRelease,
   type AgentDeps,
   type AgentStatus,
   type DoctorCheck,
@@ -117,10 +117,10 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
   const refresh = useCallback(async (withDoctor = false) => {
     try {
       const deps = d();
-      const [s, c] = await Promise.all([agentStatus(deps), withDoctor ? agentDoctor(deps) : Promise.resolve(null)]);
+      const [s, c, n] = await Promise.all([agentStatus(deps), withDoctor ? agentDoctor(deps) : Promise.resolve(null), unattendedStatusWithRelease(deps)]);
       if (!mounted.current) return;
       setStatus(s);
-      setNode(unattendedStatus(deps));
+      setNode(n);
       if (c) setChecks(c);
       setError(null);
     } catch (e) {

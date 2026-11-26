@@ -10,7 +10,8 @@ import { unattendedStatus, type AgentDeps, type AgentStatus, type ExecResult, ty
 import { statusLines, unattendedLines } from './agent.command.js';
 import { agentPaths } from './paths.js';
 import { UNITS } from './unattended.js';
-import { bundleVersions, connectedExtension, describeVersions, lastConnected, versionAtLeast, type NodeVersions } from './versions.js';
+import { EXTENSION_ID } from './googleChrome.js';
+import { bundleVersions, connectedExtension, describeVersions, lastConnected, releasedExtension, versionAtLeast, type NodeVersions } from './versions.js';
 
 const CONNECTED_LINE = (at: string, v: string) =>
   `${at} mini-pc hexactra-agent[812]: INFO hexactra_agent::browser: browser extension connected version=Some("${v}") profile="default"`;
@@ -83,6 +84,26 @@ describe('reading the versions on the node', () => {
     expect(throws.calls).toHaveLength(4);
   });
 
+  it("reads the released version from the updates.xml the Chrome policy names, and anything else as unknown", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hx-ver-'));
+    const policy = join(root, 'hexactra.json');
+    const url = 'https://github.com/marinoscar/hexactra/releases/download/agent-latest/updates.xml';
+    writeFileSync(policy, JSON.stringify({ ExtensionSettings: { [EXTENSION_ID]: { installation_mode: 'force_installed', update_url: url } } }));
+    const xml = `<?xml version='1.0' encoding='UTF-8'?><gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'><app appid='${EXTENSION_ID}'><updatecheck codebase='https://x/hexactra-extension.crx' version='0.2.0.111' /></app></gupdate>`;
+    const asked: string[] = [];
+    const fetch = async (u: string) => {
+      asked.push(u);
+      return { ok: true, status: 200, text: async () => xml, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    expect(await releasedExtension(policy, fetch)).toBe('0.2.0.111');
+    expect(asked).toEqual([url]);
+    // No policy, a failed request, a request that never answers, or another document: unknown.
+    expect(await releasedExtension(join(root, 'none.json'), fetch)).toBeNull();
+    expect(await releasedExtension(policy, async () => ({ ok: false, status: 404, text: async () => '', arrayBuffer: async () => new ArrayBuffer(0) }))).toBeNull();
+    expect(await releasedExtension(policy, () => new Promise(() => undefined), 20)).toBeNull();
+    expect(await releasedExtension(policy, async () => ({ ok: true, status: 200, text: async () => '<html>login</html>', arrayBuffer: async () => new ArrayBuffer(0) }))).toBeNull();
+  });
+
   it('compares dotted versions', () => {
     expect(versionAtLeast('0.2.0.111', '0.2.0.104')).toBe(true);
     expect(versionAtLeast('0.2.0.104', '0.2.0.111')).toBe(false);
@@ -92,7 +113,15 @@ describe('reading the versions on the node', () => {
 
   it('flags a connected extension older than the bundled one', () => {
     const v: NodeVersions = { agent: { version: '0.2.0', commit: '540d2c1460d5' }, extension: '0.2.0.111', connected: { version: '0.2.0.104', at: 't' } };
-    expect(describeVersions(v)).toMatchObject({ older: true, extension: '0.2.0.111, connected 0.2.0.104 at t (older: the browser has not restarted since the update)' });
+    expect(describeVersions(v)).toMatchObject({ older: true, extension: '0.2.0.111 (bundled), connected 0.2.0.104 at t (older: the browser takes the new one when it next starts; check again after the next run)' });
+  });
+
+  it("compares with the release Chrome installs by policy, not the bundle's unstamped copy (the owner's node after an update)", () => {
+    // The bundle's manifest says 0.2.0; the policy installs 0.2.0.111; the browser last connected with the old 0.2.0.106.
+    const v: NodeVersions = { agent: { version: '0.2.0', commit: '540d2c1460d5' }, extension: '0.2.0', released: '0.2.0.111', connected: { version: '0.2.0.106', at: '2026-11-25T18:57:55-06:00' } };
+    expect(describeVersions(v)).toMatchObject({ older: true });
+    expect(describeVersions(v).extension).toBe('0.2.0.111 (latest release), connected 0.2.0.106 at 2026-11-25T18:57:55-06:00 (older: the browser takes the new one when it next starts; check again after the next run)');
+    expect(describeVersions({ ...v, connected: { version: '0.2.0.111', at: 't' } })).toMatchObject({ older: false, extension: '0.2.0.111 (latest release), connected 0.2.0.111 at t' });
   });
 });
 
@@ -111,7 +140,7 @@ describe('agent status text', () => {
     };
     const lines = statusLines(s);
     expect(lines).toContain('Agent:     0.2.0 (540d2c1)');
-    expect(lines).toContain('Extension: 0.2.0.111, connected 0.2.0.111 at 2026-11-26T02:10:03+0000');
+    expect(lines).toContain('Extension: 0.2.0.111 (bundled), connected 0.2.0.111 at 2026-11-26T02:10:03+0000');
     // The block's values line up.
     expect(new Set(lines.map((l) => l.indexOf(l.trim().split(/\s+/)[1]!)))).toEqual(new Set([11]));
   });
@@ -125,7 +154,7 @@ describe('agent status text', () => {
     };
     const lines = unattendedLines(u);
     expect(lines).toContain('Agent:      0.2.0 (540d2c1)');
-    expect(lines).toContain('Extension:  0.2.0.111, no connection found in the agent log (none yet, or the log is not readable)');
+    expect(lines).toContain('Extension:  0.2.0.111 (bundled), no connection found in the agent log (none yet, or the log is not readable)');
   });
 });
 

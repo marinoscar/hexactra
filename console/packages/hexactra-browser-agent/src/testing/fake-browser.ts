@@ -14,6 +14,8 @@ export class FakeBrowser implements BrowserPort {
   actions: Record<string, unknown>[] = [];
   /** What each action type answers (`result` of a succeeded operation); an unlisted type succeeds with `{}`. */
   results = new Map<string, Record<string, unknown>>();
+  /** What the next type_secret answers (E49.2): the fabric's fill report, or a failure. */
+  secretOp: Pick<ActionOp, 'state' | 'result' | 'error'> = { state: 'succeeded', result: {} };
   /** What the page says about a click target: by selector, or by point as "x,y". */
   targets = new Map<string, Record<string, unknown> | null>();
   url = 'https://shop.example.test/checkout';
@@ -47,7 +49,7 @@ export class FakeBrowser implements BrowserPort {
   }
   async typeSecret(opts: { handoffId: string; selector: string }): Promise<ActionOp> {
     this.actions.push({ type: 'type_secret', handoff_id: opts.handoffId, selector: opts.selector });
-    return { id: 'op', state: 'succeeded', result: {} };
+    return { id: 'op', ...this.secretOp };
   }
   async capture(screen: Screen): Promise<ScreenView> {
     return { screen, dataUrl: 'data:image/jpeg;base64,AAAA', width: 800, height: 600, url: this.url, title: 'Page', marks: [] };

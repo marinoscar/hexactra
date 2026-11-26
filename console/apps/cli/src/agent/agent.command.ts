@@ -10,7 +10,7 @@ import {
   uninstallUnattended,
   unattendedControl,
   unattendedLogs,
-  unattendedStatus,
+  unattendedStatusWithRelease,
   type UnattendedStatus,
   agentDoctor,
   agentLogs,
@@ -126,7 +126,7 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--json', 'print JSON')
     .action(async (o: { json?: boolean }) => {
       const s = await agentStatus(deps());
-      const u = unattendedStatus(deps());
+      const u = await unattendedStatusWithRelease(deps());
       if (o.json) return out(JSON.stringify({ ...s, unattended: u }, null, 2));
       for (const line of u.installed && !s.installed ? unattendedLines(u).slice(1) : [...statusLines(s), ...unattendedLines(u)]) out(line);
     });

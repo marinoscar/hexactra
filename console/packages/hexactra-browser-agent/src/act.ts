@@ -3,6 +3,7 @@
 import { actionTarget, clip, digest, inCommitTool, LEASE_LOST_TEXT, mutatingAction, redactUrl, STOPPED_TEXT, type GateTarget } from '@marinoscar/hexactra-agent';
 import { ACTION_TIMEOUT_MS, BrowserAborted, BrowserError } from './browser-port';
 import type { BrowserContext } from './context';
+import { codeBoxesNote } from './fill-report';
 
 /** What the stall detector learns from a result beyond its arguments (#405): where the page is, and whether new content came back. */
 type StallExtra = { url?: string | null; title?: string | null; contentHash?: string; resultKey?: string };
@@ -102,6 +103,11 @@ async function runAction(ctx: BrowserContext, action: Record<string, unknown>, t
     forModel = clip(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), observationChars);
   }
   if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
+  if (type === 'type') {
+    // A code split into boxes (E49.1, #958): how many were filled, or that the page moved on. A plain field keeps "ok".
+    const note = codeBoxesNote(result);
+    if (note) summary = forModel = note.startsWith('into') ? `typed ${note}` : `typed; ${note}`;
+  }
   await ctx.record('action', type, action, true, summary, started, reason, extra, intent);
   return `${forModel}${blockedNote}`;
 }
