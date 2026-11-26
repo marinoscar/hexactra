@@ -17,8 +17,11 @@ import type { DiagnosticStage } from './diagnostic-stage';
 
 export type { WebSearchResult };
 
-/** What a provider needs to make a call. `api_key`: the caller wipes the key after the call. */
-export type ProviderAuth = { kind: 'api_key'; key: SecretBytes } | { kind: 'none'; baseUrl: string } | { kind: 'ai_service'; userId: string; orgId: string | null };
+/**
+ * What a provider needs to make a call. `api_key`: the caller wipes the key after the call. `none`: a self-hosted provider's address
+ * and whether the administrator marked it as on their private network (the address check then exempts that one host, E50.8).
+ */
+export type ProviderAuth = { kind: 'api_key'; key: SecretBytes } | { kind: 'none'; baseUrl: string; allowPrivate: boolean } | { kind: 'ai_service'; userId: string; orgId: string | null };
 
 export interface SearchRequest {
   query: string;

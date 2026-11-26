@@ -266,8 +266,8 @@ export class WebSearchService {
       return r ? { kind: 'api_key', key: r.value } : null;
     }
     if (provider.credential === 'none') {
-      const baseUrl = providerSettingsOf(s, provider.id).baseUrl;
-      return baseUrl ? { kind: 'none', baseUrl } : null;
+      const { baseUrl, allowPrivate } = providerSettingsOf(s, provider.id);
+      return baseUrl ? { kind: 'none', baseUrl, allowPrivate } : null;
     }
     return { kind: 'ai_service', userId: who.userId, orgId: who.orgId };
   }

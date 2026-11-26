@@ -14,7 +14,7 @@ import { FakeBrave } from '../src/web-search/testing/fake-brave';
 import { FakeSearchProvider } from '../src/web-search/testing/fake-search-provider';
 import { webSearchHttpError } from '../src/web-search/web-search.errors';
 import { outcomeOf } from '../src/web-search/web-search.metrics';
-import { mergeWebSearchSystemSettings, resolveWebSearchSystemSettings, webSearchUserOf, type WebSearchSystemSettings } from '../src/web-search/web-search.settings';
+import { mergeWebSearchSystemSettings, resolveWebSearchSystemSettings, webSearchSystemSettingsSchema, webSearchUserOf, type WebSearchSystemSettings } from '../src/web-search/web-search.settings';
 import { WebSearchService, allowedTiers } from '../src/web-search/web-search.service';
 import type { WebSearchUsage } from '../src/web-search/web-search.usage';
 
@@ -125,7 +125,7 @@ describe('Brave Search', () => {
     const ac = new AbortController();
     ac.abort();
     expect(await codeOf(brave.search(req({ signal: ac.signal }), auth()))).toBe('ABORTED');
-    expect(await codeOf(brave.search(req(), { kind: 'none', baseUrl: 'https://x.example.test' }))).toBe('NOT_CONFIGURED');
+    expect(await codeOf(brave.search(req(), { kind: 'none', baseUrl: 'https://x.example.test', allowPrivate: false }))).toBe('NOT_CONFIGURED');
   });
 
   it('diagnoses: network then one live query of the fixed word, with codes only (E50.13)', async () => {
@@ -168,8 +168,20 @@ describe('the settings', () => {
   it('merges a patch: fields left out kept, null limits unlimited, providers per id and field', () => {
     let s: WebSearchSystemSettings = mergeWebSearchSystemSettings(undefined, { providers: { brave: { costPerCallUsd: 0.004 } }, limits: { perUserPerDay: null } });
     s = mergeWebSearchSystemSettings(s, { providers: { brave: { enabled: false } }, order: ['brave', 'alpha', 'brave'] });
-    expect(resolveWebSearchSystemSettings(s)).toEqual({ enabled: true, providers: { brave: { enabled: false, costPerCallUsd: 0.004, baseUrl: null } }, order: ['brave', 'alpha'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: null, fetchPerRun: 30 }, fetch: { enabled: true, blockedHosts: [] } });
+    expect(resolveWebSearchSystemSettings(s)).toEqual({ enabled: true, providers: { brave: { enabled: false, costPerCallUsd: 0.004, baseUrl: null, allowPrivate: false } }, order: ['brave', 'alpha'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: null, fetchPerRun: 30 }, fetch: { enabled: true, blockedHosts: [] } });
     expect(mergeWebSearchSystemSettings(s, undefined)).toEqual(s);
+  });
+
+  it("a self-hosted provider's address and its private-network tick (E50.8): off by default, kept per field", () => {
+    let s = mergeWebSearchSystemSettings(undefined, { providers: { searxng: { baseUrl: 'http://10.0.0.5:8080', allowPrivate: true } } });
+    s = mergeWebSearchSystemSettings(s, { providers: { searxng: { enabled: true } } });
+    expect(resolveWebSearchSystemSettings(s).providers.searxng).toEqual({ enabled: true, costPerCallUsd: null, baseUrl: 'http://10.0.0.5:8080', allowPrivate: true });
+    expect(resolveWebSearchSystemSettings(mergeWebSearchSystemSettings(s, { providers: { searxng: { allowPrivate: false } } })).providers.searxng!.allowPrivate).toBe(false);
+    const shape = webSearchSystemSettingsSchema.shape.providers;
+    for (const bad of ['ftp://search.example.test', 'https://user:pw@search.example.test', 'https://search.example.test/?q=x', 'https://search.example.test/#a', 'not a url']) {
+      expect({ bad, ok: shape.safeParse({ searxng: { baseUrl: bad } }).success }).toEqual({ bad, ok: false });
+    }
+    expect(shape.safeParse({ searxng: { baseUrl: 'https://search.example.test/searx', allowPrivate: false } }).success).toBe(true);
   });
 
   it('allows the system tier only when shared and the user tier only when allowed', () => {

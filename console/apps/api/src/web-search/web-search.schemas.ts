@@ -55,7 +55,12 @@ export const providerViewSchema = z.object({
 });
 export class WebSearchProviderDto extends createZodDto(providerViewSchema) {}
 
-const resolvedProviderSchema = z.object({ enabled: z.boolean(), costPerCallUsd: z.number().nullable(), baseUrl: z.string().nullable() });
+const resolvedProviderSchema = z.object({
+  enabled: z.boolean(),
+  costPerCallUsd: z.number().nullable(),
+  baseUrl: z.string().nullable().describe("A self-hosted provider's address (SearXNG)."),
+  allowPrivate: z.boolean().describe('"This instance is on my private network": http and a private address are accepted for the configured host only.'),
+});
 
 export const adminSettingsSchema = z.object({
   enabled: z.boolean(),

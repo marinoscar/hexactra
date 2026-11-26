@@ -38,8 +38,13 @@ export interface OutboundRequest {
   timeoutMs?: number;
   /** The most response bytes read (default 64 KiB); more is `too_large`. */
   maxBytes?: number;
-  /** Exact host names exempt from the private-address check (https is still required). */
+  /** Exact host names exempt from the private-address check (https is still required, unless `allowInsecureHttp`). */
   allowedHosts?: readonly string[];
+  /**
+   * `http` is accepted for a host listed in `allowedHosts`, and for no other host (E50.8: a self-hosted SearXNG the administrator
+   * marked as on their private network). Off by default.
+   */
+  allowInsecureHttp?: boolean;
   /** Cancels the exchange (E39.3: Stop): the request is destroyed and `send` rejects with `aborted`. */
   signal?: AbortSignal;
 }
@@ -57,7 +62,7 @@ export interface OutboundResponse {
 export abstract class OutboundHttp {
   abstract send(req: OutboundRequest): Promise<OutboundResponse>;
   /** Refuses (throws {@link OutboundHttpError}) a URL `send` would refuse, without sending: for validating an address when it is saved. */
-  abstract check(url: string, allowedHosts?: readonly string[]): Promise<void>;
+  abstract check(url: string, allowedHosts?: readonly string[], allowInsecureHttp?: boolean): Promise<void>;
 }
 
 /** Injection token of the DNS resolver, so a test can script a rebinding answer. */
@@ -81,9 +86,9 @@ export function devTargetsAllowed(): boolean {
 
 /**
  * The checked target of `raw`, or an {@link OutboundHttpError}. Used when a URL is saved (a clear refusal)
- * and again by every request.
+ * and again by every request. `insecureHttpForAllowed`: `http` is accepted for a host in `allowedHosts` only.
  */
-export async function checkOutboundUrl(raw: string, resolver: HostResolver, allowedHosts: readonly string[] = [], allowDev = devTargetsAllowed()): Promise<ResolvedWebhookTarget> {
+export async function checkOutboundUrl(raw: string, resolver: HostResolver, allowedHosts: readonly string[] = [], allowDev = devTargetsAllowed(), insecureHttpForAllowed = false): Promise<ResolvedWebhookTarget> {
   let host: string;
   try {
     host = new URL(raw).hostname;
@@ -91,7 +96,9 @@ export async function checkOutboundUrl(raw: string, resolver: HostResolver, allo
     throw new OutboundHttpError('invalid_url', 'The address is not a valid URL.');
   }
   const loopback = allowDev && isLoopbackHost(host);
-  const policy: WebhookEgressPolicy = loopback ? { allowInsecureHttp: true, allowPrivateTargets: true, allowedHosts: [] } : { allowInsecureHttp: false, allowPrivateTargets: false, allowedHosts };
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  const exempt = allowedHosts.some((h) => h.toLowerCase() === bare.toLowerCase());
+  const policy: WebhookEgressPolicy = loopback ? { allowInsecureHttp: true, allowPrivateTargets: true, allowedHosts: [] } : { allowInsecureHttp: insecureHttpForAllowed && exempt, allowPrivateTargets: false, allowedHosts };
   try {
     return await resolveWebhookTarget(raw, policy, resolver);
   } catch (e) {
@@ -111,13 +118,13 @@ export class PinnedOutboundHttp extends OutboundHttp {
     this.resolver = resolver ?? systemHostResolver;
   }
 
-  async check(url: string, allowedHosts: readonly string[] = []): Promise<void> {
-    await checkOutboundUrl(url, this.resolver, allowedHosts);
+  async check(url: string, allowedHosts: readonly string[] = [], allowInsecureHttp = false): Promise<void> {
+    await checkOutboundUrl(url, this.resolver, allowedHosts, devTargetsAllowed(), allowInsecureHttp);
   }
 
   async send(req: OutboundRequest): Promise<OutboundResponse> {
     if (req.signal?.aborted) throw new OutboundHttpError('aborted', 'The request was cancelled.');
-    const target = await checkOutboundUrl(req.url, this.resolver, req.allowedHosts ?? []);
+    const target = await checkOutboundUrl(req.url, this.resolver, req.allowedHosts ?? [], devTargetsAllowed(), req.allowInsecureHttp ?? false);
     return this.exchange(target, req);
   }
 
