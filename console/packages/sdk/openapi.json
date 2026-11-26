@@ -40064,6 +40064,499 @@
         }
       }
     },
+    "/api/web-search/status": {
+      "get": {
+        "description": "On or off and why (`disabled_by_admin`, `disabled_by_you`, `no_provider`, `no_key`), the provider that would answer and the tier of its key (your own, your organization's or the deployment's), today's count and limit, and the limit per run. Never a key.\n\n**Requires:** authentication, plus permission `web_search:read`.",
+        "operationId": "webSearch_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WebSearchStatusDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Whether web search works for you",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "web_search:read"
+          ]
+        }
+      }
+    },
+    "/api/web-search/providers": {
+      "get": {
+        "description": "Id, label, kind, whether it needs a key, the administrator's switch, and for you whether a key is there and at which tier. The cost per call is an estimate. Never a key.\n\n**Requires:** authentication, plus permission `web_search:read`.",
+        "operationId": "webSearch_providers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WebSearchProviderDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The search providers installed",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "web_search:read"
+          ]
+        }
+      }
+    },
+    "/api/web-search/search": {
+      "post": {
+        "description": "One search for you through the provider that answers (one fallback to the next usable one), counted against your day's limit. For the Test button and the CLI. At most 10 a minute. The query is not logged. Errors: `WEB_SEARCH_NOT_CONFIGURED`, `WEB_SEARCH_LIMIT_REACHED`, `WEB_SEARCH_AUTH_REFUSED`, `WEB_SEARCH_RATE_LIMITED`, `WEB_SEARCH_QUOTA_EXCEEDED`, `WEB_SEARCH_UNAVAILABLE`.\n\n**Requires:** authentication, plus permission `web_search:write`.",
+        "operationId": "webSearch_search",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebSearchBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WebSearchResultDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Run one web search",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "web_search:write"
+          ]
+        }
+      }
+    },
+    "/api/web-search/admin": {
+      "get": {
+        "description": "The deployment switch, the per-provider switch and cost estimate override, the order of providers, whether everyone may use the deployment key, whether users may use their own key, and the limits per run and per user per day (`null`: unlimited). Never a key.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "webSearchAdmin_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WebSearchAdminSettingsDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The web search settings of the deployment",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      },
+      "put": {
+        "description": "A field left out is kept; providers merge per id and per field; `null` on a limit makes it unlimited. Audited (`web_search.settings_saved`, the names of the fields changed).\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "webSearchAdmin_put",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebSearchAdminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WebSearchAdminSettingsDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change the web search settings",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
+    },
+    "/api/web-search/admin/usage": {
+      "get": {
+        "description": "Calls, failures and ESTIMATED cost by UTC day and provider, newest first. No user and no query.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "webSearchAdmin_usage",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "How many UTC days back (default 30).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 90,
+              "default": 30,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WebSearchUsageRowDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Web search usage of the deployment",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
     "/api/connected-apps": {
       "get": {
         "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
@@ -52116,6 +52609,14 @@
               "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
               "SERVICE_CREDENTIAL_NO_ORGANIZATION",
               "SERVICE_CREDENTIAL_INVALID",
+              "WEB_SEARCH_NOT_CONFIGURED",
+              "WEB_SEARCH_AUTH_REFUSED",
+              "WEB_SEARCH_RATE_LIMITED",
+              "WEB_SEARCH_QUOTA_EXCEEDED",
+              "WEB_SEARCH_UNAVAILABLE",
+              "WEB_SEARCH_LIMIT_REACHED",
+              "WEB_SEARCH_ABORTED",
+              "WEB_SEARCH_TEST_RATE_LIMITED",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -55221,6 +55722,31 @@
               "newChats"
             ]
           },
+          "webSearch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Web search for your runs and chats (default on). Off: the agent searches in the browser."
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The search provider you prefer among the usable ones; `null` follows the deployment's order."
+              }
+            },
+            "required": [
+              "enabled",
+              "provider"
+            ]
+          },
           "notifications": {
             "type": "object",
             "propertyNames": {
@@ -55753,6 +56279,31 @@
             },
             "required": [
               "newChats"
+            ]
+          },
+          "webSearch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Web search for your runs and chats (default on). Off: the agent searches in the browser."
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The search provider you prefer among the usable ones; `null` follows the deployment's order."
+              }
+            },
+            "required": [
+              "enabled",
+              "provider"
             ]
           },
           "notifications": {
@@ -56339,6 +56890,34 @@
                       "read_write"
                     ],
                     "description": "How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "webSearch": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Web search for your runs and chats (default on). Off: the agent searches in the browser."
+                  },
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The search provider you prefer among the usable ones; `null` follows the deployment's order."
                   }
                 }
               },
@@ -57239,6 +57818,96 @@
               }
             }
           },
+          "webSearch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "providers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "costPerCallUsd": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "baseUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 500,
+                          "format": "uri"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "order": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                }
+              },
+              "shareDeploymentKey": {
+                "type": "boolean"
+              },
+              "allowUserKeys": {
+                "type": "boolean"
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "perRun": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "perUserPerDay": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
           "deliveries": {
             "type": "object",
             "properties": {
@@ -57920,6 +58589,7 @@
           "browserAgentCeilings",
           "recordings",
           "connections",
+          "webSearch",
           "deliveries",
           "mailTriggers",
           "benchmark",
@@ -58666,6 +59336,96 @@
                         "pattern": "^[A-Za-z0-9.-]+$"
                       }
                     }
+                  }
+                }
+              }
+            }
+          },
+          "webSearch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "providers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "costPerCallUsd": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "baseUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 500,
+                          "format": "uri"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "order": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                }
+              },
+              "shareDeploymentKey": {
+                "type": "boolean"
+              },
+              "allowUserKeys": {
+                "type": "boolean"
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "perRun": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "perUserPerDay": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -60100,6 +60860,96 @@
                         "pattern": "^[A-Za-z0-9.-]+$"
                       }
                     }
+                  }
+                }
+              }
+            }
+          },
+          "webSearch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "providers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "costPerCallUsd": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "baseUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 500,
+                          "format": "uri"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "order": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                }
+              },
+              "shareDeploymentKey": {
+                "type": "boolean"
+              },
+              "allowUserKeys": {
+                "type": "boolean"
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "perRun": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "perUserPerDay": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
@@ -62583,6 +63433,31 @@
                 },
                 "required": [
                   "newChats"
+                ]
+              },
+              "webSearch": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Web search for your runs and chats (default on). Off: the agent searches in the browser."
+                  },
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The search provider you prefer among the usable ones; `null` follows the deployment's order."
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "provider"
                 ]
               },
               "notifications": {
@@ -102674,6 +103549,606 @@
           "value"
         ],
         "additionalProperties": false
+      },
+      "WebSearchStatusDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "A search of yours would be made now."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "disabled_by_admin",
+                  "disabled_by_you",
+                  "no_provider",
+                  "no_key"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why not, when `enabled` is false."
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "tier": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "organization",
+                          "system"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The tier of the key it would use (none for a provider without a key)."
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "tier"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "today": {
+            "type": "object",
+            "properties": {
+              "calls": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Searches a day (UTC); `null`: unlimited."
+              },
+              "remaining": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "calls",
+              "limit",
+              "remaining"
+            ]
+          },
+          "perRunLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Searches a run; `null`: unlimited."
+          }
+        },
+        "required": [
+          "enabled",
+          "reason",
+          "provider",
+          "today",
+          "perRunLimit"
+        ]
+      },
+      "WebSearchProviderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "results",
+              "answer"
+            ]
+          },
+          "credential": {
+            "type": "string",
+            "enum": [
+              "api_key",
+              "none",
+              "ai_service"
+            ]
+          },
+          "needsKey": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "The administrator's switch for this provider."
+          },
+          "listed": {
+            "type": "boolean",
+            "description": "In the deployment's order of providers."
+          },
+          "keyTier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "organization",
+                  "system"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tier of the key your requests would use, among the allowed ones."
+          },
+          "keys": {
+            "type": "object",
+            "properties": {
+              "user": {
+                "type": "boolean"
+              },
+              "organization": {
+                "type": "boolean"
+              },
+              "system": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "user",
+              "organization",
+              "system"
+            ],
+            "description": "Which tiers hold a key, allowed or not. Never a key."
+          },
+          "estimatedCostPerCallUsd": {
+            "description": "An ESTIMATE per call (the administrator can override it), not a price.",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "credential",
+          "needsKey",
+          "enabled",
+          "listed",
+          "keyTier",
+          "keys",
+          "estimatedCostPerCallUsd"
+        ]
+      },
+      "WebSearchResultDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "The provider that answered (after a fallback, the second one)."
+          },
+          "hits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "snippet": {
+                  "type": "string"
+                },
+                "publishedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "title",
+                "url",
+                "snippet",
+                "publishedAt"
+              ]
+            }
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "citations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "text",
+                  "citations"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Answer-type providers only."
+          }
+        },
+        "required": [
+          "provider",
+          "hits",
+          "answer"
+        ]
+      },
+      "WebSearchBodyDto": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400,
+            "description": "What to search for. Not logged."
+          },
+          "count": {
+            "default": 5,
+            "description": "How many results (1 to 20, default 5).",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "freshness": {
+            "default": null,
+            "description": "Only results from the last day, week, month or year.",
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "day",
+                  "week",
+                  "month",
+                  "year"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "site": {
+            "default": null,
+            "description": "Only results from this site (a host name).",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "WebSearchAdminSettingsDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "providers": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "costPerCallUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "baseUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "enabled",
+                "costPerCallUsd",
+                "baseUrl"
+              ]
+            },
+            "description": "Saved per-provider settings; a provider not listed has the defaults (on, the default estimate)."
+          },
+          "order": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "shareDeploymentKey": {
+            "type": "boolean"
+          },
+          "allowUserKeys": {
+            "type": "boolean"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "perRun": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "perUserPerDay": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "perRun",
+              "perUserPerDay"
+            ]
+          },
+          "installed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "credential": {
+                  "type": "string",
+                  "enum": [
+                    "api_key",
+                    "none",
+                    "ai_service"
+                  ]
+                },
+                "hosts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "defaultEstimatedCostPerCallUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "credential",
+                "hosts",
+                "defaultEstimatedCostPerCallUsd"
+              ]
+            },
+            "description": "The providers this console has, with their default cost estimate."
+          }
+        },
+        "required": [
+          "enabled",
+          "providers",
+          "order",
+          "shareDeploymentKey",
+          "allowUserKeys",
+          "limits",
+          "installed"
+        ]
+      },
+      "UpdateWebSearchAdminDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "providers": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "costPerCallUsd": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "baseUrl": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 500,
+                      "format": "uri"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "order": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+            }
+          },
+          "shareDeploymentKey": {
+            "type": "boolean"
+          },
+          "allowUserKeys": {
+            "type": "boolean"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "perRun": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "perUserPerDay": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "WebSearchUsageRowDto": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "description": "UTC day, YYYY-MM-DD."
+          },
+          "provider": {
+            "type": "string"
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failures": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "description": "An ESTIMATE, from the cost per call in force when each call was made."
+          }
+        },
+        "required": [
+          "day",
+          "provider",
+          "calls",
+          "failures",
+          "estimatedCostUsd"
+        ]
       },
       "ConnectedAppListResponseDto": {
         "type": "array",

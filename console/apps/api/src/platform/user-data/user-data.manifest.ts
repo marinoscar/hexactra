@@ -90,6 +90,8 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'ProfileSigninSession', category: 'browser-tasks' },
   // AI usage summed per hour (#732): the same category as the ledger it sums (`AiUsageEvent`).
   { model: 'AiUsageHourly', category: 'ai' },
+  // Web search counts per day and provider (E50.5): with the AI usage they sit next to.
+  { model: 'WebSearchUsage', category: 'ai' },
 ];
 
 /** Narrow scopes, such as "delete my notes" (none by default: the built-in scopes cover every category). */
