@@ -3,6 +3,7 @@
 // deadline, the report's deadline), the mapping of a connection error to a code, and the remedy table: every code a stage can return
 // has an entry, and every entry is well formed.
 import { DIAGNOSTIC_REMEDIES } from '@app/shared';
+import { SEARCH_DIAGNOSTIC_CODES, SEARCH_REMEDIES } from '../src/web-search/web-search-diagnostics';
 
 import { CONNECTION_DIAGNOSTIC_CODES, RECONNECT_REASONS, outcomeOfError } from '../src/connections/connection-diagnostics.service';
 import { ConnectionError } from '../src/connections/connections.errors';
@@ -170,7 +171,8 @@ describe('the remedy table (packages/shared/diagnostics.json)', () => {
   it('has an entry for every code a stage can return', () => {
     const registry = new DiagnosticsRegistry();
     const stageRunnerCodes = ['UNAVAILABLE', 'TIMEOUT', 'ABORTED', 'DEADLINE_EXCEEDED', 'UNKNOWN'];
-    const codes = [...CONNECTION_DIAGNOSTIC_CODES, ...RECONNECT_REASONS, ...stageRunnerCodes, ...registry.codes(), ...MCP_DIAGNOSTIC_CODES];
+    // Web search (E50.13): its codes and the remedy keys it uses where its words differ; MCP servers (E50.12).
+    const codes = [...CONNECTION_DIAGNOSTIC_CODES, ...RECONNECT_REASONS, ...stageRunnerCodes, ...registry.codes(), ...MCP_DIAGNOSTIC_CODES, ...SEARCH_DIAGNOSTIC_CODES, ...Object.values(SEARCH_REMEDIES)];
     // Every code an adapter's probe answers today (the Test dialog shows them too).
     codes.push('UNAUTHORIZED', 'FORBIDDEN', 'RATE_LIMITED', 'API_DISABLED', 'NO_MAILBOX', 'NOT_FOUND', 'FAILED');
     // E50.11: Google's and Microsoft's own stages, the checks of the deployment's app, and the per-API remedy keys.
@@ -184,7 +186,7 @@ describe('the remedy table (packages/shared/diagnostics.json)', () => {
       expect(e.title.length).toBeGreaterThan(0);
       expect(e.remedy.length).toBeGreaterThan(10);
       expect(['owner', 'admin']).toContain(e.who);
-      if (e.link !== undefined) expect(['settings', 'admin', 'provider_console']).toContain(e.link);
+      if (e.link !== undefined) expect(['settings', 'admin', 'provider_console', 'web_search']).toContain(e.link);
     }
   });
 });

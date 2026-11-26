@@ -23,3 +23,10 @@ export function webSearchHttpError(e: WebToolError): HttpException {
   const code = e.code in CODES ? e.code : 'UNAVAILABLE';
   return new HttpException({ code: `WEB_SEARCH_${code}`, message: known.description, ...(e.retryAfterMs !== undefined ? { details: { retryAfterMs: e.retryAfterMs } } : {}) }, known.status);
 }
+
+registerErrorCode({ code: 'WEB_SEARCH_PROVIDER_UNKNOWN', status: 404, description: 'No search provider with this id is installed here (`GET /api/web-search/providers` lists them).' });
+
+/** A provider id that is not installed (E50.13). */
+export function providerUnknown(): HttpException {
+  return new HttpException({ code: 'WEB_SEARCH_PROVIDER_UNKNOWN', message: 'No search provider with this id is installed here.' }, HttpStatus.NOT_FOUND);
+}

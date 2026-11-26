@@ -8184,6 +8184,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/web-search/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnose web search for you
+         * @description The report of the provider that answers for you (or `?provider=<id>`), with your effective key tier, stored with you as its owner (the last 20 are kept). Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.
+         *
+         *     **Requires:** authentication, plus permission `web_search:write`.
+         */
+        post: operations["webSearchDiagnostics_diagnose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your last web search diagnostic reports
+         * @description Newest first, every provider: `limit` (default 5, at most 20). Codes, remedy keys, counts, timings and host names only.
+         *
+         *     **Requires:** authentication, plus permission `web_search:read`.
+         */
+        get: operations["webSearchDiagnostics_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/admin/providers/{id}/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnose a search provider with the deployment's key
+         * @description The report with the deployment tier ONLY (never a user's key), stored with no owner; the switches only warn here, so a key can be tested before search is switched on. The live query counts as one call of yours. Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        post: operations["webSearchDiagnostics_diagnoseDeployment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/admin/providers/{id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A search provider's last deployment reports
+         * @description Newest first: `limit` (default 5, at most 20). The deployment tier only; no user.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["webSearchDiagnostics_historyDeployment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -10710,6 +10798,7 @@ export interface components {
              * @example WEB_SEARCH_LIMIT_REACHED
              * @example WEB_SEARCH_ABORTED
              * @example WEB_SEARCH_TEST_RATE_LIMITED
+             * @example WEB_SEARCH_PROVIDER_UNKNOWN
              * @example TASK_BUILDER_NOT_FOUND
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
@@ -52935,6 +53024,239 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["WebSearchUsageRowDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_diagnose: {
+        parameters: {
+            query?: {
+                /** @description A provider id; default: the one that answers for you. */
+                provider?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_history: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_diagnoseDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_historyDeployment: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
                     };
                 };
             };

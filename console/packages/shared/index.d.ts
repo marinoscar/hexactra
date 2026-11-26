@@ -83,8 +83,8 @@ export interface DiagnosticRemedy {
   readonly remedy: string;
   /** Who can fix it. */
   readonly who: 'owner' | 'admin';
-  /** Where to fix it: the owner's Connections page, Administration, or the provider's own console. */
-  readonly link?: 'settings' | 'admin' | 'provider_console';
+  /** Where to fix it: the owner's Connections page, Administration, the provider's own console, or the owner's Web search settings. */
+  readonly link?: 'settings' | 'admin' | 'provider_console' | 'web_search';
 }
 /** The remedy table, keyed by code (`UNAVAILABLE`, `GRANT_REVOKED`, ...). */
 export declare const DIAGNOSTIC_REMEDIES: Readonly<Record<string, DiagnosticRemedy>>;

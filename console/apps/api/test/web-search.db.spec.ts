@@ -198,7 +198,7 @@ describe('the administrator', () => {
     expect(Object.keys(usage[0]!).sort()).toEqual(['calls', 'day', 'estimatedCostUsd', 'failures', 'provider']);
 
     const contributor = app.get(EgressRegistry, { strict: false }).list().find((c) => c.id === 'web_search')!;
-    expect(await contributor.describe()).toEqual([expect.objectContaining({ id: 'web_search.brave', enabled: true, required: false, hosts: ['api.search.brave.com'], degradation: 'The agent searches in the browser instead' })]);
+    expect(await contributor.describe()).toEqual([expect.objectContaining({ id: 'web_search.brave', enabled: true, required: false, hosts: ['api.search.brave.com', 'example.com'], degradation: 'The agent searches in the browser instead' })]);
   });
 
   it('switched off by the administrator: off for everyone, with the reason', async () => {
