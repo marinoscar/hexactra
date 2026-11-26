@@ -92,7 +92,8 @@ export class ConnectionApps {
     this.cached = null;
   }
 
-  private async hasSecret(provider: ConnectionProviderId): Promise<boolean> {
+  /** Whether a client secret is stored (never the secret). */
+  async hasSecret(provider: ConnectionProviderId): Promise<boolean> {
     return (await this.credentials.describe(connectionAppPurpose(provider), CONNECTION_APP_SECRET_NAME)) !== null;
   }
 

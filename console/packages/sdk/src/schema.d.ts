@@ -7080,6 +7080,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/admin/apps/{provider}/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the deployment's app at a provider
+         * @description Checks the app before anyone connects, with no user: `app_config` (installed, a client id and a secret set; the switch off only warns), `redirect_uri` (the address the console sends is https and on the address you reached the console on; host names only), `discovery` (the provider's sign-in endpoints answer; Microsoft: the configured tenant exists), `client_check` (a token request with a deliberately invalid code tells a refused client id or secret from a good one; `skipped` with `NEEDS_A_SIGN_IN` when the answer cannot tell) and, for Google, `picker_key`. Stores the report (target kind `provider_app`, no user; the last 20 are kept) and returns it. Read calls only; nothing is issued. The report holds the client id's last four characters at most, never the secret.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        post: operations["connectionsAdmin_diagnose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/apps/{provider}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The last tests of the deployment's app at a provider
+         * @description Newest first: `limit` (default 5, at most 20). Codes, remedy keys, counts, host names and timings only.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["connectionsAdmin_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{id}/activity": {
         parameters: {
             query?: never;
@@ -19048,6 +19092,8 @@ export interface components {
                 ok: boolean;
                 /** @description A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
                 code: string | null;
+                /** @description With `API_DISABLED`: the API to enable at the provider (`gmail.googleapis.com`, `drive.googleapis.com`, ...), from a closed list. */
+                api?: string;
             }[];
         };
         RemoveConnectionResponseDto: {
@@ -19086,6 +19132,40 @@ export interface components {
             clientSecret?: string;
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
+        };
+        DiagnosticReportResponseDto: {
+            /** Format: uuid */
+            id: string;
+            target: {
+                /** @enum {string} */
+                kind: "connection" | "provider_app" | "search_provider";
+                id: string;
+            };
+            /**
+             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
+             * @enum {string}
+             */
+            trigger: "owner" | "admin" | "cli" | "health_job";
+            /**
+             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
+             * @enum {string}
+             */
+            overall: "pass" | "warn" | "fail" | "skipped";
+            /** @description ISO 8601 timestamp */
+            startedAt: string;
+            /** @description ISO 8601 timestamp */
+            finishedAt: string;
+            stages: {
+                id: string;
+                /** @enum {string} */
+                status: "pass" | "warn" | "fail" | "skipped";
+                code: string | null;
+                remedy: string | null;
+                ms: number | null;
+                data?: {
+                    [key: string]: string | number | boolean;
+                };
+            }[];
         };
         ConnectionActivityResponseDto: {
             /** @description Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name. */
@@ -19154,40 +19234,6 @@ export interface components {
             overall: "pass" | "warn" | "fail" | "skipped";
             /** @description When its last report finished ("last checked"). */
             at: string;
-        };
-        DiagnosticReportResponseDto: {
-            /** Format: uuid */
-            id: string;
-            target: {
-                /** @enum {string} */
-                kind: "connection" | "provider_app" | "search_provider";
-                id: string;
-            };
-            /**
-             * @description Who ran it: `owner`, `admin`, `cli` or the daily `health_job`.
-             * @enum {string}
-             */
-            trigger: "owner" | "admin" | "cli" | "health_job";
-            /**
-             * @description `fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran.
-             * @enum {string}
-             */
-            overall: "pass" | "warn" | "fail" | "skipped";
-            /** @description ISO 8601 timestamp */
-            startedAt: string;
-            /** @description ISO 8601 timestamp */
-            finishedAt: string;
-            stages: {
-                id: string;
-                /** @enum {string} */
-                status: "pass" | "warn" | "fail" | "skipped";
-                code: string | null;
-                remedy: string | null;
-                ms: number | null;
-                data?: {
-                    [key: string]: string | number | boolean;
-                };
-            }[];
         };
         MailTriggerResponseDto: {
             /** Format: uuid */
@@ -49406,6 +49452,116 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AdminProviderResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_diagnose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_history: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
                     };
                 };
             };

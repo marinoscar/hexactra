@@ -116,7 +116,7 @@ class Semaphore {
   }
 }
 
-const REASONS = {
+export const GOOGLE_REASONS = {
   scope: ['insufficientpermissions', 'access_token_scope_insufficient', 'insufficient_scopes'],
   rate: ['ratelimitexceeded', 'userratelimitexceeded', 'rate_limit_exceeded', 'resource_exhausted'],
   quota: ['dailylimitexceeded', 'quotaexceeded', 'storagequotaexceeded', 'quota_exceeded', 'dailylimitexceededunreg'],
@@ -147,13 +147,13 @@ export function mapGoogleError(status: number, body: unknown, retryAfterMs?: num
   const { reasons, scopeMessage } = readGoogleError(body);
   if (status === 404 || status === 410) return new CapabilityError('NOT_FOUND', { status });
   if (status === 413) return new CapabilityError('TOO_LARGE', { reason: 'REQUEST' });
-  if (status === 429) return anyOf(reasons, REASONS.quota) && !anyOf(reasons, REASONS.rate) ? new CapabilityError('QUOTA_EXCEEDED') : new CapabilityError('RATE_LIMITED', { retryAfterMs });
+  if (status === 429) return anyOf(reasons, GOOGLE_REASONS.quota) && !anyOf(reasons, GOOGLE_REASONS.rate) ? new CapabilityError('QUOTA_EXCEEDED') : new CapabilityError('RATE_LIMITED', { retryAfterMs });
   if (status === 403) {
-    if (anyOf(reasons, REASONS.scope) || scopeMessage) return new CapabilityError('PERMISSION_MISSING', { reason: 'SCOPE', status });
-    if (anyOf(reasons, REASONS.rate)) return new CapabilityError('RATE_LIMITED', { retryAfterMs });
-    if (anyOf(reasons, REASONS.quota)) return new CapabilityError('QUOTA_EXCEEDED');
-    if (anyOf(reasons, REASONS.disabled)) return new CapabilityError('PROVIDER_ERROR', { status, reason: 'API_DISABLED' });
-    if (anyOf(reasons, REASONS.notPicked)) return new CapabilityError('PERMISSION_MISSING', { reason: 'NOT_PICKED', status });
+    if (anyOf(reasons, GOOGLE_REASONS.scope) || scopeMessage) return new CapabilityError('PERMISSION_MISSING', { reason: 'SCOPE', status });
+    if (anyOf(reasons, GOOGLE_REASONS.rate)) return new CapabilityError('RATE_LIMITED', { retryAfterMs });
+    if (anyOf(reasons, GOOGLE_REASONS.quota)) return new CapabilityError('QUOTA_EXCEEDED');
+    if (anyOf(reasons, GOOGLE_REASONS.disabled)) return new CapabilityError('PROVIDER_ERROR', { status, reason: 'API_DISABLED' });
+    if (anyOf(reasons, GOOGLE_REASONS.notPicked)) return new CapabilityError('PERMISSION_MISSING', { reason: 'NOT_PICKED', status });
     return new CapabilityError('PERMISSION_MISSING', { reason: 'FORBIDDEN', status });
   }
   return new CapabilityError('PROVIDER_ERROR', { status });

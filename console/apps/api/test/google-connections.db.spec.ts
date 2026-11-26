@@ -228,10 +228,10 @@ describe('using the accounts', () => {
       { capability: 'docs_read', ok: true, code: null },
     ]);
     expect(fake.requests.map((r) => `${r.method} ${r.host}${r.path}`)).toEqual(['GET gmail.googleapis.com/gmail/v1/users/me/labels', 'GET www.googleapis.com/calendar/v3/users/me/calendarList', 'GET www.googleapis.com/drive/v3/about']);
-    // A switched-off API at the Google project is named, not "failed".
+    // A switched-off API at the Google project is named, not "failed" (E50.11, #681: with the API to enable).
     fake.failNext('calendarList', { status: 403, body: { error: { details: [{ reason: 'SERVICE_DISABLED' }] } } });
     const t2 = await call<{ results: { capability: string; ok: boolean; code: string | null }[] }>(s, 'POST', `/api/connections/${c.id}/test`);
-    expect(t2.data.results.find((r) => r.capability === 'calendar_read')).toEqual({ capability: 'calendar_read', ok: false, code: 'API_DISABLED' });
+    expect(t2.data.results.find((r) => r.capability === 'calendar_read')).toEqual({ capability: 'calendar_read', ok: false, code: 'API_DISABLED', api: 'calendar-json.googleapis.com' });
   });
 
   it('a grant the owner revoked at Google becomes CONNECTION_NEEDS_RECONNECT for the caller, once', async () => {
