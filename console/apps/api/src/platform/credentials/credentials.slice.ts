@@ -16,7 +16,8 @@ export const credentialsSlice: ApiSlice = {
     const { SECRETS_USER_CREDENTIAL_PURPOSES } = require('../../secrets/secrets.credentials') as typeof import('../../secrets/secrets.credentials');
     const { CONNECTION_USER_CREDENTIAL_PURPOSES } = require('../../connections/connections.credentials') as typeof import('../../connections/connections.credentials');
     const { DELIVERY_USER_CREDENTIAL_PURPOSES } = require('../../deliveries/deliveries.credentials') as typeof import('../../deliveries/deliveries.credentials');
-    for (const purpose of [...SECRETS_USER_CREDENTIAL_PURPOSES, ...CONNECTION_USER_CREDENTIAL_PURPOSES, ...DELIVERY_USER_CREDENTIAL_PURPOSES]) registerUserCredentialPurpose(purpose);
+    const { SERVICE_CREDENTIAL_USER_PURPOSES } = require('../../service-credentials/service-credentials.credentials') as typeof import('../../service-credentials/service-credentials.credentials');
+    for (const purpose of [...SECRETS_USER_CREDENTIAL_PURPOSES, ...CONNECTION_USER_CREDENTIAL_PURPOSES, ...DELIVERY_USER_CREDENTIAL_PURPOSES, ...SERVICE_CREDENTIAL_USER_PURPOSES]) registerUserCredentialPurpose(purpose);
   },
   modules: () => {
     const { credentialsModules } = require('./credentials.config') as typeof import('./credentials.config');

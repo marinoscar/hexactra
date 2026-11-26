@@ -1596,6 +1596,49 @@
       "web": "/admin/settings/connections"
     },
     {
+      "id": "service_credentials.own",
+      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, and setting or removing your own key. Write-only: a key is never returned, not even in part",
+      "rest": [
+        "GET /api/service-credentials",
+        "PUT /api/service-credentials/{service}/{name}",
+        "DELETE /api/service-credentials/{service}/{name}"
+      ],
+      "cli": {
+        "none": "Deliberate: a key is typed in a form in the web app, never passed on a command line or kept in a shell history"
+      },
+      "mcp": {
+        "none": "Deliberate: a key of an outside service is write-only and typed by its owner in the console; no hosted AI app reads, sets or removes one (E50.2)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; keys are managed in the web app"
+      },
+      "web": {
+        "none": "Arrives with the web search settings (E50.5, #975); until then the API is the way to set a key"
+      }
+    },
+    {
+      "id": "service_credentials.admin",
+      "description": "Administrator: the deployment's key of an outside service; organization administrator: the organization's key. Write-only: a key is never returned, not even in part",
+      "rest": [
+        "PUT /api/service-credentials/admin/{service}/{name}",
+        "DELETE /api/service-credentials/admin/{service}/{name}",
+        "PUT /api/service-credentials/org/{service}/{name}",
+        "DELETE /api/service-credentials/org/{service}/{name}"
+      ],
+      "cli": {
+        "none": "Deliberate: a key is typed in a form in the web app, never passed on a command line or kept in a shell history"
+      },
+      "mcp": {
+        "none": "Deliberate: a key of an outside service is write-only and typed by its owner in the console; no hosted AI app reads, sets or removes one (E50.2)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; keys are managed in the web app"
+      },
+      "web": {
+        "none": "Arrives with the web search settings (E50.5, #975); until then the API is the way to set a key"
+      }
+    },
+    {
       "id": "mail_triggers.read",
       "description": "List a task's email triggers (rules, account, status, runs today) and what a trigger did with each message it saw",
       "rest": [
