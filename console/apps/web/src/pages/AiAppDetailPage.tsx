@@ -276,6 +276,15 @@ export function AiAppDetailPage() {
           </Box>
           <Box>
             <FormControlLabel
+              control={<Switch checked={draft.allowWebSearch} disabled={disabled} onChange={(e) => set({ allowWebSearch: e.target.checked })} />}
+              label="Let its runs search the web"
+            />
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }} data-testid="app-web-search-help">
+              On by default: when you set up web search and switched it on, this app&apos;s runs can search the web and read public pages without the browser, like every task and chat. The app itself never calls the search provider.
+            </Typography>
+          </Box>
+          <Box>
+            <FormControlLabel
               control={<Switch checked={draft.allowSavedCards} disabled={disabled || !draft.allowSavedLogins} onChange={(e) => set({ allowSavedCards: e.target.checked })} />}
               label="Let it pay with my saved cards"
             />

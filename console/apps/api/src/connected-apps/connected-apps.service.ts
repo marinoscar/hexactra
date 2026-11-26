@@ -87,6 +87,7 @@ export function limitsOf(row: SettingsRow | null): AppLimits {
     allowSavedIdentity: row.allowSavedIdentity,
     allowSavedCards: row.allowSavedCards,
     allowConnections: row.allowConnections,
+    allowWebSearch: row.allowWebSearch,
     paused: row.paused,
   };
 }
@@ -325,6 +326,7 @@ export class ConnectedAppsService {
       allowSavedIdentity: next.allowSavedIdentity,
       allowSavedCards: next.allowSavedCards,
       allowConnections: next.allowConnections,
+      allowWebSearch: next.allowWebSearch,
       paused: next.paused,
     };
     const saved = row
@@ -338,7 +340,7 @@ export class ConnectedAppsService {
       credentialKind: 'jwt',
       clientId,
       outcome: 'ok',
-      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}), ...(patch.allowSavedIdentity !== undefined ? { allowSavedIdentity: patch.allowSavedIdentity } : {}), ...(patch.allowSavedCards !== undefined ? { allowSavedCards: patch.allowSavedCards } : {}), ...(patch.allowConnections !== undefined ? { allowConnections: patch.allowConnections } : {}) },
+      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}), ...(patch.allowSavedIdentity !== undefined ? { allowSavedIdentity: patch.allowSavedIdentity } : {}), ...(patch.allowSavedCards !== undefined ? { allowSavedCards: patch.allowSavedCards } : {}), ...(patch.allowConnections !== undefined ? { allowConnections: patch.allowConnections } : {}), ...(patch.allowWebSearch !== undefined ? { allowWebSearch: patch.allowWebSearch } : {}) },
     });
     return clampLimits(limitsOf(saved), ceilings);
   }

@@ -10,6 +10,17 @@ describe('the kgraph observer binding', () => {
   it('keeps the shape of an account result, not its values', () => {
     expect(postStateOf(obs({ family: 'accounts', resultText: JSON.stringify({ messages: [{ subject: 'Private', id: 'm1' }] }) }))).toEqual({ resultShape: '{messages:[{id:string,subject:string}]}' });
   });
+  it('records a web search or page read as the call only: no result text, no shape, and not the page as the browser\'s site (E50.7)', async () => {
+    expect(postStateOf(obs({ tool: 'web_fetch', family: 'web', resultText: 'MARKER third-party page text', steps: [{ ok: true, url: 'https://elsewhere.example.test/page', contentHash: 'h1' }] }))).toEqual({});
+    const rows: unknown[] = [];
+    const o = new KgraphObserver({ prisma: { kgTrace: { create: async ({ data }: { data: unknown }) => void rows.push(data) } } as never, log: { warn: () => undefined }, userId: 'u', runId: 'r', goal: 'Find the year', inputs: null });
+    await o.toolCall(obs({ tool: 'web_search', family: 'web', args: { query: 'Example Bridge opened', count: 5, freshness: null, site: null }, resultText: 'Results ... MARKER-HIT https://history.example.test/bridge' }));
+    await o.toolCall(obs({ seq: 2, tool: 'web_fetch', family: 'web', args: { url: 'https://history.example.test/bridge', max_chars: null }, resultText: 'A web page ... MARKER-PAGE', steps: [{ ok: true, url: 'https://history.example.test/bridge', contentHash: 'h2' }] }));
+    await o.flush();
+    expect(rows.map((r) => (r as { tool: string }).tool)).toEqual(['web_search', 'web_fetch']);
+    expect(rows.map((r) => (r as { post: unknown }).post)).toEqual([{}, {}]);
+    expect(JSON.stringify(rows)).not.toMatch(/MARKER/);
+  });
   it('uses the console sensitive table', () => {
     expect(consoleIsSensitive('4111 1111 1111 1111')).toBe(true);
     expect(consoleIsSensitive('blue pens')).toBe(false);

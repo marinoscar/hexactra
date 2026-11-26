@@ -1,0 +1,74 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: the web call budget refuses a call and the run goes on",
+  "description": "E50.7: maxWebCalls 1. The second search is refused with LIMIT_REACHED, nothing is sent, and the run is not stopped: it finishes with the browser.",
+  "goal": "Find the opening hours of the library.",
+  "harness": {
+    "budget": {
+      "maxWebCalls": 1
+    }
+  },
+  "site": {
+    "start": "https://library.example.test/",
+    "pages": {
+      "https://library.example.test/": {
+        "title": "Library",
+        "text": "Opening hours: 09:00 to 18:00.",
+        "elements": []
+      }
+    }
+  },
+  "web": {
+    "results": {
+      "library hours": [
+        {
+          "title": "Library",
+          "url": "https://library.example.test/",
+          "snippet": "Hours on the site."
+        }
+      ]
+    }
+  },
+  "script": [
+    [
+      {
+        "tool": "web_search",
+        "args": {
+          "query": "library hours"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "web_search",
+        "args": {
+          "query": "library opening hours"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "read_text",
+        "args": {}
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "The library is open 09:00 to 18:00."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 4,
+    "finishIncludes": "09:00",
+    "modelReadIncludes": [
+      "This run has used all its web searches."
+    ],
+    "webCalls": 1
+  }
+}

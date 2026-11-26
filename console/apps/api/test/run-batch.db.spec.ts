@@ -265,7 +265,7 @@ describe('in a chat: run_task_batch', () => {
     return { ai: { forUser: () => ({ runTools }) } as unknown as AiService, outputs, inputs, tools };
   }
   const engine = (ai: AiService) =>
-    new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), tasks, app.get(JobsService, { strict: false }), ai, undefined, undefined, undefined, app.get(TaskRunStarter, { strict: false }), app.get(RunPauseService, { strict: false }), undefined, batches);
+    new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), tasks, app.get(JobsService, { strict: false }), ai, undefined, undefined, undefined, app.get(TaskRunStarter, { strict: false }), app.get(RunPauseService, { strict: false }), undefined, undefined, undefined, batches);
   const threeRows = [
     { inputs: [{ name: 'Recipient', value: 'Ana' }, { name: 'Message', value: 'Hi Ana, dinner moved to 7.' }] },
     { inputs: [{ name: 'Recipient', value: 'Luis' }, { name: 'Message', value: 'Luis, dinner is at 7 now.' }] },

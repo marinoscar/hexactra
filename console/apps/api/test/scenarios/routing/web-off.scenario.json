@@ -1,0 +1,56 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: the owner's web search switch is off",
+  "description": "E50.7: with the owner's switch off, web_search and web_fetch are not offered; the agent uses the browser.",
+  "goal": "Find the opening hours of the library on library.example.test.",
+  "site": {
+    "start": "https://library.example.test/",
+    "pages": {
+      "https://library.example.test/": {
+        "title": "Library",
+        "text": "Opening hours: 09:00 to 18:00.",
+        "elements": []
+      }
+    }
+  },
+  "web": {
+    "on": false,
+    "results": {
+      "library opening hours": [
+        {
+          "title": "Library",
+          "url": "https://library.example.test/",
+          "snippet": "09:00 to 18:00"
+        }
+      ]
+    }
+  },
+  "script": [
+    [
+      {
+        "tool": "read_text",
+        "args": {}
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "The library is open 09:00 to 18:00."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 3,
+    "finishIncludes": "09:00",
+    "notOffered": [
+      "web_search",
+      "web_fetch"
+    ],
+    "firstToolFamily": "browser",
+    "webCalls": 0
+  }
+}

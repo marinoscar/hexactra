@@ -1,0 +1,61 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: a public fact is looked up on the web",
+  "description": "E50.7: web search set up and switched on, a task that sets nothing: the tools are offered, the agent searches instead of opening a search engine, and the browser is never used.",
+  "goal": "What year was the Example Bridge in Rivertown opened?",
+  "site": {
+    "start": "https://start.example.test/",
+    "pages": {
+      "https://start.example.test/": {
+        "title": "Start",
+        "text": "A blank start page.",
+        "elements": []
+      }
+    }
+  },
+  "web": {
+    "results": {
+      "Example Bridge Rivertown opened": [
+        {
+          "title": "Example Bridge - Rivertown history",
+          "url": "https://history.example.test/example-bridge",
+          "snippet": "The Example Bridge was opened to traffic in 1932."
+        }
+      ]
+    }
+  },
+  "script": [
+    [
+      {
+        "tool": "web_search",
+        "args": {
+          "query": "Example Bridge Rivertown opened"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "The Example Bridge opened in 1932 (history.example.test)."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 3,
+    "finishIncludes": "1932",
+    "offered": [
+      "web_search",
+      "web_fetch"
+    ],
+    "firstToolFamily": "web",
+    "mustNotUseFamily": [
+      "browser"
+    ],
+    "browserOpened": false,
+    "webCalls": 1
+  }
+}
