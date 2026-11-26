@@ -1621,11 +1621,12 @@
     },
     {
       "id": "service_credentials.own",
-      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, and setting or removing your own key. Write-only: a key is never returned, not even in part",
+      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, where your own key is kept (the console, your Vault or the built-in store, E50.3), setting or removing your own key, and moving it between the console and your secrets provider. Write-only: a key is never returned, not even in part",
       "rest": [
         "GET /api/service-credentials",
         "PUT /api/service-credentials/{service}/{name}",
-        "DELETE /api/service-credentials/{service}/{name}"
+        "DELETE /api/service-credentials/{service}/{name}",
+        "POST /api/service-credentials/{service}/{name}/move"
       ],
       "cli": {
         "none": "Deliberate: a key is typed in a form in the web app, never passed on a command line or kept in a shell history"

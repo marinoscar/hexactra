@@ -138,3 +138,15 @@ Read: `connections/provider.ts`, `capabilities.ts`, `capability-hub.ts`, `google
 - `limits.perRun` is counted by the port: `WebSearchService.forUser` returns a new port that counts its own calls, so E50.7 binds one per run.
 - The fallback is one step: after `AUTH_REFUSED`, `QUOTA_EXCEEDED` or `UNAVAILABLE` from the first usable provider, the next usable one is tried once; both calls are counted in the usage table. The user's preferred provider (`webSearch.provider`) goes first when it is usable.
 - No real search was made: no session had a Brave key, and Brave's reference was not re-read (not reachable from the session). The adapter is tested against an in-process fake built from the documented shape (`apps/api/src/web-search/testing/fake-brave.ts`).
+
+## Implementation notes (E50.3, #973)
+
+- Released upstream as `@marinoscar/vault-{contract,db,api,web}@0.1.0-next.7` (marinoscar/vault#241, PR #242): the system type **Service Key** (`service`, `key_name`, sensitive `key`, `notes`), `GET /api/agent/v1/service-keys/{service}/{name}` (contract 1.4, scope `vault:service_keys_read`, permission `agent_service_keys:read`, 120 a minute per owner and service, audited `agent.service_key.read`, `409 SERVICE_KEY_AMBIGUOUS`) and the embedded `ServiceKeyReleasePort`. No new migration in `vault-db`.
+- `releaseServiceKey?` is on `SecretsProviderPort` as designed; the built-in store implements it. The remote Vault is read by `VaultApiClient.serviceKey`. Both are reached through `SecretsServiceKeys` (`apps/api/src/secrets/service-keys.ts`), which picks the owner's active provider.
+- The two bindings of §3 are one class, `SecretsProviderServiceCredentials` (`apps/api/src/service-credentials/secrets-provider.binding.ts`, the cache and the miss mapping), over `SecretsServiceKeys`, instead of the two files the issue named: which of Vault and the built-in store answers is the owner's `secrets.provider`, already decided by the secrets feature.
+- The owner's choice is per key: `serviceCredentials.binding` is the default for a new key and `serviceCredentials.keys[<ref>]` records where each key is, so a change of the default never strands one.
+- The kill switch is the deployment's `secrets.agentUse.enabled` only (§3.2); the owner's own switch is about pages.
+- The console cannot write into a remote Vault (the agent API has no write for a service key): Move into Vault checks that Vault answers with the key the owner added there, then removes the console's copy. Move out of Vault leaves Vault's copy.
+- The audit is an Activity row (event `service_key`: the column is 16 characters, so the name `service_key_released` is the row's meaning, not its event value) plus Vault's own row.
+- `ServiceCredentialPort.resolveDetailed` returns the reason `PROVIDER_UNAVAILABLE`; web search turns it into `UNAVAILABLE` (a fallback code).
+- Verified only against the fake Vault (contract 1.4) and the built-in store in process; no real Vault deployment.

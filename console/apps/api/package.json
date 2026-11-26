@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.150.0",
+  "version": "1.151.0",
   "private": true,
   "engines": {
     "node": ">=24"
@@ -40,8 +40,8 @@
     "@marinoscar/platform-api": "^0.1.0-next.40",
     "@marinoscar/platform-contract": "^0.1.0-next.40",
     "@marinoscar/platform-db": "^0.1.0-next.40",
-    "@marinoscar/vault-api": "0.1.0-next.6",
-    "@marinoscar/vault-contract": "0.1.0-next.6",
+    "@marinoscar/vault-api": "0.1.0-next.7",
+    "@marinoscar/vault-contract": "0.1.0-next.7",
     "@nestjs/common": "^11.1.12",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.12",
@@ -69,7 +69,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@marinoscar/vault-db": "0.1.0-next.6",
+    "@marinoscar/vault-db": "0.1.0-next.7",
     "@nestjs/cli": "^11.0.16",
     "@nestjs/testing": "^11.1.12",
     "@opentelemetry/context-async-hooks": "^2.10.0",

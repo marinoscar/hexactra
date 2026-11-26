@@ -1,11 +1,13 @@
-// The console's one call to Vault's agent API: `GET /whoami` (E37.2, #591), made right after the owner consents
-// to prove the token works, learn which scopes it holds and whether Vault's own agent access switch is on.
-// Everything else (lookup, fill, one-time code) is the fabric's. No body or header is logged; the token is
+// The console's calls to Vault's agent API: `GET /whoami` (E37.2, #591), made right after the owner consents
+// to prove the token works, learn which scopes it holds and whether Vault's own agent access switch is on; the
+// listings of the Secrets page; and `GET /service-keys/{service}/{name}` (E50.3), the key of an outside service the
+// console's own server calls. Everything else (lookup, fill, one-time code) is the fabric's. No body or header is logged; the token is
 // sent only in `Authorization` and never appears in an error.
 import { Injectable } from '@nestjs/common';
 
 import { OutboundHttp, OutboundHttpError } from '../oauth-client';
-import { VAULT_AGENT_API_PATH, VAULT_CARD_DISABLED, VAULT_ERROR_CODES, VAULT_IDENTITY_DISABLED, vaultCardsLookupSchema, vaultIdentityLookupSchema, vaultWhoamiSchema, type VaultCardItem, type VaultIdentityItem, type VaultWhoami } from './vault-contract';
+import { SecretBytes } from './secrets-provider.port';
+import { VAULT_AGENT_API_PATH, VAULT_CARD_DISABLED, VAULT_ERROR_CODES, VAULT_IDENTITY_DISABLED, vaultCardsLookupSchema, vaultIdentityLookupSchema, vaultServiceKeyPath, vaultServiceKeyResponseSchema, vaultWhoamiSchema, type VaultCardItem, type VaultIdentityItem, type VaultWhoami } from './vault-contract';
 
 export type WhoamiResult =
   | { status: 'ok'; whoami: VaultWhoami }
@@ -30,6 +32,31 @@ export type CardListResult =
   /** The token is not accepted (401), or lacks a card scope (403 insufficient_scope). */
   | { status: 'unauthorized' }
   | { status: 'unavailable'; code: string };
+
+export type ServiceKeyResult =
+  /** The value, as bytes the caller wipes. */
+  | { status: 'ok'; value: SecretBytes }
+  /** No key opened to agents with this service and name: missing, closed and another owner's are one identical `404`. */
+  | { status: 'not_found' }
+  /** Vault's own agent access switch is off (`403 AGENT_ACCESS_DISABLED`). */
+  | { status: 'agent_access_disabled' }
+  /** The token is not accepted (`401`): the grant is gone. */
+  | { status: 'unauthorized' }
+  /** The token lacks `vault:service_keys_read` (`403` insufficient scope), or the Vault is older than contract 1.4. */
+  | { status: 'needs_scope' }
+  /** Two opened keys share the service and the name (`409 SERVICE_KEY_AMBIGUOUS`): the owner must close one. */
+  | { status: 'ambiguous' }
+  | { status: 'rate_limited'; retryAfterSeconds: number | null }
+  | { status: 'unavailable'; code: string };
+
+const errorCodeOf = (body: string): unknown => {
+  try {
+    const doc = JSON.parse(body) as { code?: unknown; error?: { code?: unknown } } | null;
+    return doc?.code ?? doc?.error?.code;
+  } catch {
+    return undefined;
+  }
+};
 
 @Injectable()
 export class VaultApiClient {
@@ -103,6 +130,40 @@ export class VaultApiClient {
         // not JSON
       }
       return code === VAULT_CARD_DISABLED || code === VAULT_ERROR_CODES.disabled ? { status: 'cards_disabled' } : { status: 'unauthorized' };
+    }
+    return { status: 'unavailable', code: `http_${res.status}` };
+  }
+
+  /**
+   * `GET /service-keys/{service}/{name}` (contract 1.4, scope `vault:service_keys_read`): the value of the owner's key of an outside
+   * service, for the console's own call to that service (E50.3). The response body is parsed once and the value turned into bytes at
+   * once; nothing of the body is logged, kept or put in an error. Vault audits the read (`agent.service_key.read`) and limits it (120 a
+   * minute per owner and service).
+   */
+  async serviceKey(baseUrl: string, accessToken: string, service: string, name: string, allowedHosts: readonly string[] = []): Promise<ServiceKeyResult> {
+    let res;
+    try {
+      res = await this.http.send({ method: 'GET', url: `${baseUrl.replace(/\/+$/, '')}${VAULT_AGENT_API_PATH}${vaultServiceKeyPath(service, name)}`, headers: { authorization: `Bearer ${accessToken}` }, allowedHosts, maxBytes: 16 * 1024 });
+    } catch (e) {
+      return { status: 'unavailable', code: e instanceof OutboundHttpError ? e.code : 'network' };
+    }
+    if (res.status === 200) {
+      let doc: unknown = null;
+      try {
+        doc = JSON.parse(res.body);
+      } catch {
+        // not JSON
+      }
+      const parsed = vaultServiceKeyResponseSchema.safeParse(doc);
+      return parsed.success ? { status: 'ok', value: SecretBytes.from(parsed.data.data.value) } : { status: 'unavailable', code: 'bad_response' };
+    }
+    if (res.status === 404) return { status: 'not_found' };
+    if (res.status === 401) return { status: 'unauthorized' };
+    if (res.status === 403) return errorCodeOf(res.body) === VAULT_ERROR_CODES.disabled ? { status: 'agent_access_disabled' } : { status: 'needs_scope' };
+    if (res.status === 409) return { status: 'ambiguous' };
+    if (res.status === 429) {
+      const raw = Number(res.headers?.['retry-after']);
+      return { status: 'rate_limited', retryAfterSeconds: Number.isFinite(raw) && raw >= 0 ? raw : null };
     }
     return { status: 'unavailable', code: `http_${res.status}` };
   }
