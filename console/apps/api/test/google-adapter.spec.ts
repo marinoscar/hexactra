@@ -102,8 +102,12 @@ describe('probe', () => {
     ];
     for (const [stub, code] of cases) {
       fake.failNext('labels$', stub as never);
-      expect(await adapter.probe({ capability: 'mail_read', accessToken: a.accessToken })).toEqual({ ok: false, code });
+      expect(await adapter.probe({ capability: 'mail_read', accessToken: a.accessToken })).toEqual({ ok: false, code, ...(code === 'API_DISABLED' ? { api: 'gmail.googleapis.com' } : {}) });
     }
+    // E50.11 (#681): the API to enable is named, from the answer's service id or else the API the probe called.
+    fake.disabledApis.add('drive.googleapis.com');
+    expect(await adapter.probe({ capability: 'docs_read', accessToken: a.accessToken })).toEqual({ ok: false, code: 'API_DISABLED', api: 'drive.googleapis.com' });
+    fake.disabledApis.clear();
     const noMail = fake.addAccount({ scopes: [SCOPE.calendarRead] });
     expect(await adapter.probe({ capability: 'mail_read', accessToken: noMail.accessToken })).toEqual({ ok: false, code: 'FORBIDDEN' });
   });

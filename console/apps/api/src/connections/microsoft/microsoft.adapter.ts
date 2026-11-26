@@ -14,7 +14,9 @@
 import { OAuthClientError, errorFrom, type OAuthTokens } from '../../oauth-client';
 import type { Capability } from '../connections.constants';
 import { CAPABILITIES, normalizeCapabilities } from '../connections.constants';
-import type { AccountIdentity, AuthorizeInput, ConnectionProviderAdapter, ExchangeInput, ProbeInput, ProbeResult, ProviderApp, RefreshInput, RevokeInput, TokenSet } from '../provider';
+import type { DiagnosticStage } from '../../diagnostics/diagnostic-report';
+import type { AccountIdentity, AuthorizeInput, ConnectionDiagnoseInput, ConnectionProviderAdapter, ExchangeInput, ProbeInput, ProbeResult, ProviderApp, ProviderAppDiagnoseInput, RefreshInput, RevokeInput, TokenSet } from '../provider';
+import { MICROSOFT_APP_DIAGNOSTIC_CODES, MICROSOFT_DIAGNOSTIC_CODES, diagnoseMicrosoftApp, diagnoseMicrosoftConnection } from './microsoft-diagnostics';
 import { BASE_SCOPES, GRAPH_BASE, GRAPH_SCOPE_PREFIX, IMPLIED_BY, LOGIN_BASE, SCOPE_OF, authorityOf, microsoftAccountId } from './microsoft.constants';
 
 const GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -55,6 +57,8 @@ const normalizeScope = (s: string): string => (s.toLowerCase().startsWith(GRAPH_
 
 export class MicrosoftConnectionAdapter implements ConnectionProviderAdapter {
   readonly id = 'microsoft' as const;
+  readonly diagnosticCodes = MICROSOFT_DIAGNOSTIC_CODES;
+  readonly appDiagnosticCodes = MICROSOFT_APP_DIAGNOSTIC_CODES;
   private readonly doFetch: typeof fetch;
   private readonly clock: () => number;
 
@@ -161,6 +165,16 @@ export class MicrosoftConnectionAdapter implements ConnectionProviderAdapter {
     if (res.status === 429) return { ok: false, code: 'RATE_LIMITED' };
     if (res.status === 404) return { ok: false, code: 'NOT_FOUND' };
     return { ok: false, code: 'UNAVAILABLE' };
+  }
+
+  /** E50.11 (#981): app_config, sign_in, token_lifetime, permissions, one Graph read per capability, clock. */
+  diagnose(input: ConnectionDiagnoseInput): Promise<DiagnosticStage[]> {
+    return diagnoseMicrosoftConnection(this.doFetch, { ...input, clock: input.clock ?? this.clock }, (scopes) => this.capabilitiesGranted(scopes));
+  }
+
+  /** E50.11 (#981): the app registration with no user: redirect_uri, discovery (the tenant), client_check. */
+  diagnoseApp(input: ProviderAppDiagnoseInput): Promise<DiagnosticStage[]> {
+    return diagnoseMicrosoftApp(this.doFetch, input);
   }
 
   // ---- internals ----

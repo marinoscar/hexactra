@@ -7,7 +7,9 @@
 import { OAuthClientError, OAuthClientService, OutboundHttp, OutboundHttpError, type OAuthServerEndpoints } from '../../oauth-client';
 import type { Capability } from '../connections.constants';
 import { groupOf } from '../connections.constants';
-import type { AccountIdentity, AuthorizeInput, ConnectionProviderAdapter, ExchangeInput, ProbeInput, ProbeResult, ProviderApp, RefreshInput, RevokeInput, TokenSet } from '../provider';
+import type { DiagnosticStage } from '../../diagnostics/diagnostic-report';
+import type { AccountIdentity, AuthorizeInput, ConnectionDiagnoseInput, ConnectionProviderAdapter, ExchangeInput, ProbeInput, ProbeResult, ProviderApp, ProviderAppDiagnoseInput, RefreshInput, RevokeInput, TokenSet } from '../provider';
+import { GOOGLE_APP_DIAGNOSTIC_CODES, GOOGLE_DIAGNOSTIC_CODES, diagnoseGoogleApp, diagnoseGoogleConnection, disabledApiOf } from './google-diagnostics';
 import { GOOGLE } from './google.constants';
 import { readGoogleError } from './google-http';
 import { capabilitiesFromScopes, scopesForCapabilities } from './google.scopes';
@@ -24,6 +26,8 @@ const creds = (app: ProviderApp) => ({ clientId: app.clientId, clientSecret: app
 
 export class GoogleConnectionAdapter implements ConnectionProviderAdapter {
   readonly id = 'google' as const;
+  readonly diagnosticCodes = GOOGLE_DIAGNOSTIC_CODES;
+  readonly appDiagnosticCodes = GOOGLE_APP_DIAGNOSTIC_CODES;
 
   constructor(
     private readonly oauth: OAuthClientService,
@@ -112,11 +116,24 @@ export class GoogleConnectionAdapter implements ConnectionProviderAdapter {
           body = null;
         }
         const { reasons } = readGoogleError(body);
-        return { ok: false, code: reasons.has('accessnotconfigured') || reasons.has('service_disabled') ? 'API_DISABLED' : 'FORBIDDEN' };
+        if (!(reasons.has('accessnotconfigured') || reasons.has('service_disabled'))) return { ok: false, code: 'FORBIDDEN' };
+        // E50.11 (#981, #681): name the API to enable, from the closed list, or the one this call used.
+        const api = disabledApiOf(body).api ?? (group === 'mail' ? 'gmail.googleapis.com' : group === 'calendar' ? 'calendar-json.googleapis.com' : 'drive.googleapis.com');
+        return { ok: false, code: 'API_DISABLED', api };
       }
       return { ok: false, code: 'FAILED' };
     } catch {
       return { ok: false, code: 'UNAVAILABLE' };
     }
+  }
+
+  /** E50.11 (#981): app_config, sign_in, token_lifetime, permissions, one read per capability (Docs and Sheets too), clock. */
+  diagnose(input: ConnectionDiagnoseInput): Promise<DiagnosticStage[]> {
+    return diagnoseGoogleConnection(this.http, input, (scopes) => this.capabilitiesGranted(scopes));
+  }
+
+  /** E50.11 (#981): the deployment's app with no user: redirect_uri, discovery, client_check, picker_key. */
+  diagnoseApp(input: ProviderAppDiagnoseInput): Promise<DiagnosticStage[]> {
+    return diagnoseGoogleApp(this.http, input);
   }
 }
