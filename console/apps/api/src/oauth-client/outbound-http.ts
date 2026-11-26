@@ -49,6 +49,8 @@ export interface OutboundResponse {
   /** Lower-cased names, first value of each. */
   headers: Record<string, string>;
   body: string;
+  /** The body's bytes, undecoded (a PDF, a page in another charset: E50.6). The real transport always sets it; a fake may leave it out. */
+  bytes?: Buffer;
 }
 
 /** The port: the real one is {@link PinnedOutboundHttp}; a test may replace it. An abstract class so Nest can inject it. */
@@ -166,7 +168,10 @@ export class PinnedOutboundHttp extends OutboundHttp {
           }
           chunks.push(chunk);
         });
-        response.on('end', () => finish(() => resolve({ status: response.statusCode ?? 0, headers: out, body: Buffer.concat(chunks).toString('utf8') })));
+        response.on('end', () => finish(() => {
+          const bytes = Buffer.concat(chunks);
+          resolve({ status: response.statusCode ?? 0, headers: out, body: bytes.toString('utf8'), bytes });
+        }));
         response.on('error', () => finish(() => reject(new OutboundHttpError('network', 'Network error while reading the response.'))));
         response.on('close', () => finish(() => reject(new OutboundHttpError('network', 'The connection closed early.'))));
       });

@@ -10,6 +10,9 @@
 //     allowUserKeys                default ON: a user's own key (the user tier) is used.
 //     limits.perRun                default 30 searches a run; null is unlimited (enforced per port: one port per run, E50.7).
 //     limits.perUserPerDay         default 300 searches a user a day (UTC); null is unlimited.
+//     limits.fetchPerRun           default 30 pages read by `web_fetch` a run; null is unlimited (per port, like perRun; E50.6).
+//     fetch.enabled                `web_fetch` on the console server, default ON (E50.6, #976).
+//     fetch.blockedHosts           host names or `*.suffix` patterns `web_fetch` never reads, at any hop (as connections' lists).
 //   user `webSearch` (the owner's own)
 //     enabled                      default ON.
 //     provider                     a preferred provider among the usable ones; null: the deployment's order.
@@ -21,6 +24,16 @@ import { z } from 'zod';
 
 const providerId = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/, 'A provider id such as brave');
 const limit = z.number().int().min(1).max(100_000).nullable();
+
+/** A host name or a `*.suffix` pattern: lower-case, no scheme, port or path (the same rule as `connections.mcp.blockedHosts`). */
+const hostPattern = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(253)
+  .regex(/^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/, 'A host name such as docs.example.test or *.example.test');
+const hostList = z.array(hostPattern).max(200);
 
 const providerSettingsSchema = z.object({
   enabled: z.boolean().optional(),
@@ -34,7 +47,8 @@ export const webSearchSystemSettingsSchema = z.object({
   order: z.array(providerId).max(20).optional(),
   shareDeploymentKey: z.boolean().optional(),
   allowUserKeys: z.boolean().optional(),
-  limits: z.object({ perRun: limit.optional(), perUserPerDay: limit.optional() }).optional(),
+  limits: z.object({ perRun: limit.optional(), perUserPerDay: limit.optional(), fetchPerRun: limit.optional() }).optional(),
+  fetch: z.object({ enabled: z.boolean().optional(), blockedHosts: hostList.optional() }).optional(),
 });
 export type WebSearchSystemSettings = z.infer<typeof webSearchSystemSettingsSchema>;
 
@@ -50,11 +64,12 @@ export interface ResolvedWebSearchSystemSettings {
   order: string[];
   shareDeploymentKey: boolean;
   allowUserKeys: boolean;
-  limits: { perRun: number | null; perUserPerDay: number | null };
+  limits: { perRun: number | null; perUserPerDay: number | null; fetchPerRun: number | null };
+  fetch: { enabled: boolean; blockedHosts: string[] };
 }
 
 export const WEB_SEARCH_DEFAULT_ORDER = ['brave'];
-export const WEB_SEARCH_DEFAULT_LIMITS = { perRun: 30, perUserPerDay: 300 } as const;
+export const WEB_SEARCH_DEFAULT_LIMITS = { perRun: 30, perUserPerDay: 300, fetchPerRun: 30 } as const;
 
 export const PROVIDER_DEFAULTS: ResolvedProviderSettings = { enabled: true, costPerCallUsd: null, baseUrl: null };
 
@@ -72,7 +87,9 @@ export function resolveWebSearchSystemSettings(v: WebSearchSystemSettings | null
     limits: {
       perRun: v?.limits && 'perRun' in v.limits ? (v.limits.perRun ?? null) : WEB_SEARCH_DEFAULT_LIMITS.perRun,
       perUserPerDay: v?.limits && 'perUserPerDay' in v.limits ? (v.limits.perUserPerDay ?? null) : WEB_SEARCH_DEFAULT_LIMITS.perUserPerDay,
+      fetchPerRun: v?.limits && 'fetchPerRun' in v.limits ? (v.limits.fetchPerRun ?? null) : WEB_SEARCH_DEFAULT_LIMITS.fetchPerRun,
     },
+    fetch: { enabled: v?.fetch?.enabled ?? true, blockedHosts: v?.fetch?.blockedHosts ? [...new Set(v.fetch.blockedHosts)] : [] },
   };
 }
 
@@ -101,7 +118,9 @@ export function mergeWebSearchSystemSettings(current: WebSearchSystemSettings | 
     limits: {
       perRun: patch.limits && 'perRun' in patch.limits ? (patch.limits.perRun ?? null) : base.limits.perRun,
       perUserPerDay: patch.limits && 'perUserPerDay' in patch.limits ? (patch.limits.perUserPerDay ?? null) : base.limits.perUserPerDay,
+      fetchPerRun: patch.limits && 'fetchPerRun' in patch.limits ? (patch.limits.fetchPerRun ?? null) : base.limits.fetchPerRun,
     },
+    fetch: { enabled: patch.fetch?.enabled ?? base.fetch.enabled, blockedHosts: patch.fetch?.blockedHosts ? [...new Set(patch.fetch.blockedHosts)] : base.fetch.blockedHosts },
   });
 }
 
@@ -111,12 +130,13 @@ const toStored = (r: ResolvedWebSearchSystemSettings): WebSearchSystemSettings =
   order: r.order,
   shareDeploymentKey: r.shareDeploymentKey,
   allowUserKeys: r.allowUserKeys,
-  limits: { perRun: r.limits.perRun, perUserPerDay: r.limits.perUserPerDay },
+  limits: { perRun: r.limits.perRun, perUserPerDay: r.limits.perUserPerDay, fetchPerRun: r.limits.fetchPerRun },
+  fetch: { enabled: r.fetch.enabled, blockedHosts: r.fetch.blockedHosts },
 });
 
 export const WEB_SEARCH_SYSTEM_SETTINGS = {
   key: 'webSearch',
-  description: 'Web search: the deployment switch, the search providers (switch, order, cost estimate override), whether everyone may use the deployment key and whether users may use their own, and the limits per run and per user per day. The keys are service credentials, never settings.',
+  description: 'Web search: the deployment switch, the search providers (switch, order, cost estimate override), whether everyone may use the deployment key and whether users may use their own, the limits per run and per user per day, and web_fetch (its switch, the hosts it never reads, the pages a run may read). The keys are service credentials, never settings.',
   storedSchema: webSearchSystemSettingsSchema,
   patchSchema: webSearchSystemSettingsSchema,
   putSchema: webSearchSystemSettingsSchema,

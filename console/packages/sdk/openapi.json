@@ -57903,6 +57903,36 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "fetchPerRun": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "fetch": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "blockedHosts": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+                    }
                   }
                 }
               }
@@ -59426,6 +59456,36 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "fetchPerRun": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "fetch": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "blockedHosts": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+                    }
                   }
                 }
               }
@@ -60950,6 +61010,36 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "fetchPerRun": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "fetch": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "blockedHosts": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+                    }
                   }
                 }
               }
@@ -103966,11 +104056,45 @@
                     "type": "null"
                   }
                 ]
+              },
+              "fetchPerRun": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Pages `web_fetch` may read in one run; null: unlimited."
               }
             },
             "required": [
               "perRun",
-              "perUserPerDay"
+              "perUserPerDay",
+              "fetchPerRun"
+            ]
+          },
+          "fetch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "`web_fetch` reads public pages on the console server."
+              },
+              "blockedHosts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Hosts (or `*.suffix`) web_fetch never reads, at any redirect."
+              }
+            },
+            "required": [
+              "enabled",
+              "blockedHosts"
             ]
           },
           "installed": {
@@ -104023,6 +104147,7 @@
           "shareDeploymentKey",
           "allowUserKeys",
           "limits",
+          "fetch",
           "installed"
         ]
       },
@@ -104111,6 +104236,36 @@
                     "type": "null"
                   }
                 ]
+              },
+              "fetchPerRun": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "fetch": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "blockedHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$"
+                }
               }
             }
           }

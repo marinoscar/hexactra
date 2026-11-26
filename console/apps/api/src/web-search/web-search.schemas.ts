@@ -63,7 +63,8 @@ export const adminSettingsSchema = z.object({
   order: z.array(z.string()),
   shareDeploymentKey: z.boolean(),
   allowUserKeys: z.boolean(),
-  limits: z.object({ perRun: z.number().int().nullable(), perUserPerDay: z.number().int().nullable() }),
+  limits: z.object({ perRun: z.number().int().nullable(), perUserPerDay: z.number().int().nullable(), fetchPerRun: z.number().int().nullable().describe('Pages `web_fetch` may read in one run; null: unlimited.') }),
+  fetch: z.object({ enabled: z.boolean().describe('`web_fetch` reads public pages on the console server.'), blockedHosts: z.array(z.string()).describe('Hosts (or `*.suffix`) web_fetch never reads, at any redirect.') }),
   installed: z
     .array(z.object({ id: z.string(), label: z.string(), credential: z.enum(['api_key', 'none', 'ai_service']), hosts: z.array(z.string()), defaultEstimatedCostPerCallUsd: z.number().nullable() }))
     .describe('The providers this console has, with their default cost estimate.'),
