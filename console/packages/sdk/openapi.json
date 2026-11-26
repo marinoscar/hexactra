@@ -39469,6 +39469,601 @@
         ]
       }
     },
+    "/api/service-credentials": {
+      "get": {
+        "description": "One entry per key the console can use (a web search provider's): for you, whether your own key, your organization's and the deployment's are stored and when, and which one your requests use now. **Never a key, nor any part of one.**\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "serviceCredentials_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceCredentialResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The keys of outside services, and which tiers hold one",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
+    "/api/service-credentials/admin/{service}/{name}": {
+      "put": {
+        "description": "Stores the deployment's key for this service, encrypted. Write-only. Audited (`service_credential.set`, tier `system`).\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "serviceCredentials_setSystem",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetServiceCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Stored"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set the deployment's key",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Idempotent. Audited (`service_credential.removed`, tier `system`).\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "serviceCredentials_removeSystem",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or there was nothing to remove)"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Remove the deployment's key",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
+    },
+    "/api/service-credentials/org/{service}/{name}": {
+      "put": {
+        "description": "Stores your active organization's key for this service, encrypted. Write-only. Needs `org_ai_config:write` in that organization. Audited with the organization's id.\n\n**Requires:** authentication, plus permission `org_ai_config:write`.",
+        "operationId": "serviceCredentials_setOrg",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetServiceCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Stored"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set your organization's key",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "org_ai_config:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Idempotent. Audited with the organization's id.\n\n**Requires:** authentication, plus permission `org_ai_config:write`.",
+        "operationId": "serviceCredentials_removeOrg",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or there was nothing to remove)"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Remove your organization's key",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "org_ai_config:write"
+          ]
+        }
+      }
+    },
+    "/api/service-credentials/{service}/{name}": {
+      "put": {
+        "description": "Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "serviceCredentials_setOwn",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetServiceCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Stored"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set your own key",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Idempotent. Audited (`service_credential.removed`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "serviceCredentials_removeOwn",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed (or there was nothing to remove)"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Remove your own key",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
     "/api/connected-apps": {
       "get": {
         "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
@@ -51517,6 +52112,10 @@
               "DELIVERY_TEST_RATE_LIMITED",
               "RECIPIENT_NOT_CONFIRMED",
               "RECIPIENT_LIMIT",
+              "SERVICE_CREDENTIAL_UNKNOWN",
+              "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
+              "SERVICE_CREDENTIAL_NO_ORGANIZATION",
+              "SERVICE_CREDENTIAL_INVALID",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -101936,6 +102535,168 @@
         },
         "additionalProperties": false
       },
+      "ServiceCredentialResponseDto": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "vault",
+              "builtin"
+            ],
+            "description": "Where the answering key is kept."
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "organization",
+                  "system"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tier a request of yours would use now (user, then organization, then deployment), or `null`."
+          },
+          "tiers": {
+            "type": "object",
+            "properties": {
+              "user": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean",
+                    "description": "A key may be stored at this tier for this reference (the organization tier needs an active organization)."
+                  },
+                  "set": {
+                    "type": "boolean",
+                    "description": "A key is stored at this tier."
+                  },
+                  "setAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "When it was stored. Never a part of the key."
+                  }
+                },
+                "required": [
+                  "available",
+                  "set",
+                  "setAt"
+                ]
+              },
+              "organization": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean",
+                    "description": "A key may be stored at this tier for this reference (the organization tier needs an active organization)."
+                  },
+                  "set": {
+                    "type": "boolean",
+                    "description": "A key is stored at this tier."
+                  },
+                  "setAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "When it was stored. Never a part of the key."
+                  }
+                },
+                "required": [
+                  "available",
+                  "set",
+                  "setAt"
+                ]
+              },
+              "system": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean",
+                    "description": "A key may be stored at this tier for this reference (the organization tier needs an active organization)."
+                  },
+                  "set": {
+                    "type": "boolean",
+                    "description": "A key is stored at this tier."
+                  },
+                  "setAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "When it was stored. Never a part of the key."
+                  }
+                },
+                "required": [
+                  "available",
+                  "set",
+                  "setAt"
+                ]
+              }
+            },
+            "required": [
+              "user",
+              "organization",
+              "system"
+            ]
+          }
+        },
+        "required": [
+          "service",
+          "name",
+          "label",
+          "binding",
+          "tier",
+          "tiers"
+        ]
+      },
+      "SetServiceCredentialDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "The key. Write-only: it is never returned, not even in part."
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
       "ConnectedAppListResponseDto": {
         "type": "array",
         "items": {
@@ -107184,6 +107945,15 @@
                   "type": "boolean",
                   "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
                 },
+                "connectionsMode": {
+                  "type": "string",
+                  "enum": [
+                    "all",
+                    "listed"
+                  ],
+                  "deprecated": true,
+                  "description": "Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools."
+                },
                 "connections": {
                   "type": "array",
                   "items": {
@@ -107330,6 +108100,7 @@
                 "useSavedIdentity",
                 "useSavedCards",
                 "recordVideo",
+                "connectionsMode",
                 "connections",
                 "lastMessageAt",
                 "createdAt",
@@ -107426,6 +108197,15 @@
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
           },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools."
+          },
           "connections": {
             "type": "array",
             "items": {
@@ -107498,6 +108278,7 @@
           "useSavedIdentity",
           "useSavedCards",
           "recordVideo",
+          "connectionsMode",
           "connections",
           "lastMessageAt",
           "createdAt",
@@ -107575,6 +108356,15 @@
           "recordVideo": {
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it."
+          },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release (#969 added it). A chat may use everything its owner switched on in Connections and tools."
           },
           "connections": {
             "maxItems": 25,
@@ -107680,6 +108470,15 @@
           "recordVideo": {
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only"
+          },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "deprecated": true,
+            "description": "Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools."
           },
           "connections": {
             "type": "array",
@@ -107872,6 +108671,7 @@
           "useSavedIdentity",
           "useSavedCards",
           "recordVideo",
+          "connectionsMode",
           "connections",
           "lastMessageAt",
           "createdAt",
@@ -107961,6 +108761,15 @@
           "recordVideo": {
             "type": "boolean",
             "description": "Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it."
+          },
+          "connectionsMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "listed"
+            ],
+            "deprecated": true,
+            "description": "Deprecated (E50.17): accepted and ignored for one release (#969 added it). A chat may use everything its owner switched on in Connections and tools."
           },
           "connections": {
             "maxItems": 25,
