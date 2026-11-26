@@ -1105,7 +1105,8 @@ export const MCP_TOOLS: McpTool[] = [
       rows: z
         .array(z.object({ inputs: z.record(z.string().min(1).max(80), z.union([z.string().max(500), z.number()])).describe("This row's values, by key or label, e.g. { \"recipient\": \"Ana\" }.") }))
         .min(2)
-        .max(25),
+        .max(25)
+        .describe('One object per run, in order: 2 to 25.'),
       policy_id: policyIdParam.optional(),
     }),
     output: batchResponseSchema,

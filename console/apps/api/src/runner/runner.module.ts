@@ -26,7 +26,7 @@ import { ProfileSigninWarnings } from '../fleet/signin-warnings';
 @Module({
   // The secrets module is mounted only with the credentials and notifications slices (app.module.ts): without it a run never signs in from a saved login.
   imports: [AiModule, FabricModule, TasksModule, QuestionsModule, PoliciesModule, MemoriesModule, ApprovalsModule, KgraphModule, ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule, ConnectionsModule] : [])],
-  controllers: [RunsStartController, RunBatchesController, RunLiveController],
+  controllers: [RunsStartController, RunLiveController, RunBatchesController],
   providers: [RunOwnerGuard, ProfileSigninWarnings, GoalRunnerService, GoalRunHandler, HandoffCheckHandler, HandoffCheckTask],
   exports: [GoalRunnerService],
 })

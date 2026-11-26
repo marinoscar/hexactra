@@ -56,9 +56,9 @@ Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its s
 <!-- mcp-scopes:start -->
 | Scope | Consent page | Risk | Default | Also needs | Tools | Console permissions |
 |---|---|---|---|---|---|---|
-| `runs:read` | See your runs, tasks, schedules and machines | low | yes | — | `run_status`, `run_wait`, `runs_list`, `run_export`, `tasks_list`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
+| `runs:read` | See your runs, tasks, schedules and machines | low | yes | — | `run_status`, `run_wait`, `runs_list`, `run_export`, `tasks_list`, `batch_status`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
 | `usage:read` | See your AI usage and cost | low | yes | — | `usage_report` | `usage:read` |
-| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `run_pause`, `run_resume`, `task_run` | `runs:write`, `runs:read` |
+| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `run_pause`, `run_resume`, `task_run`, `task_run_batch` | `runs:write`, `runs:read` |
 | `tasks:write` | Create and change tasks and schedules | low | yes | — | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
 | `inbox:read` | See questions your agent is waiting on | low | yes | — | `inbox_list`, `question_status` | `runs:read` |
 | `inbox:write` | Ask you questions and pass on answers you give in the chat | low | yes | — | `inbox_answer`, `ask_human`, `question_card_answer` | `runs:write`, `runs:read` |
@@ -279,6 +279,8 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `task_create` | Save a task | `tasks:write` | write | no | no | yes |
 | `task_update` | Change a task | `tasks:write` | destructive | no | no | yes |
 | `task_run` | Run a saved task | `runs:write` | write | yes | no | yes |
+| `task_run_batch` | Run a saved task for several rows | `runs:write` | write | yes | no | yes |
+| `batch_status` | See a batch | `runs:read` | read | no | yes | yes |
 | `schedule_create` | Schedule a task | `tasks:write` | write | no | no | yes |
 | `schedule_preview` | Check a schedule | `runs:read` | read | no | yes | yes |
 | `task_pause` | Pause a task | `tasks:write` | destructive | no | yes | yes |

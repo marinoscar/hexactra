@@ -25,8 +25,8 @@ afterAll(async () => {
 });
 
 describe('the chat-front scenarios', () => {
-  it('finds the six chat scenarios (a suite that found none must fail)', () => {
-    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'two-accounts-send-report.chat.json']);
+  it('finds the seven chat scenarios (a suite that found none must fail)', () => {
+    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'text-three-people.chat.json', 'two-accounts-send-report.chat.json']);
   });
 
   it.each(loaded.map((l) => [l.scenario.name, l.scenario] as const))('%s passes scripted', async (_name, scenario) => {

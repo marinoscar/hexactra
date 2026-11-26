@@ -21,6 +21,8 @@ import { ConnectionProviderRegistry } from '../../src/connections/connection-pro
 import type { Capability } from '../../src/connections/connections.constants';
 import { FakeCapabilityProvider } from '../../src/connections/testing';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { TaskRunStarter } from '../../src/questions/task-run-starter';
+import { RunBatchService } from '../../src/tasks/run-batch.service';
 import { TasksService } from '../../src/tasks/tasks.service';
 
 /** The chat's read tools: what `expect.tool: "read"` accepts. */
@@ -36,6 +38,7 @@ const chatExpectSchema = z.strictObject({
   tool: z.string().min(1).describe('start_run, ask_user, read (any read tool of the chat), none (a plain reply), or another tool name'),
   goalIncludes: z.array(z.string()).default([]).describe('start_run: texts the goal contains'),
   goalMustNotInclude: z.array(z.string()).default([]).describe('start_run: regexes (case-insensitive) the goal must not match'),
+  batchRows: z.number().int().min(2).optional().describe('run_task_batch (E51.1): the rows the batch waits in review with; no run has started'),
 });
 
 export const chatScenarioSchema = z.strictObject({
@@ -46,6 +49,10 @@ export const chatScenarioSchema = z.strictObject({
     .array(z.strictObject({ label: z.string().min(1), provider: z.enum(['google', 'microsoft']).default('google'), access: z.enum(['read', 'read_write']).default('read_write'), capabilities: z.array(z.string()).min(1), mail: z.array(z.strictObject({ from: z.string(), subject: z.string(), body: z.string(), date: z.string() })).default([]) }))
     .default([]),
   conversation: z.array(turnSchema).default([]),
+  tasks: z
+    .array(z.strictObject({ name: z.string().min(1), goal: z.string().min(1), parameters: z.array(z.record(z.string(), z.unknown())).default([]) }))
+    .default([])
+    .describe("The owner's saved tasks (E51.1): with any, the chat is offered run_task and run_task_batch"),
   message: z.string().min(1).describe('The newest owner message: what the turn answers'),
   script: z.array(z.tuple([z.string(), z.record(z.string(), z.unknown())])).default([]).describe('Scripted mode: the tool calls of the model\'s first round trip'),
   expect: chatExpectSchema,
@@ -163,6 +170,7 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
     });
     for (const m of c.mail) fake.account(row.id).addMessage({ from: m.from, subject: m.subject, text: m.body, date: m.date });
   }
+  for (const t of scenario.tasks) await prisma.task.create({ data: { userId: user.id, name: t.name, goal: t.goal, parameters: t.parameters as never } });
   // E50.17: the chat has every connection the owner switched on; it lists none.
   const chat = await chats.create(user.id, {} as never);
   for (const turn of scenario.conversation) {
@@ -182,18 +190,29 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
   const calls: ChatFrontResult['calls'] = [];
   // Live: the model is called as the account whose AI settings the run uses (`aiUserId`); the chat itself belongs to a fresh owner.
   const model = recordingAi(ai ?? scriptedAi(scenario.script), calls, ai ? opts.aiUserId : undefined);
-  const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), model, undefined, undefined, undefined, undefined, undefined, app.get(ConnectionCapabilities));
+  const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), model, undefined, undefined, undefined, scenario.tasks.length ? app.get(TaskRunStarter, { strict: false }) : undefined, undefined, app.get(ConnectionCapabilities), scenario.tasks.length ? app.get(RunBatchService, { strict: false }) : undefined);
   let error: string | null = null;
   try {
     await turns.run(chat.id, user.id, null);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
+  // A batch (E51.1) waits in review: its rows, and no run started before the owner's Start.
+  const batch = await prisma.runBatch.findFirst({ where: { conversationId: chat.id }, include: { items: true } });
+  const batchFailures: string[] = [];
+  if (scenario.expect.batchRows !== undefined) {
+    if (!batch) batchFailures.push('batchRows: no batch was created');
+    else {
+      if (batch.status !== 'review') batchFailures.push(`batchRows: the batch is ${batch.status}, not waiting for review`);
+      if (batch.items.length !== scenario.expect.batchRows) batchFailures.push(`batchRows: expected ${scenario.expect.batchRows} rows, the batch has ${batch.items.length}`);
+      if ((await prisma.run.count({ where: { conversationId: chat.id } })) > 0) batchFailures.push('batchRows: a run started before the owner reviewed the batch');
+    }
+  }
   // The job a `start_run` queued is not run here: removed, so no later spec's worker picks it up (only the tool call is measured).
   await prisma.run.deleteMany({ where: { conversationId: chat.id, status: 'queued' } });
   const first = calls[0] ?? null;
   const result: ChatFrontResult = { scenario, tool: first?.tool ?? 'none', args: first?.args ?? null, calls, failures: [], pendingFailures: [], pass: false };
-  result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect)];
+  result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect), ...batchFailures];
   result.pendingFailures = scenario.pending ? evaluateChat(result, scenario.pending.expect).map((f) => `[pending ${scenario.pending!.issue}] ${f}`) : [];
   result.pass = result.failures.length === 0;
   return result;
