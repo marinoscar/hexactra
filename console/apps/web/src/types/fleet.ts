@@ -42,8 +42,15 @@ export interface FleetHost {
   mode: FleetHostMode | null;
   desktop: boolean;
   profiles: FleetProfile[];
+  /**
+   * Why profiles may show no sign-in status (#998): `fabric_outdated` (the server's fabric is older
+   * than sign-in status), `not_reported` (the node never reported), `ok` otherwise. Older consoles omit it.
+   */
+  signinReporting?: FleetSigninReporting;
   lastSeen: string;
 }
+
+export type FleetSigninReporting = 'ok' | 'fabric_outdated' | 'not_reported';
 
 /** `POST /api/fleet/enrollments`. */
 export interface FleetEnrollment {
