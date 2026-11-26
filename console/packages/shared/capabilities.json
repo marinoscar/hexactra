@@ -1636,9 +1636,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; keys are managed in the web app"
       },
-      "web": {
-        "none": "Arrives with the web search settings (E50.5, #975); until then the API is the way to set a key"
-      }
+      "web": "/settings/web-search"
     },
     {
       "id": "service_credentials.admin",
@@ -1658,9 +1656,61 @@
       "tui": {
         "none": "The TUI is for watching and answering; keys are managed in the web app"
       },
-      "web": {
-        "none": "Arrives with the web search settings (E50.5, #975); until then the API is the way to set a key"
-      }
+      "web": "/admin/settings/web-search"
+    },
+    {
+      "id": "web_search.read",
+      "description": "Whether web search works for you: on or off and why, the provider that answers and the tier of its key (yours, your organization's or the deployment's), today's count and limit, and the providers installed. Never a key",
+      "rest": [
+        "GET /api/web-search/status",
+        "GET /api/web-search/providers"
+      ],
+      "cli": {
+        "none": "Arrives with the CLI of E50.15 (#985)"
+      },
+      "mcp": {
+        "none": "Not exposed through Hexactra's own MCP server: the agent gets web search inside runs (E50.7); whether a hosted AI app gets a tool is decided in E50.15"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; web search is set up in the web app"
+      },
+      "web": "/settings/web-search"
+    },
+    {
+      "id": "web_search.search",
+      "description": "Run one web search for yourself through the provider that answers (the Test button), counted against your day's limit and rate limited",
+      "rest": [
+        "POST /api/web-search/search"
+      ],
+      "cli": {
+        "none": "Arrives with the CLI of E50.15 (#985)"
+      },
+      "mcp": {
+        "none": "Not exposed through Hexactra's own MCP server: the agent gets web search inside runs (E50.7); whether a hosted AI app gets a tool is decided in E50.15"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; web search is set up in the web app"
+      },
+      "web": "/settings/web-search"
+    },
+    {
+      "id": "web_search.admin",
+      "description": "Administrator: the deployment's web search settings (switches, providers, order, cost estimate override, sharing the deployment key, user keys, limits) and the usage by day and provider (no user, no query)",
+      "rest": [
+        "GET /api/web-search/admin",
+        "PUT /api/web-search/admin",
+        "GET /api/web-search/admin/usage"
+      ],
+      "cli": {
+        "none": "Arrives with the CLI of E50.15 (#985)"
+      },
+      "mcp": {
+        "none": "Deliberate: deployment settings are changed by the administrator in the console, never by a hosted AI app"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; web search is set up in the web app"
+      },
+      "web": "/admin/settings/web-search"
     },
     {
       "id": "mail_triggers.read",

@@ -91,6 +91,7 @@ import { AiAppsPage } from './pages/AiAppsPage';
 import { ConnectAiAppPage } from './pages/ConnectAiAppPage';
 import { RunRetentionCeilingPage } from './pages/RunRetentionCeilingPage';
 import { RecordingRetentionPage } from './pages/RecordingRetentionPage';
+import { AdminWebSearchPage, WebSearchSettingsPage } from './pages/WebSearchPages';
 import { RequestHistorySettingsPage } from './pages/RequestHistorySettingsPage';
 import { AgentPricingPage } from './pages/AgentPricingPage';
 import { KgraphAdminPage } from './pages/KgraphAdminPage';
@@ -338,6 +339,8 @@ export function AppRoutes() {
           {/* Connections (E39.2): `connections:read` is what /api/connections enforces; writes are gated in the page. The admin page reads the deployment's apps only. */}
           <Route path="settings/connections" element={<Gate permission="connections:read"><ConnectionsPage /></Gate>} />
           <Route path="admin/settings/connections" element={<Gate permission="system_settings:read"><AdminConnectionsPage /></Gate>} />
+          <Route path="settings/web-search" element={<Gate permission="web_search:read"><WebSearchSettingsPage /></Gate>} />
+          <Route path="admin/settings/web-search" element={<Gate permission="system_settings:read"><AdminWebSearchPage /></Gate>} />
           <Route path="settings/ai-apps/connect" element={<Gate permission="connected_apps:read"><ConnectAiAppPage /></Gate>} />
           <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
           <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />

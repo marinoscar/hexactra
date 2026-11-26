@@ -8002,6 +8002,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/web-search/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether web search works for you
+         * @description On or off and why (`disabled_by_admin`, `disabled_by_you`, `no_provider`, `no_key`), the provider that would answer and the tier of its key (your own, your organization's or the deployment's), today's count and limit, and the limit per run. Never a key.
+         *
+         *     **Requires:** authentication, plus permission `web_search:read`.
+         */
+        get: operations["webSearch_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The search providers installed
+         * @description Id, label, kind, whether it needs a key, the administrator's switch, and for you whether a key is there and at which tier. The cost per call is an estimate. Never a key.
+         *
+         *     **Requires:** authentication, plus permission `web_search:read`.
+         */
+        get: operations["webSearch_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one web search
+         * @description One search for you through the provider that answers (one fallback to the next usable one), counted against your day's limit. For the Test button and the CLI. At most 10 a minute. The query is not logged. Errors: `WEB_SEARCH_NOT_CONFIGURED`, `WEB_SEARCH_LIMIT_REACHED`, `WEB_SEARCH_AUTH_REFUSED`, `WEB_SEARCH_RATE_LIMITED`, `WEB_SEARCH_QUOTA_EXCEEDED`, `WEB_SEARCH_UNAVAILABLE`.
+         *
+         *     **Requires:** authentication, plus permission `web_search:write`.
+         */
+        post: operations["webSearch_search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The web search settings of the deployment
+         * @description The deployment switch, the per-provider switch and cost estimate override, the order of providers, whether everyone may use the deployment key, whether users may use their own key, and the limits per run and per user per day (`null`: unlimited). Never a key.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["webSearchAdmin_get"];
+        /**
+         * Change the web search settings
+         * @description A field left out is kept; providers merge per id and per field; `null` on a limit makes it unlimited. Audited (`web_search.settings_saved`, the names of the fields changed).
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        put: operations["webSearchAdmin_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/admin/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Web search usage of the deployment
+         * @description Calls, failures and ESTIMATED cost by UTC day and provider, newest first. No user and no query.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["webSearchAdmin_usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -10480,6 +10596,14 @@ export interface components {
              * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
              * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
              * @example SERVICE_CREDENTIAL_INVALID
+             * @example WEB_SEARCH_NOT_CONFIGURED
+             * @example WEB_SEARCH_AUTH_REFUSED
+             * @example WEB_SEARCH_RATE_LIMITED
+             * @example WEB_SEARCH_QUOTA_EXCEEDED
+             * @example WEB_SEARCH_UNAVAILABLE
+             * @example WEB_SEARCH_LIMIT_REACHED
+             * @example WEB_SEARCH_ABORTED
+             * @example WEB_SEARCH_TEST_RATE_LIMITED
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -11502,6 +11626,12 @@ export interface components {
                  */
                 newChats: "off" | "read" | "read_write";
             };
+            webSearch?: {
+                /** @description Web search for your runs and chats (default on). Off: the agent searches in the browser. */
+                enabled: boolean;
+                /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
+                provider: string | null;
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -11626,6 +11756,12 @@ export interface components {
                  */
                 newChats: "off" | "read" | "read_write";
             };
+            webSearch?: {
+                /** @description Web search for your runs and chats (default on). Off: the agent searches in the browser. */
+                enabled: boolean;
+                /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
+                provider: string | null;
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -11744,6 +11880,12 @@ export interface components {
                  * @enum {string}
                  */
                 newChats?: "off" | "read" | "read_write";
+            } | null;
+            webSearch?: {
+                /** @description Web search for your runs and chats (default on). Off: the agent searches in the browser. */
+                enabled?: boolean;
+                /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
+                provider?: string | null;
             } | null;
             notifications?: {
                 [key: string]: {
@@ -11912,6 +12054,23 @@ export interface components {
                         clientId?: string | null;
                         tenant?: string;
                     };
+                };
+            };
+            webSearch: {
+                enabled?: boolean;
+                providers?: {
+                    [key: string]: {
+                        enabled?: boolean;
+                        costPerCallUsd?: number | null;
+                        baseUrl?: string | null;
+                    };
+                };
+                order?: string[];
+                shareDeploymentKey?: boolean;
+                allowUserKeys?: boolean;
+                limits?: {
+                    perRun?: number | null;
+                    perUserPerDay?: number | null;
                 };
             };
             deliveries: {
@@ -12224,6 +12383,23 @@ export interface components {
                         clientId?: string | null;
                         tenant?: string;
                     };
+                };
+            };
+            webSearch?: {
+                enabled?: boolean;
+                providers?: {
+                    [key: string]: {
+                        enabled?: boolean;
+                        costPerCallUsd?: number | null;
+                        baseUrl?: string | null;
+                    };
+                };
+                order?: string[];
+                shareDeploymentKey?: boolean;
+                allowUserKeys?: boolean;
+                limits?: {
+                    perRun?: number | null;
+                    perUserPerDay?: number | null;
                 };
             };
             deliveries?: {
@@ -12540,6 +12716,23 @@ export interface components {
                         clientId?: string | null;
                         tenant?: string;
                     };
+                };
+            };
+            webSearch?: {
+                enabled?: boolean;
+                providers?: {
+                    [key: string]: {
+                        enabled?: boolean;
+                        costPerCallUsd?: number | null;
+                        baseUrl?: string | null;
+                    };
+                };
+                order?: string[];
+                shareDeploymentKey?: boolean;
+                allowUserKeys?: boolean;
+                limits?: {
+                    perRun?: number | null;
+                    perUserPerDay?: number | null;
                 };
             };
             deliveries?: {
@@ -13106,6 +13299,12 @@ export interface components {
                      * @enum {string}
                      */
                     newChats: "off" | "read" | "read_write";
+                };
+                webSearch?: {
+                    /** @description Web search for your runs and chats (default on). Off: the agent searches in the browser. */
+                    enabled: boolean;
+                    /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
+                    provider: string | null;
                 };
                 notifications?: {
                     [key: string]: {
@@ -22333,6 +22532,136 @@ export interface components {
         SetServiceCredentialDto: {
             /** @description The key. Write-only: it is never returned, not even in part. */
             value: string;
+        };
+        WebSearchStatusDto: {
+            /** @description A search of yours would be made now. */
+            enabled: boolean;
+            /** @description Why not, when `enabled` is false. */
+            reason: ("disabled_by_admin" | "disabled_by_you" | "no_provider" | "no_key") | null;
+            provider: {
+                id: string;
+                label: string;
+                /** @description The tier of the key it would use (none for a provider without a key). */
+                tier: ("user" | "organization" | "system") | null;
+            } | null;
+            today: {
+                calls: number;
+                /** @description Searches a day (UTC); `null`: unlimited. */
+                limit: number | null;
+                remaining: number | null;
+            };
+            /** @description Searches a run; `null`: unlimited. */
+            perRunLimit: number | null;
+        };
+        WebSearchProviderDto: {
+            id: string;
+            label: string;
+            /** @enum {string} */
+            kind: "results" | "answer";
+            /** @enum {string} */
+            credential: "api_key" | "none" | "ai_service";
+            needsKey: boolean;
+            /** @description The administrator's switch for this provider. */
+            enabled: boolean;
+            /** @description In the deployment's order of providers. */
+            listed: boolean;
+            /** @description The tier of the key your requests would use, among the allowed ones. */
+            keyTier: ("user" | "organization" | "system") | null;
+            /** @description Which tiers hold a key, allowed or not. Never a key. */
+            keys: {
+                user: boolean;
+                organization: boolean;
+                system: boolean;
+            };
+            /** @description An ESTIMATE per call (the administrator can override it), not a price. */
+            estimatedCostPerCallUsd: number | null;
+        };
+        WebSearchResultDto: {
+            /** @description The provider that answered (after a fallback, the second one). */
+            provider: string;
+            hits: {
+                title: string;
+                url: string;
+                snippet: string;
+                publishedAt: string | null;
+            }[];
+            /** @description Answer-type providers only. */
+            answer: {
+                text: string;
+                citations: string[];
+            } | null;
+        };
+        WebSearchBodyDto: {
+            /** @description What to search for. Not logged. */
+            query: string;
+            /**
+             * @description How many results (1 to 20, default 5).
+             * @default 5
+             */
+            count?: number;
+            /**
+             * @description Only results from the last day, week, month or year.
+             * @default null
+             */
+            freshness?: ("day" | "week" | "month" | "year") | null;
+            /**
+             * @description Only results from this site (a host name).
+             * @default null
+             */
+            site?: string | null;
+        };
+        WebSearchAdminSettingsDto: {
+            enabled: boolean;
+            /** @description Saved per-provider settings; a provider not listed has the defaults (on, the default estimate). */
+            providers: {
+                [key: string]: {
+                    enabled: boolean;
+                    costPerCallUsd: number | null;
+                    baseUrl: string | null;
+                };
+            };
+            order: string[];
+            shareDeploymentKey: boolean;
+            allowUserKeys: boolean;
+            limits: {
+                perRun: number | null;
+                perUserPerDay: number | null;
+            };
+            /** @description The providers this console has, with their default cost estimate. */
+            installed: {
+                id: string;
+                label: string;
+                /** @enum {string} */
+                credential: "api_key" | "none" | "ai_service";
+                hosts: string[];
+                defaultEstimatedCostPerCallUsd: number | null;
+            }[];
+        };
+        UpdateWebSearchAdminDto: {
+            enabled?: boolean;
+            providers?: {
+                [key: string]: {
+                    enabled?: boolean;
+                    costPerCallUsd?: number | null;
+                    baseUrl?: string | null;
+                };
+            };
+            order?: string[];
+            shareDeploymentKey?: boolean;
+            allowUserKeys?: boolean;
+            limits?: {
+                perRun?: number | null;
+                perUserPerDay?: number | null;
+            };
+        };
+        WebSearchUsageRowDto: {
+            /** @description UTC day, YYYY-MM-DD. */
+            day: string;
+            provider: string;
+            calls: number;
+            failures: number;
+            /** @description An ESTIMATE, from the cost per call in force when each call was made. */
+            estimatedCostUsd: number;
         };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
@@ -51777,6 +52106,305 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearch_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WebSearchStatusDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearch_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WebSearchProviderDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearch_search: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebSearchBodyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WebSearchResultDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchAdmin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WebSearchAdminSettingsDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchAdmin_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebSearchAdminDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WebSearchAdminSettingsDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchAdmin_usage: {
+        parameters: {
+            query?: {
+                /** @description How many UTC days back (default 30). */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["WebSearchUsageRowDto"][];
+                    };
+                };
             };
             /** @description Unauthorized - Invalid or missing token */
             401: {
