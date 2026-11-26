@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { OAuthClientModule } from '../oauth-client/oauth-client.module';
 import { ServiceCredentialsModule } from '../service-credentials/service-credentials.module';
 import { BraveSearchProvider } from './providers/brave.provider';
+import { WebFetchService } from './fetch/web-fetch.service';
 import { SearchProviderRegistry } from './search-provider';
 import { WebSearchAdminController } from './web-search-admin.controller';
 import { WebSearchAdminService } from './web-search-admin.service';
@@ -19,12 +20,12 @@ import { WebSearchUsage } from './web-search.usage';
  * slice (app.module.ts), like the service credentials it reads.
  *
  * What the next issues use: `WebSearchService.forUser(userId, orgId)` (E50.7 binds the agent's `web_search` tool to it: one port per
- * run) and `SearchProviderRegistry` (E50.8 and E50.9 add adapters, each registering itself from its `onModuleInit`).
+ * run), `WebFetchService.forRun({ userId, sites })` (E50.7 binds `web_fetch` to it: one port per run; E50.6, #976) and `SearchProviderRegistry` (E50.8 and E50.9 add adapters, each registering itself from its `onModuleInit`).
  */
 @Module({
   imports: [ServiceCredentialsModule, OAuthClientModule],
   controllers: [WebSearchController, WebSearchAdminController],
-  providers: [SearchProviderRegistry, BraveSearchProvider, WebSearchUsage, WebSearchService, WebSearchAdminService, WebSearchEgressContributor],
-  exports: [SearchProviderRegistry, WebSearchService],
+  providers: [SearchProviderRegistry, BraveSearchProvider, WebSearchUsage, WebSearchService, WebSearchAdminService, WebSearchEgressContributor, WebFetchService],
+  exports: [SearchProviderRegistry, WebSearchService, WebFetchService],
 })
 export class WebSearchModule {}
