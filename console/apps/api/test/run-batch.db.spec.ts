@@ -13,6 +13,7 @@ import { ChatService } from '../src/chat/chat.service';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TaskRunStarter } from '../src/questions/task-run-starter';
+import { recordRequestInChat } from '../src/questions/chat-request-record';
 import { RunPauseService } from '../src/tasks/run-pause.service';
 import { BATCH_CLAIM_GRACE_MS, RunBatchService, batchCounts, type BatchView } from '../src/tasks/run-batch.service';
 import { TasksService } from '../src/tasks/tasks.service';
@@ -298,18 +299,26 @@ describe('in a chat: run_task_batch', () => {
     const started = await call<BatchView>(s, 'POST', `/batches/${batchId}/start`, { rows: [1, 3] });
     expect(started.status).toBe(200);
     expect(started.data.items.map((i) => i.status)).toEqual(['running', 'skipped', 'pending']);
-    await end(s.userId, (await liveRunOf(batchId))!.id, 'succeeded');
+    // Row 1's run asks to confirm the send: the request is a card in the thread, as for any chat run.
+    const first = (await liveRunOf(batchId))!;
+    const question = await prisma.question.create({ data: { ownerUserId: s.userId, askedBy: `run:${first.id}`, runId: first.id, input: 'confirm', kind: 'confirmation', prompt: 'Send the text to Ana?', expiresAt: new Date(Date.now() + 600_000) } });
+    await recordRequestInChat(prisma, question);
+    expect(await prisma.chatMessage.count({ where: { conversationId: chat.id, kind: 'request' } })).toBe(1);
+    await end(s.userId, first.id, 'succeeded');
     const third = (await liveRunOf(batchId))!;
     expect([third.batchSeq, third.trigger, third.conversationId]).toEqual([3, 'chat', chat.id]);
     // A batch run is still a chat run: start_run is refused while it is live.
     const meanwhile = scriptedAi([[['start_run', { goal: 'Another job', expects: null }]]]);
     await say(s, chat.id, 'And book a table', meanwhile);
     expect(meanwhile.outputs[0]).toMatch(/^Refused: a batch of this chat is still running/);
+    // Row 3's send went ahead on a saved approval (the gate records the use): the summary says so.
+    const rule = await prisma.approvalRule.create({ data: { userId: s.userId, kind: 'gate', host: 'messages.google.com', category: 'send', matchKey: 'send', summary: 'Send texts on messages.google.com' } });
+    await prisma.approvalRuleUse.create({ data: { ruleId: rule.id, runId: third.id, stepSeq: 1 } });
     await end(s.userId, third.id, 'succeeded');
 
     const results = await prisma.chatMessage.findMany({ where: { conversationId: chat.id, kind: 'result' } });
     expect(results).toHaveLength(1);
-    expect(results[0]!.text).toBe('2 done, 1 not started');
+    expect(results[0]!.text).toBe('2 done, 1 not started\nRow 3: 1 step went ahead on a saved approval: Send texts on messages.google.com.');
     expect(results[0]!.meta).toMatchObject({ batchId, batchSummary: true, status: 'done' });
     // The backstop that writes missed results writes none for a batch's runs.
     await app.get(ChatResults, { strict: false }).sync(s.userId, chat.id);
