@@ -17024,6 +17024,11 @@ export interface components {
             }[];
             /** @description ISO 8601 timestamp */
             lastSeen: string;
+            /**
+             * @description Why profiles may show no sign-in status (#998): fabric_outdated (the fabric is older than sign-in status: update the server), not_reported (the node never reported: update its agent), or ok
+             * @enum {string}
+             */
+            signinReporting: "ok" | "fabric_outdated" | "not_reported";
         };
         CreateEnrollmentDto: {
             name?: string;

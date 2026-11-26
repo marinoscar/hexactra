@@ -634,7 +634,12 @@ export const fleetProfileResponseSchema = z.object({
   checkedAt: iso.nullable().describe('When the node last checked; null when it never did'),
 });
 /** `GET /api/fleet/hosts`: the MCP shape plus each profile's sign-in status. */
-export const fleetHostWithSigninResponseSchema = fleetHostResponseSchema.extend({ profiles: z.array(fleetProfileResponseSchema) });
+export const fleetHostWithSigninResponseSchema = fleetHostResponseSchema.extend({
+  profiles: z.array(fleetProfileResponseSchema),
+  signinReporting: z
+    .enum(['ok', 'fabric_outdated', 'not_reported'])
+    .describe('Why profiles may show no sign-in status (#998): fabric_outdated (the fabric is older than sign-in status: update the server), not_reported (the node never reported: update its agent), or ok'),
+});
 export class FleetHostResponseDto extends createZodDto(fleetHostWithSigninResponseSchema) {}
 
 export class OkResponseDto extends createZodDto(z.object({ ok: z.literal(true) })) {}

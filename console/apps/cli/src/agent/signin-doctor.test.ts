@@ -65,4 +65,19 @@ describe('profile sign-in checks', () => {
       { name: 'profiles', ok: true, warning: true, detail: `sign-in status needs hexactra's access: run \`sudo -u hexactra ${bin} doctor --profiles-dir /nonexistent/p\`` },
     ]);
   });
+
+  it("shows whether the control plane accepts the node's sign-in reports (#998)", () => {
+    const { d } = deps(
+      [
+        'ok   profile default: signed_in (signed in to Google as owner@example.com)',
+        'warn reports: the control plane does not accept sign-in reports (HTTP 404, since 2026-11-26 18:12 UTC): update the server (hexactra deploy update)',
+      ].join('\n'),
+    );
+    expect(profileSigninChecks(d, '/p')[1]).toEqual({
+      name: 'sign-in reports',
+      ok: true,
+      warning: true,
+      detail: 'the control plane does not accept sign-in reports (HTTP 404, since 2026-11-26 18:12 UTC): update the server (hexactra deploy update)',
+    });
+  });
 });
