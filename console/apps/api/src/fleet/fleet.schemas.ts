@@ -44,8 +44,16 @@ export interface FleetHost {
   /** The host can share its desktop through the fabric. */
   desktop: boolean;
   profiles: FleetProfile[];
+  /**
+   * Why the host's profiles may show no sign-in status (#998): `fabric_outdated` when the fabric does
+   * not carry sign-in status at all (older than E48), `not_reported` when no profile was ever checked
+   * (the node's agent never reported), `ok` otherwise.
+   */
+  signinReporting: FleetSigninReporting;
   lastSeen: string;
 }
+
+export type FleetSigninReporting = 'ok' | 'fabric_outdated' | 'not_reported';
 
 /** A profile's identity sign-in state (E48, docs/decisions/profile-signin-health.md). */
 export type FleetSigninState = 'signed_in' | 'signed_out' | 'expired' | 'unknown';
