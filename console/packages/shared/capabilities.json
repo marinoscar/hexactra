@@ -1546,11 +1546,13 @@
     },
     {
       "id": "connections.admin",
-      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist. No access to users' connections",
+      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist, and the test of each app before anyone connects (E50.11). No access to users' connections",
       "rest": [
         "GET /api/connections/admin/apps",
         "PUT /api/connections/admin/apps/{provider}",
-        "DELETE /api/connections/admin/apps/{provider}"
+        "DELETE /api/connections/admin/apps/{provider}",
+        "POST /api/connections/admin/apps/{provider}/diagnose",
+        "GET /api/connections/admin/apps/{provider}/diagnostics"
       ],
       "cli": {
         "none": "Deliberate: an administrator sets the deployment's apps in Administration; the client secret is write-only"

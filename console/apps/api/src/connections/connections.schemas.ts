@@ -102,7 +102,7 @@ export const updateResultSchema = z.object({ connection: connectionViewSchema, c
 export class UpdateConnectionResponseDto extends createZodDto(updateResultSchema) {}
 
 export const testResultSchema = z.object({
-  results: z.array(z.object({ capability: capability, ok: z.boolean(), code: z.string().nullable().describe('A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...).') })),
+  results: z.array(z.object({ capability: capability, ok: z.boolean(), code: z.string().nullable().describe('A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...).'), api: z.string().optional().describe('With `API_DISABLED`: the API to enable at the provider (`gmail.googleapis.com`, `drive.googleapis.com`, ...), from a closed list.') })),
 });
 export class TestConnectionResponseDto extends createZodDto(testResultSchema) {}
 
