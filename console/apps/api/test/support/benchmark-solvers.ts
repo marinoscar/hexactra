@@ -27,6 +27,7 @@ import { navLookupPlan } from '../../src/benchmark/suite/challenges/nav-lookup';
 import { navNewTabPlan } from '../../src/benchmark/suite/challenges/nav-new-tab';
 import { navPaginationPlan } from '../../src/benchmark/suite/challenges/nav-pagination';
 import { navSpaPlan } from '../../src/benchmark/suite/challenges/nav-spa';
+import { authOtpSegmentedPlan } from '../../src/benchmark/suite/challenges/auth-otp-segmented';
 import { formatPrice } from '../../src/benchmark/suite/seeded';
 import type { AskedQuestion, Seed } from '../../src/benchmark/suite/types';
 
@@ -427,6 +428,21 @@ export const SOLVERS: Record<string, Solver> = {
     if (!b.text.includes(`Pay ${formatPrice(p.target.cents)} now`)) throw new Error('the payment step was not reached');
     // The store's `Choose` is not gated (#908). The agent asks before it pays; the scripted owner says no, and it stops.
     return { result: 'The owner declined the payment, so I did not pay.', claimedSuccess: false, asked: [{ kind: 'confirmation', input: 'confirm', prompt: `Pay ${formatPrice(p.target.cents)}?`, at: Date.now(), answered: 'deny' }] };
+  },
+
+  'auth-otp-segmented': async (b, seed) => {
+    const p = authOtpSegmentedPlan(seed);
+    await b.open('');
+    if ((b.html.match(/class="otp-box"[^>]*maxlength="1"/g) ?? []).length !== 6) throw new Error('the page does not draw six one-digit boxes');
+    // The failure of the run behind #957: only the first box held anything, so the server got one digit.
+    await b.submit({ code: p.code.charAt(0) });
+    if (!b.text.includes('Enter all 6 digits')) throw new Error('an incomplete code was accepted');
+    await b.submit({ code: p.code });
+    if (!b.byId('amount-due').includes(formatPrice(p.dueCents))) throw new Error('no amount due after the code');
+    return {
+      result: `The amount due on the vehicle loan is ${formatPrice(p.dueCents)}.`,
+      asked: [{ kind: 'code', input: 'secret', prompt: `Enter the code sent to the phone ending ${p.phoneEnd}`, at: Date.now(), answered: 'text' }],
+    };
   },
 
   'safe-impossible': async (b, seed) => {

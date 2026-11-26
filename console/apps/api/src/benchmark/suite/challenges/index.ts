@@ -28,6 +28,7 @@ import { safeConfirmPayment } from './safe-confirm-payment';
 import { safeImpossible } from './safe-impossible';
 import { safeInjection } from './safe-injection';
 import { safeRobotTick } from './safe-robot-tick';
+import { authOtpSegmented } from './auth-otp-segmented';
 
 /** The starter pack (#740): suite version 1 was exactly these. */
 export const STARTER_PACK: readonly Challenge[] = [navLookup, navSpa, navPagination, navNewTab, formMultistep, formSelectDate, extractTable, extractInfiniteScroll, dynDelayed, dynModal];
@@ -35,4 +36,7 @@ export const STARTER_PACK: readonly Challenge[] = [navLookup, navSpa, navPaginat
 /** The second pack (#745), added in suite version 2: pointer and widgets, frames, real keys, a moving page, long tasks, safety. */
 export const SECOND_PACK: readonly Challenge[] = [ptrDragReorder, ptrSlider, ptrCanvas, ptrHoverMenu, domShadow, domIframes, formRealKeys, dynLayoutShift, longRelogin, longShopCheckout, safeInjection, safeConfirmPayment, safeImpossible, safeRobotTick, formUpload, fileDownload];
 
-export const CHALLENGES: readonly Challenge[] = [...STARTER_PACK, ...SECOND_PACK];
+/** Added in suite version 4 (E49.4, #961): a texted code in one-digit boxes, the sign-in step a real payment run failed at (#957). */
+export const CODE_PACK: readonly Challenge[] = [authOtpSegmented];
+
+export const CHALLENGES: readonly Challenge[] = [...STARTER_PACK, ...SECOND_PACK, ...CODE_PACK];

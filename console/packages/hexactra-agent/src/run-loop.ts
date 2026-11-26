@@ -8,7 +8,7 @@ import { cancelRun, closeRun, LOG_LINES, pauseFlag, pauseForPerson, pauseNow, re
 import { ModelUnavailable, type ModelRoute } from './ports';
 import type { RunContext } from './run-context';
 import { MAX_IDLE_CHUNKS, observePage, type StallSignal } from './stall';
-import { maybeDeEscalate } from './tiers';
+import { escalateBeforeGivingUp, maybeDeEscalate } from './tiers';
 import { clip } from './text';
 import { LeaseLost, StopLoop, structuredPatch, TIER_LABEL, type HarnessMemory, type RunOutcome } from './types';
 
@@ -173,6 +173,11 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
     if (state.stop === 'pause' && (state.handoffId || state.handoffAsk)) return pauseForPerson(ctx);
     // The owner paused the run (E38.2): after the chunk's usage is saved, before anything else is decided (a finished run still finishes).
     if ((control.pauseRequested || flags.pauseRequested) && !(state.stop === 'finish' && state.finished)) return pauseNow(ctx);
+    // About to finish as failed with a stronger tier still allowed (E49.4, #961): escalate once and go on instead.
+    if (state.stop === 'finish' && state.finished && (await escalateBeforeGivingUp(ctx, profile.visionNotes))) {
+      await ctx.checkpoint();
+      continue;
+    }
     if (state.stop === 'finish' && state.finished) {
       const to = state.finished.success ? 'succeeded' : 'failed';
       const done = state.finished;

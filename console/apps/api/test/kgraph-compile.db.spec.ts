@@ -108,7 +108,8 @@ describe('the Knowledge Graph compiler job (#781)', () => {
   });
 
   it('a failed run enqueues nothing and compiles nothing', async () => {
-    const { runId } = await learnRun([[['navigate', { url: 'https://shop.example.test/pens', reason: 'open' }], ['finish', { success: false, result: 'Could not.' }]]]);
+    // A failed finish escalates once first (E49.4, #961); the second ends the run.
+    const { runId } = await learnRun([[['navigate', { url: 'https://shop.example.test/pens', reason: 'open' }], ['finish', { success: false, result: 'Could not.' }]], [['finish', { success: false, result: 'Could not.' }]]]);
     expect((await prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe('failed');
     expect(await jobsFor(runId)).toBe(0);
     expect(await app.get(KgraphCompileService).compileRun(owner.userId, runId)).toBe('skipped_not_clean');

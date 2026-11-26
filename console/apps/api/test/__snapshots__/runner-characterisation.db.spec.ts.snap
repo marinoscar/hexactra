@@ -2312,14 +2312,6 @@ exports[`goal runner characterisation (E38.5) pins a budget that ends a run: the
       "type": "navigate",
       "url": "https://shop.example.test/b",
     },
-    {
-      "type": "navigate",
-      "url": "https://shop.example.test/c",
-    },
-    {
-      "marks": true,
-      "type": "screenshot",
-    },
   ],
   "outcomes": [
     "failed",
@@ -2337,9 +2329,8 @@ Progress so far (latest last):
 
 Continue toward the goal.
 
-Steps used: 0 of 60.",
+Steps used: 0 of 2.",
       "outputs": [
-        "at  — ",
         "at  — ",
         "at  — ",
       ],
@@ -3460,59 +3451,77 @@ When done, or when the goal is impossible, call finish with a short, factual res
     {
       "input": "Goal: Never finishes
 
-Allowed sites: any.
-
-Tools you have: The browser, The desktop.
-
 Progress so far (latest last):
 (No page screenshot this round: no screenshots in this fake)
 1. navigate {"url":"https://shop.example.test/a"} → ok: at [invalid url] — 
 2. navigate {"url":"https://shop.example.test/b"} → ok: at [invalid url] — 
-3. navigate {"url":"https://shop.example.test/c"} → ok: at [invalid url] — 
-(No page screenshot this round: no screenshots in this fake)
+Step budget exhausted: asking the model to wrap up.
 
-Continue toward the goal.
-
-Steps used: 3 of 60.",
+The actions budget is used up. Call finish now: success only if the goal is fully done; otherwise summarise exactly what was done and what remains.",
       "outputs": [
         "Finished.",
       ],
       "request": {
         "instructions": "same instructions",
-        "maxSteps": 10,
+        "maxOutputTokens": 1500,
+        "maxSteps": 1,
       },
-      "tools": "same tools",
+      "tools": [
+        {
+          "description": "End the run with a short factual result.",
+          "name": "finish",
+          "parameters": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "additionalProperties": false,
+            "properties": {
+              "result": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string",
+              },
+              "success": {
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "success",
+              "result",
+            ],
+            "type": "object",
+          },
+          "strict": true,
+        },
+      ],
     },
   ],
   "run": {
     "activity": null,
     "confirmedActions": null,
     "currentTier": "standard",
-    "error": "The agent could not reach the goal",
+    "error": "Step budget exhausted",
     "escalations": 0,
     "handoffId": null,
-    "inputTokens": 40,
+    "inputTokens": 30,
     "memoryIds": [],
-    "modelCalls": 4,
-    "outputTokens": 20,
+    "modelCalls": 3,
+    "outputTokens": 15,
     "result": "Stopped at the limit.",
     "status": "failed",
-    "stepCount": 4,
-    "stopReason": "finished",
+    "stepCount": 3,
+    "stopReason": "budget_actions",
     "transcript": {
-      "chunks": 2,
-      "lastSeq": 4,
+      "chunks": 1,
+      "lastSeq": 3,
       "log": [
         "(No page screenshot this round: no screenshots in this fake)",
         "1. navigate {"url":"https://shop.example.test/a"} → ok: at [invalid url] — ",
         "2. navigate {"url":"https://shop.example.test/b"} → ok: at [invalid url] — ",
-        "3. navigate {"url":"https://shop.example.test/c"} → ok: at [invalid url] — ",
-        "(No page screenshot this round: no screenshots in this fake)",
-        "4. finish → FAILED: Stopped at the limit.",
+        "Step budget exhausted: asking the model to wrap up.",
+        "3. finish → FAILED: Stopped at the limit.",
       ],
       "look": null,
       "pendingWarnings": [],
-      "progressStreak": 3,
+      "progressStreak": 2,
       "stall": {
         "failures": 0,
         "observable": false,
@@ -3526,11 +3535,6 @@ Steps used: 3 of 60.",
           {
             "fp": "5921564a25a8",
             "label": "navigate to https://shop.example.test/b",
-            "ok": true,
-          },
-          {
-            "fp": "74537613ac2d",
-            "label": "navigate to https://shop.example.test/c",
             "ok": true,
           },
         ],
@@ -3580,24 +3584,6 @@ Steps used: 3 of 60.",
       "summary": "at [invalid url] — ",
     },
     {
-      "action": "navigate",
-      "args": {
-        "url": "https://shop.example.test/c",
-      },
-      "durationMs": "ms",
-      "kind": "action",
-      "ok": true,
-      "phase": "done",
-      "questionId": null,
-      "reasoning": "three",
-      "screenshotKey": null,
-      "screenshotMasked": null,
-      "screenshotMoment": null,
-      "screenshotNote": null,
-      "seq": 3,
-      "summary": "at [invalid url] — ",
-    },
-    {
       "action": null,
       "args": null,
       "durationMs": "ms",
@@ -3610,7 +3596,7 @@ Steps used: 3 of 60.",
       "screenshotMasked": null,
       "screenshotMoment": null,
       "screenshotNote": null,
-      "seq": 4,
+      "seq": 3,
       "summary": "Stopped at the limit.",
     },
     {
@@ -3626,7 +3612,7 @@ Steps used: 3 of 60.",
       "screenshotMasked": null,
       "screenshotMoment": "final",
       "screenshotNote": "no_storage",
-      "seq": 5,
+      "seq": 4,
       "summary": "The run ended: failed",
     },
   ],

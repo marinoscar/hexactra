@@ -107,9 +107,10 @@ describe('outcome checks and audit runs (#785)', () => {
   it('a replay whose required output is empty hands over to the agent instead of succeeding', async () => {
     const { taskId, versionId } = await reuseTask();
     const runId = await newRun(taskId);
-    const s = scriptedAi([[['finish', { success: false, result: 'No total.' }]]]);
+    // A failed finish escalates once first (E49.4, #961): two model calls, the second ending the run.
+    const s = scriptedAi([[['finish', { success: false, result: 'No total.' }]], [['finish', { success: false, result: 'No total.' }]]]);
     await runnerOf(fabric(null), s.ai).advance(runId, owner.userId, null);
-    expect(s.runTools).toHaveBeenCalledTimes(1);
+    expect(s.runTools).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(s.inputs[0])).toContain('The saved procedure finished but its result did not pass its checks: total is missing');
     expect((await prisma.run.findUniqueOrThrow({ where: { id: runId } })).result).not.toBe('Done by the saved procedure.');
     expect((await app.get(PrismaProcedureStore).getVersion(owner.userId, versionId))!.evidence.failures).toBe(1);

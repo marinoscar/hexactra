@@ -49,7 +49,8 @@ describe('runLive', () => {
   it('counts a run that fails, with the reason, in the pass rate', async () => {
     const wrong: Scenario = JSON.parse(JSON.stringify(lookup));
     // The model "forgets" to finish: the run cannot succeed.
-    wrong.script = [[{ tool: 'observe_elements' }], [{ tool: 'finish', args: { success: false, result: 'could not find it' } }]];
+    // A failed finish escalates once first (E49.4, #961); the second ends the run.
+    wrong.script = [[{ tool: 'observe_elements' }], [{ tool: 'finish', args: { success: false, result: 'could not find it' } }], [{ tool: 'finish', args: { success: false, result: 'could not find it' } }]];
     const summary = await runLive([lookup], { model: () => fakeProvider(wrong), runs: 2, tier: 'fast', prices: PRICES, capUsd: 10 });
     expect(summary.scenarios[0]).toMatchObject({ passes: 0, passRate: 0, completed: 2 });
     expect(summary.scenarios[0]!.failures.join('\n')).toMatch(/status: expected succeeded, got failed/);
