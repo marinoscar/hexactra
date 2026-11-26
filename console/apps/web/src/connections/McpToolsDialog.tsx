@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { useBreakpoint } from '../ui';
 import { getMcpTools, refreshMcpTools, setMcpToolMode, type McpCatalog, type McpTool, type McpToolMode } from './api';
 import { McpToolList } from './McpToolList';
+import { McpTryDialog } from './McpTryDialog';
 import { mcpErrorWords } from './mcpWords';
 import type { PlatformApiClient } from '@marinoscar/platform-web/core';
 
@@ -30,6 +31,7 @@ export function McpToolsDialog({ open, api, connection, canWrite, onClose, onCha
   const [catalog, setCatalog] = useState<McpCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [trying, setTrying] = useState<McpTool | null>(null);
 
   const load = useCallback(async () => {
     if (!connection) return;
@@ -106,7 +108,7 @@ export function McpToolsDialog({ open, api, connection, canWrite, onClose, onCha
           {catalog === null ? (
             <Skeleton variant="rounded" height={120} />
           ) : (
-            <McpToolList tools={catalog.tools} busyId={busy} disabled={!canWrite} onChange={(t, m) => void decide(t, m)} />
+            <McpToolList tools={catalog.tools} busyId={busy} disabled={!canWrite} onChange={(t, m) => void decide(t, m)} {...(canWrite ? { onTry: setTrying } : {})} />
           )}
         </Stack>
       </DialogContent>
@@ -120,6 +122,7 @@ export function McpToolsDialog({ open, api, connection, canWrite, onClose, onCha
           Done
         </Button>
       </DialogActions>
+      <McpTryDialog open={trying !== null} api={api} connection={connection} tool={trying} onClose={() => setTrying(null)} />
     </Dialog>
   );
 }

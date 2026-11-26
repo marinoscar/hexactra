@@ -88,3 +88,17 @@ export interface DiagnosticRemedy {
 }
 /** The remedy table, keyed by code (`UNAVAILABLE`, `GRANT_REVOKED`, ...). */
 export declare const DIAGNOSTIC_REMEDIES: Readonly<Record<string, DiagnosticRemedy>>;
+
+/** One MCP server preset (`mcp-presets.json`): what the Add dialog fills in. Never a secret, never a tool mode. */
+export interface McpPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly url: string;
+  readonly auth: 'oauth' | 'bearer' | 'header' | 'none';
+  readonly headerName?: string;
+  readonly docsUrl: string;
+  readonly notes: string;
+  /** The date the address was checked against the vendor's own documentation (`YYYY-MM-DD`). */
+  readonly verified: string;
+}
+export declare const MCP_PRESETS: readonly McpPreset[];

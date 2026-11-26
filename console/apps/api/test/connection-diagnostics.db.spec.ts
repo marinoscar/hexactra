@@ -204,7 +204,7 @@ describe('a report through the fallback', () => {
     }
   });
 
-  it('an MCP server: it answers and lists its tools (a count, never their names); a refused sign-in fails as AUTH_REFUSED', async () => {
+  it('an MCP server: its own stages (E50.12) with a tool count, never their names; a refused sign-in fails as AUTH_REFUSED', async () => {
     const s = await login('diag-mcp');
     const srv = await new FakeMcpServer({ bearer: BEARER, tools: [{ name: 'search_notes', description: 'Search the notes.', inputSchema: { type: 'object', properties: {} } }, { name: 'add_note', description: 'Adds a note.', inputSchema: { type: 'object', properties: {} } }] }).start();
     servers.push(srv);
@@ -212,19 +212,14 @@ describe('a report through the fallback', () => {
     expect(added.statusCode).toBe(200);
     const id = added.data.connection.id;
     const r = await diagnose(s, id);
-    expect(shape(r.data)).toEqual([
-      ['status', 'pass', null],
-      ['provider_installed', 'pass', null],
-      ['server', 'pass', null],
-      ['latency', 'pass', null],
-    ]);
-    expect(r.data.stages[2]!.data).toEqual({ tools: 2 });
+    expect(shape(r.data).map(([stage]) => stage)).toEqual(['status', 'provider_installed', 'switch', 'address', 'network', 'initialize', 'sign_in', 'tool_list', 'tool_changes', 'enabled_tools', 'offered_cap', 'latency']);
+    expect(r.data.stages.find((x) => x.id === 'tool_list')!.data).toEqual({ count: 2, pages: 1 });
     expect(JSON.stringify(r.data)).not.toContain('search_notes');
 
     // The server stops accepting the token.
     (srv as unknown as { opts: { bearer?: string } }).opts.bearer = 'another-token';
     const refused = await diagnose(s, id);
-    expect(refused.data.stages[2]).toMatchObject({ id: 'server', status: 'fail', code: 'AUTH_REFUSED' });
+    expect(refused.data.stages.find((x) => x.id === 'sign_in')).toMatchObject({ status: 'fail', code: 'AUTH_REFUSED' });
 
     expect((await call(admin, 'PUT', '/api/connections/admin/mcp', { enabled: false })).statusCode).toBe(200);
     app.get(ConnectionApps, { strict: false }).invalidate();
@@ -232,7 +227,7 @@ describe('a report through the fallback', () => {
       const off = await diagnose(s, id);
       expect(shape(off.data).slice(1, 3)).toEqual([
         ['provider_installed', 'fail', 'PROVIDER_DISABLED'],
-        ['server', 'skipped', null],
+        ['provider', 'skipped', null],
       ]);
     } finally {
       await call(admin, 'PUT', '/api/connections/admin/mcp', { enabled: true });

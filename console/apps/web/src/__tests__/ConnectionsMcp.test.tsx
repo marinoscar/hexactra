@@ -294,3 +294,47 @@ describe('the administrator\'s MCP card', () => {
     expect(card.getByRole('switch', { name: 'Let users add and use MCP servers' })).toBeDisabled();
   });
 });
+
+describe('presets and Try (E50.12)', () => {
+  const PRESETS = [
+    { id: 'sentry', name: 'Sentry', url: 'https://mcp.sentry.dev/mcp', auth: 'oauth', docsUrl: 'https://github.com/getsentry/sentry-mcp', notes: "Sentry's hosted MCP server.", verified: '2026-11-26' },
+    { id: 'github', name: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', auth: 'bearer', docsUrl: 'https://github.com/github/github-mcp-server', notes: 'Sign in with a token.', verified: '2026-11-26' },
+  ];
+
+  it('a preset only fills the form: the address, the name and the kind of sign-in; the secret is still typed by the owner', async () => {
+    const host = renderPage({ 'GET /connections': [], 'GET /connections/mcp/presets': PRESETS });
+    const dialog = await openAdd();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'GitHub' }));
+    expect(within(dialog).getByLabelText(/Server address/)).toHaveValue('https://api.githubcopilot.com/mcp/');
+    expect(within(dialog).getByLabelText(/Name \(optional\)/)).toHaveValue('GitHub');
+    expect(within(dialog).getByRole('radio', { name: 'Bearer token' })).toBeChecked();
+    expect(within(dialog).getByText(/address checked 2026-11-26/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+    expect(host.requests.some((r) => r.method === 'POST')).toBe(false);
+  });
+
+  it('tries a Read tool with JSON arguments and shows the answer as plain text; a Write tool has no Try', async () => {
+    const catalog = { tools: [SEARCH, { ...ADD, mode: 'write', review: null }], needsReview: 0, fetchedAt: null };
+    const host = renderPage({
+      'GET /connections': [NOTES],
+      [`GET /connections/${NOTES.id}/tools`]: catalog,
+      [`POST /connections/${NOTES.id}/tools/t1/try`]: { ok: true, code: null, ms: 42, text: 'Found 2 notes <b>bold</b>', truncated: false },
+    });
+    await screen.findByRole('listitem', { name: 'Connection Work notes' });
+    fireEvent.click(within(await openMenu('Work notes')).getByRole('menuitem', { name: 'Tools' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Tools of Work notes' });
+    await within(dialog).findByText('Search notes');
+    expect(within(dialog).queryByRole('button', { name: 'Try Add a note' })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Try Search notes' }));
+    const tryDialog = await screen.findByRole('dialog', { name: 'Try Search notes' });
+    const field = within(tryDialog).getByLabelText(/Arguments \(JSON\)/);
+    expect(field).toHaveValue('{\n  "query": ""\n}');
+    fireEvent.change(field, { target: { value: 'not json' } });
+    expect(within(tryDialog).getByRole('button', { name: 'Try it' })).toBeDisabled();
+    fireEvent.change(field, { target: { value: '{"query": "invoices"}' } });
+    fireEvent.click(within(tryDialog).getByRole('button', { name: 'Try it' }));
+    expect(await within(tryDialog).findByText('Found 2 notes <b>bold</b>')).toBeInTheDocument();
+    expect(tryDialog.querySelector('b')).toBeNull();
+    expect(host.requests.find((r) => r.path.endsWith('/try'))?.body).toEqual({ arguments: { query: 'invoices' } });
+  });
+});
