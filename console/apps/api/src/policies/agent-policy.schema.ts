@@ -62,7 +62,14 @@ const budgetSchema = z
     maxCostUsd: z.number().positive().max(100_000).nullable().describe('Most a run may cost in US dollars. `null` means unlimited.'),
     // E50.7: not a stop. The call over the limit is refused (`LIMIT_REACHED`) and the run goes on with the browser, so it is not in
     // `BUDGET_LIMIT_KEYS` (which cap a run) nor in the harness's `BudgetTracker`; the runner's web port counts it (`host/web-port.ts`).
-    maxWebCalls: limit(10_000, 'Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser.').default(null),
+    maxWebCalls: z
+      .number()
+      .int()
+      .min(1)
+      .max(10_000)
+      .nullable()
+      .default(null)
+      .describe('Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.'),
     warnAtPercent: z.number().int().min(10).max(95).describe('Warn the owner when any set budget reaches this percentage.'),
   })
   .describe('What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them.');

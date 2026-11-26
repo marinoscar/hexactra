@@ -10573,6 +10573,18 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
+             * @example SERVICE_CREDENTIAL_UNKNOWN
+             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
+             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
+             * @example SERVICE_CREDENTIAL_INVALID
+             * @example WEB_SEARCH_NOT_CONFIGURED
+             * @example WEB_SEARCH_AUTH_REFUSED
+             * @example WEB_SEARCH_RATE_LIMITED
+             * @example WEB_SEARCH_QUOTA_EXCEEDED
+             * @example WEB_SEARCH_UNAVAILABLE
+             * @example WEB_SEARCH_LIMIT_REACHED
+             * @example WEB_SEARCH_ABORTED
+             * @example WEB_SEARCH_TEST_RATE_LIMITED
              * @example TASK_BUILDER_NOT_FOUND
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
@@ -10592,18 +10604,6 @@ export interface components {
              * @example DELIVERY_TEST_RATE_LIMITED
              * @example RECIPIENT_NOT_CONFIRMED
              * @example RECIPIENT_LIMIT
-             * @example SERVICE_CREDENTIAL_UNKNOWN
-             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
-             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
-             * @example SERVICE_CREDENTIAL_INVALID
-             * @example WEB_SEARCH_NOT_CONFIGURED
-             * @example WEB_SEARCH_AUTH_REFUSED
-             * @example WEB_SEARCH_RATE_LIMITED
-             * @example WEB_SEARCH_QUOTA_EXCEEDED
-             * @example WEB_SEARCH_UNAVAILABLE
-             * @example WEB_SEARCH_LIMIT_REACHED
-             * @example WEB_SEARCH_ABORTED
-             * @example WEB_SEARCH_TEST_RATE_LIMITED
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -17073,6 +17073,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -17287,6 +17292,11 @@ export interface components {
                         maxOutputTokens: number | null;
                         /** @description Most a run may cost in US dollars. `null` means unlimited. */
                         maxCostUsd: number | null;
+                        /**
+                         * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                         * @default null
+                         */
+                        maxWebCalls?: number | null;
                         /** @description Warn the owner when any set budget reaches this percentage. */
                         warnAtPercent: number;
                     };
@@ -17425,6 +17435,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -17511,6 +17526,11 @@ export interface components {
                     maxOutputTokens: number | null;
                     /** @description Most a run may cost in US dollars. `null` means unlimited. */
                     maxCostUsd: number | null;
+                    /**
+                     * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                     * @default null
+                     */
+                    maxWebCalls?: number | null;
                     /** @description Warn the owner when any set budget reaches this percentage. */
                     warnAtPercent: number;
                 };
@@ -21412,6 +21432,14 @@ export interface components {
                     costKnown: boolean;
                     /** @description Time spent working, waits for a person excluded */
                     activeMs: number;
+                    /** @description What the run did on the web (E50.7); absent when it made no web call */
+                    web?: {
+                        searches: number;
+                        /** @description Pages read with web_fetch */
+                        reads: number;
+                        /** @description An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost */
+                        estimatedSearchCostUsd: number | null;
+                    };
                 };
             };
             /** @description What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed. */
@@ -21487,6 +21515,11 @@ export interface components {
                         maxOutputTokens: number | null;
                         /** @description Most a run may cost in US dollars. `null` means unlimited. */
                         maxCostUsd: number | null;
+                        /**
+                         * @description Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.
+                         * @default null
+                         */
+                        maxWebCalls?: number | null;
                         /** @description Warn the owner when any set budget reaches this percentage. */
                         warnAtPercent: number;
                     };
@@ -22779,6 +22812,8 @@ export interface components {
                 allowSavedCards: boolean;
                 /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
+                /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+                allowWebSearch: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -22880,6 +22915,8 @@ export interface components {
                 allowSavedCards: boolean;
                 /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
+                /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+                allowWebSearch: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -22918,6 +22955,8 @@ export interface components {
             allowSavedCards: boolean;
             /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
             allowConnections: boolean;
+            /** @description Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider. */
+            allowWebSearch: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -22934,6 +22973,7 @@ export interface components {
             allowSavedIdentity?: boolean;
             allowSavedCards?: boolean;
             allowConnections?: boolean;
+            allowWebSearch?: boolean;
             paused?: boolean;
         };
         UsageReportResponseDto: {

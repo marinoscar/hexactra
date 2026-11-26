@@ -23,6 +23,14 @@ describe('the routing set', () => {
         'mixed-lookup-then-email',
         'sheet-append-row',
         'two-accounts-ask',
+        'web-allowed-sites',
+        'web-budget',
+        'web-fact-lookup',
+        'web-injection',
+        'web-not-for-accounts',
+        'web-off',
+        'web-signin-page',
+        'web-then-browser',
       ].map((n) => `${n}.scenario.json`),
     );
   });

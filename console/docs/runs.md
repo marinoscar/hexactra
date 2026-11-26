@@ -219,6 +219,8 @@ Every run keeps a trace a person can follow afterwards (#541): its steps (`run_s
 - **Removed with the run** by a delete and by the nightly retention; a storage failure never keeps a run.
 - **Metrics.** `app.runs.trace_screenshots` (labels `moment`, `result`: `stored`, `skipped`, `failed`) and `app.runs.trace_screenshot_bytes`. The Doctor's `runs.trace_storage` warns when storage is off. No image, key or prompt text is ever logged.
 
+**Web search (E50.7).** A run with web search on records `web_search` and `web_fetch` as `action` steps: the query (masked), the count, the freshness and the site of a search, the host and path of a page read; never the text of a result or a page. The run trace file's `usage.web` (`{ searches, reads, estimatedSearchCostUsd }`, absent when the run made no web call) counts the searches and reads that were sent; the search cost is an **estimate** (searches times the provider's cost per call, as the run started) and is never added to `costUsd`, which is the AI cost.
+
 ## Crash safety (E38.3)
 
 A run survives its worker dying (a crash, a deploy, a lost lease): it carries on from the last action that really happened, and **a step the owner confirmed (a payment, an order, a message) is never carried out twice.** Code: `console/apps/api/src/runner/` (`lease.ts`, and in `packages/hexactra-agent/src/`: `intent.ts`, `reconcile.ts` and `record` in `steps.ts`).
