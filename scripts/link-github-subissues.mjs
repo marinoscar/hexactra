@@ -70,7 +70,7 @@ const epicChildren = new Map([
   // E47 Hexactra as a passkey provider (post-v1): E47.1 to E47.7 in order; E47.3 (Vault) waits for marinoscar/vault.
   [925, [939, 940, 941, 942, 943, 944, 945]],
   // E48 profile sign-in health: warn on signed-out Chrome profiles and sign them in with one click (E48.1 to E48.7, in order).
-  [926, [927, 928, 929, 930, 931, 932, 933]],
+  [926, [927, 928, 929, 930, 931, 932, 933, 990, 991]],
   // E49 verification codes in segmented fields: fill every box, keep the code from the model, don't give up early.
   [957, [958, 959, 960, 961, 963]],
   // E50 web search, extensible tools and diagnostics (E50.1 to E50.17; order in the epic body).

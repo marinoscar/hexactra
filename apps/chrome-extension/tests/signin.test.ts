@@ -58,10 +58,13 @@ describe('checkGoogleSignin', () => {
     const down = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     }) as unknown as typeof fetch;
-    expect(await checkGoogleSignin(down)).toEqual({ signin: 'unknown', accounts: [] });
-    expect((await checkGoogleSignin(respond('["gaia.l.a.r",[]]', 500))).signin).toBe('unknown');
+    expect(await checkGoogleSignin(down)).toEqual({ signin: 'unknown', accounts: [], reason: 'network' });
+    expect(await checkGoogleSignin(respond('["gaia.l.a.r",[]]', 500))).toEqual({ signin: 'unknown', accounts: [], reason: 'http_500' });
+    expect(await checkGoogleSignin(respond('<html>', 200))).toEqual({ signin: 'unknown', accounts: [], reason: 'parse' });
     const hang = vi.fn((_u: string, init?: RequestInit) => new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))) as unknown as typeof fetch;
-    expect((await checkGoogleSignin(hang, 20)).signin).toBe('unknown');
+    expect(await checkGoogleSignin(hang, 20)).toEqual({ signin: 'unknown', accounts: [], reason: 'timeout' });
+    // The reason is all an unknown result adds to the message.
+    expect(profileStatusMessage(await checkGoogleSignin(hang, 20))).toEqual({ type: 'profile_status', signin: 'unknown', accounts: [], reason: 'timeout' });
   });
 });
 

@@ -7896,6 +7896,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/service-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The keys of outside services, and which tiers hold one
+         * @description One entry per key the console can use (a web search provider's): for you, whether your own key, your organization's and the deployment's are stored and when, and which one your requests use now. **Never a key, nor any part of one.**
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["serviceCredentials_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/service-credentials/admin/{service}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the deployment's key
+         * @description Stores the deployment's key for this service, encrypted. Write-only. Audited (`service_credential.set`, tier `system`).
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        put: operations["serviceCredentials_setSystem"];
+        post?: never;
+        /**
+         * Remove the deployment's key
+         * @description Idempotent. Audited (`service_credential.removed`, tier `system`).
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        delete: operations["serviceCredentials_removeSystem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/service-credentials/org/{service}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set your organization's key
+         * @description Stores your active organization's key for this service, encrypted. Write-only. Needs `org_ai_config:write` in that organization. Audited with the organization's id.
+         *
+         *     **Requires:** authentication, plus permission `org_ai_config:write`.
+         */
+        put: operations["serviceCredentials_setOrg"];
+        post?: never;
+        /**
+         * Remove your organization's key
+         * @description Idempotent. Audited with the organization's id.
+         *
+         *     **Requires:** authentication, plus permission `org_ai_config:write`.
+         */
+        delete: operations["serviceCredentials_removeOrg"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/service-credentials/{service}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set your own key
+         * @description Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        put: operations["serviceCredentials_setOwn"];
+        post?: never;
+        /**
+         * Remove your own key
+         * @description Idempotent. Audited (`service_credential.removed`, tier `user`).
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        delete: operations["serviceCredentials_removeOwn"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -10370,6 +10476,10 @@ export interface components {
              * @example DELIVERY_TEST_RATE_LIMITED
              * @example RECIPIENT_NOT_CONFIRMED
              * @example RECIPIENT_LIMIT
+             * @example SERVICE_CREDENTIAL_UNKNOWN
+             * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
+             * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
+             * @example SERVICE_CREDENTIAL_INVALID
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -22181,6 +22291,48 @@ export interface components {
             };
             /** @constant */
             neverForSite?: true;
+        };
+        ServiceCredentialResponseDto: {
+            service: string;
+            name: string;
+            label: string;
+            /**
+             * @description Where the answering key is kept.
+             * @enum {string}
+             */
+            binding: "credential_store" | "vault" | "builtin";
+            /** @description The tier a request of yours would use now (user, then organization, then deployment), or `null`. */
+            tier: ("user" | "organization" | "system") | null;
+            tiers: {
+                user: {
+                    /** @description A key may be stored at this tier for this reference (the organization tier needs an active organization). */
+                    available: boolean;
+                    /** @description A key is stored at this tier. */
+                    set: boolean;
+                    /** @description When it was stored. Never a part of the key. */
+                    setAt: string | null;
+                };
+                organization: {
+                    /** @description A key may be stored at this tier for this reference (the organization tier needs an active organization). */
+                    available: boolean;
+                    /** @description A key is stored at this tier. */
+                    set: boolean;
+                    /** @description When it was stored. Never a part of the key. */
+                    setAt: string | null;
+                };
+                system: {
+                    /** @description A key may be stored at this tier for this reference (the organization tier needs an active organization). */
+                    available: boolean;
+                    /** @description A key is stored at this tier. */
+                    set: boolean;
+                    /** @description When it was stored. Never a part of the key. */
+                    setAt: string | null;
+                };
+            };
+        };
+        SetServiceCredentialDto: {
+            /** @description The key. Write-only: it is never returned, not even in part. */
+            value: string;
         };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
@@ -51282,6 +51434,366 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["QuestionResponseDto"];
                     };
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ServiceCredentialResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_setSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetServiceCredentialDto"];
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_removeSystem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or there was nothing to remove) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_setOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetServiceCredentialDto"];
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_removeOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or there was nothing to remove) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_setOwn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetServiceCredentialDto"];
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_removeOwn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed (or there was nothing to remove) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

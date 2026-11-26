@@ -29,6 +29,7 @@ import { ApprovalsModule } from './approvals/approvals.module';
 import { SecretsModule } from './secrets/secrets.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { DiagnosticsModule } from './diagnostics/diagnostics.module';
+import { ServiceCredentialsModule } from './service-credentials/service-credentials.module';
 import { GoogleConnectionsModule } from './connections/google/google.module';
 import { DeliveriesModule } from './deliveries/deliveries.module';
 import { MicrosoftConnectionsModule } from './connections/microsoft/microsoft.module';
@@ -78,6 +79,8 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     DiagnosticsModule,
     // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule, MicrosoftConnectionsModule, MailTriggersModule] : []),
+    // Service credentials (E50.2): the keys of outside services the console calls (a search provider), user, organization and deployment.
+    ...(isSliceEnabled('credentials') ? [ServiceCredentialsModule] : []),
     // The built-in secrets store (E37.5): the Vault packages embedded. Mounted when the deployment has a store key (the
     // installer generates SECRETS_STORE_KEY, #711); OFFERED only while the administrator's switch is on (Administration →
     // Secrets, `secrets.store.enabled`). A malformed key stops the API at boot with one clear error.

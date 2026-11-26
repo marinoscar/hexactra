@@ -118,7 +118,7 @@ Most sites sign in through Google, and the agent relies on the profile's Google 
 | `signed_in` | **Signed in as** the account's email, in full | A valid Google session |
 | `signed_out` | **Not signed in to Google** (warning) | No Google account in the profile |
 | `expired` | **Google session expired** (warning) | Chrome knows the account, but Google wants the person to sign in again |
-| `unknown` | **Sign-in not checked** | The browser never ran, the check failed, or the checks disagree. A failed check is never shown as signed out |
+| `unknown` | **Sign-in not checked** | The browser never ran, the check failed, or the checks disagree. A failed check is never shown as signed out. While the browser runs, a failed check with Google does not hide a signed-in account the node read from the profile's settings |
 
 **How it is checked.** The node reads the profile's Chrome settings on disk (at agent start, after the browser closes, and when a profile is created), and while the browser runs, the extension asks Google which accounts the profile's session holds (when it starts, every 10 minutes, and as soon as a Google sign-in page finishes loading). Only the state, the email and the time of the check leave the node; cookies and Google's answer never do. `expired` is seen only while the browser runs.
 
@@ -199,5 +199,5 @@ What the node has always held is unchanged: the browser profiles, with their coo
 | The extension is not connected | `hexactra agent doctor` checks the policy, the native host and the extension |
 | The node shows offline | `hexactra agent status`, then `hexactra agent logs`. The node needs outbound HTTPS to the console. |
 | Profile shows **Not signed in to Google** or **Google session expired** | Click **Sign in** on it in Fleet (unattended nodes) and sign in on the desktop. On an attended node, sign in in your own Chrome; on a browser-only host, use `hexactra fleet profile show`. The warning clears within seconds of the sign-in. |
-| Profile shows **Sign-in not checked** | Its browser has not run yet, or the node could not read its settings. Start a run or open the profile once; `hexactra agent doctor` on the node prints what it read. |
+| Profile shows **Sign-in not checked** | Its browser has not run yet, or the node could not read its settings. Start a run or open the profile once; `hexactra agent doctor` on the node prints what it read. When the check with Google fails, the node agent's log has a line `live sign-in check could not tell` with the reason (`http_<status>`, `timeout`, `network`, `parse`). |
 | A warning about software graphics | The machine has no usable Intel or AMD GPU (or uses NVIDIA's proprietary driver). The node works but is easier to detect. |
