@@ -44,7 +44,7 @@ export interface UpdateResult {
 }
 
 export interface TestResult {
-  results: { capability: Capability; ok: boolean; code: string | null }[];
+  results: { capability: Capability; ok: boolean; code: string | null; api?: string }[];
 }
 
 const STATUS_ORDER: Record<string, number> = { needs_reconnect: 0, revoked: 1, active: 2, paused: 3 };
@@ -223,14 +223,17 @@ export class ConnectionsService {
     const accessToken = await this.tokens.getAccessToken(id, userId);
     const results: TestResult['results'] = [];
     for (const capability of capabilitiesOf(row)) {
-      let r: { ok: boolean; code?: string };
+      let r: { ok: boolean; code?: string; api?: string };
       try {
         r = await adapter.probe({ capability, accessToken });
       } catch (e) {
         this.log.warn(`connection probe failed (${e instanceof Error ? e.name : 'error'})`);
         r = { ok: false, code: 'UNAVAILABLE' };
       }
-      results.push({ capability, ok: r.ok, code: r.ok ? null : /^[A-Z][A-Z_]{0,39}$/.test(r.code ?? '') ? r.code! : 'UNKNOWN' });
+      const code = r.ok ? null : /^[A-Z][A-Z_]{0,39}$/.test(r.code ?? '') ? r.code! : 'UNKNOWN';
+      // E50.11 (#681): a switched-off API is named (an id from the adapter's closed list, never provider text).
+      const api = code === 'API_DISABLED' && typeof r.api === 'string' && /^[a-z0-9][a-z0-9.-]{0,99}$/.test(r.api) ? r.api : null;
+      results.push({ capability, ok: r.ok, code, ...(api ? { api } : {}) });
     }
     this.events.count(row.provider, 'tested');
     return { results };
