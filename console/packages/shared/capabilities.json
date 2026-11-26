@@ -1581,7 +1581,9 @@
       "tui": {
         "none": "The TUI is for watching and answering; the CLI command and the web page cover it"
       },
-      "web": "/admin/settings/connections"
+      "web": {
+        "none": "Not yet: the app test of Administration → Connections comes with E50.14 (#984); the CLI and the REST route run it today"
+      }
     },
     {
       "id": "connections.mcp",
