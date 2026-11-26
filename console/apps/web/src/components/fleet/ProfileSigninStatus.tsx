@@ -8,7 +8,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Box, Button, Chip, Tooltip, Typography } from '@mui/material';
 import type { ElementType } from 'react';
 
-import { needsSignin, type FleetHost, type FleetProfile, type FleetSigninState } from '../../types/fleet';
+import { needsSignin, type FleetHost, type FleetProfile, type FleetSigninReporting, type FleetSigninState } from '../../types/fleet';
 import { formatRelative, useProfileTimeZone, type StatusColor } from '../../ui';
 
 /** Each state's chip: a colour, an icon and words, so colour is never the only signal. */
@@ -60,15 +60,27 @@ function emailsOf(profile: FleetProfile, state: FleetSigninState): string[] {
   return matching.length ? matching : profile.accounts.map((a) => a.email);
 }
 
-export interface SigninChipProps {
-  profile: Pick<FleetProfile, 'signin' | 'checkedAt'>;
+/** The tooltip of a profile never checked, when the host says why (#998). */
+export const FABRIC_OUTDATED_HINT = "Not reported: the server's fabric does not accept sign-in status yet. Update the server (hexactra deploy update).";
+export const NOT_REPORTED_HINT = "Not reported: this node has not sent its sign-in status. Update its agent (hexactra agent update).";
+
+function neverChecked(reporting: FleetSigninReporting | undefined): string {
+  if (reporting === 'fabric_outdated') return FABRIC_OUTDATED_HINT;
+  if (reporting === 'not_reported') return NOT_REPORTED_HINT;
+  return 'never checked';
 }
 
-/** The sign-in chip, with "checked <relative time>" as its tooltip. */
-export function SigninChip({ profile }: SigninChipProps) {
+export interface SigninChipProps {
+  profile: Pick<FleetProfile, 'signin' | 'checkedAt'>;
+  /** The host's `signinReporting`: names the cause when the profile was never checked. */
+  reporting?: FleetSigninReporting;
+}
+
+/** The sign-in chip, with "checked <relative time>" (or why it never was) as its tooltip. */
+export function SigninChip({ profile, reporting }: SigninChipProps) {
   const timeZone = useProfileTimeZone();
   const chip = chipOf(profile.signin);
-  const checked = profile.checkedAt ? `checked ${formatRelative(profile.checkedAt, Date.now(), { timeZone })}` : 'never checked';
+  const checked = profile.checkedAt ? `checked ${formatRelative(profile.checkedAt, Date.now(), { timeZone })}` : neverChecked(reporting);
   return (
     <Tooltip title={checked}>
       <Chip
@@ -84,7 +96,7 @@ export function SigninChip({ profile }: SigninChipProps) {
 }
 
 export interface ProfileSigninStatusProps {
-  host: Pick<FleetHost, 'name' | 'mode' | 'desktop' | 'online'>;
+  host: Pick<FleetHost, 'name' | 'mode' | 'desktop' | 'online' | 'signinReporting'>;
   profile: FleetProfile;
   canDesktop: boolean;
   /** What "Sign in" does. Opens the desktop page today; E48.4 rewires it to the guided sign-in. */
@@ -102,7 +114,7 @@ export function ProfileSigninStatus({ host, profile, canDesktop, onSignIn }: Pro
   const action = needsSignin(profile) ? signinAction(host, canDesktop) : null;
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1, rowGap: 0.5, mt: 0.5, minWidth: 0 }}>
-      <SigninChip profile={profile} />
+      <SigninChip profile={profile} reporting={host.signinReporting} />
       {emails.length > 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
           {state === 'signed_in' ? `Signed in as ${emails.join(', ')}` : `Last signed in as ${emails.join(', ')}`}

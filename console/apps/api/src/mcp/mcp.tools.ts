@@ -564,11 +564,12 @@ async function answerTool(a: Record<string, unknown>, ctx: McpContext, mode: 're
 }
 
 /** A list answer: the bare list in `content` (as it always was), `{ items }` as structured content. */
-/** A fleet host as `hosts_list` returns it: profiles keep only their name and running state (E48, #927). */
+/** A fleet host as `hosts_list` returns it: profiles keep only their name and running state, and the host no sign-in field (E48, #927, #998). */
 export function withoutSignin(h: unknown): unknown {
   if (!h || typeof h !== 'object') return h;
-  const host = h as { profiles?: unknown };
-  if (!Array.isArray(host.profiles)) return h;
+  const host: { profiles?: unknown; signinReporting?: unknown } = { ...(h as object) };
+  delete host.signinReporting;
+  if (!Array.isArray(host.profiles)) return host;
   return { ...host, profiles: host.profiles.map((p: { name?: unknown; running?: unknown }) => ({ name: p?.name, running: p?.running })) };
 }
 
