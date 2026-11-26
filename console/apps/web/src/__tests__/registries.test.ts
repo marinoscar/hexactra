@@ -133,6 +133,8 @@ describe('browser agent cards', () => {
       ['/settings/kgraph', 'kgraph:read', undefined],
       // E50.5 (#975), appended: what GET /api/web-search/status enforces.
       ['/settings/web-search', 'web_search:read', undefined],
+      // #1008, appended: what GET /api/skills enforces.
+      ['/settings/skills', 'skills:read', undefined],
     ]);
   });
 
@@ -162,6 +164,8 @@ describe('browser agent cards', () => {
       ['Benchmarks', '/admin/settings/benchmarks', 'benchmarks:read', undefined],
       // E50.5 (#975), appended: what GET /api/web-search/admin enforces.
       ['Web search', '/admin/settings/web-search', 'system_settings:read', undefined],
+      // #1008, appended: the `skills` namespace of the system settings.
+      ['Skills', '/admin/settings/skills', 'system_settings:read', undefined],
     ]);
     expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');

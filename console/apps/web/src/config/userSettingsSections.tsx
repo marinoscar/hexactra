@@ -7,6 +7,7 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
@@ -162,6 +163,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: TravelExploreOutlinedIcon,
         path: '/settings/web-search',
         permission: 'web_search:read',
+      },
+      // Skills (#1008). `skills:read` is what `GET /api/skills` enforces (apps/api/src/skills/skills.controller.ts); writes need
+      // `skills:write`, checked in the page.
+      {
+        title: 'Skills',
+        description: 'How you want the agent to do a kind of job, in your words. A skill is guidance: it never allows a site, a payment or a recipient.',
+        Icon: MenuBookOutlinedIcon,
+        path: '/settings/skills',
+        permission: 'skills:read',
       },
     ],
   },
