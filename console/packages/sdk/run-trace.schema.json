@@ -367,6 +367,36 @@
               "minimum": -9007199254740991,
               "maximum": 9007199254740991,
               "description": "Time spent working, waits for a person excluded"
+            },
+            "web": {
+              "description": "What the run did on the web (E50.7); absent when it made no web call",
+              "type": "object",
+              "properties": {
+                "searches": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "reads": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Pages read with web_fetch"
+                },
+                "estimatedSearchCostUsd": {
+                  "description": "An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "searches",
+                "reads",
+                "estimatedSearchCostUsd"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -720,6 +750,20 @@
                       ],
                       "description": "Most a run may cost in US dollars. `null` means unlimited."
                     },
+                    "maxWebCalls": {
+                      "default": null,
+                      "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "warnAtPercent": {
                       "type": "integer",
                       "minimum": 10,
@@ -734,6 +778,7 @@
                     "maxInputTokens",
                     "maxOutputTokens",
                     "maxCostUsd",
+                    "maxWebCalls",
                     "warnAtPercent"
                   ],
                   "additionalProperties": false,

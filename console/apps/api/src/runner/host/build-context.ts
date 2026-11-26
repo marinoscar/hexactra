@@ -59,6 +59,9 @@ import { subProcedures } from './kgraph/sub-procedure';
 import { procedureTools, proceduresFamily } from './tools/procedures';
 import { everydayBinding } from './kgraph/everyday';
 import { runCandidateSites, SITE_FACT_MODES, siteFactsBinding } from './kgraph/site-facts';
+import { webFamily, webSiteGate, webTools } from '@marinoscar/hexactra-web-agent';
+import { readSnapshotWeb } from './web-availability';
+import { bindWeb, earlierWebCalls, webSites } from './web-port';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -99,6 +102,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     allowed: (url: string) => domainAllowed(url, allowedDomains) && domainAllowed(url, appDomains),
     text: [allowedDomains.join(', ') || null, appDomains.length ? `the app's: ${appDomains.join(', ')}` : null].filter(Boolean).join('; '),
   };
+  // Web search (E50.7): bound only when the snapshot says it is on; the allowed sites bind web_fetch and filter web_search, never remove them.
+  const web = await bindWeb(d, { userId, orgId, runId: run.id, web: readSnapshotWeb(snapshot), sites: webSites(sites.allowed, allowedDomains, appDomains), earlierCalls: () => earlierWebCalls(d.prisma, run.id) });
   const used = { logins: readUsedSavedLogins(run.usedSavedLogins), identity: readUsedSavedIdentity(run.usedSavedIdentity), cards: readUsedSavedCards(run.usedSavedCards) };
 
   // A run with connections opens its browser at the first call that needs one (E39.7); a run without any opened it at its start.
@@ -169,6 +174,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     // The connections the run may use (E39.7), fixed at its start, and what it may read through them (the policy's context section).
     connections: { list: s.connections.list, needsBrowser: s.connections.needsBrowser, lazyBrowser: s.connections.lazyBrowser, limits: { messages: context.connectionReadMessages ?? DEFAULT_CONNECTION_READ_LIMITS.messages, chars: context.connectionReadChars ?? DEFAULT_CONNECTION_READ_LIMITS.chars } },
     flags,
+    ...(web ? { web } : {}),
   };
   // Routing steps (#405) take a `seq` but are not actions: the sequence runs ahead of `stepCount` by their number.
   const newest = await store.newestSeq();
@@ -235,6 +241,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     passkeys: flags.passkeys ? passkeyTools : null,
     connections: s.connections.list.length > 0 && Boolean(d.connections),
     ...(s.connections.list.length > 0 ? await mcpToolset(d, userId, s.connections.list).then((m) => ({ mcp: m.tools, mcpFamilies: m.families })) : { mcp: [] }),
+    web: web ? { tools: webTools as never, family: webFamily as never } : null,
     procedures,
     siteFacts,
   });
@@ -247,7 +254,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     // The shared instructions, then (for a task with outputs) the list of what to return: the same text every round (the stable prefix, #406).
     instructions: instructionsWithOutputs(runInstructions(registry, ctx, ASK_TOPICS), readOutputs(run.outputsSpec)),
     registry,
-    pipeline: new GatePipeline<HostContext>([siteGate as never, riskGate as never, connectionGate as never]),
+    pipeline: new GatePipeline<HostContext>([siteGate as never, riskGate as never, connectionGate as never, ...(web ? [webSiteGate as never] : [])]),
     visionNotes: VISION_NOTES,
     observe: (c) => observeRound(c as never),
     assembleInput: assembleRoundInput,

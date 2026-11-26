@@ -8,6 +8,7 @@ import { builtinPolicy } from './builtin-policies';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { readEffectiveBudget, runBudgetView, type BudgetRunColumns, type EffectiveBudget, type RunBudgetView } from '../runner/budget';
 import type { ResolvedTiers } from './model-tiers.schema';
+import type { SnapshotWeb } from '../runner/host/web-availability';
 import { runTierView, type RunTierColumns, type RunTierView } from './run-tier-view';
 
 /** Why a policy applied to a run (`runs.policy_source`). */
@@ -56,6 +57,11 @@ export interface RunPolicySnapshot {
    * a live run. Absent (or empty): none. An AI app's run has none unless the app's limits allow connections.
    */
   connections?: SnapshotConnection[];
+  /**
+   * Web search (E50.7): offered to this run because a provider was set up and both switches were on when it started (`web-availability.ts`).
+   * Absent: off. A later flip of a switch never alters a live run.
+   */
+  web?: SnapshotWeb;
 }
 
 /** One connection a run may use: which, how, and what was switched on at the start (the tools offered follow it). */
@@ -93,6 +99,8 @@ export interface SnapshotAppLimits {
   allowSavedCards: boolean;
   /** The owner allowed this app's runs to use their connections (E39.7); false when absent. */
   allowConnections: boolean;
+  /** The owner allowed this app's runs to search the web (E50.7); on when absent (on by default for every app). */
+  allowWebSearch: boolean;
   policyId: string | null;
   allowedPolicyIds: string[];
   appliedPolicyId: string | null;
@@ -115,6 +123,7 @@ export function readAppLimits(value: unknown): SnapshotAppLimits | null {
     allowSavedIdentity: v.allowSavedIdentity === true,
     allowSavedCards: v.allowSavedCards === true,
     allowConnections: v.allowConnections === true,
+    allowWebSearch: v.allowWebSearch !== false,
     policyId: typeof v.policyId === 'string' ? v.policyId : null,
     allowedPolicyIds: Array.isArray(v.allowedPolicyIds) ? v.allowedPolicyIds.filter((d): d is string => typeof d === 'string') : [],
     appliedPolicyId: typeof v.appliedPolicyId === 'string' ? v.appliedPolicyId : null,

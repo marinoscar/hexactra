@@ -1,0 +1,77 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: find the page by search, then act on it in the browser",
+  "description": "E50.7: the search finds the right page; the job on the site is done in the browser.",
+  "goal": "Find the ticket page of the Example Museum and read today's opening hours from it.",
+  "site": {
+    "start": "https://start.example.test/",
+    "pages": {
+      "https://start.example.test/": {
+        "title": "Start",
+        "text": "A blank start page.",
+        "elements": []
+      },
+      "https://museum.example.test/tickets": {
+        "title": "Tickets",
+        "text": "Today: open 10:00 to 17:00.",
+        "elements": []
+      }
+    }
+  },
+  "web": {
+    "results": {
+      "Example Museum tickets": [
+        {
+          "title": "Tickets - Example Museum",
+          "url": "https://museum.example.test/tickets",
+          "snippet": "Book your visit."
+        }
+      ]
+    }
+  },
+  "script": [
+    [
+      {
+        "tool": "web_search",
+        "args": {
+          "query": "Example Museum tickets"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "navigate",
+        "args": {
+          "url": "https://museum.example.test/tickets"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "read_text",
+        "args": {}
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "Today the museum is open 10:00 to 17:00."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 5,
+    "finishIncludes": "10:00",
+    "firstToolFamily": "web",
+    "toolsUsed": [
+      "web_search",
+      "navigate",
+      "read_text"
+    ],
+    "browserOpened": true
+  }
+}

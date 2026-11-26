@@ -1,0 +1,72 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: the owner's mail is not a web search",
+  "description": "E50.7: with web search on, \"what is my last email\" is read from the owner's account; the web is not used.",
+  "goal": "What is my last email?",
+  "trigger": "chat",
+  "needsBrowser": "auto",
+  "site": {
+    "start": "https://start.example.test/",
+    "pages": {
+      "https://start.example.test/": {
+        "title": "Start",
+        "text": "A blank start page.",
+        "elements": []
+      }
+    }
+  },
+  "web": {},
+  "connections": [
+    {
+      "ref": "c1",
+      "label": "Personal",
+      "provider": "google",
+      "capabilities": [
+        "mail_read"
+      ],
+      "mail": [
+        {
+          "id": "m1",
+          "from": "person-b@example.test",
+          "subject": "Dinner on Friday",
+          "date": "2026-11-20T08:00:00+00:00",
+          "body": "Are we still on for Friday?"
+        }
+      ]
+    }
+  ],
+  "script": [
+    [
+      {
+        "tool": "mail_search",
+        "args": {
+          "connection": "Personal",
+          "limit": 1
+        }
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "Your last email is from person-b@example.test: Dinner on Friday."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 3,
+    "finishIncludes": "Dinner",
+    "offered": [
+      "web_search"
+    ],
+    "firstToolFamily": "accounts",
+    "mustNotUseFamily": [
+      "web",
+      "browser"
+    ],
+    "webCalls": 0
+  }
+}

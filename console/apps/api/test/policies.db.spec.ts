@@ -430,8 +430,9 @@ describe('the legacy task fields', () => {
     const derived = data<Policy>(await app.inject({ method: 'GET', url: `/api/agent-policies/${l.policyRef}`, headers: as(alice.token) }));
     expect(derived.spec.models).toMatchObject({ startTier: 'standard', maxTier: 'standard', pins: { standard: 'model-x' } });
     expect(derived.spec.budget).toMatchObject({ maxActions: 250, maxActiveMinutes: 45, maxModelCalls: 120, maxCostUsd: 2 });
-    // The SQL builds the same document the service derives.
-    expect(derived.spec).toEqual(legacyTaskSpec({ maxSteps: 250, maxMinutes: 45, model: 'model-x' }));
+    // The SQL builds the same document the service derives. The SQL predates `maxWebCalls` (E50.7): its document reads with no web limit.
+    const expected = legacyTaskSpec({ maxSteps: 250, maxMinutes: 45, model: 'model-x' });
+    expect(derived.spec).toEqual({ ...expected, budget: { ...expected.budget, maxWebCalls: null } });
 
     // Idempotent: a second run changes nothing.
     await migrate();

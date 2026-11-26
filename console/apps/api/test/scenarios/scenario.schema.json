@@ -446,7 +446,8 @@
               "maxActiveMinutes",
               "maxInputTokens",
               "maxOutputTokens",
-              "maxCostUsd"
+              "maxCostUsd",
+              "maxWebCalls"
             ]
           },
           "additionalProperties": {
@@ -737,6 +738,90 @@
         "additionalProperties": false
       }
     },
+    "web": {
+      "description": "Web search (E50.7): set up for this owner, with these results and pages. Absent: not set up, the tools are not offered",
+      "type": "object",
+      "properties": {
+        "on": {
+          "default": true,
+          "description": "The owner's web search switch (a provider is set up): off, web_search and web_fetch are not offered",
+          "type": "boolean"
+        },
+        "fetch": {
+          "default": true,
+          "description": "The administrator's web_fetch switch",
+          "type": "boolean"
+        },
+        "results": {
+          "default": {},
+          "description": "What a query answers (exact query); any other query has no results",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "An https address of an invented host"
+                },
+                "snippet": {
+                  "default": "",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "pages": {
+          "default": {},
+          "description": "What web_fetch reads, by address; an injection scenario puts hostile text here",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "blocked": {
+          "default": [],
+          "description": "Addresses a server cannot read (sign-in, a bot check): web_fetch says to open them in the browser",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "needsBrowser": {
       "default": "auto",
       "description": "A task that never opens a browser is offered no browser tool",
@@ -936,6 +1021,40 @@
         "browserOpened": {
           "description": "Whether any action reached the browser",
           "type": "boolean"
+        },
+        "offered": {
+          "description": "Each named tool was offered in the first round (E50.7)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notOffered": {
+          "description": "No named tool was offered in any round (E50.7)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modelReadIncludes": {
+          "description": "Texts some tool result the model read contains",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modelReadExcludes": {
+          "description": "Texts no tool result the model read contains (a result filtered out)",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "webCalls": {
+          "description": "Exactly this many calls reached the search provider and the page reader (E50.7)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -1009,6 +1128,40 @@
             "browserOpened": {
               "description": "Whether any action reached the browser",
               "type": "boolean"
+            },
+            "offered": {
+              "description": "Each named tool was offered in the first round (E50.7)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "notOffered": {
+              "description": "No named tool was offered in any round (E50.7)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "modelReadIncludes": {
+              "description": "Texts some tool result the model read contains",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "modelReadExcludes": {
+              "description": "Texts no tool result the model read contains (a result filtered out)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "webCalls": {
+              "description": "Exactly this many calls reached the search provider and the page reader (E50.7)",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             },
             "finishIncludes": {
               "type": "string"

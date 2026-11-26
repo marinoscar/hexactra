@@ -106,7 +106,7 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
     if (run.pauseRequested && run.status !== 'waiting_human') return pauseEarly(d, userId, run.id, memory, lease);
 
     // The policy snapshot, written once at the first advance (resolved apart from the run's own state).
-    const snapshot = await policySnapshot(d, db, run, memory);
+    const snapshot = await policySnapshot(d, db, run, memory, orgId);
     // The tier the run is on: the start tier, moved up on a stall and back down after progress (#405). Kept in the memory, so it survives chunks, jobs and handoffs.
     const startTier = snapshot.spec.models.startTier;
     let tier: Tier = memory.tier ?? startTier;
