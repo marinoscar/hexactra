@@ -23,6 +23,7 @@ import '../tasks/runs.settings';
 import '../questions/questions.settings';
 import '../recordings/recordings.settings';
 import '../memories/memories.settings';
+import '../skills/skills.settings';
 import '../kgraph/kgraph.settings';
 import '../mcp/mcp.settings';
 import '../secrets/secrets.settings';

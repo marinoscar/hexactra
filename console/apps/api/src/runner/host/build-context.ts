@@ -59,6 +59,7 @@ import { subProcedures } from './kgraph/sub-procedure';
 import { procedureTools, proceduresFamily } from './tools/procedures';
 import { everydayBinding } from './kgraph/everyday';
 import { runCandidateSites, SITE_FACT_MODES, siteFactsBinding } from './kgraph/site-facts';
+import { skillsBinding } from './skills';
 
 export interface BuiltRun {
   /** The harness's loop for this run: `loop.run(profile)` drives it. */
@@ -224,6 +225,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   const factMode = SITE_FACT_MODES.has(kgMode) ? kgMode : everyday ? 'everyday' : null;
   const facts = factMode ? await siteFactsBinding(d, userId, run, factMode, await runCandidateSites(d, userId, run, [...allowedDomains, ...appDomains])) : null;
   const siteFacts = facts?.tools ?? null;
+  // The owner's skills (#1008): null without a fitting one (or with a switch off), and then nothing below changes.
+  const skills = await skillsBinding(d, userId, run, memory.context, [...allowedDomains, ...appDomains], s.connections.list);
   // The tools, in the order the model has always been offered them (one function, shared with the scenario kit).
   const registry = registerRunTools<HostContext>({
     needsBrowser: s.connections.needsBrowser,
@@ -237,6 +240,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     ...(s.connections.list.length > 0 ? await mcpToolset(d, userId, s.connections.list).then((m) => ({ mcp: m.tools, mcpFamilies: m.families })) : { mcp: [] }),
     procedures,
     siteFacts,
+    skills,
   });
 
   // A run an email started (E39.8): a reference to the message, never its content.
@@ -260,8 +264,9 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
       return line ? [line] : [];
     },
     summarizeGuidance: guidanceSummary,
-    // The memories, then "About these sites" (E46.32), then (everyday, E46.28) the saved procedures that may fit: all data, in the stable prefix.
-    aboutOwner: [await aboutOwner(d, userId, run, memory.context), facts?.block ?? '', everyday?.block ?? ''].filter(Boolean).join('\n\n'),
+    // The memories, then the owner's skills that fit (#1008), then "About these sites" (E46.32), then (everyday, E46.28) the saved procedures
+    // that may fit: all in the stable prefix.
+    aboutOwner: [await aboutOwner(d, userId, run, memory.context), skills?.block ?? '', facts?.block ?? '', everyday?.block ?? ''].filter(Boolean).join('\n\n'),
     beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),
     wrapUpNote: (c) => outputsWrapUpNote(c.ext.outputs),
   };

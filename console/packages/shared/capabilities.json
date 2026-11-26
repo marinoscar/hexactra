@@ -1236,6 +1236,51 @@
       "web": "/settings/memories"
     },
     {
+      "id": "skills.read",
+      "description": "List, search and read your skills (playbooks the agent reads when a job fits)",
+      "rest": [
+        "GET /api/skills",
+        "GET /api/skills/{id}"
+      ],
+      "cli": [
+        "skills list",
+        "skills show"
+      ],
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write skills (docs/security-skills.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; skills are kept in the web app or the CLI"
+      },
+      "web": "/settings/skills"
+    },
+    {
+      "id": "skills.write",
+      "description": "Add, edit, switch on or off, archive, unarchive and delete a skill",
+      "rest": [
+        "POST /api/skills",
+        "PATCH /api/skills/{id}",
+        "POST /api/skills/{id}/archive",
+        "POST /api/skills/{id}/unarchive",
+        "DELETE /api/skills/{id}"
+      ],
+      "cli": [
+        "skills add",
+        "skills edit",
+        "skills enable",
+        "skills disable",
+        "skills archive",
+        "skills delete"
+      ],
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write skills (docs/security-skills.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; skills are kept in the web app or the CLI"
+      },
+      "web": "/settings/skills"
+    },
+    {
       "id": "approvals.list",
       "description": "Saved approvals: the steps the owner told the agent not to ask about again, with their limits and recent uses, and whether Pause all is on",
       "rest": [

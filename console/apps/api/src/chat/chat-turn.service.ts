@@ -9,6 +9,8 @@ import { MemoryContext } from '../memories/memory-context';
 import { attributePairs, attributesFromPairs } from '../memories/memory-attribute-pairs';
 import { providerWhy } from '../platform/ai/provider-why';
 import { MemoryProposals } from '../memories/memory-proposals.service';
+import { SKILL_BLOCK_HEADER, SkillContext } from '../skills/skill-context';
+import { sitesInText } from '@marinoscar/hexactra-kgraph';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgentTrace } from '../runner/agent-trace';
@@ -74,10 +76,20 @@ export const CONNECTION_CHAT_INSTRUCTIONS = [
   "- Anything that sends, creates, changes or deletes something is a job: call start_run and name the account in the goal. The agent uses that account's tools and asks the owner before it sends or changes anything. You have no tool to change their accounts.",
 ].join('\n');
 
+/** Added to the instructions only when the input holds the owner's skills block (#1008): the chat names a skill in the goal; it reads none. */
+export const SKILLS_CHAT_INSTRUCTION =
+  '- "The owner\'s skills" lists the owner\'s own guidance for kinds of jobs. You cannot read one; the agent can. When one fits, name it in the goal ("following the owner\'s Google Messages skill").';
+
 /** The most proposals one turn may make. */
 const MAX_PROPOSALS_PER_TURN = 2;
 /** How many recent owner messages the memory selection reads. */
 const MEMORY_TEXT_MESSAGES = 10;
+
+/** Whether the input holds the skills block (it sits before the conversation, so an owner's message quoting the header does not count). */
+function hasSkillsBlock(input: string): boolean {
+  const at = input.indexOf(SKILL_BLOCK_HEADER);
+  return at >= 0 && at < input.indexOf('Conversation, oldest first:');
+}
 
 /** Thrown from `onStep` once the turn has done its one thing (asked, or started a run). */
 class TurnDone extends Error {}
@@ -110,6 +122,8 @@ export class ChatTurnService {
     @Optional() private readonly pauses?: RunPauseService,
     /** The owner's connections (E39.7): the chat's read tools. Absent without the connections module. */
     @Optional() private readonly connectionHub?: ConnectionCapabilities,
+    /** The owner's skills (#1008): names and descriptions only; the chat has no skill_read. Absent: no block. */
+    @Optional() private readonly skillContext?: SkillContext,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<ChatTurnOutcome> {
@@ -191,7 +205,9 @@ export class ChatTurnService {
     // The owner's memories (#553), chosen by what the owner wrote lately: information, never an instruction.
     const ownerText = rows.filter((r) => r.role === 'user').slice(0, MEMORY_TEXT_MESSAGES).map((r) => r.text).join('\n');
     const about = this.memoryContext ? (await this.memoryContext.forText(userId, ownerText)).block : '';
-    return [...(about ? [about, ''] : []), 'Conversation, oldest first:', ...rows.reverse().map(line), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.', ...(connectionsLine ? ['', connectionsLine] : [])].join('\n');
+    // The owner's skills that fit what they wrote (#1008), after the memories: names and descriptions, never the text.
+    const skills = this.skillContext ? (await this.skillContext.forJob(userId, { text: ownerText, sites: sitesInText(ownerText) })).block : '';
+    return [...(about ? [about, ''] : []), ...(skills ? [skills, ''] : []), 'Conversation, oldest first:', ...rows.reverse().map(line), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.', ...(connectionsLine ? ['', connectionsLine] : [])].join('\n');
   }
 
   /** The memories a chat run's goal uses (#553): recorded on the run (the run page says "Used: …") and marked used. */
@@ -435,7 +451,7 @@ export class ChatTurnService {
       const input = await this.buildInput(userId, c.id, reading.line);
       const result = await tr.within(() =>
         this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
-          instructions: reading.tools.length ? `${CHAT_INSTRUCTIONS}\n${CONNECTION_CHAT_INSTRUCTIONS}` : CHAT_INSTRUCTIONS,
+          instructions: [reading.tools.length ? `${CHAT_INSTRUCTIONS}\n${CONNECTION_CHAT_INSTRUCTIONS}` : CHAT_INSTRUCTIONS, ...(hasSkillsBlock(input) ? [SKILLS_CHAT_INSTRUCTION] : [])].join('\n'),
           input,
           tools,
           maxSteps: MAX_MODEL_STEPS,

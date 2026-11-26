@@ -13,6 +13,7 @@ import type { PrismaProcedureStore } from '../../kgraph/prisma-procedure-store';
 import type { KgraphSiteFactsService } from '../../kgraph/site-facts.service';
 import type { MemoryContext } from '../../memories/memory-context';
 import type { MemoryProposals } from '../../memories/memory-proposals.service';
+import type { SkillContext } from '../../skills/skill-context';
 import type { ModelTiersService } from '../../policies/model-tiers.service';
 import type { PolicyModelCheck } from '../../policies/policy-model-check';
 import type { PolicyResolver } from '../../policies/policy.resolver';
@@ -39,6 +40,8 @@ export interface HostDeps {
   artifacts?: RunArtifactStore;
   memoryContext?: MemoryContext;
   proposals?: MemoryProposals;
+  /** The owner's skills (#1008): the block and `skill_read`. Absent: no run is offered a skill. */
+  skills?: Pick<SkillContext, 'forJob' | 'read' | 'noteRead' | 'failed'>;
   /** Saved approvals (#555): the owner's standing answers, matched by the server. Absent: every step asks. */
   approvals?: ApprovalRulesService;
   /** The owner's secrets providers (E37.3): absent without the secrets module, and then no run signs in from a saved login. */

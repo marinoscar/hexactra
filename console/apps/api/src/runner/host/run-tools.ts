@@ -32,6 +32,11 @@ export interface RunToolsOptions<C extends AnyContext> {
    * and registered after every other tool, the procedures included, so a run with the feature off is offered exactly what it was before.
    */
   siteFacts?: { tools: readonly RunnerTool<C>[]; family: ToolFamily<C> } | null;
+  /**
+   * `skill_read` (#1008): given ONLY when the run has a fitting skill of its owner and the switches are on, and registered after every
+   * other tool, so a run without one is offered exactly what it was before.
+   */
+  skills?: { tools: readonly RunnerTool<C>[]; family: ToolFamily<C> } | null;
 }
 
 /**
@@ -58,6 +63,7 @@ export function registerRunTools<C extends AnyContext>(o: RunToolsOptions<C>): T
   if (o.procedures) registry.registerAll(o.procedures.tools);
   const siteFacts = o.siteFacts && !noBrowser ? o.siteFacts : null;
   if (siteFacts) registry.registerAll(siteFacts.tools);
-  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : []), ...(siteFacts ? [siteFacts.family] : [])]);
+  if (o.skills) registry.registerAll(o.skills.tools);
+  registry.registerFamilies([accountsFamily as unknown as ToolFamily<C>, ...(o.mcpFamilies ?? []), ...(browserFamilies as unknown as ToolFamily<C>[]), ...(o.procedures ? [o.procedures.family] : []), ...(siteFacts ? [siteFacts.family] : []), ...(o.skills ? [o.skills.family] : [])]);
   return registry;
 }

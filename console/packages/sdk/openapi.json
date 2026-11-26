@@ -52516,6 +52516,608 @@
           ]
         }
       }
+    },
+    "/api/skills": {
+      "get": {
+        "description": "The skills in use by default (`archived=true` lists the archived ones, `all` both). `q` searches the name, the description and the sites, ignoring case.\n\n**Requires:** authentication, plus permission `skills:read`.",
+        "operationId": "skills_list",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Searches the name, the description and the sites, ignoring case.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "archived",
+            "required": false,
+            "in": "query",
+            "description": "`false` (the default): the skills in use; `true`: the archived ones; `all`: both.",
+            "schema": {
+              "default": "false",
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SkillResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List your skills",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Refused with `400 SKILL_SECRET` when a field looks like a password, a code, a token or a full card, account, IBAN or Social Security number; `400 INVALID_SITE` for a site that is not a registrable domain; `409 SKILL_NAME_TAKEN` and `409 SKILL_LIMIT` (100 skills).\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
+    },
+    "/api/skills/{id}": {
+      "get": {
+        "description": "With its text.\n\n**Requires:** authentication, plus permission `skills:read`.",
+        "operationId": "skills_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Get one skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:read"
+          ]
+        }
+      },
+      "patch": {
+        "description": "The name, when to use it, the text, the sites and whether it is on. The same checks as when it is added.\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Edit a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Permanently. Runs that read it keep its id.\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
+    },
+    "/api/skills/{id}/archive": {
+      "post": {
+        "description": "An archived skill is kept but never offered to a run or a chat.\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Archive a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
+    },
+    "/api/skills/{id}/unarchive": {
+      "post": {
+        "description": "It is offered again when it fits a job (and it is on).\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Unarchive a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
     }
   },
   "info": {
@@ -52891,6 +53493,11 @@
               "MAIL_TRIGGER_POLL_TOO_FAST",
               "MAIL_TRIGGER_INPUTS_INVALID",
               "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
+              "SKILL_NOT_FOUND",
+              "SKILL_NAME_TAKEN",
+              "SKILL_LIMIT",
+              "SKILL_SECRET",
+              "INVALID_SITE",
               "BENCHMARK_NOT_FOUND",
               "BENCHMARK_RUNNING",
               "BENCHMARK_SITE_UNREACHABLE",
@@ -55973,6 +56580,18 @@
               "paused"
             ]
           },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "connections": {
             "type": "object",
             "properties": {
@@ -56530,6 +57149,18 @@
             },
             "required": [
               "paused"
+            ]
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+              }
+            },
+            "required": [
+              "enabled"
             ]
           },
           "connections": {
@@ -57137,6 +57768,22 @@
                 "properties": {
                   "paused": {
                     "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
                   }
                 }
               },
@@ -57988,6 +58635,15 @@
               "keepDays",
               "maxMinutes"
             ]
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Skills for every user's runs and chats (default on).",
+                "type": "boolean"
+              }
+            }
           },
           "connections": {
             "type": "object",
@@ -58886,6 +59542,7 @@
           "browserAgentTiers",
           "browserAgentCeilings",
           "recordings",
+          "skills",
           "connections",
           "webSearch",
           "deliveries",
@@ -59541,6 +60198,15 @@
               "keepDays",
               "maxMinutes"
             ]
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Skills for every user's runs and chats (default on).",
+                "type": "boolean"
+              }
+            }
           },
           "connections": {
             "type": "object",
@@ -61093,6 +61759,15 @@
                 "minimum": 1,
                 "maximum": 480,
                 "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
+              }
+            }
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Skills for every user's runs and chats (default on).",
+                "type": "boolean"
               }
             }
           },
@@ -63774,6 +64449,18 @@
                 },
                 "required": [
                   "paused"
+                ]
+              },
+              "skills": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+                  }
+                },
+                "required": [
+                  "enabled"
                 ]
               },
               "connections": {
@@ -101446,6 +102133,31 @@
             },
             "description": "The memories of `memoryIds` that still exist, with their labels (#553): the run page says \"Used: …\""
           },
+          "skills": {
+            "description": "The skills this run read with skill_read that still exist, by name (#1008; `runs.skill_ids`): the run page says \"Skills read: …\". Never their text.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "archived": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "archived"
+              ]
+            }
+          },
           "suggestedConnections": {
             "description": "E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied.",
             "type": "array",
@@ -123516,6 +124228,156 @@
         "required": [
           "ids"
         ]
+      },
+      "SkillResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The guidance. Only its owner reads it here; a run reads it through `skill_read`, and it is never kept in a step."
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a run last read it."
+          },
+          "useCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many runs read it."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "body",
+          "sites",
+          "enabled",
+          "archivedAt",
+          "lastUsedAt",
+          "useCount",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateSkillDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "What you call it: \"Google Messages\". 1 to 60 characters, unique among your skills ignoring case.",
+            "type": "string"
+          },
+          "description": {
+            "description": "When to use it: \"How I send text messages from Google Messages on the web\". 1 to 200 characters. The agent is shown it, not the text.",
+            "type": "string"
+          },
+          "body": {
+            "description": "The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number.",
+            "type": "string"
+          },
+          "sites": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "description": "Registrable domains the skill is about (\"google.com\"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`."
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean",
+            "description": "Off: the skill is kept but not offered to a run or a chat."
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateSkillDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "What you call it: \"Google Messages\". 1 to 60 characters, unique among your skills ignoring case.",
+            "type": "string"
+          },
+          "description": {
+            "description": "When to use it: \"How I send text messages from Google Messages on the web\". 1 to 200 characters. The agent is shown it, not the text.",
+            "type": "string"
+          },
+          "body": {
+            "description": "The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number.",
+            "type": "string"
+          },
+          "sites": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "description": "Registrable domains the skill is about (\"google.com\"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Off: the skill is kept but not offered to a run or a chat."
+          }
+        },
+        "additionalProperties": false
       }
     }
   },

@@ -386,6 +386,10 @@ export class RunDetailResponseDto extends createZodDto(
     memories: z
       .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
       .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),
+    skills: z
+      .array(z.object({ id: z.uuid(), name: z.string(), archived: z.boolean() }))
+      .optional()
+      .describe('The skills this run read with skill_read that still exist, by name (#1008; `runs.skill_ids`): the run page says "Skills read: …". Never their text.'),
     suggestedConnections: z
       .array(z.object({ connectionId: z.uuid(), label: z.string(), provider: z.string(), site: z.string(), scope: z.enum(['task', 'chat']), fix: z.enum(['resume', 'capability']), text: z.string() }))
       .optional()

@@ -10402,6 +10402,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your skills
+         * @description The skills in use by default (`archived=true` lists the archived ones, `all` both). `q` searches the name, the description and the sites, ignoring case.
+         *
+         *     **Requires:** authentication, plus permission `skills:read`.
+         */
+        get: operations["skills_list"];
+        put?: never;
+        /**
+         * Add a skill
+         * @description Refused with `400 SKILL_SECRET` when a field looks like a password, a code, a token or a full card, account, IBAN or Social Security number; `400 INVALID_SITE` for a site that is not a registrable domain; `409 SKILL_NAME_TAKEN` and `409 SKILL_LIMIT` (100 skills).
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        post: operations["skills_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one skill
+         * @description With its text.
+         *
+         *     **Requires:** authentication, plus permission `skills:read`.
+         */
+        get: operations["skills_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a skill
+         * @description Permanently. Runs that read it keep its id.
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        delete: operations["skills_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a skill
+         * @description The name, when to use it, the text, the sites and whether it is on. The same checks as when it is added.
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        patch: operations["skills_update"];
+        trace?: never;
+    };
+    "/api/skills/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a skill
+         * @description An archived skill is kept but never offered to a run or a chat.
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        post: operations["skills_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unarchive a skill
+         * @description It is offered again when it fits a job (and it is on).
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        post: operations["skills_unarchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -10610,6 +10716,11 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
+             * @example SKILL_NOT_FOUND
+             * @example SKILL_NAME_TAKEN
+             * @example SKILL_LIMIT
+             * @example SKILL_SECRET
+             * @example INVALID_SITE
              * @example BENCHMARK_NOT_FOUND
              * @example BENCHMARK_RUNNING
              * @example BENCHMARK_SITE_UNREACHABLE
@@ -11619,6 +11730,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            skills?: {
+                /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                enabled: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11749,6 +11864,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            skills?: {
+                /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                enabled: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11873,6 +11992,10 @@ export interface components {
             } | null) | null;
             approvals?: {
                 paused?: boolean;
+            } | null;
+            skills?: {
+                /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                enabled?: boolean;
             } | null;
             connections?: {
                 /**
@@ -12036,6 +12159,10 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
+            };
+            skills: {
+                /** @description Skills for every user's runs and chats (default on). */
+                enabled?: boolean;
             };
             connections: {
                 mcp?: {
@@ -12370,6 +12497,10 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
+            };
+            skills?: {
+                /** @description Skills for every user's runs and chats (default on). */
+                enabled?: boolean;
             };
             connections?: {
                 mcp?: {
@@ -12708,6 +12839,10 @@ export interface components {
                 keepDays?: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes?: number;
+            };
+            skills?: {
+                /** @description Skills for every user's runs and chats (default on). */
+                enabled?: boolean;
             };
             connections?: {
                 mcp?: {
@@ -13307,6 +13442,10 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
+                };
+                skills?: {
+                    /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                    enabled: boolean;
                 };
                 connections?: {
                     /**
@@ -21960,6 +22099,13 @@ export interface components {
                 /** @enum {string} */
                 status: "active" | "superseded" | "archived";
             }[];
+            /** @description The skills this run read with skill_read that still exist, by name (#1008; `runs.skill_ids`): the run page says "Skills read: …". Never their text. */
+            skills?: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                archived: boolean;
+            }[];
             /** @description E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied. */
             suggestedConnections?: {
                 /** Format: uuid */
@@ -27239,6 +27385,55 @@ export interface components {
              * @default false
              */
             deleteRuns?: boolean;
+        };
+        SkillResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            /** @description The guidance. Only its owner reads it here; a run reads it through `skill_read`, and it is never kept in a step. */
+            body: string;
+            sites: string[];
+            enabled: boolean;
+            archivedAt: string | null;
+            /** @description When a run last read it. */
+            lastUsedAt: string | null;
+            /** @description How many runs read it. */
+            useCount: number;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+        };
+        CreateSkillDto: {
+            /** @description What you call it: "Google Messages". 1 to 60 characters, unique among your skills ignoring case. */
+            name: string;
+            /** @description When to use it: "How I send text messages from Google Messages on the web". 1 to 200 characters. The agent is shown it, not the text. */
+            description: string;
+            /** @description The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number. */
+            body: string;
+            /**
+             * @description Registrable domains the skill is about ("google.com"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`.
+             * @default []
+             */
+            sites?: string[];
+            /**
+             * @description Off: the skill is kept but not offered to a run or a chat.
+             * @default true
+             */
+            enabled?: boolean;
+        };
+        UpdateSkillDto: {
+            /** @description What you call it: "Google Messages". 1 to 60 characters, unique among your skills ignoring case. */
+            name?: string;
+            /** @description When to use it: "How I send text messages from Google Messages on the web". 1 to 200 characters. The agent is shown it, not the text. */
+            description?: string;
+            /** @description The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number. */
+            body?: string;
+            /** @description Registrable domains the skill is about ("google.com"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`. */
+            sites?: string[];
+            /** @description Off: the skill is kept but not offered to a run or a chat. */
+            enabled?: boolean;
         };
     };
     responses: never;
@@ -59602,6 +59797,355 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_list: {
+        parameters: {
+            query?: {
+                /** @description Searches the name, the description and the sites, ignoring case. */
+                q?: string;
+                /** @description `false` (the default): the skills in use; `true`: the archived ones; `all`: both. */
+                archived?: "true" | "false" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSkillDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSkillDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
