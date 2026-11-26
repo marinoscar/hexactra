@@ -24,6 +24,7 @@ import {
   type AgentStatus,
 } from './agent.js';
 import { updateEverything } from './update.js';
+import { versionLines } from './versions.js';
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
@@ -40,6 +41,7 @@ export function unattendedLines(u: UnattendedStatus): string[] {
     `Unattended: ${s.name} (${s.hostId.slice(0, 8)}), desktop :${s.display} ${s.resolution}, user hexactra`,
     `Graphics:   ${s.gpu ? `${s.gpu.driver} (${s.gpu.renderNode})` : 'software rendering (no Intel or AMD GPU found)'}`,
     `Units:      ${Object.entries(u.units).map(([k, v]) => `${k.replace('.service', '')} ${v}`).join(', ')}`,
+    ...(u.versions ? versionLines(u.versions, 12) : []),
   ];
 }
 
@@ -60,12 +62,12 @@ export function statusLines(s: AgentStatus): string[] {
   if (!s.installed || !s.state) return ['No agent is installed on this machine. Run `hexactra agent install`.'];
   const st = s.state;
   return [
-    `Host:     ${st.name} (${st.hostId.slice(0, 8)})`,
-    `Fabric:   ${st.agentUrl}`,
-    `Agent:    ${st.version} (${st.commit.slice(0, 7)})`,
-    `Browser:  ${st.browserKind === 'chrome-for-testing' ? `Chrome for Testing ${st.chromeVersion}` : st.browserKind === 'google-chrome' ? `Google Chrome ${st.chromeVersion ?? ''} (extension by policy)`.replace('  ', ' ') : st.browser}${st.sandboxHelper ? ' (setuid sandbox)' : ''}`,
-    `Service:  ${st.service ? `${s.service?.active ?? 'unknown'} (${s.service?.sub ?? 'unknown'})` : 'none (run with `hexactra agent run`)'}`,
-    `Fleet:    ${s.fleet ? `${s.fleet.online ? 'online' : 'offline'}${s.fleet.browserConnected ? ', browser connected' : ''}` : (s.fleetError ?? 'unknown')}`,
+    `Host:      ${st.name} (${st.hostId.slice(0, 8)})`,
+    `Fabric:    ${st.agentUrl}`,
+    ...(s.versions ? versionLines(s.versions, 11) : [`Agent:     ${st.version} (${st.commit.slice(0, 7)})`]),
+    `Browser:   ${st.browserKind === 'chrome-for-testing' ? `Chrome for Testing ${st.chromeVersion}` : st.browserKind === 'google-chrome' ? `Google Chrome ${st.chromeVersion ?? ''} (extension by policy)`.replace('  ', ' ') : st.browser}${st.sandboxHelper ? ' (setuid sandbox)' : ''}`,
+    `Service:   ${st.service ? `${s.service?.active ?? 'unknown'} (${s.service?.sub ?? 'unknown'})` : 'none (run with `hexactra agent run`)'}`,
+    `Fleet:     ${s.fleet ? `${s.fleet.online ? 'online' : 'offline'}${s.fleet.browserConnected ? ', browser connected' : ''}` : (s.fleetError ?? 'unknown')}`,
   ];
 }
 

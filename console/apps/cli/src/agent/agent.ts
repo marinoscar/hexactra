@@ -27,6 +27,7 @@ import {
   type UnattendedState,
 } from './unattended.js';
 import { agentEnv, unitFile, type AgentConfig } from './service.js';
+import { bundleVersions, connectedExtension, type NodeVersions } from './versions.js';
 
 /** What `hexactra agent install` recorded (no secret: the credential is its own 0600 file). */
 export interface AgentState extends AgentConfig {
@@ -325,6 +326,8 @@ export interface AgentStatus {
   service: { active: string; sub: string } | null;
   fleet: FleetHostView | null;
   fleetError: string | null;
+  /** The agent and extension this agent runs (E49.5); `null` when no agent is installed. */
+  versions: NodeVersions | null;
 }
 
 export async function agentStatus(d: AgentDeps): Promise<AgentStatus> {
@@ -351,7 +354,10 @@ export async function agentStatus(d: AgentDeps): Promise<AgentStatus> {
       fleetError = e instanceof Error ? e.message : String(e);
     }
   }
-  return { installed: !!state, state, activeBundle, service, fleet, fleetError };
+  const versions: NodeVersions | null = state
+    ? { ...bundleVersions(activeBundle), connected: state.service ? connectedExtension(d.exec, UNIT_NAME, 'user') : null }
+    : null;
+  return { installed: !!state, state, activeBundle, service, fleet, fleetError, versions };
 }
 
 function requireState(d: AgentDeps): AgentState {
@@ -601,13 +607,18 @@ export interface UnattendedStatus {
   installed: boolean;
   state: UnattendedState | null;
   units: Record<string, string>;
+  /** The agent and extension the node runs (E49.5): its recorded bundle, and its own agent's journal. */
+  versions: NodeVersions | null;
 }
 
 export function unattendedStatus(d: AgentDeps): UnattendedStatus {
   const state = readUnattended(d.paths.agentDir);
   const units: Record<string, string> = {};
   if (state) for (const u of Object.values(UNITS)) units[u] = (d.exec(['systemctl', 'is-active', u]).stdout.trim() || 'unknown');
-  return { installed: !!state, state, units };
+  const versions: NodeVersions | null = state
+    ? { ...bundleVersions(join(d.paths.versionsDir, state.bundle)), connected: connectedExtension(d.exec, UNITS.agent, 'system') }
+    : null;
+  return { installed: !!state, state, units, versions };
 }
 
 /** Starts, stops or restarts the unattended desktop and agent (sudo). */

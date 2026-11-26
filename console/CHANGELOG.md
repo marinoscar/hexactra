@@ -134,6 +134,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`hexactra agent status` shows which agent and which Chrome extension a node runs** (#963, console 1.144.3; E49.5, epic #957).
+  - An unattended-only node showed no version at all, and neither mode showed the extension.
+  - Both blocks now show `Agent: <version> (<commit>)` and `Extension: <bundled>`, plus the extension that last connected and when.
+    - Read on the machine, from the installed bundle and that mode's own agent log (the unattended log with `sudo -n` when needed).
+    - Flagged when the connected extension is older than the bundled one.
+    - Shown as unknown, never an error, when a source can't be read.
+  - The same is in `--json` (`versions`) and on the terminal UI's Agent screen.
+
 - **The VPS deploy builds the web image again** (#920). A `console/apps/web/node_modules` symlink committed by mistake in #799 made `hexactra deploy update` fail at Build images (`cannot replace to directory .../node_modules with file`). It is removed, the ignore rules now match `node_modules` as a file or link as well as a directory, and CI fails when any `node_modules` path is tracked (`scripts/ci/check-no-tracked-node-modules.mjs`).
 
 - **AI Usage records model calls again: tokens and cost are no longer 0** (#731, console 1.105.2; E43.1, epic #730). Administration → AI Usage showed requests with 0 tokens and no cost. The only rows were catalogue syncs, which carry no tokens. The platform writes each model call's usage row through `PLATFORM_PRISMA.forOrg(...)`, and the console's `PrismaService` had no `forOrg`, so every row was dropped with only a `Could not record AI usage (...): this.prisma.forOrg is not a function` warning. `PrismaService.forOrg` now exists (core's `orgScopeExtension`), which also gives the AI limits, AI runs and credentials paths the org-scoped client they expect. New Doctor check `ai.usage_ledger` fails when runs used tokens that the ledger does not hold. Rows lost before this release cannot be recovered; the runs' own token and cost counters were correct throughout.

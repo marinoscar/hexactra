@@ -72,7 +72,7 @@ const epicChildren = new Map([
   // E48 profile sign-in health: warn on signed-out Chrome profiles and sign them in with one click (E48.1 to E48.7, in order).
   [926, [927, 928, 929, 930, 931, 932, 933]],
   // E49 verification codes in segmented fields: fill every box, keep the code from the model, don't give up early.
-  [957, [958, 959, 960, 961]],
+  [957, [958, 959, 960, 961, 963]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

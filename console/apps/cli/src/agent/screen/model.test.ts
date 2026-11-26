@@ -11,17 +11,19 @@ const agent = (active = 'active', online = true): AgentStatus => ({
   service: { active, sub: active === 'active' ? 'running' : 'dead' },
   fleet: { id: 'h', name: 'mini-pc', online, browserConnected: online },
   fleetError: null,
+  versions: null,
 });
 const node = (units: Record<string, string>): UnattendedStatus => ({
   installed: true,
   state: { hostId: 'fedcba9876543210', name: 'mini-pc', agentUrl: 'u', display: 90, maxBrowsers: 1, resolution: '1920x1080', gpu: null, bundle: 'b', installedAt: '', updatedAt: '' },
   units,
+  versions: null,
 });
-const none: AgentStatus = { installed: false, state: null, activeBundle: null, service: null, fleet: null, fleetError: null };
+const none: AgentStatus = { installed: false, state: null, activeBundle: null, service: null, fleet: null, fleetError: null, versions: null };
 
 describe('the dashboard', () => {
   it('guides a machine with nothing installed to Install', () => {
-    expect(panels(none, { installed: false, state: null, units: {} })[0]!.title).toBe('Not set up');
+    expect(panels(none, { installed: false, state: null, units: {}, versions: null })[0]!.title).toBe('Not set up');
     expect(actions(none, null).map((a) => a.id)).toEqual(['install', 'doctor', 'chrome']);
   });
 
@@ -53,5 +55,18 @@ describe('the dashboard', () => {
     expect(h.problems.map((c) => c.name)).toEqual(['desktop-input', 'graphics']);
     expect(checkLine(h.problems[0]!)).toMatchObject({ tone: 'error', text: expect.stringMatching(/^✗ desktop-input/) });
     expect(health(null)).toBeNull();
+  });
+});
+
+describe('versions on the dashboard (E49.5, #963)', () => {
+  const versions = { agent: { version: '0.2.0', commit: '540d2c1460d5' }, extension: '0.2.0.111', connected: { version: '0.2.0.104', at: 't' } };
+  it('shows the agent and the extension for the attended agent and the unattended node', () => {
+    const ps = panels({ ...agent(), versions }, { ...node({ 'hexactra-node-agent.service': 'active' }), versions: { ...versions, connected: null } });
+    const rows = (title: string) => ps.find((p) => p.title === title)!.rows;
+    expect(rows('Agent · this user').find((r) => r.label === 'Version')).toMatchObject({ value: '0.2.0 (540d2c1)' });
+    // The connected extension is older than the bundled one: a warning.
+    expect(rows('Agent · this user').find((r) => r.label === 'Extension')).toMatchObject({ tone: 'warning' });
+    expect(rows('Unattended node · its own desktop').map((r) => r.label)).toEqual(expect.arrayContaining(['Version', 'Extension']));
+    expect(rows('Unattended node · its own desktop').find((r) => r.label === 'Extension')).toMatchObject({ tone: 'dim' });
   });
 });
