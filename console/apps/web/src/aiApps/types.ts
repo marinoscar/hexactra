@@ -28,6 +28,8 @@ export interface AppLimits {
   allowSavedIdentity?: boolean;
   /** Let this app's runs pay with the owner's saved cards (E37.7); absent from an older console: off. */
   allowSavedCards?: boolean;
+  /** Let this app's runs use the connections the owner switched on (E39.7); on for a new app since E50.17; absent from an older console: off. */
+  allowConnections?: boolean;
   paused: boolean;
 }
 
@@ -109,6 +111,7 @@ export interface LimitsDraft {
   allowSavedLogins: boolean;
   allowSavedIdentity: boolean;
   allowSavedCards: boolean;
+  allowConnections: boolean;
 }
 
 /** The highest values the API accepts (it may refuse more, above the deployment's ceilings). */
@@ -127,6 +130,7 @@ export function toDraft(l: AppLimits): LimitsDraft {
     allowSavedLogins: l.allowSavedLogins ?? false,
     allowSavedIdentity: l.allowSavedIdentity ?? false,
     allowSavedCards: l.allowSavedCards ?? false,
+    allowConnections: l.allowConnections ?? false,
   };
 }
 
@@ -166,10 +170,11 @@ export function draftPatch(d: LimitsDraft, saved: AppLimits): Partial<AppLimits>
     allowSavedLogins: d.allowSavedLogins,
     allowSavedIdentity: d.allowSavedIdentity,
     allowSavedCards: d.allowSavedCards,
+    allowConnections: d.allowConnections,
   };
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(next)) {
-    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : k === 'allowSavedLogins' ? (saved.allowSavedLogins ?? false) : k === 'allowSavedIdentity' ? (saved.allowSavedIdentity ?? false) : k === 'allowSavedCards' ? (saved.allowSavedCards ?? false) : saved[k as keyof AppLimits];
+    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : k === 'allowSavedLogins' ? (saved.allowSavedLogins ?? false) : k === 'allowSavedIdentity' ? (saved.allowSavedIdentity ?? false) : k === 'allowSavedCards' ? (saved.allowSavedCards ?? false) : k === 'allowConnections' ? (saved.allowConnections ?? false) : saved[k as keyof AppLimits];
     if (JSON.stringify(v) !== JSON.stringify(before)) patch[k] = v;
   }
   return patch as Partial<AppLimits>;

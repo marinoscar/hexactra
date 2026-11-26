@@ -23,6 +23,8 @@ export interface ConnectionsMemory {
   drafts?: Record<string, { connectionId: string; to: string[]; cc: string[]; bcc: string[]; subject: string; body: string }>;
   /** What the run has read through connections: the caps of the agent policy's context section are checked against it. */
   reads?: { messages: string[]; chars: number };
+  /** The MCP toolboxes this run opened with `open_toolbox` (E50.17): family ids (`mcp:<connectionId>`). Set only by the tool. */
+  toolboxes?: string[];
 }
 
 /** The limits of what a run may read through connections: the agent policy's context section (E39.7). */

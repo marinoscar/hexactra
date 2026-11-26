@@ -3,7 +3,7 @@ import { addDaysToDateKey, zonedDateKey, zonedDayStart } from '@marinoscar/platf
 import { Prisma, type Task } from '@prisma/client';
 
 import '../schedules/schedules.errors';
-import { taskConnectionViews, type ConnectionSelectionView } from '../connections/agent-connections';
+import { deprecatedConnectionFields, type ConnectionSelectionView } from '../connections/agent-connections';
 import { PolicyResolver } from '../policies/policy.resolver';
 import { PrismaService } from '../prisma/prisma.service';
 import { describeCron } from '../schedules/cron-describe';
@@ -280,15 +280,13 @@ export class TaskSummaryService {
   private async withSpend(userId: string, tasks: Task[]): Promise<TaskWithSpend[]> {
     if (tasks.length === 0) return [];
     const facts = await this.runFacts(userId, tasks.map((t) => t.id));
-    const connections = await taskConnectionViews(this.prisma, tasks.map((t) => t.id));
-    return tasks.map((t) => ({ ...t, spend30d: this.spendOf(facts.get(t.id)), connections: connections.get(t.id) ?? [] }));
+    return tasks.map((t) => ({ ...t, ...deprecatedConnectionFields(), spend30d: this.spendOf(facts.get(t.id)) }));
   }
 
   /** The tasks with `spend30d` and `summary`, in five queries whatever their number. */
   async summarize(userId: string, tasks: Task[]): Promise<TaskWithSummary[]> {
     if (tasks.length === 0) return [];
     const ids = tasks.map((t) => t.id);
-    const connections = await taskConnectionViews(this.prisma, ids);
     const [schedules, facts, newest, policies, triggers, deliveries] = await Promise.all([
       this.db(userId).taskSchedule.findMany({ where: { taskId: { in: ids } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
       this.runFacts(userId, ids),
@@ -336,7 +334,7 @@ export class TaskSummaryService {
         mailTriggers: triggerCounts.get(t.id) ?? 0,
         deliveries: deliveryCounts.get(t.id) ?? 0,
       };
-      return { ...t, spend30d: this.spendOf(f), connections: connections.get(t.id) ?? [], summary };
+      return { ...t, ...deprecatedConnectionFields(), spend30d: this.spendOf(f), summary };
     });
   }
 

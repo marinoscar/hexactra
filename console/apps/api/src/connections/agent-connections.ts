@@ -1,12 +1,11 @@
-// Which connections a task or a chat may use, and how (E39.7, #604). A task has none until it lists them; a new chat starts with the owner's own
-// default (#680, chat-default.ts). A run has the connections its task (or the chat that started it) lists, each `read` or `read_write`, and nothing else. The selection is stored in
-// `task_connections` and `conversation_connections`; a run takes a snapshot of it when it starts (policy-snapshot.ts), so a later
-// change never alters a live run.
+// The per-task and per-chat connection lists (E39.7, #604) are DEPRECATED (E50.17, #987): a tool that is set up and switched on is always
+// available, so every run and chat gets every active connection of its owner at what the owner switched on (`runConnections`). Nothing here
+// decides availability any more. The tables `task_connections` and `conversation_connections` stay for one release (data and exports still
+// reference them) and are no longer written; the `connections` field of the task and chat APIs is accepted and ignored. What is left here:
+// the wire shapes of the deprecated fields and the Disconnect dialog's clean-up of old rows.
 //
 // Plain functions over the Prisma client, not a Nest provider: the tasks and chat modules use them whether or not the connections
-// slice is mounted (without it the tables are simply empty, and nothing is offered).
-import { BadRequestException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+// slice is mounted.
 import { z } from 'zod';
 
 import type { PrismaService } from '../prisma/prisma.service';
@@ -27,11 +26,12 @@ export const connectionSelectionSchema = z.object({
 });
 export type ConnectionSelection = z.infer<typeof connectionSelectionSchema>;
 
-/** The `connections` field of a task or a chat: absent leaves it as it is, `[]` switches every connection off. */
+/** The deprecated `connections` field of a task or a chat (E50.17): validated, then ignored. */
 export const connectionSelectionsField = z
   .array(connectionSelectionSchema)
   .max(MAX_CONNECTIONS_PER_USER)
-  .describe('The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts.');
+  .meta({ deprecated: true })
+  .describe('Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.');
 
 /** What the API returns for each selected connection. */
 export const connectionSelectionViewSchema = connectionSelectionSchema.extend({
@@ -42,57 +42,12 @@ export const connectionSelectionViewSchema = connectionSelectionSchema.extend({
 });
 export type ConnectionSelectionView = z.infer<typeof connectionSelectionViewSchema>;
 
-type SelectionRow = { connectionId: string; access: string; connection: { label: string; provider: string; accountEmail: string; status: string } };
-
-const viewOf = (r: SelectionRow): ConnectionSelectionView => ({ connectionId: r.connectionId, access: isConnectionAccess(r.access) ? r.access : 'read', label: r.connection.label, provider: r.connection.provider, accountEmail: r.connection.accountEmail, status: r.connection.status });
-
-const include = { connection: { select: { label: true, provider: true, accountEmail: true, status: true } } } as const;
-
-/** The selections of several tasks, by task id. */
-export async function taskConnectionViews(prisma: PrismaService, taskIds: readonly string[]): Promise<Map<string, ConnectionSelectionView[]>> {
-  const out = new Map<string, ConnectionSelectionView[]>();
-  if (taskIds.length === 0) return out;
-  const rows = await prisma.taskConnection.findMany({ where: { taskId: { in: [...taskIds] } }, include, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
-  for (const r of rows) out.set(r.taskId, [...(out.get(r.taskId) ?? []), viewOf(r)]);
-  return out;
-}
-
-/** The selections of several chats, by conversation id. */
-export async function conversationConnectionViews(prisma: PrismaService, ids: readonly string[]): Promise<Map<string, ConnectionSelectionView[]>> {
-  const out = new Map<string, ConnectionSelectionView[]>();
-  if (ids.length === 0) return out;
-  const rows = await prisma.conversationConnection.findMany({ where: { conversationId: { in: [...ids] } }, include, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
-  for (const r of rows) out.set(r.conversationId, [...(out.get(r.conversationId) ?? []), viewOf(r)]);
-  return out;
-}
-
-/** Checks that every connection listed is the caller's (a foreign id is reported as unknown, never as another user's) and listed once. */
-export async function assertSelectable(prisma: PrismaService | Prisma.TransactionClient, userId: string, items: readonly ConnectionSelection[]): Promise<void> {
-  const ids = items.map((i) => i.connectionId);
-  const bad = new Set(ids.filter((id, i) => ids.indexOf(id) !== i));
-  if (ids.length > 0) {
-    const own = await prisma.connection.findMany({ where: { userId, id: { in: ids } }, select: { id: true } });
-    const ok = new Set(own.map((c) => c.id));
-    for (const id of ids) if (!ok.has(id)) bad.add(id);
-  }
-  if (bad.size > 0) throw new BadRequestException({ code: 'CONNECTION_SELECTION_INVALID', message: 'A connection listed is not one of yours, or is listed twice.', details: { connectionIds: [...bad] } });
-}
-
-/** Replaces a task's selection (the caller has checked the task is theirs and ran `assertSelectable`). */
-export async function replaceTaskConnections(tx: Prisma.TransactionClient, taskId: string, items: readonly ConnectionSelection[]): Promise<void> {
-  await tx.taskConnection.deleteMany({ where: { taskId } });
-  if (items.length > 0) await tx.taskConnection.createMany({ data: items.map((i) => ({ taskId, connectionId: i.connectionId, access: i.access })) });
-}
-
-/** Replaces a chat's selection. */
-export async function replaceConversationConnections(tx: Prisma.TransactionClient, conversationId: string, items: readonly ConnectionSelection[]): Promise<void> {
-  await tx.conversationConnection.deleteMany({ where: { conversationId } });
-  if (items.length > 0) await tx.conversationConnection.createMany({ data: items.map((i) => ({ conversationId, connectionId: i.connectionId, access: i.access })) });
-}
+/** What the deprecated `connections` and `connectionsMode` fields of a task answer (E50.17): no list, every connection the owner switched on. */
+export const deprecatedConnectionFields = (): { connectionsMode: 'all'; connections: ConnectionSelectionView[] } => ({ connectionsMode: 'all', connections: [] });
 
 /**
- * The tasks and chats that use a connection, for the Disconnect dialog (`ConnectionUsageRegistry`). Clearing removes the selection
- * rows (the foreign keys would too): the task or chat then lists one connection fewer.
+ * The Disconnect dialog's sources (`ConnectionUsageRegistry`). Since E50.17 no task or chat lists a connection (every one may use all of
+ * them), so nothing is listed as a use; clearing still removes old selection rows (the foreign keys would too).
  */
 export function agentConnectionUsage(prisma: PrismaService): ConnectionUsageSource[] {
   return [
@@ -108,9 +63,8 @@ export function agentConnectionUsage(prisma: PrismaService): ConnectionUsageSour
     },
     {
       kind: 'task',
-      async list(userId, connectionId) {
-        const rows = await prisma.taskConnection.findMany({ where: { connectionId, task: { userId } }, select: { task: { select: { id: true, name: true } } } });
-        return rows.map((r) => ({ kind: 'task', id: r.task.id, name: r.task.name }));
+      async list() {
+        return [];
       },
       async clear(userId, connectionId) {
         await prisma.taskConnection.deleteMany({ where: { connectionId, task: { userId } } });
@@ -118,9 +72,8 @@ export function agentConnectionUsage(prisma: PrismaService): ConnectionUsageSour
     },
     {
       kind: 'chat',
-      async list(userId, connectionId) {
-        const rows = await prisma.conversationConnection.findMany({ where: { connectionId, conversation: { userId } }, select: { conversation: { select: { id: true, title: true } } } });
-        return rows.map((r) => ({ kind: 'chat', id: r.conversation.id, name: r.conversation.title || 'Untitled chat' }));
+      async list() {
+        return [];
       },
       async clear(userId, connectionId) {
         await prisma.conversationConnection.deleteMany({ where: { connectionId, conversation: { userId } } });

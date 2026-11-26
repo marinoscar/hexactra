@@ -283,6 +283,15 @@ export function AiAppDetailPage() {
               Off by default, and it needs the first switch above. When on, its runs may pay with a card you saved if the task or chat also allows it, at a shop and an amount you approved. The app never sees the card. With &quot;ask me before purchases&quot; on, every card use still asks you.
             </Typography>
           </Box>
+          <Box>
+            <FormControlLabel
+              control={<Switch checked={draft.allowConnections} disabled={disabled} onChange={(e) => set({ allowConnections: e.target.checked })} />}
+              label="Let its runs use my connected accounts and tools"
+            />
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }} data-testid="app-connections-help">
+              On by default for a new app: its runs can use what you switched on in Connections and tools, like every task and chat. An app you added before keeps the setting it had. Sending or changing something still asks you first, and the app itself never sees or calls your accounts: it only gets the run&apos;s answer.
+            </Typography>
+          </Box>
         </Stack>
         {canWrite && (
           <Box sx={{ position: { xs: 'sticky', sm: 'static' }, bottom: aboveBottomBar(0), bgcolor: 'background.paper', pt: 2, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>

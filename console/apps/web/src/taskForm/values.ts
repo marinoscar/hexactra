@@ -8,7 +8,7 @@
 import { isPlatformApiError } from '@marinoscar/platform-web/core';
 
 import { draftFromSchedule, draftToItem, newScheduleDraft, type ScheduleDraft, type ScheduleItemInput } from '../schedule/draft';
-import { cleanSelections, selectionsOf, type ConnectionSelection, type ConnectionsMode, type NeedsBrowser } from '../taskConnections/model';
+import type { NeedsBrowser } from '../taskConnections/model';
 import { cleanOutputs, outputProblems, type TaskOutput } from '../taskOutputs/model';
 import { cleanParameters, syncParameters, type TaskParameter } from '../taskParams/model';
 import type { Task } from '../types/tasks';
@@ -59,10 +59,6 @@ export interface TaskFormValues {
   parameters: TaskParameter[];
   /** The values the agent must return when it finishes (E39.5, #600): rows the form edits; empty rows are not saved. */
   outputs: TaskOutput[];
-  /** `all` (the default, #967): every account and tool the owner connected, at what they switched on for it; `listed`: only `connections`. */
-  connectionsMode: ConnectionsMode;
-  /** The accounts a limited task may use (E39.7, #604), each read only or read and change. Saved only when `connectionsMode` is `listed`. */
-  connections: ConnectionSelection[];
   /** Whether the task's runs open a browser. Not shown and not sent by the form (#967): the agent opens one when it needs one. */
   needsBrowser: NeedsBrowser;
   /** Record a video of each run's browser tab (epic #755). Off by default; the video is not masked. */
@@ -82,7 +78,7 @@ export interface TaskWithSchedules extends Task {
 }
 
 export function emptyValues(): TaskFormValues {
-  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], connectionsMode: 'all', connections: [], needsBrowser: 'auto', recordVideo: false, schedules: [] };
+  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], needsBrowser: 'auto', recordVideo: false, schedules: [] };
 }
 
 /** The form values of a saved task. */
@@ -102,8 +98,6 @@ export function valuesFromTask(task: TaskWithSchedules): TaskFormValues {
     unattendedPayments: task.unattendedPayments === 'allow' ? 'allow' : 'ask',
     parameters: (task.parameters ?? []).map((p) => ({ ...p })),
     outputs: (task.outputs ?? []).map((o) => ({ ...o })),
-    connectionsMode: task.connectionsMode === 'listed' || (task.connectionsMode === undefined && (task.connections?.length ?? 0) > 0) ? 'listed' : 'all',
-    connections: selectionsOf(task.connections),
     needsBrowser: task.needsBrowser ?? 'auto',
     recordVideo: task.recordVideo === true,
     schedules: (task.summary?.schedules ?? []).map(draftFromSchedule),
@@ -208,10 +202,6 @@ export interface CreateTaskBody {
   parameters?: TaskParameter[];
   /** The task's outputs (E39.5): present only when the form has some; an empty list on a change removes them. */
   outputs?: TaskOutput[];
-  /** `listed` limits the task to `connections`; `all` (the server's default) clears the list (#967). */
-  connectionsMode?: ConnectionsMode;
-  /** The accounts a limited task may use (E39.7): sent with `connectionsMode: listed`. */
-  connections?: ConnectionSelection[];
   /** Present only when it is not `auto` (or changed back to it). */
   needsBrowser?: NeedsBrowser;
   /** Present only when on (or changed). */
@@ -225,7 +215,7 @@ export function savedParameters(values: Pick<TaskFieldValues, 'goal' | 'paramete
   return cleanParameters(syncParameters(values.goal.trim(), values.parameters).parameters);
 }
 
-function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs' | 'connectionsMode' | 'connections' | 'needsBrowser' | 'recordVideo'> & { parameters: TaskParameter[]; outputs: TaskOutput[]; connectionsMode: ConnectionsMode; connections: ConnectionSelection[]; recordVideo: boolean } {
+function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs' | 'needsBrowser' | 'recordVideo'> & { parameters: TaskParameter[]; outputs: TaskOutput[]; recordVideo: boolean } {
   return {
     name: values.name.trim(),
     goal: values.goal.trim(),
@@ -240,8 +230,6 @@ function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | '
     unattendedPayments: values.unattendedPayments,
     parameters: savedParameters(values),
     outputs: cleanOutputs(values.outputs),
-    connectionsMode: values.connectionsMode,
-    connections: values.connectionsMode === 'listed' ? cleanSelections(values.connections) : [],
     recordVideo: values.recordVideo === true,
   };
 }
@@ -252,12 +240,11 @@ export function scheduleItems(schedules: readonly ScheduleDraft[]): ScheduleItem
 
 /** The body of `POST /tasks`: the task and its schedules in one request. */
 export function createBody(values: TaskFormValues, options: { sendPolicy: boolean }): CreateTaskBody {
-  const { parameters, outputs, connectionsMode, connections, recordVideo, ...fields } = fieldBody(values);
+  const { parameters, outputs, recordVideo, ...fields } = fieldBody(values);
   return {
     ...fields,
     ...(parameters.length > 0 ? { parameters } : {}),
     ...(outputs.length > 0 ? { outputs } : {}),
-    ...(connectionsMode === 'listed' ? { connectionsMode, connections } : {}),
     ...(recordVideo ? { recordVideo } : {}),
     ...(options.sendPolicy ? { policyId: values.policyId } : {}),
     ...(values.schedules.length > 0 ? { schedules: scheduleItems(values.schedules) } : {}),
@@ -273,12 +260,6 @@ export function patchBody(values: TaskFieldValues, initial: TaskFieldValues, opt
   const patch: Record<string, unknown> = {};
   for (const key of Object.keys(now) as (keyof typeof now)[]) {
     if (!same(now[key], before[key])) patch[key] = now[key];
-  }
-  // The mode and the list go together (#967): `all` clears the list, `listed` replaces it.
-  if ('connectionsMode' in patch || 'connections' in patch) {
-    patch.connectionsMode = now.connectionsMode;
-    if (now.connectionsMode === 'listed') patch.connections = now.connections;
-    else delete patch.connections;
   }
   if (options.sendPolicy && values.policyId !== initial.policyId) patch.policyId = values.policyId;
   return Object.keys(patch).length > 0 ? (patch as Partial<CreateTaskBody>) : null;
@@ -304,7 +285,7 @@ export interface MappedError {
   banner: string | null;
 }
 
-const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs', 'connectionsMode', 'connections', 'needsBrowser', 'recordVideo'];
+const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs', 'needsBrowser', 'recordVideo'];
 
 /** `allowedDomains.2` (zod) and `schedules[1].cron` (the schedule checks) in one spelling: `a[2]`, `schedules[1].cron`. */
 export function normalizePath(path: unknown): string {
