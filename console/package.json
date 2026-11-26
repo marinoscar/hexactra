@@ -15,9 +15,9 @@
   },
   "scripts": {
     "setup": "npm run build --workspace=cli && node apps/cli/dist/cli.js init",
-    "build:packages": "npm run build -w @marinoscar/hexactra-agent && npm run build -w @marinoscar/hexactra-kgraph && npm run build -w @marinoscar/hexactra-browser-agent",
-    "typecheck:packages": "npm run typecheck -w @marinoscar/hexactra-agent -w @marinoscar/hexactra-kgraph -w @marinoscar/hexactra-browser-agent",
-    "test:packages": "npm run test:run -w @marinoscar/hexactra-agent -w @marinoscar/hexactra-kgraph -w @marinoscar/hexactra-browser-agent",
+    "build:packages": "npm run build -w @marinoscar/hexactra-agent && npm run build -w @marinoscar/hexactra-kgraph && npm run build -w @marinoscar/hexactra-browser-agent && npm run build -w @marinoscar/hexactra-web-agent",
+    "typecheck:packages": "npm run typecheck -w @marinoscar/hexactra-agent -w @marinoscar/hexactra-kgraph -w @marinoscar/hexactra-browser-agent -w @marinoscar/hexactra-web-agent",
+    "test:packages": "npm run test:run -w @marinoscar/hexactra-agent -w @marinoscar/hexactra-kgraph -w @marinoscar/hexactra-browser-agent -w @marinoscar/hexactra-web-agent",
     "check:package-pack": "node scripts/check-package-pack.mjs",
     "build": "npm run build:packages && npm run build --workspace=mcp-ui && npm run build --workspace=api && npm run build --workspace=web && npm run build --workspace=cli && npm run build --workspace=@hexactra/console-sdk",
     "typecheck": "npm run build:packages && npm run typecheck:packages && npm run typecheck --workspace=api && npm run typecheck --workspace=mcp-ui && npm run typecheck --workspace=web && npm run typecheck --workspace=cli && npm run typecheck --workspace=@hexactra/console-sdk",
