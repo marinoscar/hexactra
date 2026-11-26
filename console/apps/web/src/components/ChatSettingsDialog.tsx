@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { AccountsSection } from '../taskConnections/AccountsSection';
-import { selectionsOf, summaryLine, type ConnectionSelection } from '../taskConnections/model';
+import { selectionsOf, toolsSummaryLine, type ConnectionSelection, type ConnectionsMode } from '../taskConnections/model';
 import { useConnections } from '../connections/useConnections';
 import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
@@ -42,6 +42,8 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
   const canReadConnections = viewer.hasPermission('connections:read');
   const [values, setValues] = useState<ChatSettings>(() => settingsOf(chat));
   const [selections, setSelections] = useState<ConnectionSelection[]>(() => selectionsOf(chat.connections));
+  const modeOf = (c: Chat): ConnectionsMode => (c.connectionsMode === 'all' ? 'all' : 'listed');
+  const [mode, setMode] = useState<ConnectionsMode>(() => modeOf(chat));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +52,7 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
     if (!open) return;
     setValues(settingsOf(chat));
     setSelections(selectionsOf(chat.connections));
+    setMode(modeOf(chat));
     setError(null);
   }, [open, chat]);
 
@@ -59,8 +62,10 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
     try {
       // The accounts go only when the owner changed them: an older answer must never switch them off by accident.
       const before = selectionsOf(chat.connections);
-      const changed = canReadConnections && JSON.stringify(before) !== JSON.stringify(selections);
-      await onSave({ ...values, profile: values.profile.trim() || 'default', ...(changed ? { connections: selections } : {}) });
+      const modeChanged = mode !== modeOf(chat);
+      const listChanged = mode === 'listed' && JSON.stringify(before) !== JSON.stringify(selections);
+      const accounts = !canReadConnections || (!modeChanged && !listChanged) ? {} : mode === 'all' ? { connectionsMode: 'all' as const } : { connectionsMode: 'listed' as const, connections: selections };
+      await onSave({ ...values, profile: values.profile.trim() || 'default', ...accounts });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the settings');
@@ -105,14 +110,21 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             cards={{ checked: values.useSavedCards, onChange: (useSavedCards) => setValues((v) => ({ ...v, useSavedCards })) }}
           />
           {canReadConnections && (
-            <Stack spacing={1} component="section" aria-label="Accounts this chat may use">
+            <Stack spacing={1} component="section" aria-label="Tools and accounts this chat may use">
               <Typography variant="subtitle2" component="h3">
-                Accounts this chat may use
+                Tools and accounts
               </Typography>
               <Typography variant="body2" color="text.secondary" data-testid="chat-accounts-summary">
-                {summaryLine(selections, accounts.connections)}
+                {toolsSummaryLine(mode, selections, accounts.connections)}
               </Typography>
-              <AccountsSection connections={accounts.connections} failed={accounts.failed} selections={selections} onChange={setSelections} disabled={busy} />
+              <AccountsSection
+                connections={accounts.connections}
+                failed={accounts.failed}
+                selections={selections}
+                onChange={setSelections}
+                disabled={busy}
+                mode={{ value: mode, onChange: (m, s) => (setMode(m), setSelections(s)), limitLabel: 'Limit this chat' }}
+              />
               {/* A setting of the owner, not of this chat (#680): saved as soon as it is chosen. */}
               <NewChatAccountsSetting disabled={busy} />
             </Stack>

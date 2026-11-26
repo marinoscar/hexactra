@@ -11320,7 +11320,7 @@ export interface components {
             };
             connections?: {
                 /**
-                 * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
                  * @enum {string}
                  */
                 newChats: "off" | "read" | "read_write";
@@ -11444,7 +11444,7 @@ export interface components {
             };
             connections?: {
                 /**
-                 * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
                  * @enum {string}
                  */
                 newChats: "off" | "read" | "read_write";
@@ -11563,7 +11563,7 @@ export interface components {
             } | null;
             connections?: {
                 /**
-                 * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
                  * @enum {string}
                  */
                 newChats?: "off" | "read" | "read_write";
@@ -12925,7 +12925,7 @@ export interface components {
                 };
                 connections?: {
                     /**
-                     * @description How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.
+                     * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
                      * @enum {string}
                      */
                     newChats: "off" | "read" | "read_write";
@@ -23329,7 +23329,12 @@ export interface components {
                 useSavedCards: boolean;
                 /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
                 recordVideo: boolean;
-                /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
+                /**
+                 * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+                 * @enum {string}
+                 */
+                connectionsMode: "all" | "listed";
+                /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
                 connections: {
                     /**
                      * Format: uuid
@@ -23405,7 +23410,12 @@ export interface components {
             useSavedCards: boolean;
             /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
             recordVideo: boolean;
-            /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
+            /**
+             * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @enum {string}
+             */
+            connectionsMode: "all" | "listed";
+            /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
             connections: {
                 /**
                  * Format: uuid
@@ -23452,7 +23462,12 @@ export interface components {
             useSavedCards?: boolean;
             /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
             recordVideo?: boolean;
-            /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
+            /**
+             * @description Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`.
+             * @enum {string}
+             */
+            connectionsMode?: "all" | "listed";
+            /** @description The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). */
             connections?: {
                 /**
                  * Format: uuid
@@ -23495,7 +23510,12 @@ export interface components {
             useSavedCards: boolean;
             /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
             recordVideo: boolean;
-            /** @description The connections the chat may use, and how (E39.7). Empty: none. A new chat starts with the default the owner chose (`connections.newChats` of the user settings: read and change unless they chose Off or Read only; never an MCP server). */
+            /**
+             * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @enum {string}
+             */
+            connectionsMode: "all" | "listed";
+            /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
             connections: {
                 /**
                  * Format: uuid
@@ -23576,7 +23596,12 @@ export interface components {
             useSavedCards?: boolean;
             /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
             recordVideo?: boolean;
-            /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
+            /**
+             * @description Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`.
+             * @enum {string}
+             */
+            connectionsMode?: "all" | "listed";
+            /** @description The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). */
             connections?: {
                 /**
                  * Format: uuid

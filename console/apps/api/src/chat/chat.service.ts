@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException, 
 import { Prisma, type ChatMessage, type ChatMessageKind, type ChatMessageRole, type Conversation } from '@prisma/client';
 
 import { assertSelectable, conversationConnectionViews, replaceConversationConnections, type ConnectionSelectionView } from '../connections/agent-connections';
-import { defaultChatSelections } from '../connections/chat-default';
+import { defaultChatConnections } from '../connections/chat-default';
 import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,7 +27,9 @@ export interface ChatView {
   useSavedIdentity: boolean;
   useSavedCards: boolean;
   recordVideo: boolean;
-  /** The connections the chat may use (E39.7). */
+  /** `all`: every connection the owner switched on; `listed`: only `connections` (#969). */
+  connectionsMode: 'all' | 'listed';
+  /** The connections a limited chat may use (E39.7). */
   connections: ConnectionSelectionView[];
   lastMessageAt: Date;
   createdAt: Date;
@@ -87,7 +89,7 @@ export function titleFromMessage(text: string): string {
 }
 
 function view(c: Conversation, connections: ConnectionSelectionView[] = []): ChatView {
-  return { connections, id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, useSavedCards: c.useSavedCards, recordVideo: c.recordVideo, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
+  return { connectionsMode: c.connectionsMode === 'listed' ? 'listed' : 'all', connections, id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, useSavedCards: c.useSavedCards, recordVideo: c.recordVideo, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
 }
 function messageView(m: ChatMessage): ChatMessageView {
   return { id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt };
@@ -183,13 +185,16 @@ export class ChatService {
 
   async create(userId: string, input: CreateChatDto): Promise<ChatView> {
     await this.policies?.assertAssignable(userId, input.policyId);
-    if (input.connections) await assertSelectable(this.prisma, userId, input.connections);
-    // A chat that does not say which accounts starts with the owner's own default (#680); a list, even an empty one, is taken as it is.
-    const selections = input.connections ?? (await defaultChatSelections(this.prisma, userId));
+    // A chat that says neither a mode nor a list starts with the owner's own default (#680, #969); a list, even an empty one, is a limit.
+    const chosen = input.connectionsMode ?? (input.connections ? 'listed' : undefined);
+    const start = chosen ? { mode: chosen, selections: chosen === 'listed' ? (input.connections ?? []) : [] } : await defaultChatConnections(this.prisma, userId);
+    const selections = start.selections;
+    if (selections.length) await assertSelectable(this.prisma, userId, selections);
     const c = await this.db(userId).conversation.create({
       data: {
         userId,
         title: input.title ?? '',
+        connectionsMode: start.mode,
         ...(input.profile !== undefined ? { profile: input.profile } : {}),
         ...(input.hostId !== undefined ? { hostId: input.hostId } : {}),
         ...(input.hostFallback !== undefined ? { hostFallback: input.hostFallback } : {}),
@@ -218,10 +223,13 @@ export class ChatService {
   }
 
   async update(userId: string, id: string, patch: UpdateChatDto): Promise<ChatView> {
-    const { policyId, connections, ...fields } = patch;
+    const { policyId, connections: listed, connectionsMode: mode, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
+    // #969: a list sent without a mode limits the chat to it; `all` clears the list; `listed` alone keeps the list there is.
+    const connectionsMode = mode ?? (listed ? 'listed' : undefined);
+    const connections = connectionsMode === 'all' ? [] : listed;
     if (connections) await assertSelectable(this.prisma, userId, connections);
-    const data: Prisma.ConversationUpdateManyMutationInput = { ...fields, ...(policyId !== undefined ? { policyRef: policyId } : {}) };
+    const data: Prisma.ConversationUpdateManyMutationInput = { ...fields, ...(connectionsMode ? { connectionsMode } : {}), ...(policyId !== undefined ? { policyRef: policyId } : {}) };
     const { count } = await this.db(userId).conversation.updateMany({ where: { id }, data });
     if (count === 0) throw notFound();
     // The chat's own list changes; a run already started keeps its snapshot (E39.7).

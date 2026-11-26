@@ -96,6 +96,22 @@ describe('which connection tools a run is offered', () => {
     expect(fabric.sessions()).toBe(0);
   });
 
+  it('#969: a chat that is not limited gives its run every active connection of its owner, and an AI app\'s run none', async () => {
+    const userId = await login(app, `rc-chat-all-${stamp}@example.test`);
+    const db = kit.prisma.forUser({ userId });
+    await kit.connect(userId, 'Work', ALL);
+    await kit.connect(userId, 'Old', ALL, { status: 'paused' });
+    const chat = await db.conversation.create({ data: { userId, title: 'Chat all' } });
+    expect(chat.connectionsMode).toBe('all');
+    const run = await db.run.create({ data: { userId, conversationId: chat.id, trigger: 'manual', goal: 'Send the digest' } });
+    const model = scriptedModel([[FINISH]]);
+    await kit.runner(model, fakeFabric()).advance(run.id, userId, null);
+    expect(model.offered[0]!.filter((n) => CONNECTION_TOOLS.includes(n))).toEqual(CONNECTION_TOOLS);
+    const snapshot = JSON.stringify((await db.run.findFirstOrThrow({ where: { id: run.id } })).policySnapshot);
+    expect(snapshot).toContain('"Work"');
+    expect(snapshot).not.toContain('"Old"');
+  });
+
   it('follows the switches that are on: a connection with only the calendar offers only calendar tools', async () => {
     const r = await setup('cal', [['Cal', ['calendar_read', 'calendar_write'], 'read_write']]);
     const model = scriptedModel([[FINISH]]);

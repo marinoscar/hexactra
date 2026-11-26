@@ -5,6 +5,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { ProviderMark } from '../connections/ProviderMark';
 import type { ConnectionSelectionView } from './model';
 
+/** A chat that uses everything connected (#969) shows no chips: only a limited chat's list is worth showing. */
 export function ChatAccountChips({ accounts }: { accounts: readonly ConnectionSelectionView[] | undefined | null }) {
   if (!accounts || accounts.length === 0) return null;
   return (

@@ -120,19 +120,23 @@ describe('a task lists its connections', () => {
   });
 });
 
-describe('a new chat starts with the owner\'s own default (#680)', () => {
+describe('a new chat starts with the owner\'s own default (#680, #969)', () => {
   const setDefault = (s: Session, newChats: string) => call(s, 'PATCH', '/user-settings', { connections: { newChats } });
   const other = (s: Session, label: string, extra: Record<string, unknown>) =>
     prisma.connection.create({ data: { userId: s.userId, provider: 'google', accountId: `a-${label}-${stamp}`, accountEmail: `${label.toLowerCase()}@example.test`, label, capabilities: ['mail_read'], grantedScopes: ['mail_read'], ...extra } as never });
 
-  it('is read and change, for every active Google or Microsoft account, until the owner chooses otherwise', async () => {
+  it('uses everything the owner connected (#969) until the owner chooses otherwise', async () => {
     const s = await login('def-on');
-    const work = await connection(s, 'Work');
-    const home = await connection(s, 'Home');
+    await connection(s, 'Work');
+    await connection(s, 'Home');
     const chat = await call(s, 'POST', '/chats', {});
     expect(chat.status).toBe(201);
-    expect(chat.data.connections).toHaveLength(2);
-    expect(chat.data.connections).toEqual(expect.arrayContaining([expect.objectContaining({ connectionId: work.id, access: 'read_write' }), expect.objectContaining({ connectionId: home.id, access: 'read_write' })]));
+    expect(chat.data.connectionsMode).toBe('all');
+    expect(chat.data.connections).toEqual([]);
+    // Limited, then everything again.
+    const limited = await call(s, 'PATCH', `/chats/${chat.data.id}`, { connections: [] });
+    expect(limited.data.connectionsMode).toBe('listed');
+    expect((await call(s, 'PATCH', `/chats/${chat.data.id}`, { connectionsMode: 'all' })).data.connectionsMode).toBe('all');
     // The setting reads back as read and change when it was never saved.
     expect((await call(s, 'GET', '/user-settings')).data.connections?.newChats ?? 'read_write').toBe('read_write');
   });
@@ -143,6 +147,7 @@ describe('a new chat starts with the owner\'s own default (#680)', () => {
     const home = await connection(s, 'Home');
     expect((await setDefault(s, 'read')).status).toBe(200);
     const readOnly = await call(s, 'POST', '/chats', {});
+    expect(readOnly.data.connectionsMode).toBe('listed');
     expect(readOnly.data.connections.map((c: { access: string }) => c.access)).toEqual(['read', 'read']);
     expect((await setDefault(s, 'off')).status).toBe(200);
     expect((await call(s, 'POST', '/chats', {})).data.connections).toEqual([]);
@@ -155,7 +160,7 @@ describe('a new chat starts with the owner\'s own default (#680)', () => {
     expect((await setDefault(s, 'everything')).status).toBe(400);
   });
 
-  it('never lists a paused or disconnected account, an MCP server, or another user\'s account', async () => {
+  it('read only never lists a paused or disconnected account, an MCP server, or another user\'s account', async () => {
     const s = await login('def-limits');
     const stranger = await login('def-stranger');
     const work = await connection(s, 'Work');
@@ -163,14 +168,16 @@ describe('a new chat starts with the owner\'s own default (#680)', () => {
     await other(s, 'Reconnect', { status: 'needs_reconnect' });
     await other(s, 'Tools', { provider: 'mcp' });
     await connection(stranger, 'Theirs');
+    await setDefault(s, 'read');
     const chat = await call(s, 'POST', '/chats', {});
-    expect(chat.data.connections).toEqual([expect.objectContaining({ connectionId: work.id, access: 'read_write' })]);
+    expect(chat.data.connections).toEqual([expect.objectContaining({ connectionId: work.id, access: 'read' })]);
     expect(chat.data.connections).toHaveLength(1);
   });
 
-  it('changes no chat that exists, adds no account connected later, and leaves tasks off', async () => {
+  it('changes no chat that exists, adds no account connected later to a limited chat, and leaves tasks as they are', async () => {
     const s = await login('def-existing');
     await connection(s, 'Work');
+    await setDefault(s, 'read');
     const chat = await call(s, 'POST', '/chats', {});
     expect(chat.data.connections).toHaveLength(1);
     await setDefault(s, 'off');
@@ -178,7 +185,8 @@ describe('a new chat starts with the owner\'s own default (#680)', () => {
     expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connections).toHaveLength(1);
     await setDefault(s, 'read_write');
     expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connections).toHaveLength(1);
-    expect((await call(s, 'POST', '/tasks', { name: 'Plain', goal: 'Do it' })).data.connections).toEqual([]);
+    expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connectionsMode).toBe('listed');
+    expect((await call(s, 'POST', '/tasks', { name: 'Plain', goal: 'Do it' })).data.connectionsMode).toBe('all');
   });
 });
 
