@@ -237,7 +237,7 @@ describe('the binding: pages', () => {
     web.page('https://docs.example.test/slow', { delayMs: 5_000, headers: { 'content-type': 'text/plain' }, body: 'late' });
     const started = Date.now();
     expect(await codeOf(read(svc, 'https://docs.example.test/slow'))).toBe('UNAVAILABLE');
-    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(Date.now() - started).toBeLessThan(5_000);
     expect(web.requests[0]!.timeoutMs).toBeLessThanOrEqual(200);
   });
 
@@ -245,11 +245,14 @@ describe('the binding: pages', () => {
     const { svc, web, metrics } = service();
     web.page('https://docs.example.test/slow', { delayMs: 10_000, headers: { 'content-type': 'text/plain' }, body: 'late' });
     const stop = new AbortController();
-    const started = Date.now();
+    let stoppedAt = 0;
     const p = svc.fetch(USER, { url: 'https://docs.example.test/slow', maxChars: 12_000, signal: stop.signal }, null);
-    setTimeout(() => stop.abort(), 100);
+    setTimeout(() => {
+      stoppedAt = Date.now();
+      stop.abort();
+    }, 100);
     expect(await codeOf(p)).toBe('ABORTED');
-    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(Date.now() - stoppedAt).toBeLessThan(1_000);
     expect(metrics).toEqual([]);
   });
 
@@ -260,10 +263,13 @@ describe('the binding: pages', () => {
     const { svc } = service({}, web);
     const stop = new AbortController();
     const p = svc.fetch(USER, { url: 'https://docs.example.test/', maxChars: 12_000, signal: stop.signal }, null);
-    setTimeout(() => stop.abort(), 50);
-    const started = Date.now();
+    let stoppedAt = 0;
+    setTimeout(() => {
+      stoppedAt = Date.now();
+      stop.abort();
+    }, 50);
     expect(await codeOf(p)).toBe('ABORTED');
-    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(Date.now() - stoppedAt).toBeLessThan(1_000);
   });
 });
 

@@ -293,10 +293,12 @@ const { createRequire } = require('node:module');
       title = typeof t === 'string' ? t : null;
     } catch {}
     parentPort.postMessage({ ok: true, title, pages, total: doc.numPages });
-  } catch {
+  } catch (e) {
     parentPort.postMessage({ ok: false });
   } finally {
-    if (doc) await doc.destroy().catch(() => {});
+    try {
+      if (doc && typeof doc.destroy === 'function') await doc.destroy();
+    } catch {}
   }
 })();
 `;
@@ -324,15 +326,19 @@ export async function extractPdf(bytes: Buffer, signal: AbortSignal): Promise<Ex
     stderr: true,
   });
   const answer = await new Promise<PdfWorkerAnswer | 'aborted'>((resolve) => {
+    let settled = false;
     const done = (a: PdfWorkerAnswer | 'aborted') => {
+      if (settled) return;
+      settled = true;
       signal.removeEventListener('abort', onAbort);
       resolve(a);
     };
     const onAbort = () => done('aborted');
     signal.addEventListener('abort', onAbort, { once: true });
     worker.once('message', (m: PdfWorkerAnswer) => done(m));
-    worker.once('error', () => done({ ok: false }));
-    worker.once('exit', () => done({ ok: false }));
+    // An answer already posted wins over an error or an exit that is delivered first.
+    worker.once('error', () => setTimeout(() => done({ ok: false }), 50));
+    worker.once('exit', () => setTimeout(() => done({ ok: false }), 50));
   });
   void worker.terminate();
   if (answer === 'aborted') throw new WebToolError('ABORTED');
