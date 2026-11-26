@@ -18,7 +18,6 @@ import { ChatComposer } from '../components/ChatComposer';
 import { ChatOptions, type ChatRunChoice } from '../components/ChatOptions';
 import { useInboxCount } from '../components/InboxCountProvider';
 import { firstName, greeting } from '../components/home/homeText';
-import { ChatAccountChips } from '../taskConnections/ChatAccountChips';
 import { ChatRequestCard, RequestSettled, settledText, type RequestResult } from '../components/ChatRequest';
 import { ChatList, type ChatRowAction } from '../components/ChatList';
 import { ThreadRows, TypingIndicator, type ThreadCards } from '../components/ChatMessages';
@@ -623,7 +622,6 @@ export function ChatPage() {
             ) : (
               canWrite && (
                 <>
-                  <ChatAccountChips accounts={chat?.connections} />
                   <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'Ask Hexactra to do something' : liveRun ? 'Add something for the agent' : 'Message'}
                     options={<ChatOptions {...choice} profile={chat && chatId !== null ? chat.profile : undefined} onChange={(change) => void changeChoice(change)} onOpenSettings={() => void openSettings()} />}
                   />

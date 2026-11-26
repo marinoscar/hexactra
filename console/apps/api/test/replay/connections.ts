@@ -4,7 +4,7 @@
 // created, MCP calls) is kept for `expect`. Invented data only (`Person A`, `*.example.test`).
 import { CapabilityHub } from '../../src/connections/capability-hub';
 import { CapabilityProviderRegistry } from '../../src/connections/capability-provider.registry';
-import type { Capability, ConnectionProviderId } from '../../src/connections/connections.constants';
+import { isCapability, isWriteCapability, type Capability, type ConnectionProviderId } from '../../src/connections/connections.constants';
 import type { McpRunTool } from '../../src/connections/mcp/mcp-run.service';
 import { FakeCapabilityProvider, InMemoryConnections } from '../../src/connections/testing';
 import type { FakeAccount } from '../../src/connections/testing/fake-capability-provider';
@@ -141,7 +141,8 @@ export function scenarioAccounts(connections: readonly ScenarioConnection[], pre
 
   const accounts = (): [ScenarioConnection, FakeAccount][] => connections.filter((c) => c.provider !== 'mcp').map((c) => [c, fakes.get(c.provider as ConnectionProviderId)!.account(idOf(c.ref))]);
   return {
-    list: connections.map((c) => ({ connectionId: idOf(c.ref), access: c.access, label: c.label, provider: c.provider, capabilities: c.provider === 'mcp' ? [] : [...c.capabilities] })),
+    // E50.17: the access follows the owner's switches, as `runConnections` derives it (a scenario's own `access` is ignored).
+    list: connections.map((c) => ({ connectionId: idOf(c.ref), access: switchedAccess(c), label: c.label, provider: c.provider, capabilities: c.provider === 'mcp' ? [] : [...c.capabilities] })),
     deps: { connections: hub, mcp, prisma, ...(previous ? { artifacts } : {}) } as ScenarioAccounts['deps'],
     sent: () =>
       accounts().flatMap(([c, a]) =>
@@ -157,4 +158,10 @@ export function scenarioAccounts(connections: readonly ScenarioConnection[], pre
     writes: () => accounts().flatMap(([c, a]) => a.writes.map((w) => ({ ref: c.ref, method: w.method }))),
     mcpCalls,
   };
+}
+
+/** The access the owner's switches give a connection (E50.17, `runConnections`): read and change when a change capability (an MCP `write` tool) is on. */
+export function switchedAccess(c: Pick<ScenarioConnection, 'provider' | 'capabilities' | 'tools'>): 'read' | 'read_write' {
+  const write = c.provider === 'mcp' ? c.tools.some((t) => t.effect === 'write') : c.capabilities.some((x) => isCapability(x) && isWriteCapability(x));
+  return write ? 'read_write' : 'read';
 }

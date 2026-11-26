@@ -24,7 +24,7 @@ export type UnattendedPayments = (typeof UNATTENDED_PAYMENTS)[number];
 export const NEEDS_BROWSER = ['auto', 'always', 'never'] as const;
 export type NeedsBrowser = (typeof NEEDS_BROWSER)[number];
 
-/** `Task.connectionsMode` (#967): `all` the owner's active connections at what they switched on for each; `listed` only the task's list. */
+/** `Task.connectionsMode` (#967), deprecated by E50.17: accepted and ignored; every run gets what the owner switched on. */
 export const CONNECTIONS_MODE = ['all', 'listed'] as const;
 export type ConnectionsMode = (typeof CONNECTIONS_MODE)[number];
 
@@ -71,8 +71,9 @@ const taskFields = {
     ),
   connectionsMode: z
     .enum(CONNECTIONS_MODE)
+    .meta({ deprecated: true })
     .describe(
-      "Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.",
+      'Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.',
     ),
   connections: connectionSelectionsField,
   recordVideo: z

@@ -1,4 +1,4 @@
-// The tools of the owner's MCP servers (E39.9, #606): one `RunnerTool` per tool the owner enabled on a connection the run lists, built when
+// The tools of the owner's MCP servers (E39.9, #606): one `RunnerTool` per tool the owner enabled (E50.17: on every active server), built when
 // a job starts from the stored catalogue (`McpRunService.toolsFor`) and registered like any other tool (group `connection:<id>`).
 //
 //   * The model's name is `<label_slug>__<tool_name>` and its description is prefixed with the connection's label; every description is
@@ -16,7 +16,7 @@ import type { QuestionAction } from '../../../../questions/questions.contract';
 import { checkArguments, schemaUsable, type ArgsCheck } from '../../../../connections/mcp/mcp-validate';
 import { redactArgs } from '../../../../connections/mcp/mcp-redact';
 import { labelSlug, modelToolName } from '../../../../connections/mcp/mcp-text';
-import { MCP_TRUST_LINE } from '../../../../connections/mcp/mcp.constants';
+import { MCP_MAX_TOOLS_PER_RUN, MCP_TRUST_LINE } from '../../../../connections/mcp/mcp.constants';
 import type { McpRunTool } from '../../../../connections/mcp/mcp-run.service';
 import type { SnapshotConnection } from '../../../../policies/policy-snapshot';
 import { clip, defineRunnerTool, LEASE_LOST_TEXT, type RunnerTool, type ToolFamily } from '@marinoscar/hexactra-agent';
@@ -24,6 +24,7 @@ import { ATTR } from '../../../trace-attributes';
 import type { HostContext } from '../../context';
 import type { HostDeps } from '../../deps';
 import { settle } from './commit';
+import { isOpen, openToolboxTool, toolboxesFamily, type Toolbox } from './toolbox';
 import { CONNECTION_GATE, hashArgs, openCallIntent, recordStep, refusal, takeRead, wrapMcpContent, type ConnectionDecision, type ConnectionGateRequest } from './support';
 
 /** The most a read returns before the run's own read caps apply. */
@@ -154,16 +155,18 @@ function describe(def: McpRunTool): string {
   return clip(`[${def.connectionLabel}] ${title}${def.description}`.trim(), 700);
 }
 
-function build(def: McpRunTool, name: string, parameters: z.ZodTypeAny, first: boolean): RunnerTool<HostContext> {
+function build(def: McpRunTool, name: string, parameters: z.ZodTypeAny, first: boolean, deferred: boolean): RunnerTool<HostContext> {
+  const family = mcpFamilyId(def.connectionId);
   const common = {
     name,
     group: `connection:${def.connectionId}`,
-    family: mcpFamilyId(def.connectionId),
+    family,
     description: describe(def),
     parameters,
     strict: false as const,
     ...(first ? { usage: MCP_TRUST_LINE } : {}),
-    available: (ctx: HostContext) => Boolean(ctx.ext.d.mcp) && ctx.ext.connections.list.some((c) => c.connectionId === def.connectionId),
+    // Over the cap (E50.17): offered once the run opened its server's toolbox (`open_toolbox`); never dropped.
+    available: (ctx: HostContext) => Boolean(ctx.ext.d.mcp) && ctx.ext.connections.list.some((c) => c.connectionId === def.connectionId) && (!deferred || isOpen(ctx, family)),
   };
   if (def.mode === 'read') return defineRunnerTool({ ...common, execute: (ctx: HostContext, args: unknown) => runRead(ctx, def, name, args) }) as unknown as RunnerTool<HostContext>;
   return defineRunnerTool({
@@ -203,27 +206,31 @@ export function mcpFamilies(defs: readonly McpRunTool[]): ToolFamily<HostContext
   });
 }
 
-/** The tools of the MCP connections a run lists and their families (E41.2). */
+/**
+ * The tools of the run's MCP connections and their families (E41.2). Over the per-run cap (E50.17) every server is a closed toolbox: its tools
+ * are registered but offered only once `open_toolbox` opened it, and the toolboxes family names each with its purpose and tool count.
+ */
 export async function mcpToolset(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<{ tools: RunnerTool<HostContext>[]; families: ToolFamily<HostContext>[] }> {
-  const { tools, defs } = await buildMcp(d, userId, list);
-  return { tools, families: mcpFamilies(defs) };
+  const { tools, defs, deferred } = await buildMcp(d, userId, list);
+  const families = mcpFamilies(defs);
+  if (!deferred) return { tools, families };
+  const boxes: Toolbox[] = families.map((f) => ({ familyId: f.id, label: f.title, purpose: f.whenToUse, tools: defs.filter((x) => mcpFamilyId(x.connectionId) === f.id) }));
+  return { tools: [...tools, openToolboxTool(boxes)], families: [...families, toolboxesFamily(boxes)] };
 }
 
 /**
- * The tools of the MCP connections a run lists, in the order of the list and then by name, at most 40. A tool whose schema cannot be both
- * offered to a model and checked here is left out. Empty without the connections module, with the deployment switch off, or with none.
+ * The tools of the run's MCP connections, in the order of the list and then by name. Over the per-run cap they are deferred (`mcpToolset`),
+ * never dropped. A tool whose schema cannot be both offered to a model and checked here is left out. Empty without the connections module, with the deployment switch off, or with none.
  */
 export async function mcpTools(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<RunnerTool<HostContext>[]> {
   return (await buildMcp(d, userId, list)).tools;
 }
 
-async function buildMcp(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<{ tools: RunnerTool<HostContext>[]; defs: McpRunTool[] }> {
+async function buildMcp(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly SnapshotConnection[]): Promise<{ tools: RunnerTool<HostContext>[]; defs: McpRunTool[]; deferred: boolean }> {
   const chosen = list.filter((c) => c.provider === 'mcp');
-  if (!d.mcp || chosen.length === 0) return { tools: [], defs: [] };
+  if (!d.mcp || chosen.length === 0) return { tools: [], defs: [], deferred: false };
   const defs = await d.mcp.toolsFor(userId, chosen.map((c) => ({ connectionId: c.connectionId, access: c.access })));
-  const taken = new Set<string>();
-  const out: RunnerTool<HostContext>[] = [];
-  const used: McpRunTool[] = [];
+  const usable: { def: McpRunTool; parameters: z.ZodTypeAny }[] = [];
   for (const def of defs) {
     if (!schemaUsable(def.hash, def.inputSchema)) continue;
     let parameters: z.ZodTypeAny;
@@ -233,9 +240,12 @@ async function buildMcp(d: Pick<HostDeps, 'mcp'>, userId: string, list: readonly
     } catch {
       continue;
     }
-    out.push(build(def, modelToolName(labelSlug(def.connectionLabel), def.name, taken), parameters, out.length === 0));
-    used.push(def);
+    usable.push({ def, parameters });
   }
-  return { tools: out, defs: used };
+  // Over the cap the trust line goes with `open_toolbox`, which is offered for the whole run; otherwise with the first tool, as before.
+  const deferred = usable.length > MCP_MAX_TOOLS_PER_RUN;
+  const taken = new Set<string>();
+  const tools = usable.map(({ def, parameters }, i) => build(def, modelToolName(labelSlug(def.connectionLabel), def.name, taken), parameters, !deferred && i === 0, deferred));
+  return { tools, defs: usable.map((u) => u.def), deferred };
 }
 

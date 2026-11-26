@@ -36,7 +36,6 @@ import { AUTH_WORDS } from '../connections/mcpWords';
 import { CapabilitiesDialog, DefaultsDialog, RenameDialog, TestDialog } from '../connections/ConnectionDialogs';
 import { GROUPS, GROUP_NAME, PROVIDER_NAME, STATUS_WORDS, levelOf, outcomeBanner, reasonWords, type Outcome } from '../connections/words';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, toast, useApiAction, useConfirm } from '../ui';
-import { NewChatAccountsSetting } from '../connections/NewChatAccounts';
 
 const RETURN_TO = '/settings/connections';
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -342,7 +341,7 @@ export function ConnectionsPage() {
     <PageContainer width="default">
       <PageHeader
         title="Connections"
-        subtitle="Your accounts at Google and Microsoft, and MCP servers you add, so a task or chat can read mail, check a calendar, add a row to a spreadsheet or use another tool when you tell it to."
+        subtitle="Your accounts at Google and Microsoft, and MCP servers you add, so the agent can read mail, check a calendar, add a row to a spreadsheet or use another tool."
         back={{ to: '/settings', label: 'Settings' }}
         actions={[{ key: 'mcp', label: 'Add an MCP server', Icon: ExtensionOutlinedIcon, onClick: () => setAddingMcp(true), hidden: !canWrite || !mcpEnabled }]}
         primary={{ key: 'connect', label: 'Connect an account', Icon: AddIcon, onClick: () => setConnecting(true), hidden: !canWrite }}
@@ -353,13 +352,16 @@ export function ConnectionsPage() {
         </Alert>
       )}
       <ErrorBanner error={action.error} onClose={action.clearError} onRetry={connections && connections.length === 0 ? () => void load() : undefined} />
-      {canWrite && <NewChatAccountsSetting />}
+      {/* The one rule (E50.17): each row's switch is the only place a tool is turned on or off. */}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="connections-rule">
+        What is switched on here is available to the agent in every task and chat. Sending or changing something still asks you first.
+      </Typography>
       {connections === null && <ListSkeleton />}
       {connections !== null && all.length === 0 && (
         <EmptyState
           Icon={LinkOutlinedIcon}
           title="No accounts connected yet"
-          body="A connection lets Hexactra use one of your Google or Microsoft accounts for mail, calendar or documents. A new chat can use your accounts straight away (you choose that under New chats, and can turn it off); a task has to be told to. You choose what each account may do."
+          body="A connection lets Hexactra use one of your Google or Microsoft accounts for mail, calendar or documents. Every task and chat can use what you switch on here, and you choose what each account may do: pause it, or switch a capability off, to keep the agent away from it."
           action={canWrite ? { key: 'connect', label: 'Connect an account', Icon: AddIcon, onClick: () => setConnecting(true) } : undefined}
         />
       )}

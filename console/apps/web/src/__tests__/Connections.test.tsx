@@ -131,9 +131,10 @@ describe('the list', () => {
   it('shows each account by provider: the label, the email, what it may do, its status, its defaults and its last use', async () => {
     renderPage({ 'GET /connections': [BROKEN, WORK, PERSONAL, OUTLOOK] });
     expect(await screen.findByRole('heading', { name: 'Connections', level: 1 })).toBeInTheDocument();
-    // The owner's "New chats" choice (#680), then needs-reconnect first, then Google, then Microsoft
+    // Needs-reconnect first, then Google, then Microsoft (no "New chats" choice since E50.17); the rule is said once at the top.
+    expect(screen.getByTestId('connections-rule')).toHaveTextContent('What is switched on here is available to the agent in every task and chat. Sending or changing something still asks you first.');
     const sections = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
-    expect(sections).toEqual(['New chats', 'Needs reconnecting', 'Google', 'Microsoft']);
+    expect(sections).toEqual(['Needs reconnecting', 'Google', 'Microsoft']);
 
     const work = within(row('Work'));
     expect(work.getByText('person.a@example.test · Person A')).toBeInTheDocument();
@@ -165,11 +166,11 @@ describe('the list', () => {
     expect(document.body.textContent).not.toContain(MARKER);
   });
 
-  it('empty: says what a connection is, that a new chat can use it straight away and a task has to be told to', async () => {
+  it('empty: says what a connection is, and that every task and chat can use what is switched on (E50.17)', async () => {
     renderPage({ 'GET /connections': [] });
     expect(await screen.findByText('No accounts connected yet')).toBeInTheDocument();
-    expect(screen.getByText(/A new chat can use your accounts straight away/)).toBeInTheDocument();
-    expect(screen.getByText(/a task has to be told to/)).toBeInTheDocument();
+    expect(screen.getByText(/Every task and chat can use what you switch on here/)).toBeInTheDocument();
+    expect(screen.queryByText(/a task has to be told to/)).toBeNull();
     expect(screen.getAllByRole('button', { name: 'Connect an account' }).length).toBeGreaterThan(0);
   });
 

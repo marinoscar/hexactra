@@ -11621,7 +11621,7 @@ export interface components {
             };
             connections?: {
                 /**
-                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                 * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                  * @enum {string}
                  */
                 newChats: "off" | "read" | "read_write";
@@ -11751,7 +11751,7 @@ export interface components {
             };
             connections?: {
                 /**
-                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                 * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                  * @enum {string}
                  */
                 newChats: "off" | "read" | "read_write";
@@ -11876,7 +11876,7 @@ export interface components {
             } | null;
             connections?: {
                 /**
-                 * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                 * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                  * @enum {string}
                  */
                 newChats?: "off" | "read" | "read_write";
@@ -13295,7 +13295,7 @@ export interface components {
                 };
                 connections?: {
                     /**
-                     * @description How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.
+                     * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
                      * @enum {string}
                      */
                     newChats: "off" | "read" | "read_write";
@@ -19346,11 +19346,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -19551,11 +19555,15 @@ export interface components {
                 /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
                 recordVideo: boolean;
                 /**
-                 * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+                 * @deprecated
+                 * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
                  * @enum {string}
                  */
                 connectionsMode: "all" | "listed";
-                /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+                /**
+                 * @deprecated
+                 * @description Deprecated (E50.17): always empty. A task has no connection list.
+                 */
                 connections: {
                     /**
                      * Format: uuid
@@ -19811,11 +19819,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -20088,11 +20100,15 @@ export interface components {
              */
             needsBrowser?: "auto" | "always" | "never";
             /**
-             * @description Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode?: "all" | "listed";
-            /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
+             */
             connections?: {
                 /**
                  * Format: uuid
@@ -20173,11 +20189,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -20374,11 +20394,15 @@ export interface components {
              */
             needsBrowser?: "auto" | "always" | "never";
             /**
-             * @description Which of the owner's connections the task's runs may use (#967). `all` (the default): every active connection (Google, Microsoft, MCP server), at what the owner switched on for it when connecting it, so the agent can pick the right tool for the job. `listed`: only `connections`, each at its access. A request that sends `connections` without this field is `listed`; `all` clears the list.
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode?: "all" | "listed";
-            /** @description The connections the agent may use in this task or chat, and how. A task has none until it lists them. A new chat that does not say takes the default the owner chose (their `connections.newChats` setting: read and change unless they chose otherwise; never an MCP server); a list, even an empty one, is taken as it is. A run takes a snapshot when it starts. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
+             */
             connections?: {
                 /**
                  * Format: uuid
@@ -20462,11 +20486,15 @@ export interface components {
             /** @description Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no connection list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -21912,7 +21940,7 @@ export interface components {
                 /** @enum {string} */
                 status: "active" | "superseded" | "archived";
             }[];
-            /** @description E41.5: the owner's connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied. */
+            /** @description E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied. */
             suggestedConnections?: {
                 /** Format: uuid */
                 connectionId: string;
@@ -21921,6 +21949,8 @@ export interface components {
                 site: string;
                 /** @enum {string} */
                 scope: "task" | "chat";
+                /** @enum {string} */
+                fix: "resume" | "capability";
                 text: string;
             }[];
         };
@@ -22714,7 +22744,7 @@ export interface components {
                 allowSavedIdentity: boolean;
                 /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
                 allowSavedCards: boolean;
-                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
@@ -22815,7 +22845,7 @@ export interface components {
                 allowSavedIdentity: boolean;
                 /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
                 allowSavedCards: boolean;
-                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
                 allowConnections: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
@@ -22853,7 +22883,7 @@ export interface components {
             allowSavedIdentity: boolean;
             /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
             allowSavedCards: boolean;
-            /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+            /** @description Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections. */
             allowConnections: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
@@ -23920,11 +23950,15 @@ export interface components {
                 /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
                 recordVideo: boolean;
                 /**
-                 * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+                 * @deprecated
+                 * @description Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools.
                  * @enum {string}
                  */
                 connectionsMode: "all" | "listed";
-                /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
+                /**
+                 * @deprecated
+                 * @description Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.
+                 */
                 connections: {
                     /**
                      * Format: uuid
@@ -24001,11 +24035,15 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -24053,11 +24091,15 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
             recordVideo?: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`.
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release (#969 added it). A chat may use everything its owner switched on in Connections and tools.
              * @enum {string}
              */
             connectionsMode?: "all" | "listed";
-            /** @description The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
+             */
             connections?: {
                 /**
                  * Format: uuid
@@ -24101,11 +24143,15 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755); off by default. Not masked, owner-only */
             recordVideo: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969): `all` every active connection at what the owner switched on for it; `listed` only `connections`
+             * @deprecated
+             * @description Deprecated (E50.17): always `all`. A chat may use everything its owner switched on in Connections and tools.
              * @enum {string}
              */
             connectionsMode: "all" | "listed";
-            /** @description The connections a limited chat may use, and how (E39.7). Empty with `all`. A new chat follows the owner's `connections.newChats` (`read_write`, the default: everything; `read`: Google and Microsoft read only; `off`: none). */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-chat list.
+             */
             connections: {
                 /**
                  * Format: uuid
@@ -24187,11 +24233,15 @@ export interface components {
             /** @description Record a video of the chat's runs (epic #755). Off by default. The video is not masked: anything on the page or typed into it is visible; only the owner can watch it. */
             recordVideo?: boolean;
             /**
-             * @description Which of the owner's connections the chat may use (#969). `all`: every active connection (Google, Microsoft, MCP server) at what the owner switched on for it, so the agent can pick the right tool. `listed`: only `connections`. A request that sends `connections` without this field is `listed`; `all` clears the list. A new chat that says neither follows the owner's `connections.newChats`.
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release (#969 added it). A chat may use everything its owner switched on in Connections and tools.
              * @enum {string}
              */
             connectionsMode?: "all" | "listed";
-            /** @description The connections (mail, calendar, documents, MCP servers) a limited chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): accepted and ignored for one release. Every run and chat may use everything its owner switched on in Connections and tools (each send or change still asks); there is no per-task or per-chat list.
+             */
             connections?: {
                 /**
                  * Format: uuid
@@ -24294,7 +24344,10 @@ export interface components {
                 /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[];
-            /** @description E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools.
+             */
             connections: {
                 /** Format: uuid */
                 connectionId: string;
@@ -24740,7 +24793,10 @@ export interface components {
                 /** @description Masked in every view and export, and never sent to an AI app */
                 sensitive?: boolean;
             }[];
-            /** @description E41.5: the chat's connections its runs actually used, at the access they needed (read and write when a run changed something through one). A proposal for the task form: nothing is listed on a task until the owner saves it. Empty when no run used one. */
+            /**
+             * @deprecated
+             * @description Deprecated (E50.17): always empty. A task has no account list; every run may use everything the owner switched on in Connections and tools.
+             */
             connections: {
                 /** Format: uuid */
                 connectionId: string;

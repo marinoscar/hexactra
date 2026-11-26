@@ -157,15 +157,14 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
   const fake = fakeRegistered;
   const user = await prisma.user.create({ data: { email: `chat-front-${randomUUID().slice(0, 8)}@example.test`, displayName: 'Person A' } });
   const adapters = app.get(ConnectionProviderRegistry);
-  const selections: { connectionId: string; access: 'read' | 'read_write' }[] = [];
   for (const c of scenario.connections) {
     const row = await prisma.connection.create({
       data: { userId: user.id, provider: c.provider, accountId: `acct-${randomUUID()}`, accountEmail: `${c.label.toLowerCase().replace(/\W+/g, '-')}@example.test`, label: c.label, capabilities: c.capabilities, grantedScopes: adapters.get(c.provider)?.scopesFor(c.capabilities as Capability[]) ?? c.capabilities, status: 'active' },
     });
     for (const m of c.mail) fake.account(row.id).addMessage({ from: m.from, subject: m.subject, text: m.body, date: m.date });
-    selections.push({ connectionId: row.id, access: c.access });
   }
-  const chat = await chats.create(user.id, { connections: selections } as never);
+  // E50.17: the chat has every connection the owner switched on; it lists none.
+  const chat = await chats.create(user.id, {} as never);
   for (const turn of scenario.conversation) {
     if (turn.role === 'user') await chats.postUserMessage(user.id, chat.id, turn.text);
     else if (turn.role === 'assistant') await chats.append(chat.id, { role: 'assistant', kind: 'text', text: turn.text });
