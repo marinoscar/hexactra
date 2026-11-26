@@ -129,3 +129,16 @@ describe('web_fetch: errors and Stop', () => {
     expect(run.ctx.state.stop).toBe('cancel');
   });
 });
+
+describe('web_fetch: the span (E50.7)', () => {
+  it('names the kind and the outcome of the call, never the address', async () => {
+    const run = fakeWebRun();
+    run.fetch.pages.set('https://docs.example.test/ok', { title: 'Ok', text: 'Fine.' });
+    await call(run, { url: 'https://docs.example.test/ok', max_chars: null });
+    run.fetch.failures.set('https://docs.example.test/login', 'BLOCKED');
+    await call(run, { url: 'https://docs.example.test/login', max_chars: null });
+    const attrs = run.telemetry.calls.filter((c) => c.startsWith('attrs:'));
+    expect(attrs).toEqual([`attrs:${JSON.stringify({ 'hexactra.web.kind': 'fetch', 'hexactra.web.outcome': 'ok' })}`, `attrs:${JSON.stringify({ 'hexactra.web.kind': 'fetch', 'hexactra.web.outcome': 'blocked' })}`]);
+    expect(attrs.join()).not.toContain('docs.example.test');
+  });
+});

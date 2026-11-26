@@ -25,7 +25,8 @@ export interface AgentPolicySpec {
     allowProviderFallback: boolean;
     pins?: Partial<Record<Tier, string | null>>;
   };
-  budget: Record<BudgetLimitKey, number | null> & { warnAtPercent: number };
+  /** `maxWebCalls` (E50.7): web searches and page reads; a refused call over it, never a stop, so it is not one of the limits above. */
+  budget: Record<BudgetLimitKey, number | null> & { maxWebCalls?: number | null; warnAtPercent: number };
   stall: {
     maxConsecutiveFailures: number;
     maxRepeatedAction: number;

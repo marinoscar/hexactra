@@ -23,6 +23,7 @@ import { FakeCapabilityProvider } from '../../src/connections/testing';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { TaskRunStarter } from '../../src/questions/task-run-starter';
 import { TasksService } from '../../src/tasks/tasks.service';
+import { FakeWebFetch, FakeWebSearch } from '@marinoscar/hexactra-web-agent/testing';
 
 /** The chat's read tools: what `expect.tool: "read"` accepts. */
 export const CHAT_READ_TOOLS = CHAT_CONNECTION_TOOLS.map((t) => t.name);
@@ -37,6 +38,7 @@ const chatExpectSchema = z.strictObject({
   tool: z.string().min(1).describe('start_run, ask_user, read (any read tool of the chat), none (a plain reply), or another tool name'),
   goalIncludes: z.array(z.string()).default([]).describe('start_run: texts the goal contains'),
   goalMustNotInclude: z.array(z.string()).default([]).describe('start_run: regexes (case-insensitive) the goal must not match'),
+  noRun: z.boolean().optional().describe('The turn started no run (E50.7)'),
   task: z.string().optional().describe('run_task: the task it names (#1007)'),
   inputs: z.record(z.string(), z.string()).optional().describe('run_task: values it passes, by parameter name (#1007)'),
   options: z.array(z.string()).optional().describe('ask_user: the suggested answers it offers, every one of them (#1007)'),
@@ -62,6 +64,10 @@ export const chatScenarioSchema = z.strictObject({
     .default([]),
   tasks: z.array(z.strictObject({ name: z.string().min(1), goal: z.string().min(1), parameters: z.array(taskParamSchema).default([]) })).default([]).describe("The owner's saved tasks (#1007)"),
   conversation: z.array(turnSchema).default([]),
+  web: z
+    .strictObject({ results: z.record(z.string(), z.array(z.strictObject({ title: z.string(), url: z.string(), snippet: z.string() }))).default({}) })
+    .optional()
+    .describe('Web search set up and switched on for the owner (E50.7), with these results by query. Absent: not set up'),
   message: z.string().min(1).describe('The newest owner message: what the turn answers'),
   script: z.array(z.tuple([z.string(), z.record(z.string(), z.unknown())])).default([]).describe('Scripted mode: the tool calls of the model\'s first round trip'),
   expect: chatExpectSchema,
@@ -184,6 +190,21 @@ function recordingAi(inner: AiService, calls: ChatFrontResult['calls'], aiUserId
   } as unknown as AiService;
 }
 
+/** Web search set up and switched on for the owner (E50.7): the service's shape over the web toolset's fakes. */
+function fakeWebDeps(web: NonNullable<ChatScenario['web']>) {
+  const search = new FakeWebSearch();
+  for (const [q, hits] of Object.entries(web.results)) search.results.set(q, hits.map((h) => ({ ...h, publishedAt: null })));
+  const fetch = new FakeWebFetch();
+  const webSearch = {
+    system: async () => ({ enabled: true, fetch: { enabled: true } }),
+    userSettings: async () => ({ enabled: true, provider: null }),
+    candidates: async () => [{ provider: { id: 'fake' }, tier: null }],
+    costOf: () => 0.001,
+    forUser: async () => search,
+  };
+  return { webSearch, webFetch: { forRun: async () => fetch }, search };
+}
+
 let fakeRegistered: FakeCapabilityProvider | null = null;
 
 /**
@@ -228,9 +249,10 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
   // Live: the model is called as the account whose AI settings the run uses (`aiUserId`); the chat itself belongs to a fresh owner.
   const seen: { input?: string; offered?: string[] } = {};
   const model = recordingAi(ai ?? scriptedAi(scenario.script), calls, ai ? opts.aiUserId : undefined, seen);
+  const web = scenario.web ? fakeWebDeps(scenario.web) : null;
   // With the task starter (#1007), so run_task and the task block are what the app offers.
   const starter = app.get(TaskRunStarter, { strict: false });
-  const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), model, undefined, undefined, undefined, starter, undefined, app.get(ConnectionCapabilities));
+  const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), model, undefined, undefined, undefined, starter, undefined, app.get(ConnectionCapabilities), web?.webSearch as never, web?.webFetch as never);
   let error: string | null = null;
   try {
     await turns.run(chat.id, user.id, null);
@@ -238,11 +260,12 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
     error = e instanceof Error ? e.message : String(e);
   }
   const runs = (await prisma.run.findMany({ where: { conversationId: chat.id, status: { in: ['queued', 'waiting_human'] } }, select: { taskId: true } }));
+  const runCount = await prisma.run.count({ where: { conversationId: chat.id } });
   // The job a `start_run` or `run_task` queued is not run here: removed, so no later spec's worker picks it up (only the tool call is measured).
   await prisma.run.deleteMany({ where: { conversationId: chat.id, status: { in: ['queued', 'waiting_human'] } } });
   const first = calls[0] ?? null;
   const result: ChatFrontResult = { scenario, tool: first?.tool ?? 'none', args: first?.args ?? null, calls, runs, input: seen.input ?? '', offered: seen.offered ?? [], failures: [], pendingFailures: [], pass: false };
-  result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect)];
+  result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect), ...(scenario.expect.noRun && runCount > 0 ? [`noRun: the turn started ${runCount} run(s)`] : [])];
   result.pendingFailures = scenario.pending ? evaluateChat(result, scenario.pending.expect).map((f) => `[pending ${scenario.pending!.issue}] ${f}`) : [];
   result.pass = result.failures.length === 0;
   return result;

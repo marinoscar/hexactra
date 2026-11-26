@@ -20,6 +20,9 @@ import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import { TasksService } from '../tasks/tasks.service';
 import { RunPauseService } from '../tasks/run-pause.service';
 import { chatConnectionTools } from './chat-connection-tools';
+import { chatWebTools, WEB_CHAT_INSTRUCTIONS } from './chat-web-tools';
+import { WebFetchService } from '../web-search/fetch/web-fetch.service';
+import { WebSearchService } from '../web-search/web-search.service';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
 import { ChatResults } from './chat-results.service';
 import { ChatTaskDraftService } from './chat-task-draft.service';
@@ -111,6 +114,9 @@ export class ChatTurnService {
     @Optional() private readonly pauses?: RunPauseService,
     /** The owner's connections (E39.7): the chat's read tools. Absent without the connections module. */
     @Optional() private readonly connectionHub?: ConnectionCapabilities,
+    /** Web search (E50.7): the chat's `web_search` and `web_fetch`, when the owner set it up and switched it on. */
+    @Optional() private readonly webSearch?: WebSearchService,
+    @Optional() private readonly webFetch?: WebFetchService,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<ChatTurnOutcome> {
@@ -250,6 +256,8 @@ export class ChatTurnService {
     const savedTasks = this.starter ? await chatTaskContext(this.prisma, userId, await this.recentOwnerText(c.id)) : NO_TASK_CONTEXT;
     // The chat's connections (E39.7): the read tools only, for the accounts the chat lists. No write tool is ever offered here.
     const reading = await chatConnectionTools({ prisma: this.prisma, connections: this.connectionHub }, { userId, orgId, conversationId: c.id }, (a) => tr.toolAttributes(a));
+    // A public fact is answered here (E50.7): the web tools, when web search is set up and switched on for the owner.
+    const web = await chatWebTools({ webSearch: this.webSearch, webFetch: this.webFetch, log: this.log }, { userId, orgId, conversationId: c.id }, (a) => tr.toolAttributes(a));
     const tools: AiDefinedTool[] = tr.wrapTools([
       defineTool({
         name: 'ask_user',
@@ -443,12 +451,13 @@ export class ChatTurnService {
           ]
         : []),
       ...reading.tools,
+      ...web,
     ]);
 
     let text = '';
     try {
       const input = await this.buildInput(userId, c.id, reading.line, savedTasks);
-      const base = reading.tools.length ? `${CHAT_INSTRUCTIONS}\n${CONNECTION_CHAT_INSTRUCTIONS}` : CHAT_INSTRUCTIONS;
+      const base = [CHAT_INSTRUCTIONS, ...(reading.tools.length ? [CONNECTION_CHAT_INSTRUCTIONS] : []), ...(web.length ? [WEB_CHAT_INSTRUCTIONS] : [])].join('\n');
       const result = await tr.within(() =>
         this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
           instructions: savedTasks.block ? withSavedTaskInstructions(base) : base,

@@ -6,6 +6,13 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { chatConnectionTools } from '../src/chat/chat-connection-tools';
+import { chatWebTools } from '../src/chat/chat-web-tools';
+import { SecretBytes } from '../src/secrets/secrets-provider.port';
+import { SERVICE_CREDENTIAL_PORT, type ServiceCredentialPort } from '../src/service-credentials/service-credential.port';
+import { WebFetchService } from '../src/web-search/fetch/web-fetch.service';
+import { credentialRefOf } from '../src/web-search/search-provider';
+import { WebSearchAdminService } from '../src/web-search/web-search-admin.service';
+import { WebSearchService } from '../src/web-search/web-search.service';
 import { ChatService } from '../src/chat/chat.service';
 import { ConnectionApps } from '../src/connections/connection-apps.service';
 import { ConnectionCapabilities } from '../src/connections/connection-capabilities.service';
@@ -96,7 +103,11 @@ async function offered(o: Owner, kind: Kind, calls: Call[][] = [[FINISH]]) {
   const data = kind === 'task run' ? { taskId: o.task.id, trigger: 'manual' as const } : kind === 'one-off run' ? { trigger: 'manual' as const } : { conversationId: o.chat.id, trigger: 'chat' as const };
   const run = await o.db.run.create({ data: { userId: o.userId, goal: 'Do the errand', ...data } });
   const model = scriptedModel(calls);
-  const outcome = await kit.runner(model, fakeFabric()).advance(run.id, o.userId, null);
+  const runner = kit.runner(model, fakeFabric());
+  // Web search (E50.7): the real services, as in the application. Only an owner with a key has a provider set up.
+  runner.webSearch = app.get(WebSearchService, { strict: false });
+  runner.webFetch = app.get(WebFetchService, { strict: false });
+  const outcome = await runner.advance(run.id, o.userId, null);
   return { names: model.offered[0]!, run, outcome, model };
 }
 
@@ -193,7 +204,74 @@ describe('a tool that is set up and switched on is always available (E50.17)', (
     expect(JSON.stringify((await kit.prisma.run.findFirstOrThrow({ where: { id: run.id } })).policySnapshot)).not.toContain('"Theirs"');
   });
 
-  // E50.7 (#977) fills these in when web search exists (`host/web-availability.ts`): set up and switched on means offered, the same rule.
-  it.todo('web search (E50.7): a task run, a one-off run, a chat run and the chat model are offered web_search and web_fetch when a provider is set up and both switches are on, with no task field');
-  it.todo('web search (E50.7): the deployment or the user switch off removes web_search from the next run, and on brings it back');
+  // E50.7 (#977): web search follows the same rule (`host/web-availability.ts`): set up (a provider with a usable key) and switched on (the
+  // deployment's switch and the owner's) means offered, with no task field.
+  describe('web search (E50.7)', () => {
+    const WEB = ['web_search', 'web_fetch'];
+    let w: Owner;
+    const web = () => app.get(WebSearchService, { strict: false });
+    const setUserSwitch = async (enabled: boolean) => {
+      await kit.prisma.userSettings.upsert({ where: { userId: w.userId }, create: { userId: w.userId, value: { webSearch: { enabled } } }, update: { value: { webSearch: { enabled } } } });
+    };
+    const setDeploymentSwitch = (enabled: boolean) => app.get(WebSearchAdminService, { strict: false }).save(adminId, { enabled });
+    const chatWeb = async () => (await chatWebTools({ webSearch: web(), webFetch: app.get(WebFetchService, { strict: false }) }, { userId: w.userId, orgId: null, conversationId: w.chat.id }, () => undefined)).map((t) => (t as unknown as { tool?: { name: string }; name?: string }).tool?.name ?? (t as unknown as { name: string }).name);
+    beforeAll(async () => {
+      w = await owner('web');
+      // The owner's own Brave key (the user tier): the provider is set up for them, and for nobody else.
+      await app.get<ServiceCredentialPort>(SERVICE_CREDENTIAL_PORT, { strict: false }).set(credentialRefOf('brave'), 'user', { userId: w.userId, orgId: null }, SecretBytes.from('BSAtoolsalwaysavailable0000'));
+      web().invalidate();
+    });
+    afterAll(async () => {
+      await setDeploymentSwitch(true);
+      await app.get<ServiceCredentialPort>(SERVICE_CREDENTIAL_PORT, { strict: false }).delete(credentialRefOf('brave'), 'user', { userId: w.userId, orgId: null });
+    });
+
+    it.each<Kind>(['task run', 'one-off run', "chat's run"])('a %s is offered web_search and web_fetch when a provider is set up and both switches are on, with no task field', async (kind) => {
+      const { names, run } = await offered(w, kind);
+      expect(names).toEqual(expect.arrayContaining(WEB));
+      // The connections are offered as before, and web_search comes after the MCP tools and before finish.
+      expect(names.indexOf('web_search')).toBeGreaterThan(names.indexOf(MCP_WRITE));
+      expect(names.indexOf('finish')).toBeGreaterThan(names.indexOf('web_fetch'));
+      expect((await kit.prisma.run.findFirstOrThrow({ where: { id: run.id } })).policySnapshot).toMatchObject({ web: { search: true, fetch: true, maxCalls: 30 } });
+    });
+
+    it('the chat model is offered web_search and web_fetch too', async () => {
+      expect(await chatWeb()).toEqual(WEB);
+    });
+
+    it('an owner without a provider set up is offered neither', async () => {
+      for (const n of WEB) expect((await offered(o, 'task run')).names).not.toContain(n);
+    });
+
+    it("the deployment or the user switch off removes web_search from the next run, and on brings it back", async () => {
+      await setUserSwitch(false);
+      web().invalidate();
+      for (const n of WEB) expect((await offered(w, 'task run')).names).not.toContain(n);
+      expect(await chatWeb()).toEqual([]);
+      await setUserSwitch(true);
+      expect((await offered(w, 'task run')).names).toEqual(expect.arrayContaining(WEB));
+
+      await setDeploymentSwitch(false);
+      for (const n of WEB) expect((await offered(w, 'one-off run')).names).not.toContain(n);
+      expect(await chatWeb()).toEqual([]);
+      await setDeploymentSwitch(true);
+      expect((await offered(w, 'one-off run')).names).toEqual(expect.arrayContaining(WEB));
+    });
+
+    it('a switch flipped mid-run does not change what that run is offered: the snapshot decides, and the service refuses the call', async () => {
+      const run = await w.db.run.create({ data: { userId: w.userId, goal: 'Look it up', taskId: w.task.id, trigger: 'manual' } });
+      const model = scriptedModel([[['web_search', { query: 'opening hours', count: null, freshness: null, site: null }], FINISH]]);
+      const runner = kit.runner(model, fakeFabric());
+      runner.webSearch = web();
+      runner.webFetch = app.get(WebFetchService, { strict: false });
+      // The snapshot is taken at the run's first advance, with the switch on; the owner switches it off before the job runs.
+      await runner.policySnapshot(w.db, { ...run, task: { policyRef: null } } as never, { log: [], chunks: 0 } as never, null);
+      await setUserSwitch(false);
+      web().invalidate();
+      await runner.advance(run.id, w.userId, null);
+      await setUserSwitch(true);
+      expect(model.offered[0]).toEqual(expect.arrayContaining(WEB));
+      expect(model.outputs[0]).toBe('Web search is not set up. Use the browser if the goal needs it.');
+    });
+  });
 });
