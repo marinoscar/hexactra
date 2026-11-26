@@ -1,9 +1,11 @@
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
+import { UsageError } from '@marinoscar/platform-cli/commands';
 
 import { DIAGNOSTIC_REMEDIES } from '@app/shared';
 
 import { consoleApi } from './console-api.js';
+import { healthWord, historyLine, reportExitCode, reportLines, runDiagnostic, type DiagnosticReportView, type DiagnosticSummaryView } from './diagnostics.js';
 
 /** A test's or a diagnostic's code in words, from the remedy table the API and the web app share (`diagnostics.json`, E50.10). */
 export function remedyTitle(code: string): string {
@@ -64,11 +66,25 @@ export function capabilitiesText(caps: readonly string[]): string {
   return parts.length > 0 ? parts.join(', ') : 'nothing switched on';
 }
 
-/** The list line: id prefix, provider, label, account, what it can do, flags. */
-export function connectionLine(c: ConnectionView): string {
+/** The list line: id prefix, provider, health (the last diagnostic, E50.10; `null` leaves the column out), label, account, what it can do, flags. */
+export function connectionLine(c: ConnectionView, health?: DiagnosticSummaryView | null): string {
   const what = c.mcp ? `${c.mcp.tools.enabled} of ${c.mcp.tools.total} tools on${c.mcp.tools.needsReview > 0 ? `, ${c.mcp.tools.needsReview} to review` : ''}` : capabilitiesText(c.capabilities);
   const flags = [c.status !== 'active' ? `${c.status.replace('_', ' ')}${c.statusReason ? ` (${c.statusReason})` : ''}` : null, c.defaultFor.length > 0 ? `default for ${c.defaultFor.join(', ')}` : null].filter(Boolean).join('; ');
-  return `${c.id.slice(0, 8)}  ${c.provider.padEnd(9)}  ${c.label.padEnd(24)}  ${c.accountEmail.padEnd(28)}  ${what}${flags ? `  [${flags}]` : ''}`;
+  const healthCol = health === null ? '' : `${healthWord(health).padEnd(11)}  `;
+  return `${c.id.slice(0, 8)}  ${c.provider.padEnd(9)}  ${healthCol}${c.label.padEnd(24)}  ${c.accountEmail.padEnd(28)}  ${what}${flags ? `  [${flags}]` : ''}`;
+}
+
+/**
+ * The one line of what the agent can use in every run and chat (E50.17): the browser, web search while it is on, and every connection
+ * switched on. Nothing is chosen per task. `null`: that part could not be read (it is said so, never guessed).
+ */
+export function agentToolsLine(connections: readonly ConnectionView[] | null, web: { enabled: boolean } | null): string {
+  const parts = ['the browser'];
+  if (web === null) parts.push('web search if it is on (`search status`)');
+  else if (web.enabled) parts.push('web search');
+  if (connections === null) parts.push('the connections you switched on (`connections list`)');
+  else parts.push(...connections.filter((c) => c.status === 'active').map((c) => c.label));
+  return `The agent can use: ${parts.join(', ')}.`;
 }
 
 /** A connection by full id, id prefix or exact label (ignoring case). */
@@ -93,7 +109,48 @@ export const connectionsCommand: CliCommandRegistration = (program: Command) => 
       const list = await consoleApi().get<ConnectionView[]>('/connections');
       if (o.json) return out(JSON.stringify(list, null, 2));
       if (list.length === 0) return out('No connected accounts. Connect one in the web app: Settings → Connections.');
-      for (const c of list) out(connectionLine(c));
+      // HEALTH: the last diagnostic of each connection (one query); when it cannot be read the column is left out, never guessed.
+      const summary = await consoleApi()
+        .get<DiagnosticSummaryView[]>('/connections/diagnostics/summary')
+        .catch(() => null);
+      const byId = new Map((summary ?? []).map((s) => [s.targetId, s]));
+      out(`${'ID'.padEnd(8)}  ${'PROVIDER'.padEnd(9)}  ${summary ? `${'HEALTH'.padEnd(11)}  ` : ''}${'LABEL'.padEnd(24)}  ${'ACCOUNT'.padEnd(28)}  CAN DO`);
+      for (const c of list) out(connectionLine(c, summary ? byId.get(c.id) : null));
+    });
+  connections
+    .command('diagnose <connection>')
+    .description('Diagnose a connection: each check in order, with what to do about a failure (id, id prefix or label). Exit code 0 pass or warn, 1 fail, 2 could not run')
+    .option('--json', "print the API's report (codes and counts, no name)")
+    .option('--include-names', "with --json, add the connection's label")
+    .action(async (ref: string, o: { json?: boolean; includeNames?: boolean }) => {
+      const c = await runDiagnostic(() => findConnection(ref));
+      const r = await runDiagnostic(() => consoleApi().post<DiagnosticReportView>(`/connections/${c.id}/diagnose`, {}));
+      if (o.json) out(JSON.stringify(o.includeNames ? { ...r, label: c.label } : r, null, 2));
+      else for (const line of reportLines(r, c.label)) out(line);
+      process.exitCode = reportExitCode(r);
+    });
+  connections
+    .command('diagnostics <connection>')
+    .description("A connection's last diagnostic reports, newest first (id, id prefix or label)")
+    .option('--limit <n>', 'how many (1 to 20, default 5)', (v) => Number.parseInt(v, 10))
+    .option('--json', "print the API's reports (codes and counts)")
+    .action(async (ref: string, o: { limit?: number; json?: boolean }) => {
+      const c = await findConnection(ref);
+      const list = await consoleApi().get<DiagnosticReportView[]>(`/connections/${c.id}/diagnostics`, { query: o.limit ? { limit: String(o.limit) } : {} });
+      if (o.json) return out(JSON.stringify(list, null, 2));
+      if (list.length === 0) return out(`No reports yet. Run \`connections diagnose ${ref}\`.`);
+      for (const r of list) out(historyLine(r));
+    });
+  connections
+    .command('app-test <provider>')
+    .description("Administrator: test the deployment's app at google or microsoft before anyone connects. Exit code 0 pass or warn, 1 fail, 2 could not run")
+    .option('--json', "print the API's report (codes and counts)")
+    .action(async (provider: string, o: { json?: boolean }) => {
+      if (provider !== 'google' && provider !== 'microsoft') throw new UsageError('The provider is google or microsoft.');
+      const r = await runDiagnostic(() => consoleApi().post<DiagnosticReportView>(`/connections/admin/apps/${provider}/diagnose`, {}));
+      if (o.json) out(JSON.stringify(r, null, 2));
+      else for (const line of reportLines(r, `the ${provider} app`)) out(line);
+      process.exitCode = reportExitCode(r);
     });
   connections
     .command('test <connection>')

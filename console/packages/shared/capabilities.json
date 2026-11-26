@@ -23,7 +23,10 @@
         "GET /api/tasks",
         "GET /api/tasks/{id}"
       ],
-      "cli": "tasks list",
+      "cli": [
+        "tasks list",
+        "tasks show"
+      ],
       "mcp": "tasks_list",
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
@@ -1469,15 +1472,16 @@
     },
     {
       "id": "connections.diagnose",
-      "description": "Diagnose a connection: an ordered list of checks (status, installed here, sign-in, each capability or the MCP server, the time taken), each with a closed code and a remedy from the shared remedy table; the last 20 reports per connection, and the last result of each connection (E50.10)",
+      "description": "Diagnose a connection: an ordered list of checks (status, installed here, sign-in, each capability or the MCP server, the time taken), each with a closed code and a remedy from the shared remedy table; the last 20 reports per connection, and the last result of each connection (E50.10); the CLI prints the same stages and remedies, with exit codes for scripts (E50.15)",
       "rest": [
         "POST /api/connections/{id}/diagnose",
         "GET /api/connections/{id}/diagnostics",
         "GET /api/connections/diagnostics/summary"
       ],
-      "cli": {
-        "none": "Not yet: `connections diagnose` comes with E50.15 (#985); `connections test` prints the same remedy words today"
-      },
+      "cli": [
+        "connections diagnose",
+        "connections diagnostics"
+      ],
       "mcp": {
         "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly, and a diagnostic report is about the owner's accounts (E50.10, docs/parity.md)"
       },
@@ -1546,13 +1550,11 @@
     },
     {
       "id": "connections.admin",
-      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist, and the test of each app before anyone connects (E50.11). No access to users' connections",
+      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist. No access to users' connections",
       "rest": [
         "GET /api/connections/admin/apps",
         "PUT /api/connections/admin/apps/{provider}",
-        "DELETE /api/connections/admin/apps/{provider}",
-        "POST /api/connections/admin/apps/{provider}/diagnose",
-        "GET /api/connections/admin/apps/{provider}/diagnostics"
+        "DELETE /api/connections/admin/apps/{provider}"
       ],
       "cli": {
         "none": "Deliberate: an administrator sets the deployment's apps in Administration; the client secret is write-only"
@@ -1562,6 +1564,22 @@
       },
       "tui": {
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/admin/settings/connections"
+    },
+    {
+      "id": "connections.app_diagnostics",
+      "description": "Administrator: test the deployment's app at Google or Microsoft before anyone connects (configuration, redirect address, the provider's endpoints, the client id and secret), and its last reports (E50.11). Codes, counts and host names only; no user",
+      "rest": [
+        "POST /api/connections/admin/apps/{provider}/diagnose",
+        "GET /api/connections/admin/apps/{provider}/diagnostics"
+      ],
+      "cli": "connections app-test",
+      "mcp": {
+        "none": "Deliberate: a diagnostic describes the deployment's apps and the owner's accounts; no connection is exposed through Hexactra's MCP server (E50.15, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the CLI command and the web page cover it"
       },
       "web": "/admin/settings/connections"
     },
@@ -1623,15 +1641,17 @@
     },
     {
       "id": "service_credentials.own",
-      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, and setting or removing your own key. Write-only: a key is never returned, not even in part",
+      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, and setting or removing your own key. Write-only: a key is never returned, not even in part. The CLI reads a key from a hidden prompt or standard input, never from an argument",
       "rest": [
         "GET /api/service-credentials",
         "PUT /api/service-credentials/{service}/{name}",
         "DELETE /api/service-credentials/{service}/{name}"
       ],
-      "cli": {
-        "none": "Deliberate: a key is typed in a form in the web app, never passed on a command line or kept in a shell history"
-      },
+      "cli": [
+        "search keys",
+        "search key set",
+        "search key rm"
+      ],
       "mcp": {
         "none": "Deliberate: a key of an outside service is write-only and typed by its owner in the console; no hosted AI app reads, sets or removes one (E50.2)"
       },
@@ -1642,16 +1662,17 @@
     },
     {
       "id": "service_credentials.admin",
-      "description": "Administrator: the deployment's key of an outside service; organization administrator: the organization's key. Write-only: a key is never returned, not even in part",
+      "description": "Administrator: the deployment's key of an outside service; organization administrator: the organization's key. Write-only: a key is never returned, not even in part. The CLI reads a key from a hidden prompt or standard input, never from an argument",
       "rest": [
         "PUT /api/service-credentials/admin/{service}/{name}",
         "DELETE /api/service-credentials/admin/{service}/{name}",
         "PUT /api/service-credentials/org/{service}/{name}",
         "DELETE /api/service-credentials/org/{service}/{name}"
       ],
-      "cli": {
-        "none": "Deliberate: a key is typed in a form in the web app, never passed on a command line or kept in a shell history"
-      },
+      "cli": [
+        "search key set",
+        "search key rm"
+      ],
       "mcp": {
         "none": "Deliberate: a key of an outside service is write-only and typed by its owner in the console; no hosted AI app reads, sets or removes one (E50.2)"
       },
@@ -1667,11 +1688,31 @@
         "GET /api/web-search/status",
         "GET /api/web-search/providers"
       ],
-      "cli": {
-        "none": "Arrives with the CLI of E50.15 (#985)"
-      },
+      "cli": [
+        "search status",
+        "search providers"
+      ],
       "mcp": {
-        "none": "Not exposed through Hexactra's own MCP server: the agent gets web search inside runs (E50.7); whether a hosted AI app gets a tool is decided in E50.15"
+        "none": "Deliberate (E50.15): a hosted AI app (ChatGPT, Claude) has its own web search, so a tool of ours would add cost and no ability; a hosted app's run uses web search unless the owner switched that app's allowWebSearch off (docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; web search is set up in the web app"
+      },
+      "web": "/settings/web-search"
+    },
+    {
+      "id": "web_search.switch",
+      "description": "Switch web search on or off for your own runs and chats (your user setting webSearch.enabled; the administrator's switch is the deployment's). Availability is not chosen per task (E50.17)",
+      "rest": [
+        "PATCH /api/user-settings",
+        "GET /api/web-search/status"
+      ],
+      "cli": [
+        "search on",
+        "search off"
+      ],
+      "mcp": {
+        "none": "Deliberate: the switch is the owner's, set in the console or the CLI; no hosted AI app turns it on or off"
       },
       "tui": {
         "none": "The TUI is for watching and answering; web search is set up in the web app"
@@ -1684,11 +1725,9 @@
       "rest": [
         "POST /api/web-search/search"
       ],
-      "cli": {
-        "none": "Arrives with the CLI of E50.15 (#985)"
-      },
+      "cli": "search query",
       "mcp": {
-        "none": "Not exposed through Hexactra's own MCP server: the agent gets web search inside runs (E50.7); whether a hosted AI app gets a tool is decided in E50.15"
+        "none": "Deliberate (E50.15): a hosted AI app (ChatGPT, Claude) has its own web search, so a tool of ours would add cost and no ability; a hosted app's run uses web search unless the owner switched that app's allowWebSearch off (docs/parity.md)"
       },
       "tui": {
         "none": "The TUI is for watching and answering; web search is set up in the web app"
@@ -1703,9 +1742,11 @@
         "PUT /api/web-search/admin",
         "GET /api/web-search/admin/usage"
       ],
-      "cli": {
-        "none": "Arrives with the CLI of E50.15 (#985)"
-      },
+      "cli": [
+        "search admin show",
+        "search admin set",
+        "search admin usage"
+      ],
       "mcp": {
         "none": "Deliberate: deployment settings are changed by the administrator in the console, never by a hosted AI app"
       },
