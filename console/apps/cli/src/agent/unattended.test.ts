@@ -213,6 +213,22 @@ describe('hexactra agent install --mode unattended', () => {
     expect(checks.find((c) => c.name === 'graphics')).toMatchObject({ ok: true, warning: true });
   });
 
+  it("doctor shows each profile's sign-in on an unattended-only node, read as the node user (#991)", async () => {
+    const h = harness();
+    await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    const bin = join(h.layout.opt, 'agent/current/bin/hexactra-agent');
+    mkdirSync(dirname(bin), { recursive: true });
+    writeFileSync(bin, '');
+    const run = h.d.exec;
+    h.d.exec = (argv, opts) =>
+      argv[0] === 'sudo' && argv.includes(bin)
+        ? (h.exec.push(argv), { code: 0, stdout: 'ok   profile default: signed_in (signed in to Google as owner@example.com)\n', stderr: '' })
+        : run(argv, opts);
+    const checks = await agentDoctor(h.d, h.layout);
+    expect(h.exec).toContainEqual(['sudo', '-n', '-u', 'hexactra', bin, 'doctor', '--profiles-dir', join(h.layout.home, 'profiles')]);
+    expect(checks.find((c) => c.name === 'profile default')).toMatchObject({ ok: true, warning: false, detail: 'signed in to Google as owner@example.com' });
+  });
+
   it('controls and removes the node with sudo, keeping profiles by default', async () => {
     const h = harness({ userExists: true });
     await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });

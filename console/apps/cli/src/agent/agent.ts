@@ -1,5 +1,5 @@
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
@@ -519,6 +519,9 @@ export async function agentDoctor(d: AgentDeps, layout: NodeLayout = DEFAULT_LAY
       warning: !u.state.gpu,
       detail: u.state.gpu ? `${u.state.gpu.driver} (${u.state.gpu.renderNode}); check chrome://gpu on the desktop` : 'software rendering: no Intel or AMD GPU found, so sites can tell more easily',
     });
+    // The node's profiles belong to its own user (#991): read them with the
+    // node's agent binary, as that user when this user cannot.
+    checks.push(...profileSigninChecks(d, `${layout.home}/profiles`, { bin: `${layout.opt}/agent/current/bin/hexactra-agent`, runAs: NODE_USER }));
   }
   if (!s) {
     if (!u.state) add('agent', false, 'not installed: run `hexactra agent install`');
@@ -528,7 +531,7 @@ export async function agentDoctor(d: AgentDeps, layout: NodeLayout = DEFAULT_LAY
   add('credential', existsSync(d.paths.credential), existsSync(d.paths.credential) ? 'present (0600)' : 'missing: run `hexactra agent install --reenroll`');
   if (s.service) add('service', st.service?.active === 'active', `${UNIT_NAME}: ${st.service?.active ?? 'unknown'} (${st.service?.sub ?? 'unknown'})`);
   add('fleet', !!st.fleet?.online, st.fleet ? `${st.fleet.online ? 'online' : 'offline'}${st.fleet.browserConnected ? ', extension connected' : ', extension not connected yet'}` : (st.fleetError ?? 'unknown'));
-  checks.push(...profileSigninChecks(d, u.state ? `${layout.home}/profiles` : d.paths.profilesDir));
+  if (!u.state) checks.push(...profileSigninChecks(d, d.paths.profilesDir));
   return checks;
 }
 
@@ -538,11 +541,19 @@ export async function agentDoctor(d: AgentDeps, layout: NodeLayout = DEFAULT_LAY
  * needs sign-in is a warning, never a failure: it does not stop the node.
  * The email is printed on this terminal only (the owner's own node).
  */
-export function profileSigninChecks(d: AgentDeps, profilesDir: string): DoctorCheck[] {
-  const bin = join(d.paths.current, 'bin', 'hexactra-agent');
+export function profileSigninChecks(d: AgentDeps, profilesDir: string, opts: { bin?: string; runAs?: string } = {}): DoctorCheck[] {
+  const bin = opts.bin ?? join(d.paths.current, 'bin', 'hexactra-agent');
   if (!existsSync(bin)) return [];
-  const r = d.exec([bin, 'doctor', '--profiles-dir', profilesDir]);
-  if (r.code !== 0) return [];
+  const argv = [bin, 'doctor', '--profiles-dir', profilesDir];
+  // An unattended node's profiles are private to its user (#991). Reading
+  // them without access would report every profile as unknown, so ask sudo
+  // without a prompt, and otherwise say how to read them.
+  const direct = !opts.runAs || readableDir(profilesDir);
+  const r = direct ? d.exec(argv) : d.exec(['sudo', '-n', '-u', opts.runAs!, ...argv]);
+  if (r.code !== 0) {
+    if (direct) return [];
+    return [{ name: 'profiles', ok: true, warning: true, detail: `sign-in status needs ${opts.runAs}'s access: run \`sudo -u ${opts.runAs} ${argv.join(' ')}\`` }];
+  }
   const out: DoctorCheck[] = [];
   for (const line of r.stdout.split('\n')) {
     const m = /^(ok|warn)\s+profile ([^:]+): (\S+) \((.*)\)$/.exec(line.trim());
@@ -550,6 +561,15 @@ export function profileSigninChecks(d: AgentDeps, profilesDir: string): DoctorCh
     out.push({ name: `profile ${m[2]}`, ok: true, warning: m[1] === 'warn', detail: m[4]! });
   }
   return out;
+}
+
+function readableDir(dir: string): boolean {
+  try {
+    accessSync(dir, fsConstants.R_OK | fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface UnattendedOptions extends InstallOptions {
