@@ -92,7 +92,7 @@ describe('the presets file', () => {
   });
 
   it('never carries a secret or a tool mode', () => {
-    for (const p of MCP_PRESETS as readonly Record<string, unknown>[]) {
+    for (const p of MCP_PRESETS as unknown as readonly Record<string, unknown>[]) {
       expect(Object.keys(p).sort()).toEqual(expect.arrayContaining(['auth', 'docsUrl', 'id', 'name', 'notes', 'url', 'verified']));
       for (const k of Object.keys(p)) expect(['id', 'name', 'url', 'auth', 'headerName', 'docsUrl', 'notes', 'verified']).toContain(k);
     }
