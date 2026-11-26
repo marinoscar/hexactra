@@ -191,6 +191,18 @@ describe('an AI app\'s page', () => {
     await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { allowSavedLogins: true } }));
   });
 
+  it('connections (E50.17): the switch shows the stored value, says new apps start on, and saves allowConnections', async () => {
+    restore = mockViewport(1440);
+    const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses({ [`GET /connected-apps/${CLIENT}`]: { ...APP, limits: { ...LIMITS, allowConnections: true } } }));
+    const toggle = await screen.findByRole('switch', { name: 'Let its runs use my connected accounts and tools' });
+    expect(toggle).toBeChecked();
+    expect(screen.getByTestId('app-connections-help')).toHaveTextContent('On by default for a new app');
+    expect(screen.getByTestId('app-connections-help')).toHaveTextContent('An app you added before keeps the setting it had');
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Save limits' }));
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { allowConnections: false } }));
+  });
+
   it('saved identity details (E37.6): off by default, needs saved logins, saved as allowSavedIdentity', async () => {
     restore = mockViewport(1440);
     const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses());

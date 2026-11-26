@@ -507,6 +507,7 @@
           },
           "access": {
             "default": "read_write",
+            "description": "Deprecated (E50.17): ignored. The access follows the switches: read and change when a change capability (an MCP write tool) is on.",
             "type": "string",
             "enum": [
               "read",

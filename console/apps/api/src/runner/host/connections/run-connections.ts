@@ -1,10 +1,14 @@
-// Which connections a run may use (E39.7), fixed when the run starts. A task's run has every active connection of the owner, at what the owner
-// switched on for each (an account's capabilities, an MCP server's enabled tools), unless the task is limited to a list (#967: `connectionsMode`).
-// A run that is not a task's has what its chat lists (the owner's default or the owner's own choice, #680); an AI app's run gets none unless the
-// owner allowed connections for that app. The list is written onto the policy snapshot at the first advance, so a later change of the task, the
-// chat or the connection's switches never alters a live run (the hub still re-reads the connection's state at every call).
+// Which connections a run may use (E39.7; one rule, E50.17 #987), fixed when the run starts. A tool that is set up and switched on is always
+// available: every active connection of the owner is offered to every run and chat, at what the owner switched on for it (an account's
+// capabilities, an MCP server's tools that are `read` or `write`). Nothing else turns one on or off: not a task, a chat, a model or a page.
+// The per-task and per-chat lists (`task_connections`, `conversation_connections`) are deprecated and never read here. An AI app's run gets
+// them only while the owner's `allowConnections` limit for that app is on (on by default for a new app).
+//
+// The list is written onto the policy snapshot at the first advance, so a later flip of a switch never alters a live run (the capability hub
+// and `McpRunService.check` still re-read the connection at every call, so a tool switched off mid-run is refused when it is called).
+// Web search follows the same shape (`web-availability.ts`, E50.7). Guarded by `test/tools-always-available.db.spec.ts`.
 import { capabilitiesOf } from '../../../connections/connection-view';
-import { isConnectionAccess } from '../../../connections/agent-connections';
+import { isWriteCapability } from '../../../connections/connections.constants';
 import type { SnapshotAppLimits, SnapshotConnection } from '../../../policies/policy-snapshot';
 import type { HostDeps } from '../deps';
 
@@ -14,41 +18,27 @@ export function readNeedsBrowser(value: unknown): NeedsBrowser {
   return value === 'always' || value === 'never' ? value : 'auto';
 }
 
-/** The connections a run may use, from its task or its chat, as they are now. Empty for a run that lists none. */
+/**
+ * The connections the owner switched on, as they are now: every active one, ordered by label then id. `access` follows the connection's own
+ * switches: `read_write` when a change capability is on (an MCP server: when one of its tools is `write`), else `read`. Empty for an AI app's
+ * run when the owner switched connections off for that app.
+ */
 export async function runConnections(
   d: Pick<HostDeps, 'prisma'>,
-  run: { userId: string; taskId: string | null; conversationId?: string | null },
+  run: { userId: string },
   appLimits: Pick<SnapshotAppLimits, 'allowConnections'> | null,
 ): Promise<SnapshotConnection[]> {
-  // A run an AI app started gets the owner's connections only when the owner allowed it for that app, and the task lists them.
   if (appLimits && appLimits.allowConnections !== true) return [];
-  const include = { connection: { select: { id: true, userId: true, label: true, provider: true, capabilities: true } } } as const;
-  // The task's mode (#967), or the chat's (#969) for a run that is not a task's. An AI app's run never takes a chat's.
-  const owner = run.taskId
-    ? await d.prisma.task.findFirst({ where: { id: run.taskId, userId: run.userId }, select: { connectionsMode: true } })
-    : appLimits || !run.conversationId
-      ? null
-      : await d.prisma.conversation.findFirst({ where: { id: run.conversationId, userId: run.userId }, select: { connectionsMode: true } });
-  if (run.taskId || run.conversationId) {
-    if (!owner) return [];
-    if (owner.connectionsMode !== 'listed') {
-      // `all`: read and change, so what the agent may do is exactly what the owner switched on for the connection. Every write still asks.
-      const all = await d.prisma.connection.findMany({ where: { userId: run.userId, status: 'active' }, select: include.connection.select, orderBy: [{ label: 'asc' }, { id: 'asc' }] });
-      return all.map((c) => ({ connectionId: c.id, access: 'read_write' as const, label: c.label, provider: c.provider, capabilities: capabilitiesOf(c) }));
-    }
-  }
-  const rows = run.taskId
-    ? await d.prisma.taskConnection.findMany({ where: { taskId: run.taskId, task: { userId: run.userId } }, include, orderBy: [{ connection: { label: 'asc' } }, { id: 'asc' }] })
-    : appLimits || !run.conversationId
-      ? []
-      : await d.prisma.conversationConnection.findMany({ where: { conversationId: run.conversationId, conversation: { userId: run.userId } }, include, orderBy: [{ connection: { label: 'asc' } }, { id: 'asc' }] });
+  const rows = await d.prisma.connection.findMany({
+    where: { userId: run.userId, status: 'active' },
+    select: { id: true, userId: true, label: true, provider: true, capabilities: true, mcpTools: { where: { mode: 'write', review: null }, select: { id: true }, take: 1 } },
+    orderBy: [{ label: 'asc' }, { id: 'asc' }],
+  });
   return rows
-    .filter((r) => r.connection.userId === run.userId)
-    .map((r) => ({
-      connectionId: r.connectionId,
-      access: isConnectionAccess(r.access) ? r.access : 'read',
-      label: r.connection.label,
-      provider: r.connection.provider,
-      capabilities: capabilitiesOf(r.connection),
-    }));
+    .filter((c) => c.userId === run.userId)
+    .map((c) => {
+      const capabilities = capabilitiesOf(c);
+      const write = c.provider === 'mcp' ? c.mcpTools.length > 0 : capabilities.some(isWriteCapability);
+      return { connectionId: c.id, access: write ? ('read_write' as const) : ('read' as const), label: c.label, provider: c.provider, capabilities };
+    });
 }

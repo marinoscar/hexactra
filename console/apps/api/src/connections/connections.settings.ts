@@ -5,8 +5,8 @@
 //     google.clientId / microsoft.clientId the OAuth client id of the app the administrator registered (BRING YOUR OWN APP).
 //     microsoft.tenant                     `common` (default), `organizations`, `consumers` or a tenant id.
 //   user `connections` (the OWNER's own setting, #680)
-//     newChats                             how a NEW chat starts (#969): `read_write` (default) everything the owner connected, MCP included, at
-//                                          what they switched on; `read` their Google and Microsoft accounts read only; `off` none.
+//     newChats                             DEPRECATED (E50.17): has no effect. Every chat may use everything the owner switched on in
+//                                          Connections and tools. Kept so a stored settings document still parses.
 //   The client SECRETS are system credentials (`connection_app_google`, `connection_app_microsoft`), write-only.
 //     mcp.enabled                          MCP servers as connections (E39.9), default OFF: while off, none can be added or used.
 //     mcp.allowedHosts / mcp.blockedHosts  exact host names or `*.example.test` suffixes. Empty allow-list: any public host.
@@ -131,12 +131,12 @@ declare module '@marinoscar/platform-api/settings' {
 
 // ---- user (#680) ----
 
-/** How a new chat starts: the owner's accounts off, read only, or read and change. Writes still ask the owner first (approvals). */
+/** Deprecated (E50.17): how a new chat used to start. Readable so stored settings still parse; it decides nothing. */
 export const NEW_CHAT_ACCOUNTS = ['off', 'read', 'read_write'] as const;
 export type NewChatAccounts = (typeof NEW_CHAT_ACCOUNTS)[number];
 
 export const connectionsUserSettingsSchema = z.object({
-  newChats: z.enum(NEW_CHAT_ACCOUNTS).describe('How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.'),
+  newChats: z.enum(NEW_CHAT_ACCOUNTS).describe('Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.'),
 });
 export type ConnectionsUserSettings = z.infer<typeof connectionsUserSettingsSchema>;
 export const connectionsUserSettingsPatchSchema = connectionsUserSettingsSchema.partial();
@@ -144,16 +144,9 @@ export type ConnectionsUserSettingsPatch = z.infer<typeof connectionsUserSetting
 
 export const CONNECTIONS_USER_DEFAULTS: ConnectionsUserSettings = { newChats: 'read_write' };
 
-/** The owner's choice from their settings document; the default when never saved or not valid. */
-export function newChatAccountsOf(doc: unknown): NewChatAccounts {
-  const raw = (doc as { connections?: unknown } | null | undefined)?.connections;
-  const parsed = connectionsUserSettingsPatchSchema.safeParse(raw ?? {});
-  return (parsed.success ? parsed.data.newChats : undefined) ?? CONNECTIONS_USER_DEFAULTS.newChats;
-}
-
 export const CONNECTIONS_USER_SETTINGS = {
   key: 'connections',
-  description: 'Connections: how a new chat starts (everything you connected, your accounts read only, or none).',
+  description: 'Connections: how a new chat starts (your accounts off, read only, or read and change).',
   schema: connectionsUserSettingsSchema,
   patchSchema: connectionsUserSettingsPatchSchema,
   merge: (current: ConnectionsUserSettings | undefined, patch: ConnectionsUserSettingsPatch | null | undefined): ConnectionsUserSettings | undefined => {

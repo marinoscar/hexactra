@@ -33,8 +33,8 @@ import { summarize } from '../deliveries/drafts';
 import { syncDeliveries, type CreatedSecret } from '../deliveries/sync';
 import { deliveryErrorText } from '../deliveries/drafts';
 import { useTaskDeliveries } from '../deliveries/useTaskDeliveries';
-import { AccountsSection } from '../taskConnections/AccountsSection';
-import { toolsSummaryLine, type ConnectionSelection, type ConnectionsMode } from '../taskConnections/model';
+import { SwitchedOnTools } from '../taskConnections/AccountsSection';
+import { switchedOnSummary } from '../taskConnections/model';
 import { CollapsedSection } from '../taskForm/CollapsedSection';
 import { AllowedSitesInput } from './AllowedSitesInput';
 import { MachinePicker } from './MachinePicker';
@@ -289,8 +289,6 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
         : deliveries.drafts.length === 1
           ? summarize(deliveries.drafts[0]!, accounts.connections ?? [])
           : `${deliveries.drafts.length} deliveries after each run`;
-  const setConnections = (connections: ConnectionSelection[]) => setFields({ connections });
-  const setConnectionsMode = (connectionsMode: ConnectionsMode, connections: ConnectionSelection[]) => setFields({ connectionsMode, connections });
 
   const values: TaskFormValues = useMemo(() => ({ ...fields, schedules: rows.filter((r) => !r.removed).map((r) => r.draft) }), [fields, rows]);
   const dirty = isDirty(values, form.initial) || deliveries.dirty;
@@ -584,18 +582,11 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
           <CollapsedSection
             title="Tools and accounts"
             anchor="accounts"
-            summary={toolsSummaryLine(fields.connectionsMode, fields.connections, accounts.connections)}
+            summary={switchedOnSummary(accounts.connections)}
             open={accountsOpen}
             onToggle={setAccountsOpen}
           >
-            <AccountsSection
-              connections={accounts.connections}
-              failed={accounts.failed}
-              selections={fields.connections}
-              onChange={setConnections}
-              disabled={busy}
-              mode={{ value: fields.connectionsMode, onChange: setConnectionsMode }}
-            />
+            <SwitchedOnTools connections={accounts.connections} failed={accounts.failed} />
           </CollapsedSection>
         )}
 

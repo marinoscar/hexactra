@@ -33,9 +33,9 @@ export interface Task {
   parameters?: TaskParameter[] | null;
   /** The values a run must return when it finishes (E39.5, #600); empty or null when the task has none. */
   outputs?: TaskOutput[] | null;
-  /** `all`: every account and tool the owner connected; `listed`: only `connections` (#967). Absent from an older console: `listed` when it lists some. */
+  /** Deprecated (E50.17): always `all`; every run uses what the owner switched on. */
   connectionsMode?: ConnectionsMode;
-  /** The accounts a limited task may use, and how (E39.7, #604). */
+  /** Deprecated (E50.17): always empty; a task has no account list. */
   connections?: ConnectionSelectionView[] | null;
   /** Whether the task's runs open a browser (E39.7); absent: `auto`. */
   needsBrowser?: NeedsBrowser;

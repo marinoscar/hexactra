@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { assertSelectable, replaceTaskConnections, taskConnectionViews, type ConnectionSelectionView } from '../connections/agent-connections';
+import { deprecatedConnectionFields, type ConnectionSelectionView } from '../connections/agent-connections';
 import { PrismaService } from '../prisma/prisma.service';
 import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { readConfirmedActions, withConfirmedLead } from '../runner/confirmed-actions';
@@ -105,9 +105,8 @@ export class TasksService {
 
   private async withSpend<T extends { id: string }>(userId: string, tasks: T[]): Promise<(T & { spend30d: TaskSpend; connections: ConnectionSelectionView[] })[]> {
     const spend = await this.spendByTask(userId, tasks.map((t) => t.id));
-    // The connections the task may use (E39.7): who and how, never anything the connection holds.
-    const connections = await taskConnectionViews(this.prisma, tasks.map((t) => t.id));
-    return tasks.map((t) => ({ ...t, spend30d: spend.get(t.id) ?? NO_SPEND, connections: connections.get(t.id) ?? [] }));
+    // E50.17: a task has no connection list any more (every run gets what the owner switched on); the deprecated fields answer `all` and `[]`.
+    return tasks.map((t) => ({ ...t, ...deprecatedConnectionFields(), spend30d: spend.get(t.id) ?? NO_SPEND }));
   }
 
   async listTasks(userId: string) {
@@ -132,11 +131,8 @@ export class TasksService {
    * `request` supplies the device time zone for a schedule that names none.
    */
   async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
-    const { policyId, schedules, parameters: defs, outputs: outputDefs, useSavedLogins, connections: listed, connectionsMode: mode, ...fields } = input;
-    // #967: a task uses every connection the owner switched on, unless it is limited. A list sent without a mode is a limit (back-compat).
-    const connectionsMode = mode ?? (listed ? 'listed' : 'all');
-    const connections = connectionsMode === 'listed' ? listed : undefined;
-    if (connections) await assertSelectable(this.prisma, userId, connections);
+    // E50.17: `connections` and `connectionsMode` are deprecated, accepted and ignored: a run gets every tool the owner switched on.
+    const { policyId, schedules, parameters: defs, outputs: outputDefs, useSavedLogins, connections: _connections, connectionsMode: _mode, ...fields } = input;
     // The goal's `{{Name}}` parameters (#552): inferred where not defined, checked (400 names the problem).
     const parameters = prepareParameters(fields.goal, defs);
     // The values a run must return (E39.5, #600): keys derived, checked; none stored as null.
@@ -148,7 +144,6 @@ export class TasksService {
     // Absent: the owner's `secrets.defaultUseSavedLogins` (E37.3), off unless they turned it on.
     const data = {
       ...fields,
-      connectionsMode,
       userId,
       hostId: fields.hostId ?? null,
       model: fields.model ?? null,
@@ -157,11 +152,10 @@ export class TasksService {
       outputs: outputs.length ? (outputs as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       useSavedLogins: useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
     };
-    if (prepared.length === 0 && !connections?.length) return (await this.withSpend(userId, [await this.db(userId).task.create({ data })]))[0]!;
+    if (prepared.length === 0) return (await this.withSpend(userId, [await this.db(userId).task.create({ data })]))[0]!;
     const t = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({ data });
       if (prepared.length > 0) await tx.taskSchedule.createMany({ data: this.taskSchedules!.rows(userId, task.id, prepared) });
-      if (connections?.length) await replaceTaskConnections(tx, task.id, connections);
       return task;
     });
     return (await this.withSpend(userId, [t]))[0]!;
@@ -169,13 +163,10 @@ export class TasksService {
 
   /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
-    const { policyId, parameters: defs, outputs: outputDefs, connections: listed, connectionsMode: mode, ...fields } = patch;
+    // E50.17: the deprecated `connections` and `connectionsMode` are accepted and ignored.
+    const { policyId, parameters: defs, outputs: outputDefs, connections: _connections, connectionsMode: _mode, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
-    // #967: a list sent without a mode limits the task to it; `all` clears the list; `listed` alone keeps the list there is.
-    const connectionsMode = mode ?? (listed ? 'listed' : undefined);
-    const connections = connectionsMode === 'all' ? [] : listed;
-    if (connections) await assertSelectable(this.prisma, userId, connections);
-    const data: Prisma.TaskUpdateManyMutationInput = { ...fields, ...(connectionsMode ? { connectionsMode } : {}) };
+    const data: Prisma.TaskUpdateManyMutationInput = { ...fields };
     // A new goal or new definitions: the parameters are reconciled with the goal again (#552).
     if (fields.goal !== undefined || defs !== undefined) {
       const task = await this.getTask(userId, id);
@@ -198,13 +189,10 @@ export class TasksService {
       // Back at the defaults with no pinned model: follow the user's default again.
       data.policyRef = isDefaultLimits(limits) ? null : await this.policies.ensureLegacyPolicy(userId, fields.name ?? task.name, limits);
     }
-    if (connections && !(await this.db(userId).task.findFirst({ where: { id }, select: { id: true } }))) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
     if (Object.keys(data).length > 0) {
       const { count } = await this.db(userId).task.updateMany({ where: { id }, data });
       if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
     }
-    // Only the task's own list changes: a run already started keeps the snapshot it took (E39.7).
-    if (connections) await this.prisma.$transaction((tx) => replaceTaskConnections(tx, id, connections));
     return this.getTask(userId, id);
   }
 

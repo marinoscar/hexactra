@@ -1,5 +1,5 @@
 // The chat orchestrator's connection tools (E39.7): it can answer a simple question about the owner's mail, calendar or documents itself, with
-// the READ tools only, for the connections the chat lists. Anything that changes something, or needs the browser, is a run (`start_run`),
+// the READ tools only, for every connection the owner switched on (E50.17). Anything that changes something, or needs the browser, is a run (`start_run`),
 // where the gates apply: no write tool is ever in this list. The tools are the runner's own (one description, one result format, the same
 // caps and untrusted-data marking); they run against a small context of a chat turn instead of a run.
 import { defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
@@ -22,17 +22,17 @@ export const CHAT_CONNECTION_TOOLS: RunnerTool<HostContext>[] = [mailSearch, mai
 
 type Deps = Pick<HostDeps, 'prisma' | 'connections'>;
 
-/** The connections a chat lists, as the runner reads them (a chat is the owner's own, so no AI app's limits apply). */
+/** The connections a chat has: the same rule as a run (`runConnections`, E50.17): everything the owner switched on. A chat is the owner's own, so no AI app's limits apply. */
 export function chatConnections(d: Deps, c: { userId: string; conversationId: string }): Promise<SnapshotConnection[]> {
-  return runConnections(d, { userId: c.userId, taskId: null, conversationId: c.conversationId }, null);
+  return runConnections(d, { userId: c.userId }, null);
 }
 
 /** The most of an added tool's purpose (its server's own `instructions`, E41.2) the chat's line carries. */
 const PURPOSE_CHARS = 120;
 
 /**
- * The line that names the chat's accounts and added tools to the model (it needs a label to name one in a goal). Empty when the chat lists
- * none. `purposes` is each MCP connection's sanitised `instructions`, by connection id. The chat itself reads only; a job can do more.
+ * The line that names the chat's accounts and added tools to the model (it needs a label to name one in a goal). Empty when the owner switched
+ * nothing on. `purposes` is each MCP connection's sanitised `instructions`, by connection id. The chat itself reads only; a job can do more.
  */
 export function connectionsLine(list: readonly SnapshotConnection[], purposes: ReadonlyMap<string, string> = new Map()): string {
   if (list.length === 0) return '';

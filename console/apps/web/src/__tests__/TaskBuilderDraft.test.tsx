@@ -125,7 +125,7 @@ describe('The task form from the task builder', () => {
     const v = valuesFromBuilderDraft(DRAFT);
     expect(v.schedules).toEqual([{ cron: '0 9 1 * *', timezone: 'America/Costa_Rica', enabled: true, concurrency: 'skip', policyId: null, inputs: { amount: '25' } }]);
     expect(v.needsBrowser).toBe('auto');
-    expect(v.connectionsMode).toBe('all');
+    expect(v).not.toHaveProperty('connectionsMode');
     const odd = valuesFromBuilderDraft({ ...DRAFT, schedules: [{ cron: 5 } as never, ...Array.from({ length: 12 }, () => DRAFT.schedules![0]!)], needsBrowser: 'sometimes' as never, unattendedPayments: 'yes' as never });
     expect(odd.schedules).toHaveLength(10);
     expect(odd.needsBrowser).toBe('auto');

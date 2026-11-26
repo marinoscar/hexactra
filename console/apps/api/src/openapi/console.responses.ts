@@ -101,8 +101,8 @@ export const taskResponseSchema = z.object({
   unattendedPayments: z.enum(['ask', 'allow']).describe('`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`'),
   needsBrowser: z.enum(['auto', 'always', 'never']).describe("Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"),
   recordVideo: z.boolean().describe("Whether the task's runs record a video of their browser tab (epic #755). The video is not masked and is owner-only"),
-  connectionsMode: z.enum(['all', 'listed']).describe("Which of the owner's connections the task's runs may use (#967): `all` every active connection at what the owner switched on for it; `listed` only `connections`"),
-  connections: z.array(connectionSelectionViewSchema).describe('The connections the task is limited to, and how (E39.7), when `connectionsMode` is `listed`. Empty with `all`.'),
+  connectionsMode: z.enum(['all', 'listed']).meta({ deprecated: true }).describe('Deprecated (E50.17): always `all`. Every run may use everything the owner switched on in Connections and tools; a task cannot limit it.'),
+  connections: z.array(connectionSelectionViewSchema).meta({ deprecated: true }).describe('Deprecated (E50.17): always empty. A task has no connection list.'),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
   parameters: z.array(taskParameterResponseSchema).nullable().describe("The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"),
@@ -387,9 +387,9 @@ export class RunDetailResponseDto extends createZodDto(
       .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
       .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),
     suggestedConnections: z
-      .array(z.object({ connectionId: z.uuid(), label: z.string(), provider: z.string(), site: z.string(), scope: z.enum(['task', 'chat']), text: z.string() }))
+      .array(z.object({ connectionId: z.uuid(), label: z.string(), provider: z.string(), site: z.string(), scope: z.enum(['task', 'chat']), fix: z.enum(['resume', 'capability']), text: z.string() }))
       .optional()
-      .describe('E41.5: the owner\'s connections the task or chat does not list that could have done what this finished run did in the browser (a webmail, calendar or files site). Information for the owner; never shown to the agent, never applied.'),
+      .describe('E41.5 (reworded by E50.17): the owner\'s accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied.'),
   }),
 ) {}
 

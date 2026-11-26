@@ -105,7 +105,8 @@ model ConnectionFlow {
   @@map("connection_flows")
 }
 
-/// The connections a task may use (E39.7), and how: `read` or `read_write`. Nothing is available to a task by default.
+/// DEPRECATED (E50.17, #987): no longer read to decide availability and no longer written; a run gets every connection the owner
+/// switched on. Kept for one release (data and exports reference it); a follow-up removes it. Was: the connections a task may use (E39.7).
 model TaskConnection {
   id           String   @id @default(uuid()) @db.Uuid
   taskId       String   @map("task_id") @db.Uuid
@@ -122,7 +123,7 @@ model TaskConnection {
   @@map("task_connections")
 }
 
-/// The same for a chat (E39.7).
+/// DEPRECATED (E50.17, #987), like `TaskConnection`: the old per-chat list (E39.7). Not read, not written; removed after one release.
 model ConversationConnection {
   id             String   @id @default(uuid()) @db.Uuid
   conversationId String   @map("conversation_id") @db.Uuid
