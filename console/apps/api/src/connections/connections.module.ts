@@ -21,6 +21,7 @@ import { ConnectionFilesController } from './connection-files.controller';
 import { ConnectionFilesService } from './connection-files.service';
 import { ConnectionsAdminController } from './connections-admin.controller';
 import { ConnectionsController } from './connections.controller';
+import { ConnectionAccountsCheck, ConnectionsEgressContributor, ConnectionsHealthJobCheck, GoogleAppCheck, McpServersCheck, MicrosoftAppCheck } from './connections.doctor';
 import { ConnectionEvents } from './connections.events';
 import { ConnectionsHealth, ConnectionsHealthHandler, ConnectionsHealthTask } from './connections.jobs';
 import { ConnectionsService } from './connections.service';
@@ -71,6 +72,13 @@ import { McpTryService } from './mcp/mcp-try.service';
     McpOAuthService,
     McpConnectionsService,
     McpRunService,
+    // Doctor and egress (E50.13): read-only lines for the apps, the accounts, the health job and MCP servers.
+    GoogleAppCheck,
+    MicrosoftAppCheck,
+    ConnectionAccountsCheck,
+    ConnectionsHealthJobCheck,
+    McpServersCheck,
+    ConnectionsEgressContributor,
     McpDiagnostics,
     McpTryService,
   ],
