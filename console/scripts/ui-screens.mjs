@@ -684,7 +684,7 @@ async function main() {
             await page.waitForTimeout(400);
           }
           const at = new URL(page.url()).pathname;
-          if (at !== path.split('?')[0]) {
+          if (at !== path.split(/[?#]/)[0]) {
             // The app has no such route (yet), or the account may not open it: it was sent elsewhere.
             note(name, width, 'redirected');
             continue;

@@ -104,11 +104,11 @@ export function ConnectionRow({ connection: c, health, canWrite, canReadRuns, bu
           </Button>
         )}
       </Box>
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0, ml: { xs: 'auto', sm: 0 } }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end', flexShrink: 0, width: { xs: '100%', sm: 'auto' } }}>
         {switchable && (
           <FormControlLabel
             sx={{ mr: 0, minHeight: 44 }}
-            label={isPhone ? '' : c.status === 'active' ? 'On' : 'Off'}
+            label={c.status === 'active' ? 'On' : 'Off'}
             control={<Switch checked={c.status === 'active'} disabled={!canWrite || busy} onChange={onTogglePause} slotProps={{ input: { 'aria-label': `${c.label} switched on` } }} />}
           />
         )}
