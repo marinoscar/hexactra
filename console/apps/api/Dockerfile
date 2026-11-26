@@ -19,6 +19,7 @@ COPY apps/mcp-ui/package.json ./apps/mcp-ui/
 COPY packages/hexactra-agent/package.json ./packages/hexactra-agent/
 COPY packages/hexactra-browser-agent/package.json ./packages/hexactra-browser-agent/
 COPY packages/hexactra-kgraph/package.json ./packages/hexactra-kgraph/
+COPY packages/hexactra-web-agent/package.json ./packages/hexactra-web-agent/
 RUN npm ci --workspace=api --include-workspace-root
 # The PDF report (#543) runs pdfmake on Node only: drop the browser bundles,
 # the bundled Roboto fonts and the source maps of pdfmake, pdfkit and fontkit,
@@ -54,6 +55,7 @@ COPY tsconfig.base.json ./
 COPY packages/hexactra-agent ./packages/hexactra-agent
 COPY packages/hexactra-browser-agent ./packages/hexactra-browser-agent
 COPY packages/hexactra-kgraph ./packages/hexactra-kgraph
+COPY packages/hexactra-web-agent ./packages/hexactra-web-agent
 RUN npm run build:packages
 COPY apps/api ./apps/api
 COPY --from=widgets /app/apps/mcp-ui/dist ./apps/mcp-ui/dist
@@ -68,6 +70,7 @@ COPY tsconfig.base.json ./
 COPY packages/hexactra-agent ./packages/hexactra-agent
 COPY packages/hexactra-browser-agent ./packages/hexactra-browser-agent
 COPY packages/hexactra-kgraph ./packages/hexactra-kgraph
+COPY packages/hexactra-web-agent ./packages/hexactra-web-agent
 RUN npm run build:packages
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api
@@ -81,6 +84,7 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages/hexactra-agent/dist ./packages/hexactra-agent/dist
 COPY --from=build /app/packages/hexactra-browser-agent/dist ./packages/hexactra-browser-agent/dist
 COPY --from=build /app/packages/hexactra-kgraph/dist ./packages/hexactra-kgraph/dist
+COPY --from=build /app/packages/hexactra-web-agent/dist ./packages/hexactra-web-agent/dist
 # The seed (`npm run prisma:seed`) reads the permission catalog and settings
 # registry from src/, so the image carries them with prisma/. The same copy
 # brings assets/: the report fonts (assets/fonts) and the pages, scripts and

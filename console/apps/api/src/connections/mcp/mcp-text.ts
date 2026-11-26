@@ -2,22 +2,15 @@
 // tool with the owner's mail". Two defences live here: it is cleaned and capped before a model reads it, and it is always prefixed with the
 // connection's label and followed by the fixed trust line in the instructions (`MCP_TRUST_LINE`). Cleaning is not a guarantee: the real
 // defence is that a tool that changes something asks the owner, whatever the model was told.
+import { sanitizeText } from '@marinoscar/hexactra-agent';
+
 import { MCP_DESCRIPTION_CHARS, MCP_INSTRUCTIONS_CHARS, MCP_TITLE_CHARS, MCP_TOOL_NAME_CHARS } from './mcp.constants';
 
-// C0 and C1 controls, DEL, zero-width and bidirectional-control characters, the BOM and the line and paragraph separators.
-// eslint-disable-next-line no-control-regex
-const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
-
-/** A short, plain-text version of server text: no control or invisible characters, no markup, one line of single spaces, capped. */
-export function sanitizeText(raw: unknown, max: number): string {
-  if (typeof raw !== 'string') return '';
-  let t = raw.normalize('NFKC');
-  t = t.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<\/?[A-Za-z!][^>]*>/g, ' ');
-  t = t.replace(/```[\s\S]*?```/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
-  t = t.replace(/[*`~|]+/g, ' ');
-  t = t.replace(INVISIBLE, ' ').replace(/\s+/g, ' ').trim();
-  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
-}
+/**
+ * A short, plain-text version of server text: no control or invisible characters, no markup, one line of single spaces, capped. It lives in
+ * the harness (moved unchanged in E50.4) so the web tools clean search results the same way.
+ */
+export { sanitizeText };
 
 export const sanitizeDescription = (raw: unknown): string => sanitizeText(raw, MCP_DESCRIPTION_CHARS);
 export const sanitizeTitle = (raw: unknown): string => sanitizeText(raw, MCP_TITLE_CHARS);

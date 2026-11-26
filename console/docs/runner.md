@@ -28,6 +28,12 @@ packages/hexactra-browser-agent/         @marinoscar/hexactra-browser-agent: the
   src/vision.ts round.ts screenshots with numbered marks, and how a round is shown to the model
   src/instructions.ts    the browser agent's system instructions, as sections
   src/testing/           a scriptable FakeBrowser and a browser context over the fakes   (export ./testing)
+packages/hexactra-web-agent/             @marinoscar/hexactra-web-agent: the web toolset (E50.4). Imports only the harness.
+  src/tools/             web_search and web_fetch
+  src/gates/             the web site gate (`web_site`): the run's allowed sites, through `ctx.ext.web.sites`
+  src/ports.ts           WebSearchPort, WebFetchPort, WebSearchResult, WebToolError: the host binds the providers and the page reader
+  src/families.ts results.ts  the web family and its research how-to; what the model reads (wrapped, cleaned, capped) and the error sentences
+  src/testing/           FakeWebSearch, FakeWebFetch and a web context over the fakes   (export ./testing)
 apps/api/src/runner/host/                the bindings to the console. The only layer that imports console services.
   prisma-run-store.ts model-port.ts question-port.ts ...   one file per port, over Prisma, the AI service, the fabric and the question broker
   tools/                 the app's own tool families: saved logins, identity details, cards, memories (they reach console services)
@@ -39,6 +45,7 @@ The rules between them are tests, and each proves that it fires:
 
 - `packages/hexactra-agent/test/imports.spec.ts` scans the **built output** and the sources: the harness imports only `zod`, `@opentelemetry/api` and `node:` built-ins (no NestJS, Prisma, provider SDK, platform package, fabric client or console path);
 - `packages/hexactra-browser-agent/test/imports.spec.ts` does the same for the toolset (it may also import `@marinoscar/hexactra-agent`), and a **tool** imports no loop code (`@marinoscar/hexactra-agent/engine`) and **no other tool**; a **gate** imports no loop code. The composer `src/tools/index.ts` lists the tools of a family and is the only file that imports them;
+- `packages/hexactra-web-agent/test/imports.spec.ts` holds the web toolset to the same rules (it imports the harness, never the browser toolset or an HTTP client);
 - `apps/api/test/runner-layering.spec.ts`: the same tool rule for the host's own tools (`host/tools/`, composer `saved-card-tools.ts`), and no production code imports a test kit;
 - `apps/api/test/architecture/no-agent-logic.spec.ts`: no tool (outside `runner/host/tools/`), no gate and no loop code in `apps/api/src/`, and `runner/harness` and `runner/browser` do not exist.
 
@@ -190,6 +197,7 @@ The agent picks a tool by capability, not by habit. Each kind of tool is a **fam
 | `mcp:<connectionId>` | 20 | `mcpFamilies`, `tools/connections/mcp.ts` | the owner's label, and the server's own `instructions` (cleaned, at most 300 characters, under `MCP_TRUST_LINE`) or its first tool titles |
 | `procedures` | 40 | `proceduresFamily`, `apps/api/src/runner/host/tools/procedures.ts` | "The owner's saved procedures": `procedures_list` and `run_procedure` (E46.22), offered only in a run whose Knowledge Graph mode is `reuse` or `everyday` (#850, where `procedures_list` takes a `query`) and registered after every other tool; `run_procedure` walks another active procedure of the owner through the run's tool wrapper (`runSubProcedure`, depth 1) |
 | `site_facts` | 45 | `siteFactsFamily`, `packages/hexactra-kgraph/src/harness/site-facts.ts` | "Notes about sites": `propose_site_fact` and `site_facts` (#853, #854), offered only in a `learn`, `reuse` or `everyday` run, registered last |
+| `web` | 30 | `webFamily`, `packages/hexactra-web-agent/src/families.ts` | "Web search", with the "How to find things out" section (E50.4; the console registers it in E50.7) |
 | `browser` | 50 | `browserFamily`, `packages/hexactra-browser-agent/src/families.ts` | "The browser", with the "How to see" and "How to act" sections |
 | `desktop` | 60 | `desktopFamily` (same file) | "The desktop", with the "Outside the page" bullet |
 | `human`, `control`, `secrets`, `memory` | | no descriptor | covered by the general sections |

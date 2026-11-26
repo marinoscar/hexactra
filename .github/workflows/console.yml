@@ -76,7 +76,7 @@ jobs:
       # composed schema and the infra fragments equal what the packages ship.
       - run: npm run platform:check
 
-      # The agent packages (E38.9, packages/hexactra-agent and hexactra-browser-agent) before the apps: the API imports their built output.
+      # The agent packages (E38.9, packages/hexactra-agent, hexactra-browser-agent, hexactra-kgraph and hexactra-web-agent, E50.4) before the apps: the API imports their built output.
       # `test:packages` fails, rather than passes, when a package has no dist or a test did not run; `check:package-pack` dry-runs `npm pack`
       # (nothing is published) and checks the tarballs hold dist/, README and LICENSE only.
       - run: npm run build:packages
