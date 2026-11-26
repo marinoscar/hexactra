@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.150.1",
+  "version": "1.151.0",
   "private": true,
   "engines": {
     "node": ">=24"
@@ -59,6 +59,7 @@
     "ajv": "^8.18.0",
     "cron": "^4.4.0",
     "fastify": "^5",
+    "htmlparser2": "10.1.0",
     "jpeg-js": "^0.4.4",
     "nestjs-zod": "^5.4.0",
     "passport": "^0.7.0",
@@ -66,6 +67,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "tldts": "^7.5.3",
+    "unpdf": "^2.2.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -84,7 +86,6 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3",
-    "unpdf": "^2.2.1"
+    "typescript": "^6.0.3"
   }
 }
