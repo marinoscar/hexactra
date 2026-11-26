@@ -29,13 +29,14 @@ export class ConnectionsHealth {
     return this.prisma.connection.findUnique({ where: { id } });
   }
 
-  /** Live connections (active or paused) that were neither used nor refreshed in the last {@link IDLE_AFTER_MS}. */
+  /** Live connections (active or paused) that sign in with OAuth and were neither used nor refreshed in the last {@link IDLE_AFTER_MS}. */
   async idle(now = new Date(), limit = BATCH): Promise<{ id: string; userId: string }[]> {
     const before = new Date(now.getTime() - IDLE_AFTER_MS);
     return this.prisma.connection.findMany({
       where: {
         status: { in: ['active', 'paused'] },
-        provider: { in: ['google', 'microsoft'] },
+        // Google and Microsoft, and MCP servers signed in with OAuth (E50.12, #664): their refresher is the one the MCP module registered.
+        OR: [{ provider: { in: ['google', 'microsoft'] } }, { provider: 'mcp', config: { path: ['auth', 'kind'], equals: 'oauth' } }],
         AND: [{ OR: [{ lastRefreshAt: null }, { lastRefreshAt: { lt: before } }] }, { OR: [{ lastUsedAt: null }, { lastUsedAt: { lt: before } }] }],
       },
       select: { id: true, userId: true },

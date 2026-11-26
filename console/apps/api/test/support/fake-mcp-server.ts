@@ -48,6 +48,14 @@ export interface FakeMcpOptions {
   instructions?: string;
   /** Answer `initialize` with this server name. */
   serverName?: string;
+  /** E50.12: answer every POST with this instead of the protocol (a web page, an error page). */
+  answerWith?: { status: number; contentType: string; body: string };
+  /** E50.12: answer `initialize` with this HTTP status (503: a server that is down). */
+  initializeStatus?: number;
+  /** E50.12: delay every `initialize` answer. */
+  initializeDelayMs?: number;
+  /** E50.12: answer `tools/list` with this HTTP status, or with a JSON-RPC error when `rpc`. */
+  listFailure?: number | 'rpc';
   /** Act as its own OAuth authorization server too (metadata, dynamic registration, token, revocation); the MCP endpoint then needs its access token. */
   oauth?: { registration?: boolean; issuerInResponse?: boolean };
 }
@@ -204,6 +212,7 @@ export class FakeMcpServer {
     if (this.opts.bearer && req.headers.authorization !== `Bearer ${this.opts.bearer}`) return void res.writeHead(401, { 'www-authenticate': 'Bearer resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource"' }).end();
     if (this.opts.header && req.headers[this.opts.header.name.toLowerCase()] !== this.opts.header.value) return void res.writeHead(401).end();
     if (req.method === 'DELETE') return void res.writeHead(200).end();
+    if (this.opts.answerWith) return void res.writeHead(this.opts.answerWith.status, { 'content-type': this.opts.answerWith.contentType }).end(this.opts.answerWith.body);
     if (!body) return void res.writeHead(400).end();
     // A response to one of this server's own requests (the client's refusal): acknowledged.
     if (!body.method) return void res.writeHead(202).end();
@@ -214,6 +223,8 @@ export class FakeMcpServer {
     const ok = (result: unknown, headers?: Record<string, string>) => reply({ jsonrpc: '2.0', id: body!.id, result }, headers);
     switch (body.method) {
       case 'initialize': {
+        if (this.opts.initializeDelayMs) await new Promise((r) => setTimeout(r, this.opts.initializeDelayMs).unref());
+        if (this.opts.initializeStatus) return void res.writeHead(this.opts.initializeStatus).end();
         const versions = this.opts.versions ?? ['2025-11-25', '2025-06-18', '2025-03-26'];
         const asked = String(body.params?.protocolVersion ?? '');
         const version = versions.includes(asked) ? asked : versions[0]!;
@@ -223,6 +234,8 @@ export class FakeMcpServer {
       case 'notifications/initialized':
         return void res.writeHead(202).end();
       case 'tools/list': {
+        if (this.opts.listFailure === 'rpc') return reply({ jsonrpc: '2.0', id: body.id, error: { code: -32603, message: 'Internal error' } });
+        if (this.opts.listFailure) return void res.writeHead(this.opts.listFailure).end();
         const cursor = typeof body.params?.cursor === 'string' ? Number(body.params.cursor) : 0;
         const size = this.opts.pageSize ?? this.tools.length;
         const page = this.tools.slice(cursor, cursor + size).map((t) => ({ inputSchema: { type: 'object', properties: {} }, ...t }));

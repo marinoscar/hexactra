@@ -7289,7 +7289,7 @@ export interface paths {
         put?: never;
         /**
          * Diagnose a connection
-         * @description Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, or `server` for an MCP server, with its tool count), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.
+         * @description Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, Google and Microsoft; an MCP server has its own: `switch`, `address`, `network`, `initialize`, `sign_in`, `tool_list`, `tool_changes`, `enabled_tools`, `offered_cap`), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.
          *
          *     **Requires:** authentication, plus permission `connections:write`.
          */
@@ -8154,6 +8154,94 @@ export interface paths {
          *     **Requires:** authentication, plus permission `system_settings:read`.
          */
         get: operations["webSearchAdmin_usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnose web search for you
+         * @description The report of the provider that answers for you (or `?provider=<id>`), with your effective key tier, stored with you as its owner (the last 20 are kept). Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.
+         *
+         *     **Requires:** authentication, plus permission `web_search:write`.
+         */
+        post: operations["webSearchDiagnostics_diagnose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your last web search diagnostic reports
+         * @description Newest first, every provider: `limit` (default 5, at most 20). Codes, remedy keys, counts, timings and host names only.
+         *
+         *     **Requires:** authentication, plus permission `web_search:read`.
+         */
+        get: operations["webSearchDiagnostics_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/admin/providers/{id}/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnose a search provider with the deployment's key
+         * @description The report with the deployment tier ONLY (never a user's key), stored with no owner; the switches only warn here, so a key can be tested before search is switched on. The live query counts as one call of yours. Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        post: operations["webSearchDiagnostics_diagnoseDeployment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-search/admin/providers/{id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A search provider's last deployment reports
+         * @description Newest first: `limit` (default 5, at most 20). The deployment tier only; no user.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["webSearchDiagnostics_historyDeployment"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10103,6 +10191,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/mcp/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Well-known MCP servers to add
+         * @description A short, reviewed list the Add dialog offers so you pick a name instead of typing an address: each with its address, the kind of sign-in, the vendor's documentation and the date the address was checked against it. A preset only fills the form: the server is still tested before anything is kept, and every tool starts off. It never carries a secret. A preset on a host the administrator blocks (or does not allow) is left out; while MCP servers are switched off the list is empty.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["mcpConnections_presets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/mcp": {
         parameters: {
             query?: never;
@@ -10189,6 +10299,28 @@ export interface paths {
          *     **Requires:** authentication, plus permission `connections:write`.
          */
         patch: operations["mcpConnections_setMode"];
+        trace?: never;
+    };
+    "/api/connections/{id}/tools/{toolId}/try": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a read tool of an MCP server
+         * @description Calls one tool you set to `read`, with the arguments given, exactly as a run would: the same checks (the switch, the connection active, the tool unchanged since you decided), the same redaction of every credential out and back, the same cleaning and cap of the result (here 4,000 characters). The answer is the server's words, to show as plain text. A `write` tool is refused. It grants nothing and is not a run; the audit names the connection and the tool, never the arguments or the result, and the result is not stored.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["mcpConnections_try"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/connections/{id}/mcp-auth": {
@@ -10693,6 +10825,10 @@ export interface components {
              * @example CONNECTION_MCP_AUTH_REQUIRED
              * @example CONNECTION_MCP_PROTOCOL
              * @example DIAGNOSTICS_RATE_LIMITED
+             * @example TRY_READ_ONLY
+             * @example TRY_TOOL_OFF
+             * @example TRY_INVALID_ARGUMENTS
+             * @example TRY_RATE_LIMITED
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
@@ -10708,6 +10844,7 @@ export interface components {
              * @example WEB_SEARCH_LIMIT_REACHED
              * @example WEB_SEARCH_ABORTED
              * @example WEB_SEARCH_TEST_RATE_LIMITED
+             * @example WEB_SEARCH_PROVIDER_UNKNOWN
              * @example TASK_BUILDER_NOT_FOUND
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
@@ -25629,6 +25766,24 @@ export interface components {
             /** @description The administrator limits which hosts may be used. */
             restricted: boolean;
         };
+        McpPresetResponseDto: {
+            id: string;
+            name: string;
+            /** @description The server's address, as its vendor documents it. */
+            url: string;
+            /**
+             * @description How it signs you in. A preset never carries a secret: you give the token, or sign in at the server.
+             * @enum {string}
+             */
+            auth: "none" | "bearer" | "header" | "oauth";
+            /** @description For `header`: the header the server reads its key from. */
+            headerName?: string;
+            /** @description The vendor's own documentation of the server. */
+            docsUrl: string;
+            notes: string;
+            /** @description The date (`YYYY-MM-DD`) the address was checked against that documentation. */
+            verified: string;
+        };
         AddMcpResponseDto: {
             /** @description Null while an OAuth consent is pending: the connection exists once the consent returns. */
             connection: {
@@ -25818,6 +25973,25 @@ export interface components {
              * @enum {string}
              */
             mode: "off" | "read" | "write";
+        };
+        TryResultResponseDto: {
+            /** @description The server answered and reported no error. */
+            ok: boolean;
+            /** @description Null when ok; `TOOL_ERROR` (the server reported an error), `REFUSED` (nothing was sent: the tool or connection changed), or the failure (`TIMEOUT`, `UNAVAILABLE`, `AUTH`, ...). */
+            code: string | null;
+            ms: number;
+            /** @description What a run would read: cleaned, redacted of every credential and capped at 4,000 characters. The server's words: show it as plain text. */
+            text: string;
+            truncated: boolean;
+        };
+        TryToolDto: {
+            /**
+             * @description The tool's arguments, checked against its own JSON schema before anything is sent.
+             * @default {}
+             */
+            arguments?: {
+                [key: string]: unknown;
+            };
         };
         McpAuthResponseDto: {
             connection: {
@@ -52996,6 +53170,239 @@ export interface operations {
             };
         };
     };
+    webSearchDiagnostics_diagnose: {
+        parameters: {
+            query?: {
+                /** @description A provider id; default: the one that answers for you. */
+                provider?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_history: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_diagnoseDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    webSearchDiagnostics_historyDeployment: {
+        parameters: {
+            query?: {
+                /** @description How many of the last reports (default 5, at most 20). */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DiagnosticReportResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     connectedApps_list: {
         parameters: {
             query?: never;
@@ -59137,6 +59544,54 @@ export interface operations {
             };
         };
     };
+    mcpConnections_presets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpPresetResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     mcpConnections_add: {
         parameters: {
             query?: never;
@@ -59360,6 +59815,82 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpConnections_try: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                toolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TryToolDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TryResultResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `TRY_READ_ONLY` (a `write` tool: trying it would change something with no approval card), `TRY_TOOL_OFF` (switch it to `read` first) or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `TRY_INVALID_ARGUMENTS`: the arguments do not satisfy the tool's own schema (`details.issues`, never values). Nothing was sent. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `TRY_RATE_LIMITED`: at most 6 a minute for one connection. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
