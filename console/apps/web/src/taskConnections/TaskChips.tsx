@@ -1,12 +1,11 @@
-// What a task is wired to (E39.10, #607), as chips: "2 accounts", "3 deliveries", "Starts from email". Nothing for a task that has none.
+// What a task is wired to (E39.10, #607), as chips: "3 deliveries", "Starts from email". Nothing for a task that has none. No accounts chip
+// since E50.17: every task can use everything the owner switched on.
 import { Chip, Stack } from '@mui/material';
 
 import type { TaskWithSummary } from '../types/tasks';
 
 export function taskChipLabels(task: Pick<TaskWithSummary, 'connections' | 'summary'>): string[] {
   const out: string[] = [];
-  const accounts = task.connections?.length ?? 0;
-  if (accounts > 0) out.push(accounts === 1 ? '1 account' : `${accounts} accounts`);
   const deliveries = task.summary?.deliveries ?? 0;
   if (deliveries > 0) out.push(deliveries === 1 ? '1 delivery' : `${deliveries} deliveries`);
   if ((task.summary?.mailTriggers ?? 0) > 0) out.push('Starts from email');

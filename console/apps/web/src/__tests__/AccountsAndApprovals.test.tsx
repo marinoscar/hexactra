@@ -13,12 +13,10 @@ import { QuestionAnswerForm } from '../components/QuestionAnswerForm';
 import type { AskedQuestion, QuestionAction, Rememberable } from '../components/questions';
 import { domainsOf, NO_REMEMBER, rememberRuleOf } from '../components/RememberRuleField';
 import type { Connection } from '../connections/api';
-import { AccountChoices } from '../connections/AccountChoices';
 import { InboxPage, type InboxItem } from '../pages/InboxPage';
 import { TaskCreatePage } from '../pages/TaskCreatePage';
 import { TaskEditPage } from '../pages/TaskEditPage';
-import { ChatAccountChips } from '../taskConnections/ChatAccountChips';
-import { accessOf, looksBrowserless, summaryLine, withAccess } from '../taskConnections/model';
+import { switchedOnNames, switchedOnSummary } from '../taskConnections/model';
 import type { Chat } from '../types/chat';
 import { ConfirmProvider, ToastHost } from '../ui';
 import { mockViewport } from './matchMedia';
@@ -59,93 +57,12 @@ const CONNECTIONS: Connection[] = [
   conn({ id: READER, label: 'Reader', accountEmail: 'person-e@example.test', capabilities: ['mail_read'] }),
 ];
 
-describe('the model', () => {
-  it('reads, sets and clears an account\'s access, keeping the order', () => {
-    const one = withAccess([], WORK, 'read');
-    const two = withAccess(one, PERSONAL, 'read_write');
-    expect(accessOf(two, WORK)).toBe('read');
-    expect(accessOf(two, 'nobody')).toBe('none');
-    expect(withAccess(two, WORK, 'read_write').map((s) => s.connectionId)).toEqual([WORK, PERSONAL]);
-    expect(withAccess(two, WORK, 'none')).toEqual([{ connectionId: PERSONAL, access: 'read_write' }]);
-  });
-
-  it('summarises in one line', () => {
-    expect(summaryLine([], CONNECTIONS)).toMatch(/No accounts/);
-    expect(summaryLine([{ connectionId: WORK, access: 'read' }, { connectionId: PERSONAL, access: 'read_write' }], CONNECTIONS)).toBe('2 accounts: Work (read only), Personal (read and change)');
-  });
-
-  it('says a task looks like it needs no browser only for mail, calendar or documents work with accounts on', () => {
-    const on = [{ connectionId: WORK, access: 'read' as const }];
-    expect(looksBrowserless('Summarise my unread email each morning', on, 'auto')).toBe(true);
-    expect(looksBrowserless('Summarise my unread email each morning', [], 'auto')).toBe(false);
-    expect(looksBrowserless('Log in to the bank website and read the balance, then email me', on, 'auto')).toBe(false);
-    expect(looksBrowserless('Summarise my unread email', on, 'always')).toBe(false);
-  });
-});
-
-describe('the three-way choice', () => {
-  function Mount({ initial = [] as { connectionId: string; access: 'read' | 'read_write' }[], onChange = vi.fn() }) {
-    return (
-      <MemoryRouter>
-        <AccountChoices connections={CONNECTIONS} selections={initial} onChange={onChange} />
-      </MemoryRouter>
-    );
-  }
-
-  it('offers Not used, Read only and Read and change for each account, and reports a change', () => {
-    const onChange = vi.fn();
-    render(<Mount onChange={onChange} />);
-    const work = screen.getByTestId(`account-${WORK}`);
-    expect(within(work).getByRole('button', { name: 'Not used: Work' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(work).getByRole('button', { name: 'Read and change: Work' }));
-    expect(onChange).toHaveBeenCalledWith([{ connectionId: WORK, access: 'read_write' }]);
-    expect(within(work).getAllByText(/^(Mail|Documents): /).map((c) => c.textContent)).toEqual(['Mail: read and write', 'Documents: read and write']);
-  });
-
-  it('shows a paused account and one that needs reconnecting disabled, with a link to fix it', () => {
-    render(<Mount />);
-    const paused = screen.getByTestId(`account-${PAUSED}`);
-    expect(within(paused).getByRole('button', { name: 'Read only: Old' })).toBeDisabled();
-    expect(within(paused).getByRole('link', { name: 'Resume it' })).toHaveAttribute('href', '/settings/connections');
-    const broken = screen.getByTestId(`account-${BROKEN}`);
-    expect(within(broken).getByRole('button', { name: 'Read and change: Stale' })).toBeDisabled();
-    expect(within(broken).getByRole('link', { name: 'Reconnect it' })).toBeInTheDocument();
-    expect(within(broken).getByText('Needs reconnect')).toBeInTheDocument();
-  });
-
-  it('disables "Read and change" for an account with no change permission, and says why', () => {
-    render(<Mount />);
-    const reader = screen.getByTestId(`account-${READER}`);
-    expect(within(reader).getByRole('button', { name: 'Read and change: Reader' })).toBeDisabled();
-    expect(within(reader).getByRole('button', { name: 'Read only: Reader' })).toBeEnabled();
-    expect(within(reader).getByText(/No "change" permission is switched on/)).toBeInTheDocument();
-  });
-
-  it('lets an account that was switched on and then paused be switched off', () => {
-    const onChange = vi.fn();
-    render(<Mount initial={[{ connectionId: PAUSED, access: 'read' }]} onChange={onChange} />);
-    const paused = screen.getByTestId(`account-${PAUSED}`);
-    expect(within(paused).getByRole('button', { name: 'Read only: Old' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(within(paused).getByRole('button', { name: 'Not used: Old' }));
-    expect(onChange).toHaveBeenCalledWith([]);
-  });
-
-  it('shows how many tools an MCP account has switched on when the API says', () => {
-    render(
-      <MemoryRouter>
-        <AccountChoices connections={[{ ...conn({ id: 'mcp-1', provider: 'mcp', label: 'Notes server', capabilities: [] }), mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes server', tools: { total: 5, enabled: 3, needsReview: 1 }, toolsFetchedAt: null } } as Connection]} selections={[]} onChange={() => undefined} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('3 tools')).toBeInTheDocument();
-  });
-
-  it('shows what an MCP server is for, as text (E41.5)', () => {
-    render(
-      <MemoryRouter>
-        <AccountChoices connections={[{ ...conn({ id: 'mcp-2', provider: 'mcp', label: 'Notes', capabilities: [] }), mcp: { url: 'https://mcp.example.test/mcp', auth: 'none', serverName: 'Notes', tools: { total: 2, enabled: 2, needsReview: 0 }, toolsFetchedAt: null, purpose: 'Create and search <b>notes</b>.' } } as Connection]} selections={[]} onChange={() => undefined} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByLabelText('What Notes is for')).toHaveTextContent('Create and search <b>notes</b>.');
+describe('the model (E50.17)', () => {
+  it('names what is switched on: the active connections, and nothing paused or to reconnect', () => {
+    expect(switchedOnNames(CONNECTIONS)).toEqual(['Work', 'Personal', 'Reader']);
+    expect(switchedOnSummary(CONNECTIONS)).toBe('Everything you switched on: Work, Personal, Reader');
+    expect(switchedOnSummary([])).toBe('Nothing switched on yet: the agent uses the browser.');
+    expect(switchedOnSummary(null)).toBe('Everything you switched on');
   });
 });
 
@@ -205,23 +122,23 @@ afterEach(() => {
   restore = null;
 });
 
-describe('the tools and accounts section of the task form (#967)', () => {
+describe('the tools and accounts section of the task form (E50.17)', () => {
   it('is hidden without connections:read', async () => {
     mountForm('/tasks/new', ['tasks:read', 'tasks:write', 'runs:write', 'agent_policies:read', 'fleet:read']);
     await screen.findByRole('heading', { name: 'Outputs' });
     expect(screen.queryByRole('button', { name: /Tools and accounts/ })).toBeNull();
   });
 
-  it('a new task uses everything connected: no choice to make, no browser question, and nothing about accounts is sent', async () => {
+  it('asks nothing: one read-only line names what is switched on, links to the page, and nothing about accounts is sent', async () => {
     const { sent } = mountForm('/tasks/new', PERMS);
     const toggle = await screen.findByRole('button', { name: /Tools and accounts/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Everything you connected: Work, Personal, Reader'));
+    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Everything you switched on: Work, Personal, Reader'));
     fireEvent.click(toggle);
-    expect(await screen.findByText(/The agent can use every account and tool you connected/)).toBeInTheDocument();
-    expect(screen.getByTestId(`uses-${WORK}`)).toBeInTheDocument();
-    expect(screen.queryByTestId(`uses-${PAUSED}`)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Read only: Work' })).toBeNull();
+    const line = await screen.findByTestId('switched-on-tools');
+    expect(line).toHaveTextContent('The agent can use everything you switched on in Connections and tools: Work, Personal, Reader.');
+    expect(within(line).getByRole('link', { name: 'Connections and tools' })).toHaveAttribute('href', '/settings/connections');
+    expect(screen.queryByRole('button', { name: 'Limit this task' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Read only: / })).toBeNull();
     expect(screen.queryByLabelText('Does this task use a browser?')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Inbox digest' } });
     fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Summarise my unread email each morning' } });
@@ -233,45 +150,18 @@ describe('the tools and accounts section of the task form (#967)', () => {
     expect(body).not.toHaveProperty('needsBrowser');
   });
 
-  it('"Limit this task" starts from everything usable and sends the limit', async () => {
-    const { sent } = mountForm('/tasks/new', PERMS);
-    fireEvent.click(await screen.findByRole('button', { name: /Tools and accounts/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Limit this task' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Read only: Work' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Not used: Personal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Not used: Reader' }));
-    expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Limited. 1 account: Work (read only)');
-    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: 'Inbox digest' } });
-    fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Summarise my unread email' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(sent('POST', '/tasks')).toHaveLength(1));
-    expect(sent('POST', '/tasks')[0]!.body).toMatchObject({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read' }] });
-  });
-
-  it('edits a limited task: the summary names the accounts, and a change sends the mode with the list', async () => {
+  it('editing a task that once listed accounts sends no account field', async () => {
     const { sent } = mountForm(`/tasks/${TASK_ID}/edit`, PERMS);
-    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent('Limited. 1 account: Work (read only)'));
-    fireEvent.click(screen.getByRole('button', { name: /Tools and accounts/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Read and change: Work' }));
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(sent('PATCH', `/tasks/${TASK_ID}`)).toHaveLength(1));
-    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read_write' }] });
+    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ name: 'Renamed' });
   });
 
-  it('"Use everything I connected" removes the limit', async () => {
-    const { sent } = mountForm(`/tasks/${TASK_ID}/edit`, PERMS);
-    fireEvent.click(await screen.findByRole('button', { name: /Tools and accounts/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Use everything I connected' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(sent('PATCH', `/tasks/${TASK_ID}`)).toHaveLength(1));
-    expect(sent('PATCH', `/tasks/${TASK_ID}`)[0]!.body).toEqual({ connectionsMode: 'all' });
-  });
-
-  it('keeps the accounts a task has when the list of accounts could not be loaded, and says so', async () => {
+  it('says so when the list of connections could not be loaded', async () => {
     mountForm(`/tasks/${TASK_ID}/edit`, PERMS, { 'GET /connections': () => { throw Object.assign(new Error('down'), { status: 500 }); } });
-    await waitFor(() => expect(screen.getByTestId('accounts-summary')).toHaveTextContent(/1 account/));
-    fireEvent.click(screen.getByRole('button', { name: /Tools and accounts/ }));
-    expect(await screen.findByText(/Your accounts could not be loaded/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /Tools and accounts/ }));
+    expect(await screen.findByText(/Your connections could not be loaded/)).toBeInTheDocument();
   });
 });
 
@@ -345,68 +235,32 @@ const CHAT: Chat = {
 };
 
 describe('chat', () => {
-  function mountDialog(permissions: string[], onSave = vi.fn().mockResolvedValue(undefined), chat: Chat = CHAT) {
+  function mountDialog(permissions: string[], onSave = vi.fn().mockResolvedValue(undefined)) {
     const host = createTestPlatformHost({ permissions, responses: { ...POLICY_READS, 'GET /fleet/hosts': [], 'GET /connections': CONNECTIONS, 'GET /memories/settings': { suggest: false } } });
     render(
       <PlatformHostProvider host={host}>
         <MemoryRouter>
-          <ChatSettingsDialog open chat={chat} onClose={() => undefined} onSave={onSave} />
+          <ChatSettingsDialog open chat={CHAT} onClose={() => undefined} onSave={onSave} />
         </MemoryRouter>
       </PlatformHostProvider>,
     );
     return onSave;
   }
 
-  it('a limited chat shows its list, and sends the mode with the list only when changed (#969)', async () => {
+  it('shows the one read-only line instead of a choice, and never sends accounts', async () => {
     const onSave = mountDialog(['connections:read', 'agent_policies:read']);
-    expect(await screen.findByRole('region', { name: 'Tools and accounts this chat may use' })).toBeInTheDocument();
-    expect(screen.getByTestId('chat-accounts-summary')).toHaveTextContent('Limited. 1 account: Work (read only)');
+    const region = await screen.findByRole('region', { name: 'Tools and accounts' });
+    await waitFor(() => expect(within(region).getByTestId('switched-on-tools')).toHaveTextContent('The agent can use everything you switched on in Connections and tools: Work, Personal, Reader.'));
+    expect(screen.queryByRole('button', { name: /Read and change: / })).toBeNull();
+    expect(screen.queryByText(/New chats/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0]![0]).not.toHaveProperty('connections');
-    expect(onSave.mock.calls[0]![0]).not.toHaveProperty('connectionsMode');
-    onSave.mockClear();
-    fireEvent.click(await screen.findByRole('button', { name: 'Read and change: Personal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave.mock.calls[0]![0]).toMatchObject({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read' }, { connectionId: PERSONAL, access: 'read_write' }] });
   });
 
-  it('a chat that uses everything shows it, and "Limit this chat" / "Use everything I connected" switch the mode (#969)', async () => {
-    const onSave = mountDialog(['connections:read', 'agent_policies:read'], undefined, { ...CHAT, connectionsMode: 'all', connections: [] });
-    await waitFor(() => expect(screen.getByTestId('chat-accounts-summary')).toHaveTextContent('Everything you connected: Work, Personal, Reader'));
-    fireEvent.click(screen.getByRole('button', { name: 'Limit this chat' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Use everything I connected' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave.mock.calls[0]![0]).not.toHaveProperty('connectionsMode');
-    onSave.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Limit this chat' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Not used: Personal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave.mock.calls[0]![0]).toMatchObject({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read_write' }, { connectionId: READER, access: 'read' }] });
-  });
-
-  it('has no accounts section without connections:read', () => {
+  it('has no tools section without connections:read', () => {
     mountDialog(['agent_policies:read']);
-    expect(screen.queryByRole('region', { name: 'Tools and accounts this chat may use' })).toBeNull();
-  });
-
-  it('shows chips for the accounts in use, and says when one is paused', () => {
-    render(
-      <MemoryRouter>
-        <ChatAccountChips accounts={[...CHAT.connections!, { connectionId: PAUSED, access: 'read_write', label: 'Old', provider: 'google', accountEmail: 'x@example.test', status: 'paused' }]} />
-      </MemoryRouter>,
-    );
-    const chips = within(screen.getByTestId('chat-account-chips'));
-    expect(chips.getByText('Work: read only')).toBeInTheDocument();
-    expect(chips.getByText('Old: paused')).toBeInTheDocument();
-  });
-
-  it('shows no chips for a chat with no accounts', () => {
-    render(<ChatAccountChips accounts={[]} />);
-    expect(screen.queryByTestId('chat-account-chips')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Tools and accounts' })).toBeNull();
   });
 });
 
@@ -570,12 +424,12 @@ describe('the Inbox group for approvals', () => {
 });
 
 describe('chips on a task', () => {
-  it('say how many accounts and deliveries a task has and that an email starts it, and nothing for a plain task', async () => {
+  it('say how many deliveries a task has and that an email starts it, no accounts chip (E50.17), and nothing for a plain task', async () => {
     const { TaskChips, taskChipLabels } = await import('../taskConnections/TaskChips');
-    const wired = { connections: [{ connectionId: WORK, access: 'read' as const, label: 'Work', provider: 'google', accountEmail: 'a@example.test', status: 'active' }, { connectionId: PERSONAL, access: 'read_write' as const, label: 'Personal', provider: 'microsoft', accountEmail: 'b@example.test', status: 'active' }], summary: { mailTriggers: 1, deliveries: 3 } };
-    expect(taskChipLabels(wired as never)).toEqual(['2 accounts', '3 deliveries', 'Starts from email']);
+    const wired = { connections: [], summary: { mailTriggers: 1, deliveries: 3 } };
+    expect(taskChipLabels(wired as never)).toEqual(['3 deliveries', 'Starts from email']);
     render(<TaskChips task={wired as never} />);
-    expect(within(screen.getByTestId('task-chips')).getAllByText(/account|deliver|email/).map((n) => n.textContent)).toEqual(['2 accounts', '3 deliveries', 'Starts from email']);
+    expect(within(screen.getByTestId('task-chips')).getAllByText(/deliver|email/).map((n) => n.textContent)).toEqual(['3 deliveries', 'Starts from email']);
     expect(taskChipLabels({ connections: [], summary: { mailTriggers: 0, deliveries: 0 } } as never)).toEqual([]);
     expect(taskChipLabels({ connections: undefined, summary: { deliveries: 1 } } as never)).toEqual(['1 delivery']);
   });
