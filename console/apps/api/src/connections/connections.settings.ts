@@ -5,8 +5,8 @@
 //     google.clientId / microsoft.clientId the OAuth client id of the app the administrator registered (BRING YOUR OWN APP).
 //     microsoft.tenant                     `common` (default), `organizations`, `consumers` or a tenant id.
 //   user `connections` (the OWNER's own setting, #680)
-//     newChats                             how a NEW chat starts: `off`, `read` (read only) or `read_write` (read and change), default `read_write`:
-//                                          the owner's Google and Microsoft accounts are on in a new chat unless the owner chose Off. Never MCP servers.
+//     newChats                             how a NEW chat starts (#969): `read_write` (default) everything the owner connected, MCP included, at
+//                                          what they switched on; `read` their Google and Microsoft accounts read only; `off` none.
 //   The client SECRETS are system credentials (`connection_app_google`, `connection_app_microsoft`), write-only.
 //     mcp.enabled                          MCP servers as connections (E39.9), default OFF: while off, none can be added or used.
 //     mcp.allowedHosts / mcp.blockedHosts  exact host names or `*.example.test` suffixes. Empty allow-list: any public host.
@@ -136,7 +136,7 @@ export const NEW_CHAT_ACCOUNTS = ['off', 'read', 'read_write'] as const;
 export type NewChatAccounts = (typeof NEW_CHAT_ACCOUNTS)[number];
 
 export const connectionsUserSettingsSchema = z.object({
-  newChats: z.enum(NEW_CHAT_ACCOUNTS).describe('How a new chat starts: `off` (no account), `read` (your Google and Microsoft accounts, read only) or `read_write` (read and change; each send or change still asks you first). Default `read_write`. Existing chats keep what they have.'),
+  newChats: z.enum(NEW_CHAT_ACCOUNTS).describe('How a new chat starts: `read_write` (the default: every account and tool you connected, MCP servers included, at what you switched on for each; each send or change still asks you first), `read` (your Google and Microsoft accounts, read only) or `off` (none). Existing chats keep what they have.'),
 });
 export type ConnectionsUserSettings = z.infer<typeof connectionsUserSettingsSchema>;
 export const connectionsUserSettingsPatchSchema = connectionsUserSettingsSchema.partial();
@@ -153,7 +153,7 @@ export function newChatAccountsOf(doc: unknown): NewChatAccounts {
 
 export const CONNECTIONS_USER_SETTINGS = {
   key: 'connections',
-  description: 'Connections: how a new chat starts (your accounts off, read only, or read and change).',
+  description: 'Connections: how a new chat starts (everything you connected, your accounts read only, or none).',
   schema: connectionsUserSettingsSchema,
   patchSchema: connectionsUserSettingsPatchSchema,
   merge: (current: ConnectionsUserSettings | undefined, patch: ConnectionsUserSettingsPatch | null | undefined): ConnectionsUserSettings | undefined => {

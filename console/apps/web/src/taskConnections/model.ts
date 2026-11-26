@@ -27,7 +27,7 @@ export type ConnectionsMode = 'all' | 'listed';
 export const ALL_TOOLS_HELP =
   'The agent can use every account and tool you connected, at what you switched on for each in Connections, and picks the right one for the job. It opens a browser only when the job needs a website. It asks before it sends or changes anything, unless you told it not to ask again.';
 
-export const LIMITED_HELP = 'This task is limited to the accounts and tools switched on below.';
+export const LIMITED_HELP = 'Limited to the accounts and tools switched on below.';
 
 /** The owner's connections a task in `all` mode uses: the active ones. */
 export const usableConnections = (connections: readonly Connection[]): Connection[] => connections.filter((c) => c.status === 'active');

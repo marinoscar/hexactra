@@ -345,35 +345,52 @@ const CHAT: Chat = {
 };
 
 describe('chat', () => {
-  function mountDialog(permissions: string[], onSave = vi.fn().mockResolvedValue(undefined)) {
+  function mountDialog(permissions: string[], onSave = vi.fn().mockResolvedValue(undefined), chat: Chat = CHAT) {
     const host = createTestPlatformHost({ permissions, responses: { ...POLICY_READS, 'GET /fleet/hosts': [], 'GET /connections': CONNECTIONS, 'GET /memories/settings': { suggest: false } } });
     render(
       <PlatformHostProvider host={host}>
         <MemoryRouter>
-          <ChatSettingsDialog open chat={CHAT} onClose={() => undefined} onSave={onSave} />
+          <ChatSettingsDialog open chat={chat} onClose={() => undefined} onSave={onSave} />
         </MemoryRouter>
       </PlatformHostProvider>,
     );
     return onSave;
   }
 
-  it('shows "Accounts this chat may use" with the same choice, and sends the accounts only when changed', async () => {
+  it('a limited chat shows its list, and sends the mode with the list only when changed (#969)', async () => {
     const onSave = mountDialog(['connections:read', 'agent_policies:read']);
-    expect(await screen.findByRole('region', { name: 'Accounts this chat may use' })).toBeInTheDocument();
-    expect(screen.getByTestId('chat-accounts-summary')).toHaveTextContent('1 account: Work (read only)');
+    expect(await screen.findByRole('region', { name: 'Tools and accounts this chat may use' })).toBeInTheDocument();
+    expect(screen.getByTestId('chat-accounts-summary')).toHaveTextContent('Limited. 1 account: Work (read only)');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0]![0]).not.toHaveProperty('connections');
+    expect(onSave.mock.calls[0]![0]).not.toHaveProperty('connectionsMode');
     onSave.mockClear();
     fireEvent.click(await screen.findByRole('button', { name: 'Read and change: Personal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave.mock.calls[0]![0].connections).toEqual([{ connectionId: WORK, access: 'read' }, { connectionId: PERSONAL, access: 'read_write' }]);
+    expect(onSave.mock.calls[0]![0]).toMatchObject({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read' }, { connectionId: PERSONAL, access: 'read_write' }] });
+  });
+
+  it('a chat that uses everything shows it, and "Limit this chat" / "Use everything I connected" switch the mode (#969)', async () => {
+    const onSave = mountDialog(['connections:read', 'agent_policies:read'], undefined, { ...CHAT, connectionsMode: 'all', connections: [] });
+    await waitFor(() => expect(screen.getByTestId('chat-accounts-summary')).toHaveTextContent('Everything you connected: Work, Personal, Reader'));
+    fireEvent.click(screen.getByRole('button', { name: 'Limit this chat' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use everything I connected' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0]![0]).not.toHaveProperty('connectionsMode');
+    onSave.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Limit this chat' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Not used: Personal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0]![0]).toMatchObject({ connectionsMode: 'listed', connections: [{ connectionId: WORK, access: 'read_write' }, { connectionId: READER, access: 'read' }] });
   });
 
   it('has no accounts section without connections:read', () => {
     mountDialog(['agent_policies:read']);
-    expect(screen.queryByRole('region', { name: 'Accounts this chat may use' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Tools and accounts this chat may use' })).toBeNull();
   });
 
   it('shows chips for the accounts in use, and says when one is paused', () => {

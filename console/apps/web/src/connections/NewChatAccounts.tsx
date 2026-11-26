@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react';
 import { getNewChatAccounts, setNewChatAccounts, type NewChatAccounts } from './api';
 
 const CHOICES: { value: NewChatAccounts; label: string }[] = [
+  { value: 'read_write', label: 'Everything I connected' },
+  { value: 'read', label: 'Accounts, read only' },
   { value: 'off', label: 'Off' },
-  { value: 'read', label: 'Read only' },
-  { value: 'read_write', label: 'Read and change' },
 ];
 
-export const NEW_CHATS_HELP = 'How a new chat starts with your connected Google and Microsoft accounts. A chat keeps what it has when you change this, and you can switch accounts on or off in any chat. Sending or changing something still asks you first. MCP servers are never on by default.';
+export const NEW_CHATS_HELP = 'How a new chat starts. Everything I connected (the default): every account and tool you connected, at what you switched on for each, and the agent picks the right one. Accounts, read only: your Google and Microsoft accounts, read only. A chat keeps what it has when you change this, and you can limit any chat. Sending or changing something still asks you first.';
 
 /**
  * "New chats" (#680): the user setting `connections.newChats`, read and change by default, saved as soon as it is chosen. It only decides how a

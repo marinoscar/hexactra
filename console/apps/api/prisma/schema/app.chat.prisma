@@ -68,6 +68,9 @@ model Conversation {
   allowedDomains      String[]     @default([]) @map("allowed_domains")
   /// Ask the owner before a purchase or another step that is hard to undo. On by default in a chat.
   confirmRiskyActions Boolean      @default(true) @map("confirm_risky_actions")
+  /// Which of the owner's connections the chat may use (#969): `all` (the default) every active connection at what the owner switched on for
+  /// it; `listed` only the `conversation_connections` rows, each at its access.
+  connectionsMode String           @default("all") @map("connections_mode") @db.VarChar(8)
   /// Let the chat's runs sign in from the owner's saved logins (E37.3): an opt-in, off by default (new chats start from the owner's `secrets.defaultUseSavedLogins`).
   useSavedLogins Boolean           @default(false) @map("use_saved_logins")
   /// Let the chat's runs fill identity details from the owner's saved details (E37.6): off by default.
