@@ -29,6 +29,11 @@ export function scenarioWeb(scenario: Scenario, allowed: (url: string) => boolea
   const search = new FakeWebSearch();
   search.provider = 'fake';
   for (const [query, hits] of Object.entries(w.results)) search.results.set(query, hits.map((h) => ({ title: h.title, url: h.url, snippet: h.snippet, publishedAt: null })));
+  // An answer-type provider (E50.9): the answer and its cited pages as hits, the URLs as citations.
+  for (const [query, a] of Object.entries(w.answers)) {
+    const hits = a.citations.map((h) => ({ title: h.title, url: h.url, snippet: h.snippet, publishedAt: null }));
+    search.results.set(query, { provider: 'fake', hits, answer: { text: a.text, citations: hits.map((h) => h.url) } });
+  }
   const fetch = new FakeWebFetch();
   for (const [url, page] of Object.entries(w.pages)) fetch.pages.set(url, { title: page.title, text: page.text });
   for (const url of w.blocked) fetch.failures.set(url, 'BLOCKED');

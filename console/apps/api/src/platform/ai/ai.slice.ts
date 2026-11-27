@@ -35,6 +35,9 @@ export const aiSlice: ApiSlice = {
     registerAiFeature(CHAT_ORCHESTRATOR_FEATURE);
     const { TASK_BUILDER_FEATURE } = require('../../task-builder/task-builder.feature') as typeof import('../../task-builder/task-builder.feature');
     registerAiFeature(TASK_BUILDER_FEATURE);
+    // The OpenAI web search provider's calls (E50.9): attributed to "Web search" on the AI usage pages.
+    const { WEB_SEARCH_AI_FEATURE } = require('../../web-search/web-search.feature') as typeof import('../../web-search/web-search.feature');
+    registerAiFeature(WEB_SEARCH_AI_FEATURE);
   },
   modules: () => {
     const { AiModule } = require('./ai.config') as typeof import('./ai.config');

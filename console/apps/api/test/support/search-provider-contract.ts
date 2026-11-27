@@ -11,7 +11,8 @@
 //               request and while it is in flight);
 //   * leaks     no thrown error carries the provider's text, the query or the key (its message is its code); the key appears in
 //               exactly one place of each request that carries it (its documented header) and nowhere else in the request log;
-//   * diagnose  returns the stages of E50.13 (`network`, `live_query`), with known codes only, and never throws;
+//   * diagnose  returns the stages of E50.13 (`network`, `live_query`), with known codes only, and never throws (a provider through
+//               the AI service has no probe of its own: `probe: false`, its `network` stage sends nothing);
 //   * hosts     every request went to a host the provider declares (a self-hosted provider: its configured host).
 //
 // The harness is transport-neutral: a result-type provider over `OutboundHttp` uses `httpContractHarness`; an answer-type provider
@@ -80,6 +81,11 @@ export interface ProviderContractOptions {
   authRefusedStatuses?: readonly number[];
   /** A status of its own that is not AUTH_REFUSED, with the code a search reads it as (SearXNG: 403 → UNAVAILABLE, FORMAT_DISABLED). */
   ownStatuses?: readonly { status: number; code: WebToolErrorCode; diagnosticCode?: string }[];
+  /**
+   * The `network` stage sends one probe (the next scripted exchange answers it). Default true. False for a provider whose connection
+   * is the AI service's (E50.9): its `network` stage sends nothing and the live query is the first exchange.
+   */
+  probe?: boolean;
 }
 
 const QUERY = 'contract widgets query';
@@ -139,6 +145,9 @@ function expectHit(hit: WebSearchHit): void {
 export function searchProviderContract(name: string, make: () => ProviderContractHarness, options: ProviderContractOptions): void {
   const quota = options.quota ?? true;
   const authStatuses = options.authRefusedStatuses ?? [401, 403];
+  const probe = options.probe ?? true;
+  // An answer cites pages: they carry no publication date (decision record §1).
+  const firstPublishedAt = options.kind === 'answer' ? null : '2026-10-01T00:00:00Z';
 
   describe(`the search provider contract: ${name}`, () => {
     it('declares what the registry and the settings need', () => {
@@ -159,7 +168,7 @@ export function searchProviderContract(name: string, make: () => ProviderContrac
       expect(r.hits.length).toBeGreaterThan(0);
       expect(r.hits.length).toBeLessThanOrEqual(3);
       r.hits.forEach(expectHit);
-      expect(r.hits[0]).toMatchObject({ title: 'Example widgets & parts', url: 'https://docs.example.test/widgets', publishedAt: '2026-10-01T00:00:00Z' });
+      expect(r.hits[0]).toMatchObject({ title: 'Example widgets & parts', url: 'https://docs.example.test/widgets', publishedAt: firstPublishedAt });
       expect(r.hits[0]!.snippet).toMatch(/^An invented page about widgets\./);
       expect(r.hits.map((x) => x.url)).not.toContain('ftp://files.example.test/widgets');
       if (options.kind === 'results') {
@@ -278,13 +287,20 @@ export function searchProviderContract(name: string, make: () => ProviderContrac
         if (expectLive) expect(stages[1]!.status).toBe(expectLive);
         return stages;
       };
+      const probeAnswers = () => {
+        if (probe) h.script({ kind: 'server_error', status: 404 });
+      };
       // A pass: the probe answers, then the fixed word returns one hit.
-      h.script({ kind: 'server_error', status: 404 });
+      probeAnswers();
       h.script({ kind: 'results', hits: contractHits(3) });
       expect((await check('pass'))[1]!.data).toMatchObject({ hits: 1 });
-      // The probe cannot connect: the query is skipped.
-      h.script({ kind: 'transport', error: 'unresolvable' });
-      expect((await check('skipped'))[0]).toMatchObject({ status: 'fail', code: 'UNRESOLVABLE' });
+      if (probe) {
+        // The probe cannot connect: the query is skipped.
+        h.script({ kind: 'transport', error: 'unresolvable' });
+        expect((await check('skipped'))[0]).toMatchObject({ status: 'fail', code: 'UNRESOLVABLE' });
+      } else {
+        expect((await check(null))[0]).toMatchObject({ id: 'network', status: 'skipped' });
+      }
       // The key refused, rate limited, a server error, an error from below the adapter: stages, never a throw.
       for (const [live, status] of [
         [{ kind: 'auth_refused', status: authStatuses[0]! }, 'fail'],
@@ -293,25 +309,27 @@ export function searchProviderContract(name: string, make: () => ProviderContrac
         [{ kind: 'throw' }, 'fail'],
         [{ kind: 'results', hits: [] }, 'warn'],
       ] as [ContractScript, string][]) {
-        h.script({ kind: 'server_error', status: 404 });
+        probeAnswers();
         h.script(live);
         await check(status);
       }
       for (const own of options.ownStatuses ?? []) {
-        h.script({ kind: 'server_error', status: 404 });
+        probeAnswers();
         h.script({ kind: 'server_error', status: own.status });
         const stages = await check('fail');
         if (own.diagnosticCode) expect(stages[1]).toMatchObject({ code: own.diagnosticCode, remedy: own.diagnosticCode });
       }
-      // The probe itself throws something unexpected.
-      h.script({ kind: 'throw' });
-      await check(null);
+      if (probe) {
+        // The probe itself throws something unexpected.
+        h.script({ kind: 'throw' });
+        await check(null);
+      }
       // Today's limit reached: no query is sent.
       const n = h.requests().length;
-      h.script({ kind: 'server_error', status: 404 });
+      probeAnswers();
       const limited = await h.provider.diagnose(h.auth(), new AbortController().signal, { liveQuery: false });
       expect(limited[1]).toMatchObject({ id: 'live_query', status: 'skipped', code: 'LIMIT_REACHED' });
-      expect(h.requests().length).toBe(n + 1);
+      expect(h.requests().length).toBe(n + (probe ? 1 : 0));
     });
   });
 }

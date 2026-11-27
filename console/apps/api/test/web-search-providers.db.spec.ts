@@ -98,6 +98,7 @@ describe('the providers API', () => {
       ['tavily', 'Tavily', 'results', 'api_key', true, false, 0.008],
       ['exa', 'Exa', 'results', 'api_key', true, false, 0.01],
       ['searxng', 'SearXNG (self-hosted)', 'results', 'none', false, false, 0],
+      ['openai', 'OpenAI web search', 'answer', 'ai_service', false, false, 0.01],
     ]);
   });
 });
@@ -158,7 +159,7 @@ describe('SearXNG, self-hosted', () => {
 
     const saved = await call(admin, 'PUT', '/api/web-search/admin', { order: ['searxng', 'brave'], providers: { searxng: { baseUrl: SEARXNG, allowPrivate: true } } });
     expect(saved.status).toBe(200);
-    expect(data<{ providers: Record<string, unknown> }>(saved).providers.searxng).toEqual({ enabled: true, costPerCallUsd: null, baseUrl: SEARXNG, allowPrivate: true });
+    expect(data<{ providers: Record<string, unknown> }>(saved).providers.searxng).toEqual({ enabled: true, costPerCallUsd: null, baseUrl: SEARXNG, allowPrivate: true, model: null });
     // Unticking it again while the address is private http is refused.
     expect(codeOf(await call(admin, 'PUT', '/api/web-search/admin', { providers: { searxng: { allowPrivate: false } } }))).toBe('WEB_SEARCH_ADDRESS_REFUSED');
 

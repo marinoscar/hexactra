@@ -26,6 +26,7 @@ describe('the routing set', () => {
         'web-allowed-sites',
         'web-budget',
         'web-fact-lookup',
+        'web-injection-answer',
         'web-injection',
         'web-not-for-accounts',
         'web-off',
