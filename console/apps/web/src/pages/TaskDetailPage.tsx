@@ -457,6 +457,9 @@ export function TaskDetailPage() {
             </Paper>
           </Section>
 
+          {/* The Knowledge Graph (E46.20, #1031): right after the goal; nothing without `kgraph:read`. */}
+          <TaskKgraphControl taskId={task.id} />
+
           <TaskSchedulesSection task={task} canWrite={canWrite} canReadRuns={canReadRuns} catalog={policyCatalog} onChanged={() => void refresh()} />
 
           {((task.connections?.length ?? 0) > 0 || (summary.deliveries ?? 0) > 0) && (
@@ -466,9 +469,6 @@ export function TaskDetailPage() {
           )}
 
           <MailTriggersSection taskId={task.id} parameters={task.parameters ?? []} canWrite={canRun} canRead={canReadRuns} canReadConnections={viewer.hasPermission('connections:read')} />
-
-          {/* The Knowledge Graph (E46.20): nothing without `kgraph:read`. */}
-          <TaskKgraphControl taskId={task.id} />
 
           <Section title="Configuration" collapsible startCollapsed={foldGoal} action={editLink}>
             <Paper variant="outlined" sx={{ px: 2, py: 1 }}>

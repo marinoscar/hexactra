@@ -564,6 +564,15 @@ describe('the task page: layout', () => {
     expect(document.getElementById('schedule')).not.toBeNull();
   });
 
+  it('puts the Knowledge Graph control right after the goal, before the schedules (#1031)', async () => {
+    mount(TASK, { 'GET /kgraph/status': { deployment: true, user: true, available: true, everyday: false, autoApproveFacts: false }, [`GET /tasks/${TASK_ID}/kgraph`]: { taskId: TASK_ID, mode: 'learn', available: true } }, [...ALL, 'kgraph:read', 'kgraph:write']);
+    await loaded();
+    await screen.findByTestId('task-kgraph');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings.filter((h) => ['Goal', 'Knowledge Graph', 'Schedules'].includes(h ?? ''))).toEqual(['Goal', 'Knowledge Graph', 'Schedules']);
+    expect(screen.getByTestId('task-kgraph-chip')).toHaveTextContent('Learning');
+  });
+
   it('on a phone a long goal starts collapsed with the configuration; a short one is open', async () => {
     restoreViewport = mockViewport(390);
     mount({ ...TASK, goal: 'A long goal. '.repeat(40) });

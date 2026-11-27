@@ -42,9 +42,9 @@ export function TaskEditPage() {
     <PageContainer width="default">
       <PageHeader title="Edit task" back={{ to: taskPath(id), label: task?.name ?? 'Task' }} />
       <ErrorBanner error={error} onRetry={() => void load()} />
+      {/* The Knowledge Graph (E46.20, #1031): first, above the form, since it saves on its own through /api/tasks/{id}/kgraph; nothing without `kgraph:read`. */}
+      {task !== null && <TaskKgraphControl taskId={task.id} mb={3} />}
       {task === null ? !error && <CardSkeleton /> : <TaskForm mode="edit" taskId={task.id} initial={valuesFromTask(task)} savedSchedules={task.summary?.schedules} cancelTo={taskPath(id)} />}
-      {/* The Knowledge Graph (E46.20): saved on its own through /api/tasks/{id}/kgraph; nothing without `kgraph:read`. */}
-      {task !== null && <TaskKgraphControl taskId={task.id} mt={3} />}
     </PageContainer>
   );
 }
