@@ -8388,6 +8388,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/consistency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How consistent a task's runs are
+         * @description The spread of steps, model calls, working time and cost over the task's newest finished runs (E52.7): min, median, 90th percentile, max and max ÷ median, the success rate and a label (`steady`, `varies`, `erratic`, `not_enough_runs`). `last` is 3 to 50 (default 20); `since` counts only runs created at or after a time (the web passes the time the goal last changed). Benchmark runs are left out. The findings of the 10 newest runs are included. Permissions `tasks:read` and `runs:read`; 404 `TASK_NOT_FOUND` for a task that is not yours.
+         *
+         *     **Requires:** authentication, plus permissions `tasks:read` and `runs:read`.
+         */
+        get: operations["taskInsights_consistency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage/report": {
         parameters: {
             query?: never;
@@ -23599,6 +23621,68 @@ export interface components {
                 evidence: {
                     [key: string]: string | number | boolean | number[];
                 };
+            }[];
+        };
+        TaskConsistencyResponseDto: {
+            /** Format: uuid */
+            taskId: string;
+            /** @description The finished runs counted */
+            runs: number;
+            succeeded: number;
+            /** @description 0 to 1 */
+            successRate: number;
+            steps: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            modelCalls: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            activeMs: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            /** @description Null when the cost of a counted run is unknown */
+            costUsd: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            /**
+             * @description Fewer than 3 runs: not_enough_runs. steady: the largest run is at most 1.5× the median in steps and 90% succeeded; erratic: over 3× or under 60% succeeded; varies otherwise
+             * @enum {string}
+             */
+            label: "not_enough_runs" | "steady" | "varies" | "erratic";
+            since: string | null;
+            perRun: {
+                /** Format: uuid */
+                runId: string;
+                status: string;
+                createdAt: string;
+                stepCount: number;
+                costUsd: number | null;
+                activeMs: number;
+                /** @description The findings of the 10 newest runs; empty for older ones */
+                findings: {
+                    code: string;
+                    severity: string;
+                }[];
             }[];
         };
         UsageReportResponseDto: {
@@ -54097,6 +54181,61 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["RunDiagnosticsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskInsights_consistency: {
+        parameters: {
+            query?: {
+                /** @description How many of the newest finished runs to count (3 to 50) */
+                last?: number;
+                /** @description Only runs created at or after this time (ISO 8601) */
+                since?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskConsistencyResponseDto"];
                     };
                 };
             };
