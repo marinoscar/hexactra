@@ -15,7 +15,7 @@ import { AppMetricsService } from '@marinoscar/platform-api/host';
 import { registerAppMetrics, type AppMetricDef } from '@marinoscar/platform-api/otel-core';
 
 import { SecretBytes } from '../secrets/secrets-provider.port';
-import { CREDENTIAL_TIERS, storedName, type CredentialTier, type ServiceCredentialPort, type ServiceCredentialRef, type ServiceCredentialResolveOptions, type ServiceCredentialStatus, type Who } from './service-credential.port';
+import { CREDENTIAL_TIERS, storedName, type CredentialTier, type ServiceCredentialPort, type ServiceCredentialRef, type ServiceCredentialResolution, type ServiceCredentialResolveOptions, type ServiceCredentialStatus, type Who } from './service-credential.port';
 import { ServiceCredentialRegistry, type ServiceCredentialRegistration } from './service-credential.registry';
 import { SERVICE_CREDENTIAL_PURPOSE } from './service-credentials.credentials';
 import { ServiceCredentialError } from './service-credentials.errors';
@@ -65,18 +65,35 @@ export class CredentialStoreServiceCredentials implements ServiceCredentialPort 
     const reg = this.registry.get(ref);
     if (!reg) return null;
     for (const tier of this.order(reg, who, opts)) {
-      const stored = await this.read(tier, ref, who);
-      if (stored === null) continue;
-      const value = unseal(stored);
-      if (value === null) {
-        this.log.warn(`service credential ${storedName(ref)}: the ${tier} key is not in the expected envelope; skipped`);
-        continue;
-      }
+      const value = await this.readTier(ref, tier, who);
+      if (!value) continue;
       this.count(ref.service, tier);
-      return { tier, value: SecretBytes.from(value) };
+      return { tier, value };
     }
     this.count(ref.service, 'none');
     return null;
+  }
+
+  async resolveDetailed(ref: ServiceCredentialRef, who: Who, opts: ServiceCredentialResolveOptions = {}): Promise<ServiceCredentialResolution> {
+    const found = await this.resolve(ref, who, opts);
+    return found ? { found } : { found: null, reason: 'NONE' };
+  }
+
+  /** The key stored in `tier` here, unsealed, or null. Server-side only; the caller wipes it. Not counted. */
+  async readTier(ref: ServiceCredentialRef, tier: CredentialTier, who: Who): Promise<SecretBytes | null> {
+    const stored = await this.read(tier, ref, who);
+    if (stored === null) return null;
+    const value = unseal(stored);
+    if (value === null) {
+      this.log.warn(`service credential ${storedName(ref)}: the ${tier} key is not in the expected envelope; skipped`);
+      return null;
+    }
+    return SecretBytes.from(value);
+  }
+
+  /** When the key in `tier` here was stored, or null. */
+  setTime(ref: ServiceCredentialRef, tier: CredentialTier, who: Who): Promise<Date | null> {
+    return this.describe(tier, ref, who);
   }
 
   async status(ref: ServiceCredentialRef, who: Who, opts: ServiceCredentialResolveOptions = {}): Promise<ServiceCredentialStatus> {
@@ -123,7 +140,7 @@ export class CredentialStoreServiceCredentials implements ServiceCredentialPort 
   }
 
   /** The tiers consulted, in order: the registration's, narrowed by `allowTiers`, without the organization when there is none. */
-  private order(reg: ServiceCredentialRegistration, who: Who, opts: ServiceCredentialResolveOptions): CredentialTier[] {
+  order(reg: ServiceCredentialRegistration, who: Who, opts: ServiceCredentialResolveOptions): CredentialTier[] {
     return CREDENTIAL_TIERS.filter((t) => reg.tiers.includes(t) && (!opts.allowTiers || opts.allowTiers.includes(t)) && (t !== 'organization' || who.orgId !== null));
   }
 
@@ -149,7 +166,7 @@ export class CredentialStoreServiceCredentials implements ServiceCredentialPort 
     return (await this.system.describe(SERVICE_CREDENTIAL_PURPOSE, name))?.updatedAt ?? null;
   }
 
-  private count(service: string, tier: CredentialTier | 'none'): void {
+  count(service: string, tier: CredentialTier | 'none'): void {
     if (this.registry.services().has(service)) this.metrics?.add('serviceCredentialsResolved', 1, { service, tier });
   }
 }

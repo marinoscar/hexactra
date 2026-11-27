@@ -109,7 +109,7 @@ describe('ingest', () => {
     const list = await get<{ items: Record<string, unknown>[]; providerActivityUrl: string | null }>(alice, '/api/secrets/activity');
     expect(list.statusCode).toBe(200);
     expect(list.data.items).toHaveLength(5);
-    expect(list.data.items.every((i) => ['id', 'at', 'event', 'runId', 'site', 'loginName', 'field', 'purpose', 'outcome', 'refused', 'matches', 'amount', 'currency', 'frameSite'].every((k) => k in i) && Object.keys(i).length === 14)).toBe(true);
+    expect(list.data.items.every((i) => ['id', 'at', 'event', 'serviceKey', 'runId', 'site', 'loginName', 'field', 'purpose', 'outcome', 'refused', 'matches', 'amount', 'currency', 'frameSite'].every((k) => k in i) && Object.keys(i).length === 15)).toBe(true);
     expect(list.data.items.filter((i) => i.refused).map((i) => i.outcome).sort()).toEqual(['origin_mismatch', 'other']);
     expect(list.data.providerActivityUrl).toBeNull();
     // The login's name is the one the run recorded for that site; a refusal and a lookup carry none.

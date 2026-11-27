@@ -17,6 +17,7 @@ import { SecretsIdentityService } from './secrets-identity.service';
 import { SecretsController } from './secrets.controller';
 import { VaultConnectionsCheck, VaultEgressContributor } from './secrets.doctor';
 import { SecretsEvents } from './secrets.events';
+import { SecretsServiceKeys } from './service-keys';
 import { VaultKeepFresh, VaultKeepFreshHandler, VaultKeepFreshTask } from './secrets.jobs';
 import { VaultApiClient } from './vault-api.client';
 import { VaultClientConfigs } from './vault-client.config';
@@ -56,12 +57,13 @@ import { VaultTokenService } from './vault-token.service';
     SecretsProviderRegistrar,
     RunSecretsService,
     SaveLoginService,
+    SecretsServiceKeys,
     VaultKeepFresh,
     VaultKeepFreshHandler,
     VaultKeepFreshTask,
     VaultConnectionsCheck,
     VaultEgressContributor,
   ],
-  exports: [FABRIC_SECRETS_REGISTRY, RunSecretsService, SaveLoginService, SecretsPolicyService, SecretsProviderRegistrar, VaultConnectionService, VaultTokenService],
+  exports: [FABRIC_SECRETS_REGISTRY, RunSecretsService, SaveLoginService, SecretsPolicyService, SecretsProviderRegistrar, VaultConnectionService, VaultTokenService, SecretsServiceKeys],
 })
 export class SecretsModule {}

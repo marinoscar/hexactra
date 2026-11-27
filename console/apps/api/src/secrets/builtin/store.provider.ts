@@ -17,9 +17,18 @@
 // (`SecretBytes.take`); the caller writes it to the response and wipes it. A JS string cannot be wiped, so the string
 // that Vault's service decrypted lives until the garbage collector frees it: the remote Vault path does not have this
 // exposure (docs/secrets.md, "What the built-in store cannot do").
-import { HttpException, Inject, Injectable, Logger } from '@nestjs/common';
-import { AGENT_RELEASE_PORT, AgentCredentialsService, type AgentReleasePort } from '@marinoscar/vault-api/agent';
+//
+// Keys of outside services (E50.3, #973): a `Service Key` item of the Vault domain (kind `api_key`: a service, a key name, one value,
+// no origin). The console's own server reads one through Vault's in-process `ServiceKeyReleasePort` (its rules: the kill switch,
+// the per-item opt-in, 120 a minute per owner and service, an audit row `agent.service_key.read` with the label
+// `hexactra-console`), and writes one only when the owner moves their key here (Settings → Secrets). `lookup` lists logins only, so a
+// service key is never offered to the agent as a login, and the fabric's routes cannot name one.
+import { HttpException, Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { AGENT_RELEASE_PORT, AgentCredentialsService, SERVICE_KEY_RELEASE_PORT, type AgentReleasePort, type ServiceKeyReleasePort } from '@marinoscar/vault-api/agent';
+import { SecretsService } from '@marinoscar/vault-api/secrets';
+import { SERVICE_KEY_NAME_FIELD, SERVICE_KEY_SERVICE_FIELD, SERVICE_KEY_TYPE_NAME, SERVICE_KEY_VALUE_FIELD } from '@marinoscar/vault-contract/secret-types';
 
+import { PrismaService } from '../../prisma/prisma.service';
 import { SecretsPolicyService } from '../secrets-policy.service';
 import {
   SecretBytes,
@@ -32,11 +41,18 @@ import {
   type SecretPurpose,
   type SecretsErrorCode,
   type SecretsProviderPort,
+  type ServiceKeyRequest,
 } from '../secrets-provider.port';
+import { SecretsServiceKeys, type BuiltinServiceKeyStore } from '../service-keys';
 import { SecretsStoreKeys } from './store.data-keys';
 
 /** What the owner sees as the app in Vault's agent trail. Stable: a new label is a new app. */
 export const STORE_CLIENT_LABEL = 'hexactra-agent';
+/** The label of the console's own server-side reads of a service key: a distinct app in Vault's trail, so the owner tells them apart. */
+export const STORE_SERVICE_CLIENT_LABEL = 'hexactra-console';
+
+/** The name a service key the console wrote has in the store: how it finds it again to replace, describe or remove it. */
+export const serviceKeyItemName = (service: string, name: string): string => `Service key ${service}.${name}`;
 
 type AgentPurpose = 'login' | 'signup' | 'password_change' | 'mfa';
 const PURPOSES: Partial<Record<SecretPurpose, AgentPurpose>> = { login: 'login', signup: 'signup', password_change: 'password_change', mfa: 'mfa' };
@@ -59,13 +75,16 @@ export function mapStoreError(e: unknown): SecretsProviderError {
       return new SecretsProviderError((code && map[code]) || 'refused', 'The built-in store refused the request.');
     }
     if (status === 400) return new SecretsProviderError('refused', 'The request was not accepted.');
-    if (status === 409) return new SecretsProviderError('name_taken', 'A secret with that name already exists.');
+    if (status === 409) {
+      if (code === 'SERVICE_KEY_AMBIGUOUS') return new SecretsProviderError('refused', 'More than one key with this service and name is open to the agent.');
+      return new SecretsProviderError('name_taken', 'A secret with that name already exists.');
+    }
   }
   return new SecretsProviderError('unavailable', 'The built-in store could not answer.');
 }
 
 @Injectable()
-export class BuiltinSecretsProvider implements SecretsProviderPort {
+export class BuiltinSecretsProvider implements SecretsProviderPort, BuiltinServiceKeyStore, OnModuleInit {
   readonly id = 'builtin';
   private readonly log = new Logger(BuiltinSecretsProvider.name);
 
@@ -74,7 +93,16 @@ export class BuiltinSecretsProvider implements SecretsProviderPort {
     private readonly keys: SecretsStoreKeys,
     private readonly policy: SecretsPolicyService,
     private readonly credentials: AgentCredentialsService,
+    @Inject(SERVICE_KEY_RELEASE_PORT) private readonly serviceKeys: ServiceKeyReleasePort,
+    private readonly secrets: SecretsService,
+    private readonly prisma: PrismaService,
+    private readonly serviceKeyHost: SecretsServiceKeys,
   ) {}
+
+  /** Offers the store's service keys to the service credentials port (E50.3). */
+  onModuleInit(): void {
+    this.serviceKeyHost.attachBuiltin(this);
+  }
 
   /** The console's own gate: both switches on and the built-in store chosen. A failure is `disabled`, with no detail. */
   private async gate(ownerId: string): Promise<void> {
@@ -136,5 +164,78 @@ export class BuiltinSecretsProvider implements SecretsProviderPort {
     if (!purpose) throw new SecretsProviderError('unsupported', 'The built-in store releases a login’s codes only.');
     const r = await this.run(req.ownerId, () => this.agent.totp({ userId: req.ownerId, clientLabel: req.clientLabel || STORE_CLIENT_LABEL, secretId: req.itemId, origin: req.origin, purpose }));
     return { value: SecretBytes.take(Buffer.from(r.code, 'utf8')), expiresAt: new Date(r.expiresAt) };
+  }
+
+  // ---- keys of outside services (E50.3) ----
+
+  /**
+   * The gate of a server-side release: the deployment's `secrets.agentUse` (the kill switch of every release), the store offered
+   * (`secrets.store.enabled`) and chosen by the owner. The owner's own agent-use switch is about pages and is not asked: the owner
+   * chose this store for the key by moving it here.
+   */
+  private async serviceKeyGate(ownerId: string, release: boolean): Promise<void> {
+    if (release && !(await this.policy.system()).agentUse.enabled) throw new SecretsProviderError('disabled', 'Releases from the built-in store are switched off.');
+    if ((await this.policy.activeProvider(ownerId)) !== 'builtin') throw new SecretsProviderError('disabled', 'The built-in store is not enabled for this owner.');
+  }
+
+  private async serviceKeyRun<R>(ownerId: string, create: boolean, fn: () => Promise<R>): Promise<R> {
+    try {
+      return await this.keys.scope(ownerId, { create }, fn);
+    } catch (e) {
+      const mapped = mapStoreError(e);
+      if (mapped.code === 'unavailable') this.log.warn(`the built-in store failed on a service key (${e instanceof Error ? e.name : 'error'})`);
+      throw mapped;
+    }
+  }
+
+  async releaseServiceKey(req: ServiceKeyRequest): Promise<SecretBytes> {
+    await this.serviceKeyGate(req.ownerId, true);
+    const { value } = await this.serviceKeyRun(req.ownerId, false, () => this.serviceKeys.releaseServiceKey({ userId: req.ownerId, clientLabel: STORE_SERVICE_CLIENT_LABEL, service: req.service, name: req.name }));
+    // Vault hands over a Buffer the caller owns: take it as is, the caller wipes it.
+    return SecretBytes.take(value);
+  }
+
+  /** The store's item of a key the console wrote (by its name), or null. Never decrypted. */
+  private findServiceKeyItem(ownerId: string, service: string, name: string): Promise<{ id: string; updatedAt: Date } | null> {
+    return this.prisma.secret.findFirst({ where: { createdById: ownerId, name: serviceKeyItemName(service, name), type: { name: SERVICE_KEY_TYPE_NAME, isSystem: true } }, select: { id: true, updatedAt: true } });
+  }
+
+  /** When the owner's key `service`/`name` was last written here, or null when there is none. Never a value. */
+  async describeServiceKey(ownerId: string, service: string, name: string): Promise<Date | null> {
+    if (!(await this.policy.storeEnabled())) return null;
+    return (await this.findServiceKeyItem(ownerId, service, name))?.updatedAt ?? null;
+  }
+
+  /**
+   * Writes the owner's key `service`/`name` as a `Service Key` item opened to the agent (`agentAccess = fill`), replacing the one the
+   * console wrote before. Vault's own service encrypts and audits it (`secret.create` or `secret.update`). The value crosses this
+   * process as a string for Vault's service (its DTO is JSON): the caller's buffer is wiped by the caller.
+   */
+  async saveServiceKey(ownerId: string, service: string, name: string, label: string, value: Buffer): Promise<void> {
+    await this.serviceKeyGate(ownerId, false);
+    await this.serviceKeyRun(ownerId, true, async () => {
+      const data = { [SERVICE_KEY_SERVICE_FIELD]: service, [SERVICE_KEY_NAME_FIELD]: name, [SERVICE_KEY_VALUE_FIELD]: value.toString('utf8'), notes: `${label}. Written by Hexactra; read by its server for calls to this service.` };
+      const existing = await this.findServiceKeyItem(ownerId, service, name);
+      let id: string;
+      if (existing) {
+        await this.secrets.update(existing.id, { data } as never, ownerId, []);
+        id = existing.id;
+      } else {
+        const type = await this.prisma.secretType.findFirst({ where: { name: SERVICE_KEY_TYPE_NAME, isSystem: true }, select: { id: true } });
+        if (!type) throw new SecretsProviderError('unavailable', 'The built-in store has no service key type yet.');
+        const created = (await this.secrets.create({ name: serviceKeyItemName(service, name), typeId: type.id, data } as never, ownerId, [])) as { id: string };
+        id = created.id;
+      }
+      await this.secrets.updateAgentAccess(id, 'fill', ownerId, []);
+    });
+  }
+
+  /** Removes the owner's key `service`/`name` the console wrote. Idempotent. */
+  async removeServiceKey(ownerId: string, service: string, name: string): Promise<void> {
+    if (!(await this.policy.storeEnabled())) throw new SecretsProviderError('disabled', 'The built-in store is switched off.');
+    await this.serviceKeyRun(ownerId, false, async () => {
+      const existing = await this.findServiceKeyItem(ownerId, service, name);
+      if (existing) await this.secrets.remove(existing.id, ownerId, []);
+    });
   }
 }

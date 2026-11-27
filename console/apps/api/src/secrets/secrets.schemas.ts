@@ -19,6 +19,7 @@ export const connectVaultSchema = z
     allowWrite: z.boolean().optional().describe('Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default.'),
     allowCards: z.boolean().optional().describe('Also ask for `vault:cards_read` and `vault:cards_fill` (the agent may pay with a saved card under your per-merchant permission in the provider and your approval here, without ever seeing a number, an expiry or a code). A new consent. Off by default.'),
     allowIdentity: z.boolean().optional().describe('Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default.'),
+    allowServiceKeys: z.boolean().optional().describe('Also ask for `vault:service_keys_read` (contract 1.4): the console\'s own server may read the keys of outside services (a web search provider\'s) you keep in your Vault as a "Service key" opened to the agent, for its calls to that service. Never a login, never a page. A new consent. Off by default.'),
     returnTo: z.string().max(200).optional().describe('A path on this console to return to after the consent (default `/settings/secrets`).'),
   })
   .strict();

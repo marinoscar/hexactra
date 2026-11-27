@@ -116,6 +116,25 @@ export interface ReleaseRequest {
   clientLabel?: string;
 }
 
+/**
+ * A key of an outside service (E50.3, #973; decision record `docs/decisions/web-search.md` §3): item kind `api_key`, a `service` and a
+ * `name`, one value, no origin. It is a separate kind on purpose: it is NOT an {@link ItemKind}, so no lookup by a page, no fabric
+ * call and no saved-login tool can name one. Only the console's own server process asks for it, through the service credentials port.
+ */
+export const SERVICE_KEY_ITEM_KIND = 'api_key' as const;
+
+/** One key of an outside service, for the console's own call to that service. Nothing from a model or a page chooses `service` or `name`. */
+export interface ServiceKeyRequest {
+  ownerId: string;
+  /** `web_search`. */
+  service: string;
+  /** `brave`. */
+  name: string;
+  /** A server-side call to the service (Vault's `AGENT_SERVICE_KEY_PURPOSE`). */
+  purpose: 'service_call';
+  runId?: string;
+}
+
 export interface CodeRequest {
   ownerId: string;
   itemId: string;
@@ -340,6 +359,11 @@ export interface SecretsProviderPort {
   release(req: ReleaseRequest): Promise<SecretBytes>;
   /** A one-time code and when it expires. The caller wipes the value. */
   oneTimeCode(req: CodeRequest): Promise<{ value: SecretBytes; expiresAt: Date }>;
+  /**
+   * The value of a key of an outside service (E50.3): for the console API process only, from the service credentials port, never
+   * from the fabric or a tool. Optional: a provider without it cannot hold service keys. The caller wipes the result.
+   */
+  releaseServiceKey?(req: ServiceKeyRequest): Promise<SecretBytes>;
 }
 
 /** What the console tells the fabric about an owner's provider. The token is Secret Material: write only. */

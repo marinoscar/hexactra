@@ -28,6 +28,7 @@ import '../mcp/mcp.settings';
 import '../secrets/secrets.settings';
 import '../connections/connections.settings';
 import '../web-search/web-search.settings';
+import '../service-credentials/service-credentials.settings';
 import '../deliveries/deliveries.settings';
 import '../mail-triggers/mail-triggers.settings';
 import '../benchmark/benchmark.settings';
