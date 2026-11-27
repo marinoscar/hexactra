@@ -93,6 +93,11 @@ export interface TaskFormProps {
   onCreated?: (taskId: string) => void | Promise<void>;
   /** A new task from nothing starts with the owner's default for "Use my saved logins" (E37.4); a copy or a chat's draft keeps its own. */
   useOwnerSavedLoginsDefault?: boolean;
+  /**
+   * Called once an edit's task fields were saved, with the goal as saved (E52.9: a proposal records that it was applied). After the save,
+   * never instead of it; its failure never fails the save.
+   */
+  onSaved?: (taskId: string, goal: string) => void | Promise<void>;
 }
 
 /** Where the form goes after a save (the task's page, #428). */
@@ -171,7 +176,7 @@ function DraftSummary({ draft, saved, catalog, profileTimezone }: { draft: Sched
  * `maxSteps`, `maxMinutes` or `model`; `policyId` goes only when the viewer
  * may read agent policies. Needs a `ConfirmProvider` and a router above it.
  */
-export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCreated, useOwnerSavedLoginsDefault }: TaskFormProps) {
+export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCreated, useOwnerSavedLoginsDefault, onSaved }: TaskFormProps) {
   const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -375,6 +380,8 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
         }
         // The task fields are saved now: a retry after a schedule failure sends the schedules only.
         setForm((f) => ({ ...f, initial: { ...fields, schedules: f.initial.schedules } }));
+        // Whoever asked to hear about the save is told (E52.9); it cannot undo the save by failing.
+        await Promise.resolve(onSaved?.(id, fields.goal)).catch(() => undefined);
       }
       if (schedulesChanged(values.schedules, initialSchedules)) {
         try {
