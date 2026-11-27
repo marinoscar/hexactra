@@ -23,7 +23,7 @@ export const BINDING_WORDS: Record<KeyBinding, string> = {
 const PROVIDER_WORDS = { vault: 'your Vault', builtin: 'the built-in store' } as const;
 
 /** The screen where the key of a service is set (E50.14), or null when there is none yet. */
-const setupHref = (k: ServiceKeyView): string | null => (k.service === 'web_search' ? '/settings/web-search' : null);
+const setupHref = (k: ServiceKeyView): string | null => (k.service === 'web_search' ? '/settings/connections#web-search' : null);
 
 function WhereChip({ k }: { k: ServiceKeyView }) {
   if (!k.tiers.user.set) return <Chip size="small" variant="outlined" label="Not set" />;

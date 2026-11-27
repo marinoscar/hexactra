@@ -1,12 +1,23 @@
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
 import { Alert, Box, Button, FormControlLabel, FormHelperText, IconButton, InputAdornment, Paper, Stack, Switch, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 
 import { getAdminApps, getAdminMcp, removeAdminApp, saveAdminApp, saveAdminMcp, type AdminProvider, type McpAdmin } from '../connections/api';
+import { DiagnosticsPanel } from '../diagnostics/DiagnosticsPanel';
+import type { DiagnosticTarget } from '../diagnostics/api';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiAction, useConfirm } from '../ui';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
+
+const hostOf = (url: string): string | null => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+};
 
 /** One provider's app: the switch, the client id, the write-only secret, the tenant (Microsoft), the redirect URI to copy and the setup checklist. */
 function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvider; canWrite: boolean; onChange: (all: AdminProvider[]) => void }) {
@@ -18,6 +29,7 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
   const [clientId, setClientId] = useState(provider.clientId ?? '');
   const [clientSecret, setClientSecret] = useState('');
   const [tenant, setTenant] = useState(provider.tenant ?? 'common');
+  const [testing, setTesting] = useState<DiagnosticTarget | null>(null);
   useEffect(() => {
     setEnabled(provider.enabled);
     setClientId(provider.clientId ?? '');
@@ -56,7 +68,7 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(provider.redirectUri);
-      toast('Redirect URI copied');
+      toast('Redirect address copied');
     } catch {
       toast('Select the address and copy it', 'info');
     }
@@ -89,7 +101,7 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
       </Box>
 
       <TextField
-        label="Redirect URI"
+        label="Redirect address"
         value={provider.redirectUri}
         margin="normal"
         fullWidth
@@ -98,7 +110,7 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
             readOnly: true,
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton aria-label={`Copy the ${provider.displayName} redirect URI`} onClick={() => void copy()} edge="end" sx={{ minWidth: 44, minHeight: 44 }}>
+                <IconButton aria-label={`Copy the ${provider.displayName} redirect address`} onClick={() => void copy()} edge="end" sx={{ minWidth: 44, minHeight: 44 }}>
                   <ContentCopyIcon />
                 </IconButton>
               </InputAdornment>
@@ -134,6 +146,9 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
               <Button type="submit" variant="contained" disabled={action.busy !== null} sx={TOUCH}>
                 Save
               </Button>
+              <Button variant="outlined" startIcon={<FactCheckOutlinedIcon />} onClick={() => setTesting({ kind: 'provider_app', provider: provider.provider, name: `the ${provider.displayName} app`, host: hostOf(provider.redirectUri) })} disabled={action.busy !== null} sx={TOUCH}>
+                Test app setup
+              </Button>
               <Button color="error" onClick={() => void remove()} disabled={action.busy !== null || (!provider.clientId && !provider.hasClientSecret)} sx={TOUCH}>
                 Remove the app
               </Button>
@@ -141,6 +156,7 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
           )}
         </Stack>
       </Box>
+      <DiagnosticsPanel target={testing} onClose={() => setTesting(null)} note="Checks the app's settings, the redirect address and that the provider accepts the client id and secret. No user's account is used." actions={{ provider: provider.provider, canAdmin: true }} />
     </Paper>
   );
 }
