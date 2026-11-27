@@ -149,6 +149,10 @@ const webSchema = z.strictObject({
   on: z.boolean().default(true).describe("The owner's web search switch (a provider is set up): off, web_search and web_fetch are not offered"),
   fetch: z.boolean().default(true).describe("The administrator's web_fetch switch"),
   results: z.record(z.string(), z.array(webHitSchema)).default({}).describe('What a query answers (exact query); any other query has no results'),
+  answers: z
+    .record(z.string(), z.strictObject({ text: z.string().describe('The written answer (third-party text: a model wrote it from pages nobody here read)'), citations: z.array(webHitSchema).default([]) }))
+    .default({})
+    .describe('E50.9: an answer-type provider (OpenAI web search): what a query answers, a written answer and the pages it cites. Wins over `results` for the same query'),
   pages: z.record(z.string(), z.strictObject({ title: z.string().nullable().default(null), text: z.string() })).default({}).describe('What web_fetch reads, by address; an injection scenario puts hostile text here'),
   blocked: z.array(z.string()).default([]).describe('Addresses a server cannot read (sign-in, a bot check): web_fetch says to open them in the browser'),
 });
