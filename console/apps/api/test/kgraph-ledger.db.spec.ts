@@ -101,7 +101,8 @@ describe('the savings ledger (#780)', () => {
 
   const newTask = async (mode: 'off' | 'learn') => {
     const task = await prisma.forUser({ userId: owner.userId }).task.create({ data: { userId: owner.userId, name: `Pens ${mode} ${stamp}`, goal: 'Search the shop for blue pens', confirmRiskyActions: false } });
-    if (mode !== 'off') await prisma.kgTaskSettings.create({ data: { taskId: task.id, userId: owner.userId, mode } });
+    // AI only is stored explicitly: a task with no setting learns by default (#1031).
+    await prisma.kgTaskSettings.create({ data: { taskId: task.id, userId: owner.userId, mode } });
     return task.id;
   };
   const processJob = async (runId: string) => {

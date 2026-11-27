@@ -28,6 +28,13 @@ export interface KgraphStatus {
 }
 
 /**
+ * A task's mode when its owner never chose one (#1031): Learn only. It changes nothing a run does (the agent still does every step), and
+ * it takes effect only while the deployment's and the owner's switches are both on; with either off every run is `off`. An explicit
+ * choice, AI only included, is stored and kept.
+ */
+export const DEFAULT_TASK_MODE: Mode = 'learn';
+
+/**
  * The one gate of the Knowledge Graph (E46.3, #777). Every other E46 code path asks `modeFor` and nothing else. It reads, in order, the
  * deployment switch, the user switch, the task mode, the run's AI-only flag and whether it is a saved task's run. It never throws: an error
  * reading any of them is `off`. The caller reads it once per job.
@@ -53,10 +60,11 @@ export class KgraphEnabledService {
     return { deployment, user: own.enabled, available: deployment && own.enabled, everyday: own.everyday, autoApproveFacts: own.autoApproveFacts };
   }
 
-  /** The task's stored mode (`off` without a row). */
+  /** The task's stored mode; {@link DEFAULT_TASK_MODE} without a row (#1031); `off` for a stored value this build does not know (fails closed). */
   async taskMode(userId: string, taskId: string): Promise<Mode> {
     const row = await this.prisma.forUser({ userId }).kgTaskSettings.findFirst({ where: { taskId }, select: { mode: true } });
-    const parsed = modeSchema.safeParse(row?.mode);
+    if (!row) return DEFAULT_TASK_MODE;
+    const parsed = modeSchema.safeParse(row.mode);
     return parsed.success ? parsed.data : 'off';
   }
 

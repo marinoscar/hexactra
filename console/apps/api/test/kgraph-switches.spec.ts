@@ -24,7 +24,6 @@ describe('KgraphEnabledService.modeFor', () => {
     ['the deployment is off', { deployment: false }, taskRun],
     ['the user is off', { user: false }, taskRun],
     ['the task is off', { mode: 'off' }, taskRun],
-    ['the task has no row', { mode: null }, taskRun],
     ['the stored mode is unknown', { mode: 'turbo' }, taskRun],
     ['a chat run', {}, { ...taskRun, run: { isTaskRun: false } }],
     ['a run with no task', {}, { ...taskRun, taskId: null }],
@@ -34,6 +33,10 @@ describe('KgraphEnabledService.modeFor', () => {
     ['the task mode read throws', { throwOn: 'task' as const }, taskRun],
   ])('is off when %s', async (_why, o, input) => {
     expect(await gate(o as never).modeFor(input as never)).toBe('off');
+  });
+
+  it('is Learn only for a task the owner never set, with both switches on (#1031)', async () => {
+    expect(await gate({ mode: null } as never).modeFor(taskRun as never)).toBe('learn');
   });
 });
 

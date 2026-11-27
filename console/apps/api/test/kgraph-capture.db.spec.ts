@@ -126,9 +126,10 @@ describe('the Knowledge Graph capture (#779)', () => {
     await patch(admin.token, '/system-settings', { kgraph: { enabled: false } });
   });
 
-  const newTask = async (mode: 'off' | 'learn') => {
+  const newTask = async (mode: 'off' | 'learn' | 'unset') => {
     const task = await prisma.forUser({ userId: owner.userId }).task.create({ data: { userId: owner.userId, name: `Pens ${mode}`, goal: 'Search the shop for blue pens', confirmRiskyActions: false } });
-    if (mode !== 'off') await prisma.kgTaskSettings.create({ data: { taskId: task.id, userId: owner.userId, mode } });
+    // AI only is stored explicitly: a task with no setting learns by default (#1031).
+    if (mode !== 'unset') await prisma.kgTaskSettings.create({ data: { taskId: task.id, userId: owner.userId, mode } });
     return task.id;
   };
 
@@ -152,6 +153,12 @@ describe('the Knowledge Graph capture (#779)', () => {
     for (const marker of [TYPED_MARKER, 'hunter', HANDOFF, '777333']) expect(stored).not.toContain(marker);
     // A page sentence read back by read_text is never stored: no trace holds result text.
     expect(stored).not.toMatch(/resultText|"text":"[^"]{40,}/);
+  });
+
+  it('a task its owner never set learns by default: its run is captured (#1031)', async () => {
+    const { runId } = await runOnce(owner.userId, await newTask('unset'), true);
+    expect(await prisma.kgTrace.count({ where: { runId } })).toBeGreaterThan(0);
+    expect(await prisma.kgRun.findFirst({ where: { runId } })).toMatchObject({ mode: 'learn' });
   });
 
   it('off mode with the gate bound: no observer, nothing written', async () => {

@@ -84,7 +84,8 @@ describe('the Knowledge Graph switches (#777)', () => {
     expect((await call<{ kgraph: { enabled: boolean } }>(admin, 'GET', '/system-settings')).data.kgraph.enabled).toBe(false);
     expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: false, user: false, available: false, everyday: false, autoApproveFacts: false });
     const task = await newTask(owner, 'Refused');
-    expect((await call(owner, 'GET', `/tasks/${task}/kgraph`)).data).toEqual({ taskId: task, mode: 'off', available: false });
+    // A task the owner never set reads Learn only (#1031); with a switch off it is not available, so no run captures anything.
+    expect((await call(owner, 'GET', `/tasks/${task}/kgraph`)).data).toEqual({ taskId: task, mode: 'learn', available: false });
     const refused = await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' });
     expect([refused.statusCode, refused.code]).toEqual([409, 'KGRAPH_OFF']);
     // An ordinary user cannot turn the deployment on.
@@ -93,10 +94,32 @@ describe('the Knowledge Graph switches (#777)', () => {
     expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' })).statusCode).toBe(409);
     expect((await call(owner, 'PATCH', '/user-settings', { kgraph: { enabled: true } })).statusCode).toBe(200);
     expect((await call(owner, 'GET', '/kgraph/status')).data).toEqual({ deployment: true, user: true, available: true, everyday: false, autoApproveFacts: false });
-    expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'learn' })).data).toEqual({ taskId: task, mode: 'learn', available: true });
+    expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'reuse' })).data).toEqual({ taskId: task, mode: 'reuse', available: true });
     expect((await call(owner, 'PUT', `/tasks/${task}/kgraph`, { mode: 'fast' })).statusCode).toBe(400);
     const audit = await prisma.auditEvent.findFirst({ where: { actorUserId: owner.userId, action: 'kgraph.task_mode_changed' } });
-    expect(audit?.meta).toEqual({ taskId: task, from: 'off', to: 'learn' });
+    expect(audit?.meta).toEqual({ taskId: task, from: 'learn', to: 'reuse' });
+  });
+
+  it('a task the owner never set learns by default once both switches are on; an explicit AI only is kept (#1031)', async () => {
+    const gate = app.get(KgraphEnabledService);
+    const fresh = await newTask(owner, 'Default');
+    const chosen = await newTask(owner, 'Chosen off');
+    const mode = (taskId: string) => gate.modeFor({ userId: owner.userId, taskId, run: { isTaskRun: true } });
+    expect(await mode(fresh)).toBe('learn');
+    expect((await call(owner, 'GET', `/tasks/${fresh}/kgraph`)).data).toEqual({ taskId: fresh, mode: 'learn', available: true });
+    // "Run with AI only this time" and a chat still never learn.
+    expect(await gate.modeFor({ userId: owner.userId, taskId: fresh, run: { isTaskRun: true, aiOnly: true } })).toBe('off');
+    expect(await gate.modeFor({ userId: owner.userId, taskId: fresh, run: { isTaskRun: false } })).toBe('off');
+    await call(owner, 'PUT', `/tasks/${chosen}/kgraph`, { mode: 'off' });
+    expect(await mode(chosen)).toBe('off');
+    // Either switch off: nothing learns, the default included.
+    await call(owner, 'PATCH', '/user-settings', { kgraph: { enabled: false } });
+    expect(await mode(fresh)).toBe('off');
+    await call(owner, 'PATCH', '/user-settings', { kgraph: { enabled: true } });
+    await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: false } });
+    expect(await mode(fresh)).toBe('off');
+    await call(admin, 'PATCH', '/system-settings', { kgraph: { enabled: true, pacing: 'fast' } });
+    expect(await mode(fresh)).toBe('learn');
   });
 
   it("answers another user's task with 404", async () => {
