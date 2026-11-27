@@ -10790,6 +10790,7 @@ export interface components {
              * @example SERVICE_CREDENTIAL_NOT_IN_PROVIDER
              * @example SERVICE_CREDENTIAL_PROVIDER_READ_ONLY
              * @example SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE
+             * @example WEB_SEARCH_ADDRESS_REFUSED
              * @example WEB_SEARCH_NOT_CONFIGURED
              * @example WEB_SEARCH_AUTH_REFUSED
              * @example WEB_SEARCH_RATE_LIMITED
@@ -12299,6 +12300,7 @@ export interface components {
                         enabled?: boolean;
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
+                        allowPrivate?: boolean;
                     };
                 };
                 order?: string[];
@@ -12633,6 +12635,7 @@ export interface components {
                         enabled?: boolean;
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
+                        allowPrivate?: boolean;
                     };
                 };
                 order?: string[];
@@ -12971,6 +12974,7 @@ export interface components {
                         enabled?: boolean;
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
+                        allowPrivate?: boolean;
                     };
                 };
                 order?: string[];
@@ -22988,7 +22992,10 @@ export interface components {
                 [key: string]: {
                     enabled: boolean;
                     costPerCallUsd: number | null;
+                    /** @description A self-hosted provider's address (SearXNG). */
                     baseUrl: string | null;
+                    /** @description "This instance is on my private network": http and a private address are accepted for the configured host only. */
+                    allowPrivate: boolean;
                 };
             };
             order: string[];
@@ -23023,6 +23030,7 @@ export interface components {
                     enabled?: boolean;
                     costPerCallUsd?: number | null;
                     baseUrl?: string | null;
+                    allowPrivate?: boolean;
                 };
             };
             order?: string[];
