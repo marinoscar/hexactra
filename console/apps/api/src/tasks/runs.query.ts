@@ -18,6 +18,14 @@ import type { RunStatus } from './run-status';
 import { TERMINAL_RUN_STATUSES } from './run-status';
 import { BUDGET_STOP_REASONS, HIDDEN_RUN_TRIGGERS, LIVE_RUN_STATUSES, RUN_STATES, RUN_STATUSES, type RunFilter } from './runs.schemas';
 
+/**
+ * A goal search as LIKE text: `%`, `_` and `\\` escaped (with Postgres's default escape character), so the search is plain text as
+ * documented. Prisma's `contains` does not escape them: before this, `q=%` matched every run, for the list and for a delete by filter.
+ */
+export function likeText(q: string): string {
+  return q.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 function invalidFilter(message: string): BadRequestException {
   return new BadRequestException({ code: 'INVALID_FILTER', message });
 }
@@ -42,13 +50,37 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
     ...(filter.taskId ? { taskId: filter.taskId === 'none' ? null : filter.taskId } : {}),
     trigger: filter.trigger ? { in: filter.trigger } : { notIn: [...HIDDEN_RUN_TRIGGERS] },
     ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
-    ...(filter.q ? { goal: { contains: filter.q, mode: 'insensitive' as const } } : {}),
+    ...(filter.q ? { goal: { contains: likeText(filter.q), mode: 'insensitive' as const } } : {}),
     ...(stopReasons ? { stopReason: { in: stopReasons } } : {}),
     ...(filter.policyId ? { policyRef: filter.policyId } : {}),
     ...(filter.origin ? { origin: { in: filter.origin } } : {}),
     ...(filter.clientId ? { clientId: filter.clientId } : {}),
     ...(filter.batchId ? { batchId: filter.batchId } : {}),
   };
+}
+
+/**
+ * The same filter as `runWhere`, as SQL over `runs r` for one user, for an aggregate Prisma cannot express (run statistics, E53.1:
+ * percentiles). It must select exactly the rows `runWhere` selects: `run-stats.db.spec.ts` compares the two for every parameter,
+ * so a change to one is a change to both. The same 400s as `runWhere`. Every value is a bound parameter; only fixed text is SQL.
+ */
+export function runWhereSql(userId: string, filter: RunFilter): Prisma.Sql {
+  runWhere(filter); // the same validation, and the same INVALID_FILTER answers
+  const parts: Prisma.Sql[] = [Prisma.sql`r.user_id = ${userId}::uuid`];
+  const statuses = filter.status ?? (filter.state ? [...RUN_STATES[filter.state]] : undefined);
+  if (statuses) parts.push(Prisma.sql`r.status::text = ANY(${statuses}::text[])`);
+  if (filter.taskId) parts.push(filter.taskId === 'none' ? Prisma.sql`r.task_id IS NULL` : Prisma.sql`r.task_id = ${filter.taskId}::uuid`);
+  parts.push(filter.trigger ? Prisma.sql`r.trigger::text = ANY(${filter.trigger}::text[])` : Prisma.sql`r.trigger::text <> ALL(${[...HIDDEN_RUN_TRIGGERS]}::text[])`);
+  if (filter.from) parts.push(Prisma.sql`r.created_at >= ${new Date(filter.from)}`);
+  if (filter.to) parts.push(Prisma.sql`r.created_at < ${new Date(filter.to)}`);
+  if (filter.q) parts.push(Prisma.sql`r.goal ILIKE ${`%${likeText(filter.q)}%`}`);
+  const stopReasons = filter.stopReason ? [...new Set(filter.stopReason.flatMap((r) => (r === 'budget' ? BUDGET_STOP_REASONS : [r])))] : undefined;
+  if (stopReasons) parts.push(Prisma.sql`r.stop_reason::text = ANY(${stopReasons}::text[])`);
+  if (filter.policyId) parts.push(Prisma.sql`r.policy_ref = ${filter.policyId}`);
+  if (filter.origin) parts.push(Prisma.sql`r.origin::text = ANY(${filter.origin}::text[])`);
+  if (filter.clientId) parts.push(Prisma.sql`r.client_id = ${filter.clientId}::uuid`);
+  if (filter.batchId) parts.push(Prisma.sql`r.batch_id = ${filter.batchId}::uuid`);
+  return Prisma.join(parts, ' AND ');
 }
 
 /**

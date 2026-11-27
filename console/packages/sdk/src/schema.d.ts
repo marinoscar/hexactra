@@ -8366,6 +8366,28 @@ export interface paths {
         patch: operations["connectedApps_patch"];
         trace?: never;
     };
+    "/api/runs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run statistics
+         * @description How the caller's runs behaved as a population (E53.1): counts per status, the success rate, cost per successful run, and the distribution (n, sum, mean, min, p50, p90, max) of working time, wall time, steps, model calls, tokens and cost over the finished runs, overall and per `groupBy`. The filter is the runs list's (`GET /api/runs`), so both count the same runs; benchmark runs are left out unless `trigger=benchmark`. Reads the newest 100,000 matching runs at most (`truncated`). Computed on read, no model; never a goal, a result or a step. Cost is each run's stored cost (the prices of the day it ran). Permission `runs:read`.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runInsights_runStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{id}/diagnostics": {
         parameters: {
             query?: never;
@@ -23692,6 +23714,307 @@ export interface components {
             allowConnections?: boolean;
             allowWebSearch?: boolean;
             paused?: boolean;
+        };
+        RunStatsResponseDto: {
+            /** @enum {string} */
+            groupBy: "none" | "task" | "policy" | "stopReason" | "status" | "trigger" | "origin" | "tier" | "day" | "week";
+            /** @description The time zone of the days and weeks */
+            timeZone: string;
+            /** @description Runs read: at most 100000, the newest */
+            scanned: number;
+            /** @description True when more than 100000 runs matched: narrow the filter (from, to) for exact numbers */
+            truncated: boolean;
+            total: {
+                /** @description Every matching run, live or finished */
+                runs: number;
+                /** @description succeeded + failed + cancelled: what the distributions and the success rate are over */
+                finished: number;
+                /** @description queued + running + waiting_human + paused */
+                live: number;
+                byStatus: {
+                    queued: number;
+                    running: number;
+                    waiting_human: number;
+                    paused: number;
+                    succeeded: number;
+                    failed: number;
+                    cancelled: number;
+                };
+                /** @description succeeded ÷ finished, 0 to 1; null with no finished run */
+                successRate: number | null;
+                /** @description The finished runs' cost ÷ the succeeded runs; null with none succeeded. A lower bound while costKnown is false */
+                costPerSuccessUsd: number | null;
+                /** @description False when a finished run had a model call that could not be priced */
+                costKnown: boolean;
+                metrics: {
+                    /** @description Time in `running` (waiting for a person never counts) */
+                    workingMs: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description From start to finish, waits included; runs that never started are left out */
+                    wallMs: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    steps: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    modelCalls: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Input tokens, cached included */
+                    inputTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    cachedInputTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    outputTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Input + output */
+                    totalTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Each run's stored cost: the prices of the day it ran */
+                    costUsd: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                };
+            };
+            /** @description Empty for groupBy=none. Periods oldest first (a period with no run is absent); any other grouping largest first */
+            groups: {
+                /** @description Every matching run, live or finished */
+                runs: number;
+                /** @description succeeded + failed + cancelled: what the distributions and the success rate are over */
+                finished: number;
+                /** @description queued + running + waiting_human + paused */
+                live: number;
+                byStatus: {
+                    queued: number;
+                    running: number;
+                    waiting_human: number;
+                    paused: number;
+                    succeeded: number;
+                    failed: number;
+                    cancelled: number;
+                };
+                /** @description succeeded ÷ finished, 0 to 1; null with no finished run */
+                successRate: number | null;
+                /** @description The finished runs' cost ÷ the succeeded runs; null with none succeeded. A lower bound while costKnown is false */
+                costPerSuccessUsd: number | null;
+                /** @description False when a finished run had a model call that could not be priced */
+                costKnown: boolean;
+                metrics: {
+                    /** @description Time in `running` (waiting for a person never counts) */
+                    workingMs: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description From start to finish, waits included; runs that never started are left out */
+                    wallMs: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    steps: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    modelCalls: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Input tokens, cached included */
+                    inputTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    cachedInputTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Over the finished runs of the group; null when it has none */
+                    outputTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Input + output */
+                    totalTokens: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Each run's stored cost: the prices of the day it ran */
+                    costUsd: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                };
+                /** @description An id, a value, `none`, or the first day of the period (YYYY-MM-DD) */
+                key: string;
+                /** @description What a person reads: a task or policy name, else the key */
+                label: string;
+            }[];
+            /** @description True when there were more than 400 groups: the largest (or the latest periods) are kept */
+            groupsTruncated: boolean;
         };
         RunDiagnosticsResponseDto: {
             /** Format: uuid */
@@ -54352,6 +54675,83 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AppLimitsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runInsights_runStats: {
+        parameters: {
+            query?: {
+                /** @description Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                status?: string | string[];
+                /** @description Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`. */
+                state?: "live" | "finished";
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
+                from?: string;
+                /** @description Runs created before this ISO 8601 date-time (exclusive). */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+                /** @description Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas. */
+                origin?: string | string[];
+                /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
+                clientId?: string;
+                /** @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`. */
+                batchId?: string;
+                /** @description One grouping: `none` (the total only), `task`, `policy`, `stopReason`, `status`, `trigger`, `origin`, `tier` (the model tier the run ended on), `day` or `week` (by creation time in `tz`; a week starts on Monday). */
+                groupBy?: "none" | "task" | "policy" | "stopReason" | "status" | "trigger" | "origin" | "tier" | "day" | "week";
+                /** @description IANA time zone of the days and weeks; default the caller's time zone setting. */
+                tz?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunStatsResponseDto"];
                     };
                 };
             };
