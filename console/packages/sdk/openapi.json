@@ -59109,6 +59109,19 @@
                     },
                     "allowPrivate": {
                       "type": "boolean"
+                    },
+                    "model": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -60665,6 +60678,19 @@
                     },
                     "allowPrivate": {
                       "type": "boolean"
+                    },
+                    "model": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -62222,6 +62248,19 @@
                     },
                     "allowPrivate": {
                       "type": "boolean"
+                    },
+                    "model": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   }
                 }
@@ -105718,13 +105757,21 @@
                 "allowPrivate": {
                   "type": "boolean",
                   "description": "\"This instance is on my private network\": http and a private address are accepted for the configured host only."
+                },
+                "model": {
+                  "description": "An answer-type provider's model, a model id of the AI catalogue (OpenAI web search). Null: not chosen, the provider is not usable.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
                 "enabled",
                 "costPerCallUsd",
                 "baseUrl",
-                "allowPrivate"
+                "allowPrivate",
+                "model"
               ]
             },
             "description": "Saved per-provider settings; a provider not listed has the defaults (on, the default estimate)."
@@ -105906,6 +105953,19 @@
                 },
                 "allowPrivate": {
                   "type": "boolean"
+                },
+                "model": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               }
             }

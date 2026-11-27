@@ -21,6 +21,8 @@ export interface WebSearchStatus {
 export interface WebSearchProvider {
   id: string;
   label: string;
+  /** `ai_service`: answers through the AI settings' key (OpenAI web search, E50.9); no key field. */
+  credential?: 'api_key' | 'none' | 'ai_service';
   needsKey: boolean;
   enabled: boolean;
   listed: boolean;
@@ -31,10 +33,12 @@ export interface WebSearchProvider {
 interface SearchResult {
   provider: string;
   hits: { title: string; url: string; snippet: string }[];
+  /** An answer-type provider's written answer (E50.9): third-party text, shown as text. */
+  answer?: { text: string; citations: string[] } | null;
 }
 interface AdminSettings {
   enabled: boolean;
-  providers: Record<string, { enabled: boolean; costPerCallUsd: number | null; baseUrl: string | null }>;
+  providers: Record<string, { enabled: boolean; costPerCallUsd: number | null; baseUrl: string | null; model?: string | null }>;
   order: string[];
   shareDeploymentKey: boolean;
   allowUserKeys: boolean;
@@ -56,6 +60,11 @@ export const REASON_TEXT: Record<NonNullable<WebSearchStatus['reason']>, string>
   no_key: 'No key is set that your searches may use. Add your own key below, or ask your administrator to share the deployment key.',
 };
 export const TIER_TEXT: Record<Tier, string> = { user: 'your own key', organization: "your organization's key", system: "the deployment's key" };
+
+/** What a provider that answers through the AI settings says instead of a key field (E50.9). */
+export const AI_SERVICE_KEY_TEXT = 'Uses your OpenAI key from AI settings. No search key is needed.';
+/** Where the token part of an answer-type provider's cost is (E50.9): the search fee is here, the tokens under AI usage. */
+export const AI_SERVICE_COST_TEXT = 'The cost shown is the search fee only. The tokens the model read and wrote are under AI usage, feature "Web search".';
 
 const estimate = (usd: number | null) => (usd === null ? 'no estimate' : `about $${(usd * 1000).toFixed(2)} per 1,000 searches (estimate)`);
 
@@ -156,6 +165,19 @@ export function WebSearchSettingsPage() {
             </Stack>
           </Paper>
           {providers
+            .filter((p) => p.credential === 'ai_service' && p.enabled && p.listed)
+            .map((p) => (
+              <Paper key={p.id} variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
+                <Stack spacing={1}>
+                  <Typography variant="subtitle1">{p.label}</Typography>
+                  <Typography variant="body2">{AI_SERVICE_KEY_TEXT}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Cost: {estimate(p.estimatedCostPerCallUsd)}. {AI_SERVICE_COST_TEXT}
+                  </Typography>
+                </Stack>
+              </Paper>
+            ))}
+          {providers
             .filter((p) => p.needsKey)
             .map((p) => (
               <Paper key={p.id} variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
@@ -205,6 +227,11 @@ export function WebSearchSettingsPage() {
                     Search
                   </Button>
                 </Stack>
+                {result?.answer && (
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} aria-label="Answer">
+                    {result.answer.text}
+                  </Typography>
+                )}
                 {result && (
                   <Box component="ol" sx={{ m: 0, pl: 3 }} aria-label="Results">
                     {result.hits.length === 0 && <Typography variant="body2">No results.</Typography>}
@@ -327,6 +354,7 @@ export function AdminWebSearchPage() {
                       }}
                     />
                   )}
+                  {p.credential === 'ai_service' && <AiServiceProviderSettings model={ps.model ?? null} disabled={!canWrite || action.busy === 'save'} onSave={(model) => void save({ providers: { [p.id]: { model } } })} />}
                 </Stack>
               </Paper>
             );
@@ -335,6 +363,11 @@ export function AdminWebSearchPage() {
             <Typography variant="subtitle1" gutterBottom>
               Usage, last 30 days
             </Typography>
+            {s.installed.some((p) => p.credential === 'ai_service') && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {AI_SERVICE_COST_TEXT}
+              </Typography>
+            )}
             {usage.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 No searches yet.
@@ -367,5 +400,27 @@ export function AdminWebSearchPage() {
         </Stack>
       )}
     </PageContainer>
+  );
+}
+
+/** An answer-type provider through the AI service (E50.9): no key field; the model it answers with, chosen by the administrator. */
+function AiServiceProviderSettings({ model, disabled, onSave }: { model: string | null; disabled: boolean; onSave: (model: string | null) => void }) {
+  const [value, setValue] = useState(model ?? '');
+  useEffect(() => setValue(model ?? ''), [model]);
+  const v = value.trim();
+  const bad = v !== '' && !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(v);
+  return (
+    <Stack spacing={1}>
+      <Typography variant="body2">{AI_SERVICE_KEY_TEXT} It needs AI on, Web search switched on under hosted tools in Administration → AI, and a model chosen here.</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {AI_SERVICE_COST_TEXT}
+      </Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+        <TextField size="small" label="Model for web search" value={value} disabled={disabled} error={bad} helperText={bad ? 'A model id of the AI catalogue' : model ? 'A model of the AI catalogue' : 'Not chosen: this provider is not used'} onChange={(e) => setValue(e.target.value)} sx={{ flex: 1 }} />
+        <Button variant="outlined" sx={{ minHeight: 40 }} disabled={disabled || bad || v === (model ?? '')} onClick={() => onSave(v === '' ? null : v)}>
+          Save model
+        </Button>
+      </Stack>
+    </Stack>
   );
 }

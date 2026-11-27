@@ -55,7 +55,8 @@ export class WebSearchProviderCheck implements DoctorCheck, OnModuleInit {
   /** Whether the provider can answer with the deployment tier: a stored deployment key (its row only), an address, or AI. */
   private async deploymentUsable(p: SearchProvider, s: ResolvedWebSearchSystemSettings): Promise<boolean> {
     if (p.credential === 'none') return !!providerSettingsOf(s, p.id).baseUrl;
-    if (p.credential === 'ai_service') return true;
+    // An answer-type provider through the AI service (E50.9): its own check, for the deployment (the system tier of the AI keys).
+    if (p.credential === 'ai_service') return p.diagnoseCredential ? (await p.diagnoseCredential(null).catch(() => ({ status: 'fail' as const }))).status !== 'fail' : true;
     return (await this.systemCredentials?.describe(SERVICE_CREDENTIAL_PURPOSE, storedName(credentialRefOf(p.id)))) != null;
   }
 

@@ -12301,6 +12301,7 @@ export interface components {
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
                         allowPrivate?: boolean;
+                        model?: string | null;
                     };
                 };
                 order?: string[];
@@ -12636,6 +12637,7 @@ export interface components {
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
                         allowPrivate?: boolean;
+                        model?: string | null;
                     };
                 };
                 order?: string[];
@@ -12975,6 +12977,7 @@ export interface components {
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
                         allowPrivate?: boolean;
+                        model?: string | null;
                     };
                 };
                 order?: string[];
@@ -22996,6 +22999,8 @@ export interface components {
                     baseUrl: string | null;
                     /** @description "This instance is on my private network": http and a private address are accepted for the configured host only. */
                     allowPrivate: boolean;
+                    /** @description An answer-type provider's model, a model id of the AI catalogue (OpenAI web search). Null: not chosen, the provider is not usable. */
+                    model: string | null;
                 };
             };
             order: string[];
@@ -23031,6 +23036,7 @@ export interface components {
                     costPerCallUsd?: number | null;
                     baseUrl?: string | null;
                     allowPrivate?: boolean;
+                    model?: string | null;
                 };
             };
             order?: string[];

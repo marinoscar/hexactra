@@ -71,7 +71,8 @@ export async function bindWeb(
     const counter: WebCallCounter = { used: s.web.maxCalls === null ? 0 : await s.earlierCalls(), max: s.web.maxCalls };
     // The snapshot decides what is offered: a switch turned off since the run started leaves the tools in place (the cached prompt prefix does
     // not change), and the service refuses the call (`NOT_CONFIGURED`), as a connection switched off mid-run is refused when it is called.
-    const search = (await d.webSearch.forUser(s.userId, s.orgId)) ?? NOT_CONFIGURED_SEARCH;
+    // With allowed sites, an answer-type provider (it writes from pages nobody here can filter) is skipped for every call (E50.9).
+    const search = (await d.webSearch.forUser(s.userId, s.orgId, { resultsOnly: s.sites !== null })) ?? NOT_CONFIGURED_SEARCH;
     const fetch = s.web.fetch && d.webFetch ? ((await d.webFetch.forRun({ userId: s.userId, sites: s.sites })) ?? NOT_CONFIGURED_FETCH) : null;
     return { search: limitSearch(search, counter), fetch: fetch ? limitFetch(fetch, counter) : null, sites: s.sites, limits: { ...DEFAULT_WEB_LIMITS } };
   } catch (e) {
