@@ -16,6 +16,8 @@
 import type { ExportContext, ExportRow, ExportSource, ExportTable } from '@marinoscar/platform-api/exports';
 import { z } from 'zod';
 
+import { RUN_DATASET_EXPORT_SOURCE } from '../../run-insights/run-dataset.source';
+
 export const notesExportRequestSchema = z
   .object({ includeArchived: z.boolean().default(true).describe('Include archived notes') })
   .strict();
@@ -85,4 +87,5 @@ export const NOTES_EXPORT_SOURCE: ExportSource<NotesExportRequest> = {
 };
 
 /** This app's export sources and writers. Append here (`registerExportSource` / `registerExportWriter` run for each). */
-export const APP_EXPORT_SOURCES: readonly ExportSource<any>[] = [NOTES_EXPORT_SOURCE];
+/** The app's sources: the notes example and the run dataset (E53.3, #1071). */
+export const APP_EXPORT_SOURCES: readonly ExportSource<any>[] = [NOTES_EXPORT_SOURCE, RUN_DATASET_EXPORT_SOURCE];
