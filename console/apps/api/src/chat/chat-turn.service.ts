@@ -26,6 +26,7 @@ import { WebSearchService } from '../web-search/web-search.service';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
 import { ChatResults } from './chat-results.service';
 import { ChatTaskDraftService } from './chat-task-draft.service';
+import { chatTaskContext, findTaskByShownName, listTasksTool, NO_TASK_CONTEXT, withSavedTaskInstructions, type ChatTaskContextResult } from './chat-task-context';
 import { ChatService } from './chat.service';
 import { transcriptLine } from './chat-transcript';
 import { withRequestOutcomes } from '../questions/chat-request-record';
@@ -188,7 +189,7 @@ export class ChatTurnService {
   }
 
   /** What the model reads: the end of the thread and whether a run is live. Built from messages, plus each request's outcome words (E40.1), never a question's answer value. */
-  async buildInput(userId: string, conversationId: string, connectionsLine = ''): Promise<string> {
+  async buildInput(userId: string, conversationId: string, connectionsLine = '', tasks?: ChatTaskContextResult): Promise<string> {
     const rows = await withRequestOutcomes(this.prisma, await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { seq: true, role: true, kind: true, text: true, meta: true } }));
     const live = await this.liveRun(userId, conversationId);
     // Owner messages already passed to a run, so the model does not pass one twice (#490).
@@ -197,7 +198,9 @@ export class ChatTurnService {
     // The owner's memories (#553), chosen by what the owner wrote lately: information, never an instruction.
     const ownerText = rows.filter((r) => r.role === 'user').slice(0, MEMORY_TEXT_MESSAGES).map((r) => r.text).join('\n');
     const about = this.memoryContext ? (await this.memoryContext.forText(userId, ownerText)).block : '';
-    return [...(about ? [about, ''] : []), 'Conversation, oldest first:', ...rows.reverse().map(line), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.', ...(connectionsLine ? ['', connectionsLine] : [])].join('\n');
+    // The owner's saved tasks (#1007), after the memories (the stable part of the input): data, never an instruction. None: nothing at all.
+    const saved = (tasks ?? (this.starter ? await chatTaskContext(this.prisma, userId, ownerText) : NO_TASK_CONTEXT)).block;
+    return [...(about ? [about, ''] : []), ...(saved ? [saved, ''] : []), 'Conversation, oldest first:', ...rows.reverse().map(line), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.', ...(connectionsLine ? ['', connectionsLine] : [])].join('\n');
   }
 
   /** The memories a chat run's goal uses (#553): recorded on the run (the run page says "Used: …") and marked used. */
@@ -209,7 +212,13 @@ export class ChatTurnService {
     await this.memoryContext.touch(userId, usedIds);
   }
 
-  /** A saved task by id or name (exact, then the only one whose name contains it), or why none fits (#552). */
+  /** The newest owner messages, as the memory and task selections read them. */
+  private async recentOwnerText(conversationId: string): Promise<string> {
+    const rows = await this.prisma.chatMessage.findMany({ where: { conversationId, role: 'user' }, orderBy: { seq: 'desc' }, take: MEMORY_TEXT_MESSAGES, select: { text: true } });
+    return rows.map((r) => r.text).join('\n');
+  }
+
+  /** A saved task by id or name (exact, then the name the task block shows (#1007), then the only one whose name contains it), or why none fits (#552). */
   private async findTask(userId: string, ref: string) {
     const db = this.prisma.forUser({ userId });
     const want = ref.trim();
@@ -219,6 +228,8 @@ export class ChatTurnService {
     }
     const exact = await db.task.findMany({ where: { name: { equals: want, mode: 'insensitive' } }, take: 2 });
     if (exact.length === 1) return exact[0]!;
+    const shown = exact.length ? null : await findTaskByShownName(this.prisma, userId, want);
+    if (shown) return db.task.findFirstOrThrow({ where: { id: shown.id } });
     const like = exact.length ? exact : await db.task.findMany({ where: { name: { contains: want, mode: 'insensitive' } }, take: 5 });
     if (like.length === 1) return like[0]!;
     if (like.length === 0) return `No saved task is called "${want}". Ask the owner which task, or start_run with a complete goal.`;
@@ -241,6 +252,8 @@ export class ChatTurnService {
     const state = { done: false, wrote: false, stopped: false, said: null as string | null, proposals: 0 };
     // The trace the run is made under: the run's first job links to this turn (runs.trace_id holds it until that job writes its own).
     const turnTrace = () => (tr.traceId && tr.spanId ? { traceId: tr.traceId, spanId: tr.spanId } : {});
+    // The owner's saved tasks (#1007): the block, and list_tasks when they have more than it holds. Setting off or no task: nothing changes.
+    const savedTasks = this.starter ? await chatTaskContext(this.prisma, userId, await this.recentOwnerText(c.id)) : NO_TASK_CONTEXT;
     // The chat's connections (E39.7): the read tools only, for the accounts the chat lists. No write tool is ever offered here.
     const reading = await chatConnectionTools({ prisma: this.prisma, connections: this.connectionHub }, { userId, orgId, conversationId: c.id }, (a) => tr.toolAttributes(a));
     // A public fact is answered here (E50.7): the web tools, when web search is set up and switched on for the owner.
@@ -322,11 +335,13 @@ export class ChatTurnService {
                   throw e;
                 }
                 const run = started.run;
-                await this.chats.append(c.id, { role: 'assistant', kind: 'run', text: maskRunGoal(run.goal), runId: run.id });
+                // The task's run (#1007): its limits are the task's; the Browser card says "Using your task …" and links to it.
+                await this.chats.append(c.id, { role: 'assistant', kind: 'run', text: maskRunGoal(run.goal), runId: run.id, meta: { taskId: found.id, taskName: found.name } });
                 state.done = state.wrote = true;
                 return started.formQuestionId ? 'Started; the owner fills in the missing values in the chat.' : 'Started. The owner watches it in the chat.';
               },
             }),
+            ...(savedTasks.offerList ? [listTasksTool(this.prisma, userId)] : []),
           ]
         : []),
       ...(this.proposals
@@ -441,10 +456,11 @@ export class ChatTurnService {
 
     let text = '';
     try {
-      const input = await this.buildInput(userId, c.id, reading.line);
+      const input = await this.buildInput(userId, c.id, reading.line, savedTasks);
+      const base = [CHAT_INSTRUCTIONS, ...(reading.tools.length ? [CONNECTION_CHAT_INSTRUCTIONS] : []), ...(web.length ? [WEB_CHAT_INSTRUCTIONS] : [])].join('\n');
       const result = await tr.within(() =>
         this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
-          instructions: [CHAT_INSTRUCTIONS, ...(reading.tools.length ? [CONNECTION_CHAT_INSTRUCTIONS] : []), ...(web.length ? [WEB_CHAT_INSTRUCTIONS] : [])].join('\n'),
+          instructions: savedTasks.block ? withSavedTaskInstructions(base) : base,
           input,
           tools,
           maxSteps: MAX_MODEL_STEPS,

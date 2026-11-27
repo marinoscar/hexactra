@@ -435,7 +435,7 @@ const chatMessages = [
   chatMessage(6, 'assistant', 'clarify', 'Which showing would you like?', { meta: { options: ['4:30 PM', '7:30 PM', 'The latest one'] } }),
   chatMessage(7, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),
   // The live run: its Browser card shows the run's picture (the mocked screenshot).
-  chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
+  chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun, meta: { taskId: IDS.task, taskName: 'Book cinema tickets for the usual Friday showing at the cinema near home' } }),
   // The agent offers to remember a person the owner named (#553): the "Remember this?" card.
   chatMessage(9, 'assistant', 'memory', 'Suggested remembering: My partner', { meta: { questionId: memoryProposal.id } }),
   // The agent offers to save the sign-in the owner typed by hand (E37.4b): the "Save this sign-in for <site>?" card.

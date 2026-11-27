@@ -96,6 +96,24 @@ export const ROUTES = [
   ['run-paused', '/runs/{pausedRun}'],
   ['chat-thread-paused', '/chat/{pausedChat}'],
   ['chat-browser-paused', '/chat/{pausedChat}', { action: pressButton('Open browser'), viewport: true }],
+  // A chat run started from a saved task (#1007): its Browser card starts with "Using your task …", a link to the task.
+  ['chat-task-run', '/chat/{chat}', {
+    action: async (page) => {
+      await page.getByTestId('using-task').first().scrollIntoViewIfNeeded({ timeout: 5_000 });
+      await page.waitForTimeout(300);
+    },
+    viewport: true,
+  }],
+  // Chat settings (#1007): "Use my saved tasks when one fits" under "Suggest memories", at the end of the dialog.
+  ['chat-settings-saved-tasks', '/chat/{chat}', {
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Chat options' }).first().click({ timeout: 5_000 });
+      await page.getByRole('menuitem', { name: /All chat settings/ }).or(page.getByRole('button', { name: /All chat settings/ })).first().click({ timeout: 5_000 });
+      await page.getByRole('switch', { name: 'Use my saved tasks when one fits' }).scrollIntoViewIfNeeded({ timeout: 5_000 });
+      await page.waitForTimeout(300);
+    },
+    viewport: true,
+  }],
   // A chat run that went over its (soft) usual limit and finished (#537).
   ['run-chat-over-limit', '/runs/{chatRun}'],
   // A run's trace (#544): questions with their answers, guidance, a confirmed step and five pictures;

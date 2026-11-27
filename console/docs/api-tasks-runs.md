@@ -141,7 +141,7 @@ Send ${{Amount}} today to {{Phone Number}} using Zelle on my Bank of America acc
 
 **Chat, CLI, SDK and MCP.**
 
-- Chat: the orchestrator's `run_task(task, inputs)` starts a saved task by name ("send Paula 25 with my Zelle task"); a missing value produces the same form in the thread.
+- Chat: the orchestrator's `run_task(task, inputs)` starts a saved task by name ("send Paula 25 with my Zelle task"); a missing value produces the same form in the thread. Since #1007 (E51.2) the chat also reads a block of the owner's saved tasks (names, value labels and types, a masked goal excerpt; never a default's value, a memory's value, a preset or a secret) and runs the task that fits without being told its name; with more than 15 tasks it can look one up with `list_tasks`. The chat's `run` message of a task run carries `meta.taskId` and `meta.taskName` (the Browser card says "Using your task …"). The user setting `chat.useSavedTasks` (default on, `PATCH /api/user-settings`) turns it off ([chat.md](chat.md#your-saved-tasks-in-a-chat)).
 - CLI: `hexactra tasks run <task> --input amount=25 --input "Phone Number=555 010 6020"`; at a terminal, each missing value is prompted for. A sensitive parameter is never prompted: the CLI prints the console link.
 - SDK: `packages/sdk/src/examples/task-parameters.ts`.
 - MCP: `task_run` takes `inputs`; `tasks_list`, `task_create` and `task_update` return `parameters` with `has_default` and never a default's value; `schedule_create` takes `inputs`; `inbox_answer` takes `fields`. Scopes, effects and titles are unchanged.
