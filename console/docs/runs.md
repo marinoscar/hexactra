@@ -282,6 +282,10 @@ The console shows the trace on the run's page (#544; README, "A run's page"): ea
 
 Findings read only server-recorded facts (the tool, its redacted arguments, ok, the summary, the phase), **never** `reasoning` (the model's own words). Every text is masked like the trace. Each code is a unit-tested rule (`test/run-diagnostics.spec.ts`); a diagnosis that throws answers no findings and never fails the run page.
 
+### Across a task's runs: consistency (E52.7, #1022)
+
+The task page's **Consistency** card (`GET /api/tasks/{id}/consistency`, [api-tasks-runs.md](api-tasks-runs.md)) puts a task's runs side by side: "Usually 35 steps; the longest of the last 5 took 124", the median and range of steps, cost and working time, the share that succeeded, and one bar per run with its first warning finding. Its label is `steady`, `varies`, `erratic` or "Not enough runs yet" (fewer than 3). Pure maths in `apps/api/src/run-insights/task-consistency.ts`; no model.
+
 ## Traces (OpenTelemetry)
 
 With the telemetry slice on, every job of a run is one OpenTelemetry trace (E38.4, #585): the job, its chunks, each model call, each tool call, each fabric action and each question, in the deployment's own collector. The run keeps the ids: `GET /api/runs/{id}` has `traceId` (the latest job's; null before the first job and with the slice off), the run page shows it as a copyable **Trace id**, and the JSON export lists every job's in `run.traceIds` (the newest 100). A queued chat run holds the chat turn's trace id until its first job starts. The span tree, the attributes, how to find a run by id and what a trace never holds are in the operations runbook, [Reading a run's trace](runbooks/operations.md#find-a-runs-trace-and-read-it). A trace is telemetry, not the audit trail: the durable record is the steps above.

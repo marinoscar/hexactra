@@ -18,6 +18,7 @@ import { taskPaths } from '../components/taskList';
 import { TaskSchedulesSection } from '../components/TaskSchedulesSection';
 import { MailTriggersSection } from '../mailTriggers/MailTriggersSection';
 import { TaskStats } from '../components/TaskStats';
+import { TaskConsistency } from '../components/TaskConsistency';
 import { useTaskActions } from '../components/useTaskActions';
 import { TaskDeliveriesSummary } from '../deliveries/TaskDeliveriesSummary';
 import { TaskChips } from '../taskConnections/TaskChips';
@@ -448,6 +449,8 @@ export function TaskDetailPage() {
         {canReadRuns && (
           <Stack spacing={3} sx={{ minWidth: 0 }}>
             <TaskStats taskId={task.id} lastRun={summary.lastRun} lastStopReason={lastRun && lastRun.id === summary.lastRun?.id ? lastRun.stopReason : null} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />
+            {/* How consistent its runs are (E52.7): the spread of steps, cost and time, and a bar per run. */}
+            <TaskConsistency taskId={task.id} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />
             {(task.outputs?.length ?? 0) > 0 && (
               <Section id="outputs" title="Outputs">
                 <TaskOutputsTable taskId={task.id} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />

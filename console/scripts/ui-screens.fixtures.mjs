@@ -627,6 +627,26 @@ export const RESPONSES = {
   'GET /tasks': tasksList,
   // The task page (#428) reads the task with its summary, and its statistics.
   [`GET /tasks/${IDS.task}`]: taskRows[0],
+  // How consistent the task's runs are (E52.7): erratic, with a long run that looped.
+  [`GET /tasks/${IDS.task}/consistency`]: {
+    taskId: IDS.task,
+    runs: 5,
+    succeeded: 5,
+    successRate: 1,
+    steps: { min: 33, median: 35, p90: 124, max: 124, ratio: 3.543 },
+    modelCalls: { min: 33, median: 36, p90: 129, max: 129, ratio: 3.583 },
+    activeMs: { min: 97000, median: 176000, p90: 707000, max: 707000, ratio: 4.017 },
+    costUsd: { min: 0.013, median: 0.0135, p90: 0.0635, max: 0.0635, ratio: 4.704 },
+    label: 'erratic',
+    since: null,
+    perRun: [
+      { runId: IDS.finishedRun, status: 'succeeded', createdAt: iso(-3_600_000), stepCount: 43, costUsd: 0.0175, activeMs: 176000, findings: [{ code: 'repeated_click', severity: 'warn' }] },
+      { runId: '33333333-3333-4333-8333-333333333333', status: 'succeeded', createdAt: iso(-7_200_000), stepCount: 35, costUsd: 0.013, activeMs: 97000, findings: [{ code: 'repeated_click', severity: 'warn' }] },
+      { runId: '33333332-3333-4333-8333-333333333333', status: 'succeeded', createdAt: iso(-10_800_000), stepCount: 124, costUsd: 0.0635, activeMs: 707000, findings: [{ code: 'loop', severity: 'warn' }, { code: 'selector_miss', severity: 'warn' }] },
+      { runId: '33333331-3333-4333-8333-333333333333', status: 'succeeded', createdAt: iso(-14_400_000), stepCount: 33, costUsd: 0.0135, activeMs: 211000, findings: [] },
+      { runId: '33333330-3333-4333-8333-333333333333', status: 'succeeded', createdAt: iso(-18_000_000), stepCount: 34, costUsd: 0.013, activeMs: 120000, findings: [] },
+    ],
+  },
   // The schedule editor (the form, the task page), Home, the runs list's counts and Run history (#432).
   'POST /schedules/preview': schedulePreview,
   'GET /schedules/defaults': { timezone: 'Etc/UTC', source: 'profile' },
