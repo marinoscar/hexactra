@@ -12,6 +12,7 @@ import { AllowedSitesInput } from './AllowedSitesInput';
 import { MachinePicker, useFleetHosts } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { SuggestMemoriesSwitch } from '../memories/SuggestMemoriesSwitch';
+import { UseSavedTasksSwitch } from './UseSavedTasksSwitch';
 import { SavedLoginsToggle } from '../secrets/SavedLoginsSwitch';
 
 export interface ChatSettingsDialogProps {
@@ -109,6 +110,10 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
           <div>
             <SuggestMemoriesSwitch disabled={busy} />
+          </div>
+          {/* A setting of the owner too (#1007): saved as soon as it is switched. */}
+          <div>
+            <UseSavedTasksSwitch disabled={busy} />
           </div>
         </Stack>
       </DialogContent>

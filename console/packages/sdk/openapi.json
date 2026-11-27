@@ -56857,6 +56857,18 @@
               "paused"
             ]
           },
+          "chat": {
+            "type": "object",
+            "properties": {
+              "useSavedTasks": {
+                "type": "boolean",
+                "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+              }
+            },
+            "required": [
+              "useSavedTasks"
+            ]
+          },
           "connections": {
             "type": "object",
             "properties": {
@@ -57445,6 +57457,18 @@
             },
             "required": [
               "paused"
+            ]
+          },
+          "chat": {
+            "type": "object",
+            "properties": {
+              "useSavedTasks": {
+                "type": "boolean",
+                "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+              }
+            },
+            "required": [
+              "useSavedTasks"
             ]
           },
           "connections": {
@@ -58083,6 +58107,22 @@
                 "properties": {
                   "paused": {
                     "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chat": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "useSavedTasks": {
+                    "type": "boolean",
+                    "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
                   }
                 }
               },
@@ -64762,6 +64802,18 @@
                 },
                 "required": [
                   "paused"
+                ]
+              },
+              "chat": {
+                "type": "object",
+                "properties": {
+                  "useSavedTasks": {
+                    "type": "boolean",
+                    "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+                  }
+                },
+                "required": [
+                  "useSavedTasks"
                 ]
               },
               "connections": {
