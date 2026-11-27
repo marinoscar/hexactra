@@ -18,6 +18,7 @@ import { OAUTH_PUBLIC_CORS_PATHS, verifyTenancyModeAtStartup } from '@marinoscar
 import { STORAGE_OPTIONS, simpleUploadFileSizeLimit, type ResolvedStorageModuleOptions } from '@marinoscar/platform-api/storage';
 
 import { AppModule } from './app.module';
+import { buildsApiReference, type CreateAppOptions } from './create-app-options';
 import { describeTrustProxy, parseTrustProxy } from './config/trust-proxy';
 import { registerMcpTransport } from './mcp/mcp.controller';
 import { McpSettingsReader } from './mcp/mcp-settings.reader';
@@ -38,8 +39,13 @@ export const APP_OPENAPI: PlatformOpenApiOptions = {
  * the storage slice is on, the `/api` prefix, and
  * the API reference (`/api/docs`, `/api/openapi.json`; a generation failure
  * degrades both to a 503, never the boot). Shared by the boot and the db-tier tests.
+ *
+ * `options.docs`: whether the API reference is built and mounted. The boot always builds it. Building it costs about
+ * 4 s (a JSON schema for every route), so the db tier, which boots the app once per spec file, leaves it out unless
+ * the spec asks for it with `createApp({ docs: true })` (#1043; `test/db-tier-jobs.setup.ts`). Without it,
+ * `/api/docs` and `/api/openapi.json` answer 404.
  */
-export async function createApp(): Promise<NestFastifyApplication> {
+export async function createApp(options: CreateAppOptions = {}): Promise<NestFastifyApplication> {
   // CORS, parsed before anything else so a wildcard or malformed CORS_ORIGIN fails
   // here with its own message. Same-origin only (no CORS headers) unless
   // CORS_ORIGIN lists origins. `openPaths`: the OAuth server's token, register and
@@ -87,7 +93,7 @@ export async function createApp(): Promise<NestFastifyApplication> {
   app.setGlobalPrefix('api');
   app.enableCors(corsOptions);
   if (!isSameOriginOnly(corsOptions)) new Logger('Bootstrap').log(`CORS: allowlist of ${corsOptions.origin.length} origin(s) with credentials`);
-  registerPlatformDocs(app, APP_OPENAPI);
+  if (buildsApiReference(options)) registerPlatformDocs(app, APP_OPENAPI);
   return app;
 }
 
@@ -99,7 +105,7 @@ async function bootstrap(): Promise<void> {
   // Fail fast, before a port is bound: a bad TENANCY_MODE, or stored
   // credentials without the SECRETS_ENCRYPTION_KEY that decrypts them.
   verifyTenancyModeAtStartup(process.env, logger);
-  const app = await createApp();
+  const app = await createApp({ docs: true });
   await verifyEncryptionKeyAtStartup(() => app.get(PrismaService).credential.count(), logger);
   app.enableShutdownHooks();
   const port = parseInt(process.env.PORT || '3000', 10);

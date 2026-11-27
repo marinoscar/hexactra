@@ -67,6 +67,7 @@ export const runFilterSchema = z.object({
   policyId: policyRefSchema.optional().describe("Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`."),
   origin: listOf(RUN_ORIGINS, 'Where the run was started from (#464).'),
   clientId: z.uuid().optional().describe('Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).'),
+  batchId: z.uuid().optional().describe('The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.'),
 });
 export type RunFilter = z.infer<typeof runFilterSchema>;
 

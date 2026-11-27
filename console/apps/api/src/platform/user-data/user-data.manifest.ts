@@ -74,6 +74,8 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'MailTrigger', category: 'browser-tasks' },
   { model: 'MailTriggerEvent', category: 'browser-tasks' },
   { model: 'Benchmark', category: 'browser-tasks' },
+  // Batches of runs (E51.1, #1006): with the runs.
+  { model: 'RunBatch', category: 'browser-tasks' },
   // A run's video (epic #755): with its run.
   { model: 'RunRecording', category: 'browser-tasks' },
   // The Knowledge Graph (epic E46).

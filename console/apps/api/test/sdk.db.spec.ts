@@ -27,7 +27,7 @@ function normalized(doc: { info?: { version?: string; description?: string } }) 
 }
 
 beforeAll(async () => {
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.listen(0, '127.0.0.1');
   base = `http://127.0.0.1:${(app.getHttpServer().address() as { port: number }).port}`;
 });

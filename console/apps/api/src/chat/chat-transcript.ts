@@ -16,7 +16,11 @@ export function transcriptLine(m: Pick<ChatMessage, 'role' | 'kind' | 'text' | '
     return `[assistant asked] ${text}${Array.isArray(options) && options.length ? ` (suggested: ${options.join(' | ')})` : ''}`;
   }
   if (m.kind === 'run') return `[run started] ${text}`;
+  // A batch's summary (E51.1) is a result of the batch, not of one run.
+  if (m.kind === 'result' && (m.meta as { batchSummary?: unknown } | null)?.batchSummary) return `[batch ${String((m.meta as { status?: unknown } | null)?.status ?? 'ended')}] ${text}`;
   if (m.kind === 'result') return `[run ${String((m.meta as { status?: unknown } | null)?.status ?? 'ended')}] ${text}`;
+  // A batch card (E51.1): the rows wait for the owner's review, or run one after another.
+  if (m.kind === 'batch') return `[batch of runs proposed] ${text}`;
   if (m.kind === 'task_draft') return `[task drafted] ${text}`;
   // A memory proposal (#553): the card waits for the owner; whether it was saved is not the model's to claim.
   if (m.kind === 'memory') return (m.meta as { card?: unknown } | null)?.card === 'save_login' ? `[login save offered] ${text}` : `[memory proposed] ${text}`;

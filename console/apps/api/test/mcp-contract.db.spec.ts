@@ -103,6 +103,11 @@ describe('structured results validate against the output schemas (real REST answ
       await call(t, 'task_pause', { task_id: task.id });
       await call(t, 'task_resume', { task_id: task.id });
       await call(t, 'task_run', { task_id: task.id });
+      // Batch runs (E51.1): a task with a parameter, run for two rows, then read back.
+      const textTask = await call(t, 'task_create', { name: `Contract text ${stamp}`, goal: 'Text {{Who}} hello' });
+      const batch = await call(t, 'task_run_batch', { task_id: textTask.id, rows: [{ inputs: { Who: 'Ana' } }, { inputs: { Who: 'Luis' } }] });
+      expect(batch).toMatchObject({ status: 'running', total: 2 });
+      expect(await call(t, 'batch_status', { batch_id: batch.id })).toMatchObject({ id: batch.id, items: [expect.objectContaining({ seq: 1 }), expect.objectContaining({ seq: 2 })] });
       await call(t, 'schedule_create', { task_id: task.id, cron: '0 18 * * *' });
       expect((await call(t, 'schedules_list', {})).items!.length).toBe(2);
       expect(await call(t, 'schedule_preview', { cron: '0 9 * * 1-5' })).toMatchObject({ valid: true });

@@ -95,6 +95,58 @@
       ]
     },
     {
+      "id": "tasks.run_batch",
+      "description": "Run a saved task once per row of values, one run after another (a batch, E51.1)",
+      "rest": [
+        "POST /api/tasks/{id}/batches",
+        "POST /api/batches/{id}/start"
+      ],
+      "cli": "tasks run",
+      "mcp": "task_run_batch",
+      "tui": {
+        "none": "The TUI is for watching and answering; a batch's runs are watched there like any run, and starting one needs a table of values, so use the CLI or the web app"
+      },
+      "web": [
+        "/tasks/:id",
+        "/chat/:id"
+      ]
+    },
+    {
+      "id": "batches.read",
+      "description": "A batch of runs: its rows, how each ended, and a task's batches",
+      "rest": [
+        "GET /api/batches/{id}",
+        "GET /api/tasks/{id}/batches"
+      ],
+      "cli": "batches show",
+      "mcp": "batch_status",
+      "tui": {
+        "none": "The TUI is for watching and answering; a batch's runs are watched there like any run"
+      },
+      "web": [
+        "/tasks/:id",
+        "/chat/:id"
+      ]
+    },
+    {
+      "id": "batches.cancel",
+      "description": "Cancel a batch: its live run is stopped and the rows not started are skipped",
+      "rest": [
+        "POST /api/batches/{id}/cancel"
+      ],
+      "cli": "batches cancel",
+      "mcp": {
+        "none": "run_cancel stops a batch's live run, which stops the batch; a separate tool would only repeat it"
+      },
+      "tui": {
+        "none": "The TUI stops a batch's live run like any run, which stops the batch"
+      },
+      "web": [
+        "/tasks/:id",
+        "/chat/:id"
+      ]
+    },
+    {
       "id": "tasks.outputs",
       "description": "What a task's finished runs returned (the named values its outputs ask for): a history, newest first, and as a CSV",
       "rest": [
