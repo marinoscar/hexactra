@@ -41940,6 +41940,91 @@
         }
       }
     },
+    "/api/runs/{id}/diagnostics": {
+      "get": {
+        "description": "Where the run spent effort it did not need, computed on read from its recorded steps (E52.6): loops, selectors that matched nothing, the same control clicked again, many reads per action, a slow start, time waiting for the owner, budget pressure, failures and steps whose outcome is unknown. Deterministic: no model reads anything. Texts are masked like the trace. Reads at most 2,000 steps (`truncated`). Permission `runs:read`; 404 `RUN_NOT_FOUND` for a run that is not yours.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "runInsights_diagnostics",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunDiagnosticsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A run's findings",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
     "/api/usage/report": {
       "get": {
         "description": "Tokens (uncached input, cached input, output, reasoning), requests and cost per day (or per month for `range=1y`), split by model, token type, feature, provider or user, with totals, a per-model table and the runs' own counters. Cost uses the admin's model prices (and, for `scope=me`, the caller's own overrides); a model with no price makes `costKnown` false and the cost a lower bound. `scope=me` is always the caller's own usage; `scope=all` (every user) needs `ai_config:read`. Catalogue syncs are left out.\n\n**Requires:** authentication, plus permission `usage:read`.",
@@ -108276,6 +108361,143 @@
           }
         },
         "additionalProperties": false
+      },
+      "RunDiagnosticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "computedAt": {
+            "type": "string",
+            "description": "When the findings were computed (on read, ISO 8601)"
+          },
+          "stepsRead": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the run has more than 2,000 steps: the findings cover the first 2,000"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "loop",
+                    "selector_miss",
+                    "repeated_click",
+                    "observation_heavy",
+                    "slow_start",
+                    "waited_for_owner",
+                    "budget_pressure",
+                    "failures",
+                    "unknown_outcome"
+                  ],
+                  "description": "What kind of finding it is"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "description": "One line for a person"
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "One or two sentences, facts only"
+                },
+                "seqFrom": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The first step it is about, or null"
+                },
+                "seqTo": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The last step it is about, or null"
+                },
+                "stepsSpent": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Steps attributable to it; 0 when not applicable"
+                },
+                "evidence": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    ]
+                  },
+                  "description": "The facts behind it"
+                }
+              },
+              "required": [
+                "code",
+                "severity",
+                "title",
+                "detail",
+                "seqFrom",
+                "seqTo",
+                "stepsSpent",
+                "evidence"
+              ]
+            },
+            "description": "Warnings first, then by steps spent"
+          }
+        },
+        "required": [
+          "runId",
+          "computedAt",
+          "stepsRead",
+          "truncated",
+          "findings"
+        ]
       },
       "UsageReportResponseDto": {
         "type": "object",
