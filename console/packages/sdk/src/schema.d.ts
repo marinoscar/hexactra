@@ -9289,6 +9289,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/improvements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's proposals
+         * @description Newest first, at most 50, without their changes. Permission `tasks:read`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
+        get: operations["taskImprover_list"];
+        put?: never;
+        /**
+         * Propose a better goal for a task
+         * @description Queues a proposal (E52.8): an AI reads the task's recent finished runs (default the 5 newest; `runIds`: 1 to 10 of its finished runs) and proposes a better goal, each change cited to steps. It never changes the task. 400 `INVALID_RUNS` / `NO_FINISHED_RUNS`; 409 `IMPROVEMENT_RUNNING` while one is being made; 429 `IMPROVEMENT_LIMIT` above 20 a day; 404 when the task is not yours or the feature is off. Permission `tasks:write`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskImprover_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-improvements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One proposal
+         * @description With its summary, proposed goal, changes and their evidence, and site facts. Permission `tasks:read`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
+        get: operations["taskImprover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-improvements/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a proposal
+         * @description A `ready` proposal becomes `dismissed`. Permission `tasks:write`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskImprover_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-improvements/{id}/applied": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that a proposed goal was saved
+         * @description Marks a `ready` proposal `applied` and stores the goal the owner saved. It does NOT change the task: the web calls it after the task form's own save, and it is refused (409 `GOAL_NOT_SAVED`) unless the task's goal is the one given. Permission `tasks:write`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskImprover_applied"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks/events": {
         parameters: {
             query?: never;
@@ -12481,6 +12575,9 @@ export interface components {
             notes: {
                 archiveAfterDays: number;
             };
+            taskImprover: {
+                enabled: boolean;
+            };
             /** @description The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck). */
             browserAgentTiers: {
                 fast: {
@@ -12822,6 +12919,9 @@ export interface components {
             };
             notes?: {
                 archiveAfterDays: number;
+            };
+            taskImprover?: {
+                enabled: boolean;
             };
             /** @description The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck). */
             browserAgentTiers?: {
@@ -13169,6 +13269,9 @@ export interface components {
             };
             notes?: {
                 archiveAfterDays?: number;
+            };
+            taskImprover?: {
+                enabled?: boolean;
             };
             browserAgentTiers?: {
                 fast?: {
@@ -25754,6 +25857,124 @@ export interface components {
             }[];
             /** @description What could not be carried over as the spec said (an unknown account, an invalid schedule), in words for the form */
             warnings: string[];
+        };
+        ImprovementRequestedResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "queued";
+        };
+        RequestImprovementDto: {
+            runIds?: string[];
+        };
+        ImprovementListResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                taskId: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "ready" | "failed" | "applied" | "dismissed";
+                /** @description The runs read, newest first */
+                runIds: string[];
+                /** @description The task's goal template when the proposal was asked for */
+                goalBefore: string;
+                proposedGoal: string | null;
+                /** @description What went wrong across the runs, in plain words */
+                summary: string | null;
+                /** @description Each change with the steps that show why; absent in a list */
+                changes?: {
+                    /** @enum {string} */
+                    kind: "add" | "replace" | "remove";
+                    text: string;
+                    why: string;
+                    evidence: {
+                        /** Format: uuid */
+                        runId: string;
+                        seqFrom: number;
+                        seqTo: number;
+                        finding?: string;
+                    }[];
+                }[];
+                /** @description Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list */
+                siteFacts?: {
+                    site: string;
+                    /** @enum {string} */
+                    kind: "navigation" | "timing" | "quirk";
+                    text: string;
+                    evidence: {
+                        /** Format: uuid */
+                        runId: string;
+                        seqFrom: number;
+                        seqTo: number;
+                    }[];
+                }[];
+                confidence: ("low" | "medium" | "high") | null;
+                model: string | null;
+                usedImages: boolean;
+                /** @description Why a failed proposal failed, for a person */
+                error: string | null;
+                /** @description The goal the owner saved, when applied */
+                appliedGoal: string | null;
+                createdAt: string;
+                finishedAt: string | null;
+                decidedAt: string | null;
+            }[];
+        };
+        ImprovementResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "ready" | "failed" | "applied" | "dismissed";
+            /** @description The runs read, newest first */
+            runIds: string[];
+            /** @description The task's goal template when the proposal was asked for */
+            goalBefore: string;
+            proposedGoal: string | null;
+            /** @description What went wrong across the runs, in plain words */
+            summary: string | null;
+            /** @description Each change with the steps that show why; absent in a list */
+            changes?: {
+                /** @enum {string} */
+                kind: "add" | "replace" | "remove";
+                text: string;
+                why: string;
+                evidence: {
+                    /** Format: uuid */
+                    runId: string;
+                    seqFrom: number;
+                    seqTo: number;
+                    finding?: string;
+                }[];
+            }[];
+            /** @description Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list */
+            siteFacts?: {
+                site: string;
+                /** @enum {string} */
+                kind: "navigation" | "timing" | "quirk";
+                text: string;
+                evidence: {
+                    /** Format: uuid */
+                    runId: string;
+                    seqFrom: number;
+                    seqTo: number;
+                }[];
+            }[];
+            confidence: ("low" | "medium" | "high") | null;
+            model: string | null;
+            usedImages: boolean;
+            /** @description Why a failed proposal failed, for a person */
+            error: string | null;
+            /** @description The goal the owner saved, when applied */
+            appliedGoal: string | null;
+            createdAt: string;
+            finishedAt: string | null;
+            decidedAt: string | null;
+        };
+        AppliedDto: {
+            goal: string;
         };
         WebhookEventCatalogDto: {
             items: {
@@ -56927,6 +57148,264 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ChatMessageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestImprovementDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementRequestedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_applied: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppliedDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementResponseDto"];
                     };
                 };
             };
