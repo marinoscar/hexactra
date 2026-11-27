@@ -18,6 +18,14 @@ import type { RunStatus } from './run-status';
 import { TERMINAL_RUN_STATUSES } from './run-status';
 import { BUDGET_STOP_REASONS, HIDDEN_RUN_TRIGGERS, LIVE_RUN_STATUSES, RUN_STATES, RUN_STATUSES, type RunFilter } from './runs.schemas';
 
+/**
+ * A goal search as LIKE text: `%`, `_` and `\\` escaped (with Postgres's default escape character), so the search is plain text as
+ * documented. Prisma's `contains` does not escape them: before this, `q=%` matched every run, for the list and for a delete by filter.
+ */
+export function likeText(q: string): string {
+  return q.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 function invalidFilter(message: string): BadRequestException {
   return new BadRequestException({ code: 'INVALID_FILTER', message });
 }
@@ -42,7 +50,7 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
     ...(filter.taskId ? { taskId: filter.taskId === 'none' ? null : filter.taskId } : {}),
     trigger: filter.trigger ? { in: filter.trigger } : { notIn: [...HIDDEN_RUN_TRIGGERS] },
     ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
-    ...(filter.q ? { goal: { contains: filter.q, mode: 'insensitive' as const } } : {}),
+    ...(filter.q ? { goal: { contains: likeText(filter.q), mode: 'insensitive' as const } } : {}),
     ...(stopReasons ? { stopReason: { in: stopReasons } } : {}),
     ...(filter.policyId ? { policyRef: filter.policyId } : {}),
     ...(filter.origin ? { origin: { in: filter.origin } } : {}),

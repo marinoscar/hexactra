@@ -289,6 +289,11 @@ describe('GET /runs: filters, counts and row shape', () => {
     expect(await list('q=fare')).toEqual(of('queued', 'running', 'failedActions', 'cancelled'));
     expect(await list('q=%20FARE%20TO%20')).toEqual(of('queued', 'running', 'failedActions'));
     expect(await list(`q=${encodeURIComponent('100%')}`)).toEqual(of('cancelled'));
+    // A bare % or _ is a character, not a wildcard (#1069: before, `q=%` matched every run, for the list and a delete by filter).
+    expect(await list(`q=${encodeURIComponent('%')}`)).toEqual(of('cancelled'));
+    expect(await list('q=_')).toEqual([]);
+    expect(await list(`q=${encodeURIComponent('fare_to')}`)).toEqual([]);
+    expect(await list(`q=${encodeURIComponent('\\')}`)).toEqual([]);
     expect(await list(`q=${encodeURIComponent("' OR 1=1 --")}`)).toEqual([]);
     // An empty search is no search.
     expect(await list('q=')).toHaveLength(8);
