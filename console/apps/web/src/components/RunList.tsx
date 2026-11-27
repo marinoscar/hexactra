@@ -76,7 +76,7 @@ import {
 } from './runFilters';
 import { ORIGIN_LABEL, StartedByChip, appDisplayName } from './StartedByChip';
 import { useRunExport } from './RunExport';
-import { RUN_MENU_LABEL, rowCost, runAgain, runAgainQuestionFor, runDuration, runMenuActions, triggerWords, type RunMenuAction } from './runRow';
+import { RUN_MENU_LABEL, rowCost, rowTokens, runAgain, runAgainQuestionFor, runDuration, runMenuActions, triggerWords, type RunMenuAction } from './runRow';
 import { useRunList } from './useRunList';
 
 /** The most ids one `POST /runs/delete` takes. */
@@ -404,6 +404,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   // ---- Rows ----
   const showTask = showTaskColumn && !scoped;
   const hasCost = items.some((r) => rowCost(r) !== null);
+  const hasTokens = items.some((r) => rowTokens(r) !== null);
   const taskLine = (run: RunListItem) =>
     showTask && run.taskId && run.taskName ? (
       <Link component={RouterLink} to={`/tasks/${run.taskId}`} variant="caption" underline="hover" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
@@ -467,6 +468,22 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
             render: (r: RunListItem) => (
               <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }} data-testid="run-cost">
                 {rowCost(r) ?? '—'}
+              </Box>
+            ),
+          },
+        ]
+      : []),
+    // Tokens (E53.5): beside Cost, and hidden on narrow widths like it.
+    ...(hasTokens
+      ? [
+          {
+            key: 'tokens',
+            header: 'Tokens',
+            align: 'right' as const,
+            hideBelow: 'lg' as const,
+            render: (r: RunListItem) => (
+              <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }} data-testid="run-tokens">
+                {rowTokens(r) ?? '—'}
               </Box>
             ),
           },

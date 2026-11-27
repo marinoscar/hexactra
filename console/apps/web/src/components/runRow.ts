@@ -39,6 +39,13 @@ export function triggerWords(run: Pick<Run, 'trigger' | 'actor'>): string {
  * null when there is none to show (no model call yet, or a deployment without
  * model prices, where the figure would be "≥ $0.00").
  */
+/** A run's tokens (input + output) as `1,234` or `45.6k`; null for a run that made no model call. */
+export function rowTokens(run: Pick<Run, 'inputTokens' | 'outputTokens'>): string | null {
+  const total = (run.inputTokens ?? 0) + (run.outputTokens ?? 0);
+  if (total <= 0) return null;
+  return total >= 10_000 ? `${(total / 1_000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k` : total.toLocaleString('en-US');
+}
+
 export function rowCost(run: Pick<Run, 'costUsd' | 'costKnown' | 'modelCalls'>): string | null {
   if (typeof run.costUsd !== 'number') return null;
   const known = run.costKnown ?? true;

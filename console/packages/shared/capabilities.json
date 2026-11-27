@@ -521,9 +521,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; statistics are read in the web app or the CLI"
       },
-      "web": {
-        "none": "Not yet: the Runs Analytics page is #1073 (epic #1068)"
-      }
+      "web": "/runs/analytics"
     },
     {
       "id": "runs.stats_admin",
@@ -538,9 +536,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; read the statistics with the CLI or the web app"
       },
-      "web": {
-        "none": "Not yet: Administration → Runs analytics is #1073 (epic #1068)"
-      }
+      "web": "/admin/runs/analytics"
     },
     {
       "id": "runs.dataset",
@@ -560,7 +556,7 @@
         "none": "The TUI is for watching and answering; make the file with the CLI or the web app"
       },
       "web": {
-        "none": "Not in the app's own pages yet: the Runs Analytics page's Export dataset is #1073. Today the platform's Your data page (Settings, Export your data, /settings/data-export) lists it as Run dataset"
+        "none": "The app's Runs → Analytics page starts it (Export dataset); the file is downloaded from the platform's Your data page (/settings/data-export), which the app's pages do not call"
       }
     },
     {

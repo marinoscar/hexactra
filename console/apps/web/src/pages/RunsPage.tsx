@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import { Box, Link, Snackbar, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
@@ -58,7 +59,11 @@ export function RunsPage() {
 
   return (
     <PageContainer width="wide">
-      <PageHeader title="Runs" primary={{ key: 'new', label: 'New run', Icon: AddIcon, onClick: () => setCreating(true), hidden: !canRun }} />
+      <PageHeader
+        title="Runs"
+        primary={{ key: 'new', label: 'New run', Icon: AddIcon, onClick: () => setCreating(true), hidden: !canRun }}
+        actions={[{ key: 'analytics', label: 'Analytics', Icon: InsightsOutlinedIcon, to: '/runs/analytics' }]}
+      />
       {spend && taskId && (
         <Box sx={{ mb: 2 }}>
           <Typography variant="subtitle1" component="h2">

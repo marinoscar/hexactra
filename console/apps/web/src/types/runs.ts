@@ -123,6 +123,10 @@ export interface Run {
   costKnown?: boolean;
   /** Model calls (provider round trips) made so far. */
   modelCalls?: number;
+  /** Tokens the run's model calls used (input includes cached input). */
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
   /** Why the run stopped; null while it runs and on runs from before the field. */
   stopReason?: RunStopReason | null;
   /** The run's model tier, from its policy snapshot (#408): start, max, current, escalations and model. */
