@@ -11,7 +11,7 @@ export const click = defineRunnerTool({
   name: 'click',
   group: 'browser',
   family: 'browser',
-  description: 'Click the element matching a CSS selector.',
+  description: 'Click the element matching a CSS selector, with a real mouse click at its center.',
   parameters: z.object({ selector: z.string().max(2000), reason: z.string().max(500) }),
   gated: {
     [RISK_GATE]: async (ctx: BrowserContext, { selector, reason }): Promise<RiskRequest> => {
