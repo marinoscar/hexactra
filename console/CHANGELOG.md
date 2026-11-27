@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Find out from a terminal why web search or a connection does not work** (#985, E50.15, epic #970). Everything the pages do for testing and troubleshooting is now a CLI command, for a server with no browser:
+- **Find out from a terminal why web search or a connection does not work** (#985, console 1.155.0; E50.15, epic #970). Everything the pages do for testing and troubleshooting is now a CLI command, for a server with no browser:
   - `hexactra connections diagnose <connection>` prints each check in order (a mark, the check, the code in words and what to do), exits 0 for pass or warn, 1 for a failure and 2 when it could not run; `--json` is the API's report (codes and counts, no label unless `--include-names`). `connections diagnostics <connection>` lists the last reports, `connections list` gains a HEALTH column, `connections try <connection> <tool>` calls a Read tool of an MCP server once, and an administrator tests the deployment's Google or Microsoft app with `connections app-test google|microsoft`.
   - `hexactra search status|providers|test|query|on|off|keys`: whether search works for you and why not, a diagnostic with the same exit codes, one search with numbered results, your own switch, and which keys are stored. `search key set <provider>` reads the key from a hidden prompt or `--stdin` and refuses it as an argument (it would stay in your shell history); `--deployment` and `--org` pick the tier. `search admin show|set|usage` for an administrator.
   - `hexactra tasks show <task>` prints one line of what its runs can use. There is no per-task or per-run flag for web search or connections (E50.17).
