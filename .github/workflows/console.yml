@@ -92,8 +92,7 @@ jobs:
       # The SDK's types are generated from packages/sdk/openapi.json; the db
       # tier below checks that file equals the document the API serves.
       - run: npm run check:generated --workspace=@hexactra/console-sdk
-      # Unit tests, runPlatformConformance(), web and CLI suites.
-      - run: npm test
+      # The unit tiers (api with runPlatformConformance(), web, cli, mcp-ui) are the job `unit` below (#1055); `test:packages` is above.
       # The replay suite, scripted (E38.6): every scenario against the real runner loop with a scripted model and a fake site. Free and
       # deterministic (no database, no model). It fails when a scenario fails or when none is found, so it never reports success for a
       # suite that did not run. The live mode costs money and has its own workflow (scenarios-live.yml).
@@ -111,6 +110,68 @@ jobs:
       - run: npm run bundle:compare --workspace=web
 
       # The db tier (the whole app against a migrated, seeded database) is the job below.
+
+  # The unit tiers that `npm test` runs, as parallel jobs (#1055): the api unit tier with cli and mcp-ui, and the web suite in two Vitest
+  # shards. `test:packages` runs in the job above. A shard that finds no test file fails (Vitest's default), and the job
+  # "Console unit tests" is green only when every entry passed.
+  unit:
+    name: Console unit tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api, cli, mcp-ui
+            run: npm test --workspace=api && npm run test:run --workspace=cli && npm run test:run --workspace=mcp-ui
+          - name: web 1 of 2
+            run: npm run test:run --workspace=web -- --shard=1/2
+          - name: web 2 of 2
+            run: npm run test:run --workspace=web -- --shard=2/2
+    defaults:
+      run:
+        working-directory: console
+    # The same variables the checks job had when these suites ran there (no database: the unit tiers never reach one).
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hexactra_console_test
+      POSTGRES_SSL: 'false'
+      JWT_SECRET: ci-jwt-secret-not-a-real-secret-0000000000
+      COOKIE_SECRET: ci-cookie-secret-not-a-real-secret
+      GOOGLE_CLIENT_ID: ci-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-google-client-secret
+      GOOGLE_CALLBACK_URL: http://127.0.0.1:3000/api/auth/google/callback
+      INITIAL_ADMIN_EMAIL: admin@example.test
+      OTEL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: console/package-lock.json
+      - run: npm ci
+      # What `npm test` builds first: the agent packages the apps import, and the Prisma client the api imports.
+      - run: npm run build:packages
+      - run: npm run prisma:generate --workspace=api
+      - name: Test
+        run: ${{ matrix.run }}
+
+  unit-tests:
+    name: Console unit tests
+    needs: unit
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every entry passed
+        env:
+          RESULT: ${{ needs.unit.result }}
+        run: |
+          echo "unit entries: $RESULT"
+          test "$RESULT" = "success"
 
   # The db tier: the whole app against a migrated, seeded database, as parallel shards (#1043). Each shard is its own job with its own
   # PostgreSQL, so two shards never share a database; inside a shard the files still run one after another (`--runInBand`). Jest
