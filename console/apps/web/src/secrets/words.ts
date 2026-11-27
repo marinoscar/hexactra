@@ -10,6 +10,7 @@ export const SCOPE_WORDS: Record<string, string> = {
   'vault:identity_fill': 'Fill them into forms for you',
   'vault:cards_read': 'See which cards you allowed at a shop',
   'vault:cards_fill': 'Pay with them for you, within your limits',
+  'vault:service_keys_read': 'Read your keys of outside services for Hexactra’s calls to them',
 };
 
 /** The granted permissions in plain words, in the order the owner would read them; scopes that are not permissions (`offline_access`) are left out. */
@@ -21,6 +22,9 @@ export function permissionWords(scopes: readonly string[]): string[] {
 
 export const hasWriteScope = (scopes: readonly string[]): boolean => scopes.includes('vault:items_write');
 export const hasIdentityScope = (scopes: readonly string[]): boolean => scopes.includes('vault:identity_read') && scopes.includes('vault:identity_fill');
+/** Whether the Vault grant lets the console read the owner's keys of outside services (E50.3, contract 1.4). */
+export const hasServiceKeyScope = (scopes: readonly string[]): boolean => scopes.includes('vault:service_keys_read');
+
 export const hasCardsScope = (scopes: readonly string[]): boolean => scopes.includes('vault:cards_read') && scopes.includes('vault:cards_fill');
 
 const FIELD_WORDS: Record<ActivityField, string> = {
@@ -65,6 +69,8 @@ export function fieldsWords(fields: readonly ActivityField[]): string {
 export function whatWords(item: Pick<ActivityItem, 'event' | 'field' | 'matches'> & { purpose?: ActivityItem['purpose']; outcome?: string; amount?: string | null; currency?: string | null; frameSite?: string | null }): string {
   // The sign-in the owner typed, sent to their provider to be saved (E37.4b): not something the agent typed.
   if (item.purpose === 'save_login') return 'Saved the sign-in you typed';
+  // A key of an outside service read by the console's own server (E50.3): never typed into a page.
+  if (item.event === 'service_key') return 'Read a key of an outside service for a call to it';
   if (item.event === 'lookup') {
     if (item.matches === null) return 'Looked for a saved login';
     return item.matches === 0 ? 'Looked for a saved login: none found' : `Looked for a saved login: ${item.matches} found`;

@@ -30,6 +30,25 @@ export const serviceCredentialViewSchema = z.object({
   binding: z.enum(['credential_store', 'vault', 'builtin']).describe('Where the answering key is kept.'),
   tier: tier.nullable().describe('The tier a request of yours would use now (user, then organization, then deployment), or `null`.'),
   tiers: z.object({ user: tierStateSchema, organization: tierStateSchema, system: tierStateSchema }),
+  userBinding: z.enum(['credential_store', 'vault', 'builtin']).describe('Where your own key is kept (E50.3): the console, your Vault or the built-in store.'),
+  secretsProvider: z
+    .object({
+      id: z.enum(['vault', 'builtin']).describe('Your active secrets provider (`secrets.provider`).'),
+      writable: z.boolean().describe('The console can write a key there (the built-in store). Into a remote Vault you add the key yourself, then Move checks it.'),
+      releasesEnabled: z.boolean().describe("The deployment's `secrets.agentUse` switch: off, no key is read from a secrets provider (the next tier answers)."),
+      ready: z.boolean().describe('The provider can answer now: the built-in store is offered, or your Vault is connected with `vault:service_keys_read`.'),
+    })
+    .nullable()
+    .describe('Your secrets provider, for Move here; null when this deployment has none.'),
 });
 export class ServiceCredentialResponseDto extends createZodDto(serviceCredentialViewSchema) {}
 export type ServiceCredentialView = z.infer<typeof serviceCredentialViewSchema>;
+
+export const moveSchema = z.object({ to: z.enum(['credential_store', 'secrets_provider']).describe('`credential_store`: the console. `secrets_provider`: your Vault or the built-in store.') }).strict();
+export class MoveServiceCredentialDto extends createZodDto(moveSchema) {}
+
+export const moveResultSchema = z.object({
+  binding: z.enum(['credential_store', 'vault', 'builtin']).describe('Where your key is kept now.'),
+  sourceRemoved: z.boolean().describe('The old copy was removed. False when there was none, or it is in your remote Vault (remove it there).'),
+});
+export class MoveServiceCredentialResponseDto extends createZodDto(moveResultSchema) {}

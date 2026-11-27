@@ -673,6 +673,11 @@ export const RESPONSES = {
   'GET /secrets/reach': secretsReach,
   'GET /secrets/identity': secretsIdentity,
   'GET /secrets/cards': secretsCards,
+  // Keys of outside services (E50.3): one key in the built-in store, one not set.
+  'GET /service-credentials': [
+    { service: 'web_search', name: 'brave', label: 'Brave Search API key', tier: 'user', tiers: { user: { available: true, set: true, setAt: '2026-11-20T10:00:00.000Z' }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: true, setAt: '2026-11-01T10:00:00.000Z' } }, userBinding: 'builtin', secretsProvider: { id: 'builtin', writable: true, releasesEnabled: true, ready: true } },
+    { service: 'web_search', name: 'searxng_with_a_long_reference_name', label: 'A self-hosted search provider with a long name that has to wrap on a phone', tier: null, tiers: { user: { available: true, set: false, setAt: null }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: false, setAt: null } }, userBinding: 'credential_store', secretsProvider: { id: 'builtin', writable: true, releasesEnabled: true, ready: true } },
+  ],
   'GET /secrets/admin/summary': { deploymentEnabled: true, usersConnected: 3, usersNeedingReconnect: 1, usesThisWeek: 41, refusalsThisWeek: 4 },
   'GET /secrets/vault/default-client': { baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, allowedHosts: [], redirectUri: 'https://console.example.test/api/secrets/vault/callback' },
   'GET /connected-apps/preflight': preflight,
