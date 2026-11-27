@@ -442,6 +442,17 @@ export function pageCodeBoxes(op: 'prepare' | 'verify' | 'fill', selector: strin
   return { boxes: group.length, filled: Math.min([...held].length, need), matched: held === text, method };
 }
 
+/**
+ * Focus what a key press goes to (E52.12, #1030): the element a selector names, or the focused element. It dispatches nothing: the
+ * key itself is a trusted CDP key event. The errors are `pagePress`'s.
+ */
+export function pageFocusFor(selector: string | null) {
+  const target = (selector ? document.querySelector(selector) : document.activeElement) as HTMLElement | null;
+  if (!target) return { __error: selector ? `no element matches ${selector}` : 'no focused element' };
+  if (selector && typeof target.focus === 'function') target.focus();
+  return { ok: true };
+}
+
 export function pagePress(key: string, selector: string | null) {
   const target = (selector ? document.querySelector(selector) : document.activeElement) as HTMLElement | null;
   if (!target) return { __error: selector ? `no element matches ${selector}` : 'no focused element' };
@@ -858,12 +869,30 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
         const prep = await inPage(tab.id!, pageCodeBoxes, ['prepare', action.selector, action.text, action.expect_origin ?? null, false]);
         if (prep.group) return typeCodeBoxes(tab, action);
       }
-      const typeIt = () => inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
-      return typeIt();
+      if (!action.submit) return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, false, action.expect_origin ?? null]);
+      // Type, then submit with a real, trusted Enter at the field (E52.12, #1030): a script Enter is ignored by many composers. The
+      // tab's origin is checked again before the key; without the debugger, the script submit as before.
+      const typed = await inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, false, action.expect_origin ?? null]);
+      assertTabOrigin(await resolveTab(tab.id), action.expect_origin);
+      try {
+        await cdp.pressKey(tab.id!, 'Enter');
+        return { ...(typed ?? {}), submitted: 'keys' };
+      } catch {
+        await inPage(tab.id!, pagePress, ['Enter', action.selector]);
+        return { ...(typed ?? {}), submitted: 'synthetic' };
+      }
     }
     case 'press': {
+      // A real, trusted key press at the focus (E52.12, #1030); the script key events only when the debugger is not available.
       const tab = await resolveTab(action.tab_id);
-      return inPage(tab.id!, pagePress, [action.key, action.selector ?? null]);
+      await inPage(tab.id!, pageFocusFor, [action.selector ?? null]);
+      try {
+        await cdp.pressKey(tab.id!, action.key);
+        return { method: 'keys' };
+      } catch {
+        await inPage(tab.id!, pagePress, [action.key, action.selector ?? null]);
+        return { method: 'synthetic' };
+      }
     }
     case 'scroll': {
       const tab = await resolveTab(action.tab_id);

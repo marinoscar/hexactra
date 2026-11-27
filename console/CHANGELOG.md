@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A key press is a real key press, and typing with submit sends a real Enter** (#1030, console 1.154.2; E52.12, epic #1015). `press_key`, and `type_text` with `submit`, sent script key events, which many web apps ignore: a messaging app kept the message in its box while the agent was told "ok". Both now send a trusted key event at the field (the tab's origin is checked again before the Enter); without the debugger they fall back to the script events and the agent is told the page may ignore them.
 - **A click on an element the agent names by selector is now a real mouse click** (#1016, console 1.154.1; E52.1, epic #1015). Before, `click` sent script events, which many web apps ignore: the agent was told "ok", nothing happened, and it tried again (about 8 wasted steps on a messaging app's Send button). The extension now clicks with a trusted mouse event at a point its hit test finds on the element, as `click_mark` and `click_at` already did. When the mouse cannot reach the element (covered, off screen) or the debugger cannot attach, it still clicks by script, and the agent is told the page may have ignored it.
 
 ### Changed

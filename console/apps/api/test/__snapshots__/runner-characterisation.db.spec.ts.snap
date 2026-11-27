@@ -405,7 +405,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Press a key such as Enter, Tab or Escape.",
+          "description": "Press a key such as Enter, Tab or Escape, with a real key press at the focused element.",
           "name": "press_key",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2508,7 +2508,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Press a key such as Enter, Tab or Escape.",
+          "description": "Press a key such as Enter, Tab or Escape, with a real key press at the focused element.",
           "name": "press_key",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -3842,7 +3842,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Press a key such as Enter, Tab or Escape.",
+          "description": "Press a key such as Enter, Tab or Escape, with a real key press at the focused element.",
           "name": "press_key",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -5352,7 +5352,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Press a key such as Enter, Tab or Escape.",
+          "description": "Press a key such as Enter, Tab or Escape, with a real key press at the focused element.",
           "name": "press_key",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -7607,7 +7607,7 @@ When done, or when the goal is impossible, call finish with a short, factual res
           "strict": true,
         },
         {
-          "description": "Press a key such as Enter, Tab or Escape.",
+          "description": "Press a key such as Enter, Tab or Escape, with a real key press at the focused element.",
           "name": "press_key",
           "parameters": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
