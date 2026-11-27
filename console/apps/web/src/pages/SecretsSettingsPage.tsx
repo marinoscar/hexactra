@@ -30,7 +30,8 @@ import {
   type StoreStatus,
   type VaultStatus,
 } from '../secrets/api';
-import { CONNECT_RESULT_WORDS, fieldsWords, hasCardsScope, hasIdentityScope, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
+import { CONNECT_RESULT_WORDS, fieldsWords, hasCardsScope, hasIdentityScope, hasServiceKeyScope, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
+import { ServiceKeysSection } from '../secrets/ServiceKeysSection';
 import { limitsText, type ApprovalRule, type ApprovalRulesList } from '../approvals/types';
 import { PasskeysSection } from '../secrets/PasskeysSection';
 import { CardSkeleton, EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, useApiAction, useConfirm, type Column } from '../ui';
@@ -223,6 +224,7 @@ const ACTIVITY_COLUMNS = (links: { runHref: (id: string) => string }): Column<Ac
 
 /** The login's name when the run recorded it, with the site under it. */
 function SiteCell({ item }: { item: ActivityItem }) {
+  if (item.event === 'service_key') return <>{item.serviceKey ?? 'A key of an outside service'}</>;
   const site = item.site ?? 'Unknown site';
   if (!item.loginName) return <>{site}</>;
   return (
@@ -272,7 +274,7 @@ function ActivitySection({ activity }: { activity: ActivityList }) {
           renderCard={(i) => (
             <Paper variant="outlined" sx={{ p: 1.5 }} data-testid={`activity-${i.id}`}>
               <Stack spacing={0.5}>
-                <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{i.loginName ? `${i.loginName} (${i.site ?? 'unknown site'})` : (i.site ?? 'Unknown site')}</Typography>
+                <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{i.event === 'service_key' ? (i.serviceKey ?? 'A key of an outside service') : i.loginName ? `${i.loginName} (${i.site ?? 'unknown site'})` : (i.site ?? 'Unknown site')}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {whatWords(i)} · <RelativeTime iso={i.at} />
                 </Typography>
@@ -658,16 +660,18 @@ export function SecretsSettingsPage() {
 
   const vault = status?.providers.vault ?? null;
 
-  const startConnect = (allowWrite: boolean, allowIdentity = false, allowCards = false) =>
+  // A new consent keeps every permission the owner already gave unless the call changes it (E50.3 adds the service keys one).
+  const keepServiceKeys = vault ? hasServiceKeyScope(vault.scopes) : false;
+  const startConnect = (allowWrite: boolean, allowIdentity = false, allowCards = false, allowServiceKeys = keepServiceKeys) =>
     action.run('connect', async () => {
-      const r = await connect(api, { allowWrite, ...(allowIdentity ? { allowIdentity } : {}), ...(allowCards ? { allowCards } : {}), returnTo: '/settings/secrets' });
+      const r = await connect(api, { allowWrite, ...(allowIdentity ? { allowIdentity } : {}), ...(allowCards ? { allowCards } : {}), ...(allowServiceKeys ? { allowServiceKeys } : {}), returnTo: '/settings/secrets' });
       window.location.assign(r.authorizeUrl);
     });
 
   const saveAndConnect = (v: { baseUrl: string; clientId: string; clientSecret?: string }) =>
     action.run('connect', async () => {
       await saveClient(api, v);
-      const r = await connect(api, { allowWrite: vault ? hasWriteScope(vault.scopes) : false, ...(vault && hasIdentityScope(vault.scopes) ? { allowIdentity: true } : {}), ...(vault && hasCardsScope(vault.scopes) ? { allowCards: true } : {}), returnTo: '/settings/secrets' });
+      const r = await connect(api, { allowWrite: vault ? hasWriteScope(vault.scopes) : false, ...(vault && hasIdentityScope(vault.scopes) ? { allowIdentity: true } : {}), ...(vault && hasCardsScope(vault.scopes) ? { allowCards: true } : {}), ...(keepServiceKeys ? { allowServiceKeys: true } : {}), returnTo: '/settings/secrets' });
       window.location.assign(r.authorizeUrl);
     });
 
@@ -733,6 +737,14 @@ export function SecretsSettingsPage() {
       if (!ok) return;
     }
     await startConnect(vault ? hasWriteScope(vault.scopes) : false, vault ? hasIdentityScope(vault.scopes) : false, on);
+  };
+
+  const toggleServiceKeys = async (on: boolean) => {
+    if (!on) {
+      const ok = await confirm({ title: 'Stop letting Hexactra read your keys of outside services?', body: 'You will go to Vault to approve a connection without that permission. A key kept in your Vault is then not used; your organization’s or the deployment’s key is, if one is shared.', confirmLabel: 'Continue' });
+      if (!ok) return;
+    }
+    await startConnect(vault ? hasWriteScope(vault.scopes) : false, vault ? hasIdentityScope(vault.scopes) : false, vault ? hasCardsScope(vault.scopes) : false, on);
   };
 
   const deploymentOff = status !== null && !status.agentUse.deployment;
@@ -830,6 +842,20 @@ export function SecretsSettingsPage() {
                   onChange={(on) => void toggleCards(on)}
                 />
               )}
+              {store?.provider !== 'builtin' && (
+                <SwitchRow
+                  label="Let Hexactra read your keys of outside services"
+                  help={
+                    !connected
+                      ? 'Connect your provider first.'
+                      : 'Asks Vault for permission for Hexactra’s server to read a key you keep there as a “Service key” (a web search provider’s, for example), only for its calls to that service. The agent never sees it. You approve it in Vault. Needs a Vault that supports service keys. Off by default.'
+                  }
+                  checked={connected && hasServiceKeyScope(vault.scopes)}
+                  disabled={!canWrite || !connected}
+                  busy={action.busy === 'connect'}
+                  onChange={(on) => void toggleServiceKeys(on)}
+                />
+              )}
             </Stack>
           </Paper>
 
@@ -838,6 +864,7 @@ export function SecretsSettingsPage() {
           {reach && <ReachSection reach={reach} manageUrl={manageUrl} store={store} />}
           {store?.provider !== 'builtin' && <CardsSection connected={vault.status === 'connected'} hasScope={hasCardsScope(vault.scopes)} manageUrl={manageUrl} remembered={cardRules} />}
           {identity && store?.provider !== 'builtin' && <IdentitySection identity={identity} manageUrl={identity.manageUrl ?? manageUrl} />}
+          <ServiceKeysSection canWrite={canWrite} />
           {activity ? <ActivitySection activity={activity} /> : <ListSkeleton rows={3} />}
         </Stack>
       )}
