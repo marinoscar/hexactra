@@ -104,10 +104,12 @@ export const ATTR = {
   webResults: 'hexactra.web.results',
   webKind: 'hexactra.web.kind',
   webOutcome: 'hexactra.web.outcome',
+  /** A click or key press after which the page digest did not change (E52.3, #1018): `true`, or absent. */
+  pageUnchanged: 'hexactra.page.unchanged',
 } as const;
 
 /** The only attributes a tool may add to its own span with `toolAttributes`: closed, content-free names. */
-export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect, ATTR.artifactSource, ATTR.artifactRun, ATTR.webProvider, ATTR.webResults, ATTR.webKind, ATTR.webOutcome];
+export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect, ATTR.artifactSource, ATTR.artifactRun, ATTR.webProvider, ATTR.webResults, ATTR.webKind, ATTR.webOutcome, ATTR.pageUnchanged];
 
 /** Why a span link exists (`hexactra.link.type`). */
 export const LINK = { previousJob: 'previous_job', startedBy: 'started_by' } as const;

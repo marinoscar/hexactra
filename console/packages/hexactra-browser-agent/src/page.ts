@@ -67,3 +67,57 @@ export async function lastStepOk(ctx: BrowserContext, seqBefore: number): Promis
   const step = await ctx.ports.store.getStep(ctx.state.seq);
   return Boolean(step?.ok && step.kind === 'action');
 }
+
+/**
+ * The page script that hashes what a person would see change (E52.3, #1018): the address, the title, the visible text, the number of
+ * elements, what has the focus, the open dialogs, and the length (never the value) of each field. One 32-bit FNV-1a hash, 8 hex
+ * characters: no page text and no field value leaves the page. The marker comment lets a test fabric recognise it.
+ */
+export function digestScript(): string {
+  return `/* hexactra:page-digest */(() => {
+  let h = 0x811c9dc5;
+  const add = (s) => { s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } h ^= 0x7c; h = Math.imul(h, 0x01000193) >>> 0; };
+  add(location.href); add(document.title);
+  add(((document.body && document.body.innerText) || '').slice(0, 200000));
+  add(document.getElementsByTagName('*').length);
+  const a = document.activeElement; add(a ? a.tagName + '#' + (a.id || '') + '@' + (a.getAttribute('name') || '') : '');
+  add(document.querySelectorAll('[role=dialog], dialog[open], [aria-modal=true]').length);
+  for (const f of document.querySelectorAll('input:not([type=password]), textarea, select, [contenteditable]')) {
+    const v = 'value' in f && f.tagName !== 'DIV' ? f.value : f.textContent;
+    add(String(v == null ? '' : v).length); add(f.checked ? 1 : 0);
+  }
+  return { h: (h >>> 0).toString(16).padStart(8, '0') };
+})()`;
+}
+
+/** The page digest (E52.3): one evaluate outside `act`, so no step, no budget and no stall feed. Null when the page cannot be asked. */
+export async function pageDigest(ctx: BrowserContext): Promise<string | null> {
+  try {
+    const op = await ctx.ext.browser.act({ type: 'evaluate', script: digestScript(), await_promise: false }, ACTION_TIMEOUT_MS);
+    const v = op.state === 'succeeded' ? (op.result?.value as { h?: unknown } | null | undefined) : null;
+    return v && typeof v.h === 'string' && /^[0-9a-f]{8}$/.test(v.h) ? v.h : null;
+  } catch {
+    return null;
+  }
+}
+
+/** When the digest is read again after an action (E52.3), in milliseconds after it returned. */
+export const SETTLE_DELAYS_MS: readonly number[] = [0, 150, 300, 600];
+
+/**
+ * Whether an action changed nothing on the page (E52.3): the digest after it, read at each of the delays until one differs, equals the
+ * digest before. A failed read, a page that is gone, or Stop or Pause pressed while waiting are "changed" (never claim what is not known).
+ */
+export async function unchangedAfter(ctx: BrowserContext, before: string | null): Promise<boolean> {
+  if (before === null) return false;
+  const delays = ctx.ext.settleDelaysMs ?? SETTLE_DELAYS_MS;
+  let waited = 0;
+  for (const at of delays) {
+    if (at > waited) await new Promise((r) => setTimeout(r, at - waited));
+    waited = Math.max(waited, at);
+    if (ctx.ports.control.requested || ctx.ports.control.pauseRequested) return false;
+    const now = await pageDigest(ctx);
+    if (now === null || now !== before) return false;
+  }
+  return true;
+}

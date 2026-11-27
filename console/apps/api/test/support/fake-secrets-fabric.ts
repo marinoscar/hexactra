@@ -266,6 +266,8 @@ export function fakeSecretsFabric(url: string) {
         const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string };
         return { id: 'op', state: 'succeeded', result: { type: 'object', value: surface.find((e) => e.selector === where.selector || (e.selectors as string[] | undefined)?.includes(where.selector ?? '')) ?? null } };
       }
+      // The page digest after a click (E52.3) is the server's own read, not an action: unknown here, so clicks read as before.
+      if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:page-digest */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: null } };
       if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:describe-target */')) {
         const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
         return { id: 'op', state: 'succeeded', result: { type: 'object', value: targets.get(where.selector ?? `${where.x},${where.y}`) ?? null } };
