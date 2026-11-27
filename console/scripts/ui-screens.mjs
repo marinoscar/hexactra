@@ -149,6 +149,10 @@ export const ROUTES = [
   // Memories (#551): the page, and its add dialog (opened by clicking "Add").
   ['settings-memories', '/settings/memories'],
   ['settings-memories-dialog', '/settings/memories', { click: 'Add' }],
+  // Skills (#1008): the list, the form, and the deployment switch.
+  ['settings-skills', '/settings/skills'],
+  ['settings-skills-dialog', '/settings/skills', { click: 'Add' }],
+  ['admin-skills', '/admin/settings/skills'],
   // "Don't ask again" (#555): the approval card with the box ticked and the limits open.
   ['inbox-dont-ask-again', '/inbox', {
     action: async (page) => {

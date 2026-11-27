@@ -13,6 +13,8 @@ import type { ConnectionsMemory } from './connections/memory';
 export interface RunMemory extends BrowserMemory {
   /** Memories the runner proposed so far (#553), for the per-run cap. */
   proposals?: number;
+  /** `skill_read` calls so far (#1008), for the per-run cap of five. A count only: never a skill's text. */
+  skillReads?: number;
   log: string[];
   /** A secret handoff whose value `type_handoff_secret` may type (once). */
   secretHandoffId?: string | null;

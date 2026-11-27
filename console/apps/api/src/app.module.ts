@@ -41,6 +41,7 @@ import { UsageModule } from './usage/usage.module';
 import { KgraphModule } from './kgraph/kgraph.module';
 import { KgraphLedgerModule } from './kgraph/ledger.module';
 import { MemoriesModule } from './memories/memories.module';
+import { SkillsModule } from './skills/skills.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
 import { isSliceEnabled } from './platform/slices/manifest';
@@ -110,6 +111,8 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule, McpConnectionsModule] : []),
     // Benchmarks (E44, #738): the same challenges under several agent policies, graded from the challenge site's state.
     BenchmarkModule,
+    // Skills (#1008): the owner's playbooks for the agent. Last, so its routes follow the others in the OpenAPI document.
+    SkillsModule,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

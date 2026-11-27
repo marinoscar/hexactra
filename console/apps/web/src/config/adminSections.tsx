@@ -12,6 +12,7 @@ import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui'
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import LeaderboardOutlinedIcon from '@mui/icons-material/LeaderboardOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
@@ -183,6 +184,14 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         description: "The search providers the agent uses instead of a browser, whether everyone may use the deployment's key, users' own keys, the limits and the usage.",
         Icon: TravelExploreOutlinedIcon,
         path: '/admin/settings/web-search',
+        permission: 'system_settings:read',
+      },
+      // Skills (#1008): the `skills` namespace of the system settings document: the deployment's switch, on by default.
+      {
+        title: 'Skills',
+        description: "Whether your users' skills (their written guidance for kinds of jobs) are offered to their runs and chats. On by default.",
+        Icon: MenuBookOutlinedIcon,
+        path: '/admin/settings/skills',
         permission: 'system_settings:read',
       },
     ],

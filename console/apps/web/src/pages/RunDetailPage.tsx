@@ -102,6 +102,24 @@ export function UsedMemories({ memories }: { memories: Run['memories'] }) {
   );
 }
 
+/** "Skills read: Google Messages" (#1008): the owner's skills the run read with skill_read, each a link to Skills. Never their text. */
+export function SkillsRead({ skills }: { skills: Run['skills'] }) {
+  if (!skills?.length) return null;
+  return (
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, overflowWrap: 'anywhere' }} data-testid="skills-read">
+      Skills read:{' '}
+      {skills.map((s, i) => (
+        <span key={s.id}>
+          {i > 0 && ', '}
+          <Link component={RouterLink} to={`/settings/skills?skill=${s.id}`} underline="hover">
+            {s.name}
+          </Link>
+        </span>
+      ))}
+    </Typography>
+  );
+}
+
 export { UsedSavedLogins };
 
 export function RunDetailPage() {
@@ -375,6 +393,7 @@ export function RunDetailPage() {
       <RunHeaderChips policy={run.policy} tier={run.tier} />
       <RunInputs inputs={run.inputs} />
       <UsedMemories memories={run.memories} />
+      <SkillsRead skills={run.skills} />
       {/* The owner's unlisted account that could have done this without the browser (E41.5): information only. */}
       <SuggestedConnections items={run.suggestedConnections} taskId={run.taskId} />
       <UsedSavedLogins logins={run.usedSavedLogins} />
