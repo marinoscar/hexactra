@@ -3,7 +3,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useOnNewValue } from '../ui';
+import { useOnNewValue } from '../ui/useOnNewValue';
 
 describe('useOnNewValue', () => {
   it('does nothing on mount or for the same object, and applies a new object once', () => {

@@ -7,7 +7,9 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { getAdminApps, getAdminMcp, removeAdminApp, saveAdminApp, saveAdminMcp, type AdminProvider, type McpAdmin } from '../connections/api';
 import { DiagnosticsPanel } from '../diagnostics/DiagnosticsPanel';
 import type { DiagnosticTarget } from '../diagnostics/api';
-import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiAction, useConfirm, useOnNewValue } from '../ui';
+import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiAction, useConfirm } from '../ui';
+// From its own file, not '../ui': a module added to the shared ui chunk changes a chunk the Knowledge Graph Map loads (bundle:compare).
+import { useOnNewValue } from '../ui/useOnNewValue';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
 

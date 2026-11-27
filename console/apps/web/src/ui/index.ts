@@ -24,7 +24,6 @@ export { useBreakpoint, type Breakpoint } from './useBreakpoint';
 export { NO_DATE, formatDateTime, formatRelative, formatTime, useProfileTimeZone, type FormatDateTimeOptions, type FormatRelativeOptions } from './time';
 export { RelativeTime, type RelativeTimeProps } from './RelativeTime';
 export { useApiAction, type ApiAction } from './useApiAction';
-export { useOnNewValue } from './useOnNewValue';
 export { formatCost } from './formatCost';
 export { ToastHost, dismissToast, toast, type ToastMessage } from './toast';
 export { APP_BAR_HEIGHT, BOTTOM_BAR_HEIGHT, SAFE_AREA_BOTTOM, aboveBottomBar } from './bottomBar';
