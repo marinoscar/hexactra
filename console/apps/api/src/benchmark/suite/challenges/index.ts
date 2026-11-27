@@ -29,6 +29,7 @@ import { safeImpossible } from './safe-impossible';
 import { safeInjection } from './safe-injection';
 import { safeRobotTick } from './safe-robot-tick';
 import { authOtpSegmented } from './auth-otp-segmented';
+import { messagingSendAlias, messagingSendTwoContacts } from './messaging-send';
 
 /** The starter pack (#740): suite version 1 was exactly these. */
 export const STARTER_PACK: readonly Challenge[] = [navLookup, navSpa, navPagination, navNewTab, formMultistep, formSelectDate, extractTable, extractInfiniteScroll, dynDelayed, dynModal];
@@ -39,4 +40,7 @@ export const SECOND_PACK: readonly Challenge[] = [ptrDragReorder, ptrSlider, ptr
 /** Added in suite version 4 (E49.4, #961): a texted code in one-digit boxes, the sign-in step a real payment run failed at (#957). */
 export const CODE_PACK: readonly Challenge[] = [authOtpSegmented];
 
-export const CHALLENGES: readonly Challenge[] = [...STARTER_PACK, ...SECOND_PACK, ...CODE_PACK];
+/** Added in suite version 5 (E52.5, #1020): send one text when the thread shows another name, and when two contacts fit (epic #1015). */
+export const MESSAGING_PACK: readonly Challenge[] = [messagingSendAlias, messagingSendTwoContacts];
+
+export const CHALLENGES: readonly Challenge[] = [...STARTER_PACK, ...SECOND_PACK, ...CODE_PACK, ...MESSAGING_PACK];
