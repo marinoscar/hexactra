@@ -14,6 +14,7 @@
 // core's `maintenance` namespace is registered by `PlatformHostCoreModule.forRoot()`,
 // first in PLATFORM_MODULES, so before `SettingsModule.forRoot()` too.)
 import '../notes/notes.settings';
+import '../task-improver/task-improver.settings';
 import '../policies/policies.settings';
 import '../approvals/approvals.settings';
 import '../policies/model-tiers.settings';

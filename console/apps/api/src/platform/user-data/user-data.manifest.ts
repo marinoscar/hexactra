@@ -45,6 +45,7 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'Task', category: 'browser-tasks' },
   { model: 'Run', category: 'browser-tasks' },
   { model: 'TaskSchedule', category: 'browser-tasks' },
+  { model: 'TaskImprovement', category: 'browser-tasks' },
   { model: 'Question', category: 'browser-tasks' },
   { model: 'AgentPolicy', category: 'browser-tasks' },
   { model: 'Conversation', category: 'browser-tasks' },

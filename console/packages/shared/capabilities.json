@@ -458,6 +458,29 @@
       "web": "/runs/:id"
     },
     {
+      "id": "tasks.improve",
+      "description": "Improve this task: an AI reads a task's recent runs and proposes a better goal, each change cited to steps; the owner applies it by saving the task form",
+      "rest": [
+        "POST /api/tasks/{id}/improvements",
+        "GET /api/tasks/{id}/improvements",
+        "GET /api/task-improvements/{id}",
+        "POST /api/task-improvements/{id}/dismiss",
+        "POST /api/task-improvements/{id}/applied"
+      ],
+      "cli": {
+        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
+      },
+      "mcp": {
+        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; a proposal is reviewed in the web app"
+      },
+      "web": {
+        "none": "Added with the review page of epic #1015 (#1024)"
+      }
+    },
+    {
       "id": "tasks.consistency",
       "description": "How consistent a task's runs are: the spread of steps, model calls, working time and cost over its newest finished runs, the success rate and a label",
       "rest": [

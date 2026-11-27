@@ -46929,6 +46929,449 @@
         "description": "**Requires:** authentication, plus permissions `tasks:write` and `tasks:read`."
       }
     },
+    "/api/tasks/{id}/improvements": {
+      "post": {
+        "description": "Queues a proposal (E52.8): an AI reads the task's recent finished runs (default the 5 newest; `runIds`: 1 to 10 of its finished runs) and proposes a better goal, each change cited to steps. It never changes the task. 400 `INVALID_RUNS` / `NO_FINISHED_RUNS`; 409 `IMPROVEMENT_RUNNING` while one is being made; 429 `IMPROVEMENT_LIMIT` above 20 a day; 404 when the task is not yours or the feature is off. Permission `tasks:write`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskImprover_request",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestImprovementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementRequestedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Propose a better goal for a task",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      },
+      "get": {
+        "description": "Newest first, at most 50, without their changes. Permission `tasks:read`.\n\n**Requires:** authentication, plus permission `tasks:read`.",
+        "operationId": "taskImprover_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's proposals",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read"
+          ]
+        }
+      }
+    },
+    "/api/task-improvements/{id}": {
+      "get": {
+        "description": "With its summary, proposed goal, changes and their evidence, and site facts. Permission `tasks:read`.\n\n**Requires:** authentication, plus permission `tasks:read`.",
+        "operationId": "taskImprover_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One proposal",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read"
+          ]
+        }
+      }
+    },
+    "/api/task-improvements/{id}/dismiss": {
+      "post": {
+        "description": "A `ready` proposal becomes `dismissed`. Permission `tasks:write`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskImprover_dismiss",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Dismiss a proposal",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      }
+    },
+    "/api/task-improvements/{id}/applied": {
+      "post": {
+        "description": "Marks a `ready` proposal `applied` and stores the goal the owner saved. It does NOT change the task: the web calls it after the task form's own save, and it is refused (409 `GOAL_NOT_SAVED`) unless the task's goal is the one given. Permission `tasks:write`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskImprover_applied",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppliedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Record that a proposed goal was saved",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      }
+    },
     "/api/webhooks/events": {
       "get": {
         "description": "Each with its JSON Schema and an example. Notifications appear as `notification.<eventKey>`.\n\n**Requires:** authentication, plus permission `webhooks:read`.",
@@ -60017,6 +60460,17 @@
               "archiveAfterDays"
             ]
           },
+          "taskImprover": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "browserAgentTiers": {
             "type": "object",
             "properties": {
@@ -61267,6 +61721,7 @@
           "kgraph",
           "agentPricing",
           "notes",
+          "taskImprover",
           "browserAgentTiers",
           "browserAgentCeilings",
           "recordings",
@@ -61600,6 +62055,17 @@
             },
             "required": [
               "archiveAfterDays"
+            ]
+          },
+          "taskImprover": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
             ]
           },
           "browserAgentTiers": {
@@ -63220,6 +63686,14 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 3650
+              }
+            }
+          },
+          "taskImprover": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
               }
             }
           },
@@ -117036,6 +117510,543 @@
           "schedules",
           "warnings"
         ]
+      },
+      "ImprovementRequestedResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ]
+      },
+      "RequestImprovementDto": {
+        "type": "object",
+        "properties": {
+          "runIds": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ImprovementListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "ready",
+                    "failed",
+                    "applied",
+                    "dismissed"
+                  ]
+                },
+                "runIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "description": "The runs read, newest first"
+                },
+                "goalBefore": {
+                  "type": "string",
+                  "description": "The task's goal template when the proposal was asked for"
+                },
+                "proposedGoal": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "description": "What went wrong across the runs, in plain words",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "changes": {
+                  "description": "Each change with the steps that show why; absent in a list",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "add",
+                          "replace",
+                          "remove"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "why": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "seqFrom": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "seqTo": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "finding": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "seqFrom",
+                            "seqTo"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "text",
+                      "why",
+                      "evidence"
+                    ]
+                  }
+                },
+                "siteFacts": {
+                  "description": "Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "site": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "navigation",
+                          "timing",
+                          "quirk"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "seqFrom": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "seqTo": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "seqFrom",
+                            "seqTo"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "site",
+                      "kind",
+                      "text",
+                      "evidence"
+                    ]
+                  }
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "usedImages": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "description": "Why a failed proposal failed, for a person",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "appliedGoal": {
+                  "description": "The goal the owner saved, when applied",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "finishedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "decidedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "taskId",
+                "status",
+                "runIds",
+                "goalBefore",
+                "proposedGoal",
+                "summary",
+                "confidence",
+                "model",
+                "usedImages",
+                "error",
+                "appliedGoal",
+                "createdAt",
+                "finishedAt",
+                "decidedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ImprovementResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "failed",
+              "applied",
+              "dismissed"
+            ]
+          },
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The runs read, newest first"
+          },
+          "goalBefore": {
+            "type": "string",
+            "description": "The task's goal template when the proposal was asked for"
+          },
+          "proposedGoal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "description": "What went wrong across the runs, in plain words",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changes": {
+            "description": "Each change with the steps that show why; absent in a list",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "add",
+                    "replace",
+                    "remove"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "runId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "seqFrom": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "seqTo": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "finding": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "runId",
+                      "seqFrom",
+                      "seqTo"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "text",
+                "why",
+                "evidence"
+              ]
+            }
+          },
+          "siteFacts": {
+            "description": "Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "navigation",
+                    "timing",
+                    "quirk"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "runId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "seqFrom": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "seqTo": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "runId",
+                      "seqFrom",
+                      "seqTo"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "site",
+                "kind",
+                "text",
+                "evidence"
+              ]
+            }
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usedImages": {
+            "type": "boolean"
+          },
+          "error": {
+            "description": "Why a failed proposal failed, for a person",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appliedGoal": {
+            "description": "The goal the owner saved, when applied",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "status",
+          "runIds",
+          "goalBefore",
+          "proposedGoal",
+          "summary",
+          "confidence",
+          "model",
+          "usedImages",
+          "error",
+          "appliedGoal",
+          "createdAt",
+          "finishedAt",
+          "decidedAt"
+        ]
+      },
+      "AppliedDto": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "additionalProperties": false
       },
       "WebhookEventCatalogDto": {
         "type": "object",
