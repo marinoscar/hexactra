@@ -1,5 +1,5 @@
 // How a round is shown to the model (#366): the screen, as a person would see it, and the text that goes with it.
-import { clip, digest, NO_OBSERVATION, type Observation } from '@marinoscar/hexactra-agent';
+import { clip, digest, NO_OBSERVATION, stableDigest, type Observation } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from './context';
 import { shotHash } from './context-settings';
 import { roundInput, type ScreenView } from './vision';
@@ -36,7 +36,11 @@ export async function observeRound(ctx: BrowserContext): Promise<Observation> {
     const images = ext.shotWindow.push(view);
     memory.shots = ext.shotWindow.hashes;
     // The page as the stall detector sees it: a digest of what is on it, never the image (#405).
-    const page = screen === 'page' ? { url: view.url, title: view.title, view: view.marks.length ? digest(JSON.stringify(view.marks.map((m) => [m.selector, m.text, m.x, m.y, m.w, m.h]))) : shotHash(view.dataUrl) } : null;
+    // `stable` leaves out positions and clock times (E52.2), so going round in a circle reads as the same pages.
+    const page =
+      screen === 'page'
+        ? { url: view.url, title: view.title, view: view.marks.length ? digest(JSON.stringify(view.marks.map((m) => [m.selector, m.text, m.x, m.y, m.w, m.h]))) : shotHash(view.dataUrl), stable: stableDigest(view.marks) }
+        : null;
     return { images, page, url: view.url };
   } catch (e) {
     memory.log.push(`(No ${screen} screenshot this round: ${clip(e instanceof Error ? e.message : String(e), 200)})`);
