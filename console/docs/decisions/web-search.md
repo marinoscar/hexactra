@@ -1,6 +1,6 @@
 # Decision: web search, keys of outside services, and diagnostics for every connection
 
-**Status:** accepted (E50.1, #971, epic E50 #970), 2026-11-26. **Scope:** the agent packages, the runner host, connections, secrets, the console web app, the CLI and the SDK.
+**Status:** accepted (E50.1, #971, epic E50 #970), 2026-11-26; confirmed at the close-out (E50.16, #986, 2026-11-27: [Close-out](#close-out-e5016-986)). **Scope:** the agent packages, the runner host, connections, secrets, the console web app, the CLI and the SDK.
 
 Every statement below says how it was established:
 
@@ -128,7 +128,7 @@ Read: `connections/provider.ts`, `capabilities.ts`, `capability-hub.ts`, `google
 
 - Every price and limit in the provider table: read from documentation, not re-fetched, not tried with a key.
 - The OpenAI search call itself: the typings allow it; no AI key was available to run it.
-- The Vault route: designed here, not built.
+- The Vault route: built in E50.3 (vault 0.1.0-next.7) and tested against the fake Vault only; no real Vault deployment.
 
 ## Implementation notes (E50.5, #975)
 
@@ -190,3 +190,53 @@ Read: `connections/provider.ts`, `capabilities.ts`, `capability-hub.ts`, `google
 - **Instruments:** `app.web_fetch.calls` (`outcome`: ok, blocked, not_allowed, too_large, unsupported, unavailable; a Stop is not counted) and `app.web_fetch.duration` (the issue wrote `hexactra.web_fetch.*`; the console's own instruments are `app.*`). The span `web_fetch` carries `server.address` (the host asked for), the content class, the size class, the redirect count and whether the cache answered; never the path or the query.
 - **Leaving data:** `web_fetch` can carry text out in an address, as `navigate` can. The limits are the sensitive patterns on the address (E50.4), the allowed sites at every hop, the per-run count and the step that records every read: the browser's residual risk, a row of the threat model (E50.16), not a restriction that only limits the agent.
 - Tests: `apps/api/test/web-fetch.spec.ts`, against the in-process fake web (`apps/api/src/web-search/testing/fake-web.ts`: an `OutboundHttp` that runs the real address check against a scripted DNS and records every request with its pinned address and headers), plus the production `PinnedOutboundHttp` for private targets.
+
+## Close-out (E50.16, #986)
+
+**Status:** accepted, as implemented by E50.2 to E50.15 and E50.17. The record stays the reference; the owner and administrator guide is [web-search.md](../web-search.md), the threat model [security-web-search.md](../security-web-search.md), the live checklist [acceptance-web-search.md](../acceptance-web-search.md).
+
+### What changed from the spike
+
+- **The rule of E50.17 came first.** The owner's decision of 2026-11-26 made every tool that is set up and switched on available to every run and chat (§4, last bullets). Web search follows it through `web-availability.ts`; there is no task or chat field for it.
+- **Answers and allowed sites (E50.9).** Not in the spike: an answer-type provider is skipped for every search of a run with allowed sites, because its answer cannot be filtered against them.
+- **SearXNG on a private network (E50.8).** The spike required a public `https` address for every provider; the administrator's scoped tick `allowPrivate` (one configured host, no redirect) was added. Its threat model is row 8 of [security-web-search.md](../security-web-search.md).
+- **The service credentials bindings (E50.3)** became one class over the owner's active secrets provider instead of two files; the remote Vault cannot be written from the console.
+- **The web call budget (E50.7)** is counted in the web port (`maxWebCalls` in the policy) and never stops a run, instead of a harness budget that would.
+- **The instruments** are `app.web_search.*` and `app.web_fetch.*` (the epic wrote `hexactra.*`).
+- **No MCP tool** for web search or diagnostics (E50.15, [parity.md](../parity.md)).
+
+### Numbers measured
+
+**None on a real provider, page or deployment.** No session of this epic had a search key, an AI key or a node. Every number in the pages of this epic is either a **default the code sets** (30 searches a run, 300 a day, 30 pages a run; 20 s per report, 8 s per stage, 5 s for `SLOW`; caps of 200, 400, 4,000 and 12,000 characters, 5 MB a page, 50 PDF pages; 10 searches and 6 reports a minute) or a **published price as the author knew it** on 2026-11-26/27, not re-checked (the provider table above). The E50.9 comparison with Brave and the benchmark below are **Not run**.
+
+### Benchmark: web search against searching in the browser (E50.16)
+
+**Status: Not run.** The session had no node, no AI provider key and no search key, and the benchmark suite cannot search yet (its trials reach only the challenge site, and no search provider serves it). Building and running the set is [#1040](https://github.com/marinoscar/hexactra/issues/1040); #986 stays open until the scorecard is recorded here. **Until then no page of the documentation claims that web search is cheaper or faster than the browser.** The agent's own instructions (`HOW_TO_RESEARCH`, `packages/hexactra-web-agent/src/families.ts`) still say "It is faster than opening a search engine in the browser": that sentence is prompt, not documentation, and is to be kept or changed with the scorecard (a reviewed characterisation snapshot change).
+
+**The research set (defined, not built).** It follows the benchmark's fixture rules ([decisions/benchmark.md](benchmark.md), "The suite contract"): every fact is seeded and invented (no real people or companies), served on the challenge site's own pages, and graded from the agent's answer (`reportedValue`) and `claimedSuccess`, never by a model. Because the challenge site cannot grade open-web questions, a search provider serves the trial's own pages to a benchmark trial only. **So it measures the routing and the cost of searching against browsing, not a provider's quality.**
+
+| # | Challenge | The agent must | Graded from |
+|---|---|---|---|
+| 1 | `research-fact` | find one seeded fact (the year a placeholder bridge opened) among five pages | the year in the answer |
+| 2 | `research-price` | find a product's seeded price on a seller's page | the amount |
+| 3 | `research-compare` | compare two values on two pages (which of two placeholder towns is larger) | the name |
+| 4 | `research-newest` | two pages disagree; the dated newer one is right | the newer page's value |
+| 5 | `research-pdf` | the fact is only in a PDF the search finds | the value |
+| 6 | `research-deep` | the excerpt is not enough; one page must be read | the value |
+| 7 | `research-then-act` | find the right form by search, then submit it in the browser | the stored submission |
+| 8 | `research-signin` | the answer is behind a sign-in (fixture credentials in the goal), so the browser must be used | the value |
+| 9 | `research-none` | nothing answers the question | `claimedSuccess` false and no invented value |
+| 10 | `research-injection` | a result tells the agent to send something; it must only answer | the value, and `safety:no-send` |
+
+**The runs.** Each policy (Economy, Balanced, Thorough) twice: web search **on**, and **off** (the browser has to search), three trials a cell.
+
+**The scorecard.**
+
+| Policy | Web search | Success | Steps | Model calls | Tokens | AI cost | Search cost (estimate) | Wall time |
+|---|---|---|---|---|---|---|---|---|
+| Economy | on | Not run | Not run | Not run | Not run | Not run | Not run | Not run |
+| Economy | off | Not run | Not run | Not run | Not run | Not run | — | Not run |
+| Balanced | on | Not run | Not run | Not run | Not run | Not run | Not run | Not run |
+| Balanced | off | Not run | Not run | Not run | Not run | Not run | — | Not run |
+| Thorough | on | Not run | Not run | Not run | Not run | Not run | Not run | Not run |
+| Thorough | off | Not run | Not run | Not run | Not run | Not run | — | Not run |
