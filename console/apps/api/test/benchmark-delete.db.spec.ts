@@ -36,7 +36,7 @@ async function withRuns(userId: string, opts: { status?: 'completed' | 'running'
 }
 
 beforeAll(async () => {
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   prisma = app.get(PrismaService);
