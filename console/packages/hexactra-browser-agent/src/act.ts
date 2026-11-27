@@ -114,6 +114,16 @@ async function runAction(ctx: BrowserContext, action: Record<string, unknown>, t
       forModel = `ok.${disabled}`;
     }
   }
+  if (type === 'type' && result.submitted === 'synthetic') {
+    // Typed, then submitted by script because the debugger was not available (E52.12): the page may ignore that Enter.
+    summary = `${summary === 'done' ? 'typed' : summary}; submitted by script (the page may ignore it)`;
+    forModel = 'ok, typed; the Enter that submits was sent by script because the debugger was not available, and the page may ignore it. If nothing was sent, click the send or submit control.';
+  }
+  if (type === 'press' && result.method === 'synthetic') {
+    // The debugger was not available (E52.12, #1030): the key was dispatched by script, which a page may ignore.
+    summary = 'done (pressed by script: the page may ignore it)';
+    forModel = 'ok (pressed by script, because the debugger was not available; the page may ignore it. If nothing changed, click the control instead.)';
+  }
   if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
   if (type === 'type') {
     // A code split into boxes (E49.1, #958): how many were filled, or that the page moved on. A plain field keeps "ok".
