@@ -91,7 +91,7 @@ const openMenu = async (label: string) => {
   return screen.findByRole('menu');
 };
 const openAdd = async () => {
-  fireEvent.click(await screen.findByRole('button', { name: 'Add an MCP server' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Add a tool' }));
   return screen.findByRole('dialog', { name: 'Add an MCP server' });
 };
 
@@ -116,7 +116,7 @@ describe('the words', () => {
 describe('the list', () => {
   it('shows an MCP server with its address, how many tools are on and how many await review, under its own heading', async () => {
     renderPage({ 'GET /connections': [NOTES] });
-    expect(await screen.findByRole('region', { name: 'MCP servers' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Added tools' })).toBeInTheDocument();
     const r = within(row('Work notes'));
     expect(r.getByText(/https:\/\/mcp\.example\.test\/mcp/)).toBeInTheDocument();
     expect(r.getByText('1 of 3 tools on')).toBeInTheDocument();
@@ -134,11 +134,11 @@ describe('the list', () => {
   it('offers "Add an MCP server" only when the administrator switched MCP on and the viewer may write', async () => {
     renderPage({ 'GET /connections': [], 'GET /connections/mcp/status': { enabled: false, restricted: false } });
     await screen.findByText('No accounts connected yet');
-    expect(screen.queryByRole('button', { name: 'Add an MCP server' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a tool' })).not.toBeInTheDocument();
     cleanup();
     renderPage({ 'GET /connections': [] }, ['connections:read']);
     await screen.findByText('No accounts connected yet');
-    expect(screen.queryByRole('button', { name: 'Add an MCP server' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a tool' })).not.toBeInTheDocument();
   });
 
   it('asks for a new sign-in when the server stopped accepting it, and tests the new one before keeping it', async () => {
@@ -304,7 +304,7 @@ describe('presets and Try (E50.12)', () => {
   it('a preset only fills the form: the address, the name and the kind of sign-in; the secret is still typed by the owner', async () => {
     const host = renderPage({ 'GET /connections': [], 'GET /connections/mcp/presets': PRESETS });
     const dialog = await openAdd();
-    fireEvent.click(await within(dialog).findByRole('button', { name: 'GitHub' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'GitHub · Bearer token' }));
     expect(within(dialog).getByLabelText(/Server address/)).toHaveValue('https://api.githubcopilot.com/mcp/');
     expect(within(dialog).getByLabelText(/Name \(optional\)/)).toHaveValue('GitHub');
     expect(within(dialog).getByRole('radio', { name: 'Bearer token' })).toBeChecked();

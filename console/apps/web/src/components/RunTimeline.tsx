@@ -14,6 +14,7 @@ import { Link as RouterLink, useInRouterContext } from 'react-router-dom';
 import { savedApprovalHref } from '../approvals/types';
 import type { RunStep } from '../types/runs';
 import { ConnectionStepBody, isConnectionStep } from './connectionSteps';
+import { isWebStep, webCountWords, webStepLine } from './webSteps';
 import { RunPictures, StepThumbnail } from './RunPictures';
 import { routingRow } from './runRouting';
 import { formatStepDuration, groupSteps, type TimelineOrder, type TimelineStep } from './runTimeline';
@@ -143,6 +144,7 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
   const guidance = isGuidanceStep(step);
   const answer = isAnswerStep(step);
   const account = !question && !guidance && !answer && isConnectionStep(step);
+  const web = !question && !guidance && !answer && !account && isWebStep(step) ? webStepLine(step) : null;
   const Icon = !step.ok && !answer ? ErrorOutlineIcon : question ? HelpOutlineIcon : guidance ? ChatBubbleOutlineIcon : answer ? ReplyIcon : null;
   return (
     <ListItem divider sx={{ pl: nested ? 6 : 2, alignItems: 'flex-start' }} data-testid={`step-${step.seq}`} data-kind={question ? 'question' : guidance ? 'guidance' : answer ? 'answer' : step.kind}>
@@ -160,6 +162,14 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
           <ListItemText primary={`${step.seq}. ${step.summary}`} slotProps={{ primary: { color: 'text.secondary', sx: { overflowWrap: 'anywhere' } } }} sx={{ m: 0 }} />
         ) : account ? (
           <ConnectionStepBody seq={step.seq} step={{ action: step.action, kind: step.kind, args: step.args, summary: step.summary, ok: step.ok }} />
+        ) : web ? (
+          <ListItemText
+            primary={`${step.seq}. ${web.primary}${repeats > 1 ? ` (×${repeats} in a row)` : ''}`}
+            secondary={[web.secondary, formatStepDuration(step.durationMs)].filter(Boolean).join(' · ') || undefined}
+            data-testid={`web-step-${step.seq}`}
+            slotProps={{ primary: { color: step.ok ? undefined : 'error', sx: { overflowWrap: 'anywhere' } }, secondary: { sx: { overflowWrap: 'anywhere' } } }}
+            sx={{ m: 0 }}
+          />
         ) : (
           <ListItemText
             primary={`${label(step)}${repeats > 1 ? ` (×${repeats} in a row)` : ''}`}
@@ -249,6 +259,7 @@ export function RunTimeline({ steps, live, confirmedSeqs = [], runId, fromChat =
   const withPictures = runId !== undefined && steps.some((s) => s.hasScreenshot);
   const filtering = picturesOnly && withPictures;
   const rows = groupSteps(filtering ? steps.filter((s) => s.hasScreenshot) : steps, order);
+  const webCount = webCountWords(steps);
   const list = (
     <Paper variant="outlined">
       <TraceContext.Provider value={trace}>
@@ -264,6 +275,7 @@ export function RunTimeline({ steps, live, confirmedSeqs = [], runId, fromChat =
         <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
           Steps
         </Typography>
+        {webCount && <Chip size="small" variant="outlined" label={webCount} data-testid="web-count" />}
         {withPictures && (
           <ToggleButton size="small" value="pictures" selected={picturesOnly} onChange={() => setPicturesOnly((p) => !p)} sx={{ minHeight: { xs: 44, sm: 'auto' }, gap: 0.5 }}>
             <PhotoLibraryOutlinedIcon fontSize="small" aria-hidden />

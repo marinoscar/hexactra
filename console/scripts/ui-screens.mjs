@@ -199,13 +199,8 @@ export const ROUTES = [
   ['settings-connections-mcp-add', '/settings/connections', {
     viewport: true,
     action: async (page) => {
-      // From `sm` up it is a header button; on a phone the header's "More" menu holds it.
-      const direct = page.getByRole('button', { name: 'Add an MCP server' });
-      if (await direct.count()) await direct.first().click({ timeout: 5_000 });
-      else {
-        await page.locator('main').getByRole('button', { name: 'More' }).click({ timeout: 5_000 });
-        await page.getByRole('menuitem', { name: 'Add an MCP server' }).click({ timeout: 5_000 });
-      }
+      // E50.14: the Added tools section's own button.
+      await page.getByRole('button', { name: 'Add a tool', exact: true }).first().click({ timeout: 5_000 });
       await page.getByRole('radio', { name: 'Bearer token' }).click({ timeout: 5_000 });
       await page.waitForTimeout(300);
     },
@@ -219,6 +214,36 @@ export const ROUTES = [
       await page.waitForTimeout(300);
     },
   }],
+  // Connections and tools (E50.14): the panel with a failing test (the Google Drive API off), the Web search section, the provider app's
+  // test, and the administrator's Web search card. The panel opens from the visible Test button of the Work account.
+  ['settings-connections-test', '/settings/connections', {
+    viewport: true,
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Test Work', exact: true }).click({ timeout: 5_000 });
+      await page.getByTestId('diagnostics-summary').waitFor({ timeout: 8_000 });
+      await page.waitForTimeout(300);
+    },
+  }],
+  ['settings-connections-web-search', '/settings/connections#web-search', { viewport: true }],
+  ['settings-connections-search-try', '/settings/connections#web-search', {
+    action: async (page) => {
+      await page.getByLabel('Search for').fill('library opening hours');
+      await page.getByRole('button', { name: 'Search', exact: true }).click({ timeout: 5_000 });
+      await page.getByRole('list', { name: 'Results' }).waitFor({ timeout: 5_000 });
+      await page.waitForTimeout(300);
+    },
+  }],
+  ['admin-connections-test', '/admin/settings/connections', { viewport: true, action: async (page) => {
+    await page.getByRole('button', { name: 'Test app setup' }).first().click({ timeout: 5_000 });
+    await page.getByTestId('diagnostics-summary').waitFor({ timeout: 8_000 });
+    await page.waitForTimeout(300);
+  } }],
+  ['admin-web-search', '/admin/settings/web-search'],
+  ['admin-web-search-test', '/admin/settings/web-search', { viewport: true, action: async (page) => {
+    await page.getByRole('button', { name: 'Test Brave Search' }).click({ timeout: 5_000 });
+    await page.getByTestId('diagnostics-summary').waitFor({ timeout: 8_000 });
+    await page.waitForTimeout(300);
+  } }],
   // The task form's "Saved logins" section while no provider is connected (the switch disabled with its reason; `task-new` shows it available).
   ['task-new-saved-logins-unavailable', '/tasks/new?state=not_connected'],
   ['settings-danger-zone', '/settings/danger-zone'],
@@ -677,7 +702,7 @@ async function main() {
             await page.waitForTimeout(400);
           }
           const at = new URL(page.url()).pathname;
-          if (at !== path.split('?')[0]) {
+          if (at !== path.split(/[?#]/)[0]) {
             // The app has no such route (yet), or the account may not open it: it was sent elsewhere.
             note(name, width, 'redirected');
             continue;
