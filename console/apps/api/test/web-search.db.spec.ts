@@ -209,6 +209,7 @@ describe('the administrator', () => {
       ['web_search.tavily', false, ['api.tavily.com', 'example.com']],
       ['web_search.exa', false, ['api.exa.ai', 'example.com']],
       ['web_search.searxng', false, ['example.com']],
+      ['web_search.openai', false, ['api.openai.com', 'example.com']],
     ]);
     expect((await contributor.describe())[0]).toMatchObject({ required: false, degradation: 'The agent searches in the browser instead' });
   });
