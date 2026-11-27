@@ -426,7 +426,9 @@ describe('the goal runner sees and acts like a person (#366)', () => {
     const seen: Record<string, unknown>[] = [];
     const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
       const action = opts.body?.action as Record<string, unknown> | undefined;
-      if (method === 'POST' && path.endsWith('/actions') && action?.type !== 'screenshot') {
+      // The server's own reads of the page (the page digest around a click, E52.3) are not actions: they show no activity.
+      const serverRead = action?.type === 'evaluate' && String(action.script).startsWith('/* hexactra:');
+      if (method === 'POST' && path.endsWith('/actions') && action?.type !== 'screenshot' && !serverRead) {
         seen.push((await db.run.findFirstOrThrow({ where: { id: run.id } })).activity as Record<string, unknown>);
       }
       return inner(method, path, opts);

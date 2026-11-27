@@ -250,6 +250,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
       state: { labels: new Map(), marks: new Map(), view: null },
       shotWindow: new ScreenshotWindow(scenario.vision ? 2 : 0, 5),
       observationChars: 4_000,
+      settleDelaysMs: [0, 0, 0, 0],
       confirmRisky: () => scenario.task.confirmRiskyActions,
       sensitiveParams: () => [],
       masking: NO_MASKING,

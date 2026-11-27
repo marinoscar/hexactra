@@ -4,12 +4,23 @@ import { actionTarget, clip, digest, inCommitTool, LEASE_LOST_TEXT, mutatingActi
 import { ACTION_TIMEOUT_MS, BrowserAborted, BrowserError } from './browser-port';
 import type { BrowserContext } from './context';
 import { codeBoxesNote } from './fill-report';
+import { unchangedAfter } from './page';
 
 /** What the stall detector learns from a result beyond its arguments (#405): where the page is, and whether new content came back. */
 type StallExtra = { url?: string | null; title?: string | null; contentHash?: string; resultKey?: string };
 
+/** What a click or key press asks `act` to check after it (E52.3): the page digest taken before it was sent. */
+export interface SettleCheck {
+  before: string | null;
+}
+
+/** The model's text and the step's summary when a click or key press changed nothing on the page (E52.3, #1018). */
+export const NO_CHANGE_TEXT =
+  'ok, but nothing changed on the page after this (it may have been ignored, or the change is inside a frame or a drawing this check cannot see). Do not repeat it blindly: look at the page, then try click_mark or click_at at the element, or the keyboard.';
+export const NO_CHANGE_SUMMARY = 'done; no change seen on the page';
+
 /** Run one browser action under the policy, record it, and return what the model sees. */
-export async function act(ctx: BrowserContext, action: Record<string, unknown>, reason?: string, target?: { x: number; y: number; w?: number; h?: number }, commits?: GateTarget | null): Promise<string> {
+export async function act(ctx: BrowserContext, action: Record<string, unknown>, reason?: string, target?: { x: number; y: number; w?: number; h?: number }, commits?: GateTarget | null, settle?: SettleCheck): Promise<string> {
   const started = Date.now();
   const type = String(action.type);
   // Another job took the run, Stop or Pause was pressed, or a budget is spent: nothing is sent and nothing is recorded.
@@ -22,14 +33,14 @@ export async function act(ctx: BrowserContext, action: Record<string, unknown>, 
     const commit = commits || inCommitTool() || (mutatingAction(type) && Boolean(ctx.memory.pendingConfirmation || ctx.memory.confirmedTarget));
     const intent = commit ? await ctx.openIntent(type, action, commits ?? null) : null;
     if (commit && intent === null) return LEASE_LOST_TEXT;
-    return await runAction(ctx, action, type, started, reason, intent);
+    return await runAction(ctx, action, type, started, reason, intent, settle);
   } finally {
     // Back to the model, which reads the result and picks the next step.
     await ctx.setActivity('thinking');
   }
 }
 
-async function runAction(ctx: BrowserContext, action: Record<string, unknown>, type: string, started: number, reason?: string, intent: number | null = null): Promise<string> {
+async function runAction(ctx: BrowserContext, action: Record<string, unknown>, type: string, started: number, reason?: string, intent: number | null = null, settle?: SettleCheck): Promise<string> {
   const { browser, state: page, masking, observationChars } = ctx.ext;
   let op;
   try {
@@ -129,6 +140,13 @@ async function runAction(ctx: BrowserContext, action: Record<string, unknown>, t
     // A code split into boxes (E49.1, #958): how many were filled, or that the page moved on. A plain field keeps "ok".
     const note = codeBoxesNote(result);
     if (note) summary = forModel = note.startsWith('into') ? `typed ${note}` : `typed; ${note}`;
+  }
+  // A click or key press that left the page exactly as it was (E52.3): the model is told before it repeats it. Still ok: a report.
+  if (settle && !blockedNote && (await unchangedAfter(ctx, settle.before))) {
+    summary = NO_CHANGE_SUMMARY;
+    forModel = NO_CHANGE_TEXT;
+    // A closed, content-free span attribute; the host keeps it (`hexactra.page.unchanged`).
+    ctx.ports.telemetry.toolAttributes({ 'hexactra.page.unchanged': true });
   }
   await ctx.record('action', type, action, true, summary, started, reason, extra, intent);
   return `${forModel}${blockedNote}`;

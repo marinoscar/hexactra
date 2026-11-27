@@ -117,6 +117,8 @@ export interface BrowserExt {
   hooks: BrowserHooks;
   /** The task's outputs for this run; null for a run without any (then `finish` is `{ success, result }` as it always was). */
   outputs: OutputsHandle | null;
+  /** When the page digest is read again after a click or key press (E52.3); `SETTLE_DELAYS_MS` when absent. Tests pass zeros. */
+  settleDelaysMs?: readonly number[];
 }
 
 export type BrowserContext = RunContext<BrowserMemory, BrowserExt>;
