@@ -16,7 +16,8 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor, NotFoundExc
 import { SecretTypesController } from '@marinoscar/vault-api/secret-types';
 import { SecretsController } from '@marinoscar/vault-api/secrets';
 import type { FastifyRequest } from 'fastify';
-import { from, Observable, switchMap } from 'rxjs';
+import { from, map, Observable, switchMap } from 'rxjs';
+import { SERVICE_KEY_TYPE_NAME } from '@marinoscar/vault-contract/secret-types';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { SecretsStoreKeys } from './store.data-keys';
@@ -48,6 +49,13 @@ export const STORE_SERVED_TYPE_HANDLERS: ReadonlySet<string> = new Set(['create'
 
 export const STORE_SECRET_TYPE = 'Credential';
 
+/** `GET /api/secret-types` without the system types the owner does not create on the page (the `Service Key` type, E50.3). */
+function withoutHiddenTypes(r: unknown): unknown {
+  const doc = r as { data?: unknown } | null;
+  if (!doc || !Array.isArray(doc.data)) return r;
+  return { ...doc, data: (doc.data as { name?: unknown; isSystem?: unknown }[]).filter((t) => !(t.isSystem === true && t.name === SERVICE_KEY_TYPE_NAME)) };
+}
+
 interface RequestWithUser extends FastifyRequest {
   user?: { id?: string };
 }
@@ -64,6 +72,9 @@ export class SecretsStoreInterceptor implements NestInterceptor {
     // Secret types hold no value and need no key scope; only the handlers the store decided to serve are reachable.
     if (context.getClass() === SecretTypesController) {
       if (!STORE_SERVED_TYPE_HANDLERS.has(handler)) throw new NotFoundException();
+      // The `Service Key` type (E50.3) is the console's own: it writes those items when the owner moves a key here. The owner's
+      // page offers the Credential type only, so it is left out of the list (a create of it is refused below anyway).
+      if (handler === 'findAll') return next.handle().pipe(map((r: unknown) => withoutHiddenTypes(r)));
       return next.handle();
     }
     if (context.getClass() !== SecretsController) return next.handle();

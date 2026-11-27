@@ -49,7 +49,7 @@ const PERMISSIONS = [
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'usage:read', 'user_settings:read', 'user_settings:write', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
-  'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write',
+  'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write', 'web_search:read', 'web_search:write',
   'kgraph:read', 'kgraph:write', 'kgraph:admin',
   'benchmarks:read', 'benchmarks:run',
 ];
@@ -435,7 +435,7 @@ const chatMessages = [
   chatMessage(6, 'assistant', 'clarify', 'Which showing would you like?', { meta: { options: ['4:30 PM', '7:30 PM', 'The latest one'] } }),
   chatMessage(7, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),
   // The live run: its Browser card shows the run's picture (the mocked screenshot).
-  chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
+  chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun, meta: { taskId: IDS.task, taskName: 'Book cinema tickets for the usual Friday showing at the cinema near home' } }),
   // The agent offers to remember a person the owner named (#553): the "Remember this?" card.
   chatMessage(9, 'assistant', 'memory', 'Suggested remembering: My partner', { meta: { questionId: memoryProposal.id } }),
   // The agent offers to save the sign-in the owner typed by hand (E37.4b): the "Save this sign-in for <site>?" card.
@@ -470,7 +470,7 @@ const connectionsList = (_url, _body, referer) => {
   return [
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000003', provider: 'microsoft', label: 'Outlook', accountEmail: 'person.m@example.test', accountName: 'Person M', capabilities: ['calendar_read', 'calendar_write'], granted: ['calendar_read', 'calendar_write'], status: 'needs_reconnect', statusReason: 'GRANT_REVOKED', lastUsedAt: iso(-9 * 86_400_000) },
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000001', provider: 'google', label: 'Work', accountEmail: 'person.a@example.test', accountName: 'Person A', capabilities: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], granted: ['mail_read', 'mail_send', 'calendar_read', 'docs_read', 'docs_write'], defaultFor: ['mail', 'calendar'], status: 'active', lastUsedAt: iso(-3_600_000) },
-    { ...connectionBase, id: 'c0000000-0000-4000-8000-0000000000a1', provider: 'mcp', label: 'Work notes', accountEmail: 'mcp.example.test', accountName: 'Notes server', capabilities: [], mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes server', tools: { total: 3, enabled: 1, needsReview: 2 }, toolsFetchedAt: iso(-3_600_000) } },
+    { ...connectionBase, id: 'c0000000-0000-4000-8000-0000000000a1', provider: 'mcp', label: 'Work notes', status: 'active', accountEmail: 'mcp.example.test', accountName: 'Notes server', capabilities: [], mcp: { url: 'https://mcp.example.test/mcp', auth: 'bearer', serverName: 'Notes server', tools: { total: 3, enabled: 1, needsReview: 2 }, toolsFetchedAt: iso(-3_600_000) } },
     { ...connectionBase, id: 'c0000000-0000-4000-8000-000000000002', provider: 'google', label: 'Personal', accountEmail: 'person.b@example.test', capabilities: ['mail_read'], granted: ['mail_read'], status: 'paused', lastUsedAt: null },
   ];
 };
@@ -673,6 +673,11 @@ export const RESPONSES = {
   'GET /secrets/reach': secretsReach,
   'GET /secrets/identity': secretsIdentity,
   'GET /secrets/cards': secretsCards,
+  // Keys of outside services (E50.3): one key in the built-in store, one not set.
+  'GET /service-credentials': [
+    { service: 'web_search', name: 'brave', label: 'Brave Search API key', tier: 'user', tiers: { user: { available: true, set: true, setAt: '2026-11-20T10:00:00.000Z' }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: true, setAt: '2026-11-01T10:00:00.000Z' } }, userBinding: 'builtin', secretsProvider: { id: 'builtin', writable: true, releasesEnabled: true, ready: true } },
+    { service: 'web_search', name: 'searxng_with_a_long_reference_name', label: 'A self-hosted search provider with a long name that has to wrap on a phone', tier: null, tiers: { user: { available: true, set: false, setAt: null }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: false, setAt: null } }, userBinding: 'credential_store', secretsProvider: { id: 'builtin', writable: true, releasesEnabled: true, ready: true } },
+  ],
   'GET /secrets/admin/summary': { deploymentEnabled: true, usersConnected: 3, usersNeedingReconnect: 1, usesThisWeek: 41, refusalsThisWeek: 4 },
   'GET /secrets/vault/default-client': { baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, allowedHosts: [], redirectUri: 'https://console.example.test/api/secrets/vault/callback' },
   'GET /connected-apps/preflight': preflight,
@@ -1156,6 +1161,86 @@ Object.assign(RESPONSES, {
   [`GET /benchmarks/${IDS.liveBenchmark}/trials`]: { items: benchTrials(true) },
   [`GET /benchmarks/${IDS.baselineBenchmark}`]: benchBaseline,
   [`GET /benchmarks/${IDS.baselineBenchmark}/scorecard`]: benchScorecard(IDS.baselineBenchmark, benchBaseline.name, 'completed', false),
+});
+
+/**
+ * Connections and tools (E50.14, #984): the health chips, a failing test of the Work account (the Google Drive API switched off), the
+ * provider app's test, and web search for the user and the administrator (two providers, a key saved, usage, page reading).
+ */
+const diagReport = (target, overall, stages, id = 'd0000000-0000-4000-8000-000000000001') => ({ id, target, trigger: 'owner', overall, startedAt: iso(-62_000), finishedAt: iso(-60_000), stages });
+const WORK_ID = 'c0000000-0000-4000-8000-000000000001';
+const workFailure = diagReport({ kind: 'connection', id: WORK_ID }, 'fail', [
+  { id: 'status', status: 'pass', code: null, remedy: null, ms: 2 },
+  { id: 'provider_installed', status: 'pass', code: null, remedy: null, ms: 1 },
+  { id: 'app_config', status: 'pass', code: null, remedy: null, ms: 1 },
+  { id: 'sign_in', status: 'pass', code: null, remedy: null, ms: 240 },
+  { id: 'token_lifetime', status: 'pass', code: null, remedy: null, ms: 0 },
+  { id: 'permissions', status: 'pass', code: null, remedy: null, ms: 0 },
+  { id: 'capability:mail_read', status: 'pass', code: null, remedy: null, ms: 180 },
+  { id: 'capability:mail_send', status: 'pass', code: null, remedy: null, ms: 120 },
+  { id: 'capability:calendar_read', status: 'pass', code: null, remedy: null, ms: 150 },
+  { id: 'capability:docs_read', status: 'fail', code: 'API_DISABLED', remedy: 'API_DISABLED_DRIVE', ms: 210, data: { api: 'drive.googleapis.com' } },
+  { id: 'capability:docs_write', status: 'fail', code: 'API_DISABLED', remedy: 'API_DISABLED_DOCS', ms: 190, data: { api: 'docs.googleapis.com' } },
+  { id: 'clock', status: 'pass', code: null, remedy: null, ms: 0 },
+  { id: 'latency', status: 'pass', code: null, remedy: null, ms: 1100 },
+]);
+const workPass = { ...diagReport({ kind: 'connection', id: WORK_ID }, 'pass', workFailure.stages.map((s) => ({ ...s, status: 'pass', code: null, remedy: null, data: undefined })), 'd0000000-0000-4000-8000-000000000002'), finishedAt: iso(-2 * 86_400_000) };
+const appReport = diagReport({ kind: 'provider_app', id: 'google' }, 'warn', [
+  { id: 'app_config', status: 'pass', code: null, remedy: null, ms: 1 },
+  { id: 'redirect_uri', status: 'pass', code: null, remedy: null, ms: 0, data: { https: true, redirect_host: 'console.example.test', matches_public: true } },
+  { id: 'discovery', status: 'pass', code: null, remedy: null, ms: 140 },
+  { id: 'client_check', status: 'pass', code: null, remedy: null, ms: 220 },
+  { id: 'picker_key', status: 'warn', code: 'PICKER_KEY_MISSING', remedy: 'PICKER_KEY_MISSING', ms: 0 },
+]);
+const searchReport = diagReport({ kind: 'search_provider', id: 'brave' }, 'pass', [
+  { id: 'switches', status: 'pass', code: null, remedy: null, ms: 1 },
+  { id: 'credential', status: 'pass', code: null, remedy: null, ms: 3, data: { tier: 'system' } },
+  { id: 'network', status: 'pass', code: null, remedy: null, ms: 60, data: { host: 'api.search.brave.com' } },
+  { id: 'live_query', status: 'pass', code: null, remedy: null, ms: 420, data: { hits: 1 } },
+  { id: 'limits', status: 'pass', code: null, remedy: null, ms: 1 },
+  { id: 'fetch', status: 'pass', code: null, remedy: null, ms: 300 },
+]);
+const searchProviders = [
+  { id: 'brave', label: 'Brave Search', kind: 'results', credential: 'api_key', needsKey: true, enabled: true, listed: true, keyTier: 'system', keys: { user: true, organization: false, system: true }, estimatedCostPerCallUsd: 0.005 },
+  { id: 'answers', label: 'An answer provider with a long name for narrow screens', kind: 'answer', credential: 'api_key', needsKey: true, enabled: true, listed: true, keyTier: null, keys: { user: false, organization: false, system: false }, estimatedCostPerCallUsd: 0.008 },
+];
+const searchAdmin = {
+  enabled: true,
+  providers: { brave: { enabled: true, costPerCallUsd: null, baseUrl: null, allowPrivate: false }, answers: { enabled: true, costPerCallUsd: 0.008, baseUrl: null, allowPrivate: false }, searxng: { enabled: true, costPerCallUsd: null, baseUrl: 'http://searxng.home.example.test:8080', allowPrivate: true } },
+  order: ['brave', 'answers', 'searxng'],
+  shareDeploymentKey: true,
+  allowUserKeys: true,
+  limits: { perRun: 30, perUserPerDay: 300, fetchPerRun: 20 },
+  fetch: { enabled: true, blockedHosts: ['blocked.example.test', '*.internal.example.test'] },
+  installed: [
+    { id: 'brave', label: 'Brave Search', credential: 'api_key', hosts: ['api.search.brave.com'], defaultEstimatedCostPerCallUsd: 0.005 },
+    { id: 'answers', label: 'An answer provider with a long name for narrow screens', credential: 'api_key', hosts: ['api.answers.example.test'], defaultEstimatedCostPerCallUsd: 0.008 },
+    { id: 'searxng', label: 'SearXNG', credential: 'none', hosts: [], defaultEstimatedCostPerCallUsd: 0 },
+  ],
+};
+const credTiers = (user, system) => ({ user: { available: true, set: user, setAt: user ? iso(-6 * 86_400_000) : null }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: system, setAt: system ? iso(-20 * 86_400_000) : null } });
+Object.assign(RESPONSES, {
+  'GET /connections/diagnostics/summary': [{ targetId: WORK_ID, overall: 'fail', at: iso(-60_000) }, { targetId: 'c0000000-0000-4000-8000-0000000000a1', overall: 'pass', at: iso(-2 * 3_600_000) }],
+  [`POST /connections/${WORK_ID}/diagnose`]: workFailure,
+  [`GET /connections/${WORK_ID}/diagnostics`]: [workFailure, workPass],
+  'POST /connections/admin/apps/google/diagnose': appReport,
+  'GET /connections/admin/apps/google/diagnostics': [appReport],
+  'GET /web-search/status': { enabled: true, reason: null, provider: { id: 'brave', label: 'Brave Search', tier: 'user' }, today: { calls: 12, limit: 300, remaining: 288 }, perRunLimit: 30 },
+  'GET /web-search/providers': searchProviders,
+  'POST /web-search/diagnose': searchReport,
+  'GET /web-search/diagnostics': [searchReport],
+  'POST /web-search/admin/providers/brave/diagnose': { ...searchReport, trigger: 'admin' },
+  'GET /web-search/admin/providers/brave/diagnostics': [searchReport],
+  'GET /web-search/admin': searchAdmin,
+  'GET /web-search/admin/usage': [
+    { day: iso(0).slice(0, 10), provider: 'brave', calls: 41, failures: 1, estimatedCostUsd: 0.205 },
+    { day: iso(-86_400_000).slice(0, 10), provider: 'brave', calls: 37, failures: 0, estimatedCostUsd: 0.185 },
+  ],
+  'GET /service-credentials': [
+    { service: 'web_search', name: 'brave', label: 'Brave Search', binding: 'credential_store', tier: 'user', tiers: credTiers(true, true) },
+    { service: 'web_search', name: 'answers', label: 'Answers', binding: 'credential_store', tier: null, tiers: credTiers(false, false) },
+  ],
+  'POST /web-search/search': { provider: 'brave', hits: [{ title: 'Opening hours of the city library', url: 'https://library.example.test/hours', snippet: '' }, { title: '', url: 'https://a-very-long-host-name-for-narrow-screens.example.test/a/long/path/to/a/page?with=a&query=string', snippet: '' }], answer: null },
 });
 
 export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id, scanQuestion: scanQuestion.id, benchmark: IDS.benchmark, liveBenchmark: IDS.liveBenchmark, baselineBenchmark: IDS.baselineBenchmark, signinWaiting: IDS.signinWaiting, signinDone: IDS.signinDone };

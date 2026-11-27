@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { readUsedSavedLogins } from '../runner/saved-logins';
 import { PrismaService } from '../prisma/prisma.service';
+import { SERVICE_KEY_ACTIVITY_EVENT } from './service-keys';
 import { ACTIVITY_FIELDS, ACTIVITY_PURPOSES, SECRETS_ACTIVITY_KEEP_DAYS, isRefusal, sanitizeSecretsEvent, type SanitizedActivity } from './secrets-activity';
 
 /** The newest uses the page lists. */
@@ -16,8 +17,10 @@ const DAY_MS = 86_400_000;
 export interface ActivityItem {
   id: string;
   at: string;
-  /** `lookup`: asked the provider for the logins of a page. `release`: a field was handed over to be typed. */
-  event: 'lookup' | 'release';
+  /** `lookup`: asked the provider for the logins of a page. `release`: a field was handed over to be typed. `service_key`: the console's server read a key of an outside service (E50.3). */
+  event: 'lookup' | 'release' | 'service_key';
+  /** For `service_key`: which key (`web_search.brave`). Never its value. */
+  serviceKey: string | null;
   /** The run (or chat browser) it happened in, when it is one of this user's and still exists. */
   runId: string | null;
   site: string | null;
@@ -25,7 +28,7 @@ export interface ActivityItem {
   loginName: string | null;
   field: (typeof ACTIVITY_FIELDS)[number] | null;
   /** Why the value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (the owner's typed password sent to the provider to be saved, E37.4b). */
-  purpose: (typeof ACTIVITY_PURPOSES)[number] | null;
+  purpose: (typeof ACTIVITY_PURPOSES)[number] | 'service_call' | null;
   outcome: string;
   /** The fabric refused or failed: nothing was typed. */
   refused: boolean;
@@ -145,7 +148,8 @@ export class SecretsActivityService {
     return rows.map((r) => ({
       id: r.id,
       at: r.occurredAt.toISOString(),
-      event: r.event === 'lookup' ? 'lookup' : 'release',
+      event: r.event === 'lookup' ? 'lookup' : r.event === SERVICE_KEY_ACTIVITY_EVENT ? 'service_key' : 'release',
+      serviceKey: r.event === SERVICE_KEY_ACTIVITY_EVENT ? r.itemId : null,
       runId: r.runId,
       site: r.site,
       loginName: r.event === 'release' ? nameOf(r.runId, r.site) : null,

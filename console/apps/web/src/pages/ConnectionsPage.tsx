@@ -1,170 +1,54 @@
 import AddIcon from '@mui/icons-material/Add';
 import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined';
-import GoogleIcon from '@mui/icons-material/Google';
-import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
-import MicrosoftIcon from '@mui/icons-material/Microsoft';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { Alert, Box, Button, Chip, IconButton, List, ListItem, ListItemIcon, Menu, MenuItem, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Link, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link as RouterLink, useLocation, useSearchParams } from 'react-router-dom';
 
-import {
-  authorize,
-  getConnection,
-  getMcpStatus,
-  listConnections,
-  listProviders,
-  pauseConnection,
-  removeConnection,
-  resumeConnection,
-  testConnection,
-  updateConnection,
-  type Capability,
-  type CapabilityGroup,
-  type Connection,
-  type Provider,
-  type ProviderAvailability,
-  type TestResult,
-} from '../connections/api';
+import { authorize, getConnection, getMcpStatus, listConnections, listProviders, pauseConnection, removeConnection, resumeConnection, updateConnection, type Capability, type CapabilityGroup, type Connection, type Provider, type ProviderAvailability } from '../connections/api';
 import { ConnectDialog } from '../connections/ConnectDialog';
-import { ConnectionDetails } from '../connections/ConnectionDetails';
+import { ConnectionRow } from '../connections/ConnectionRow';
+import { ConnectionsSection, SectionEmpty } from '../connections/ConnectionsSection';
+import { CapabilitiesDialog, DefaultsDialog, RenameDialog } from '../connections/ConnectionDialogs';
+import { DisconnectBody, disconnectedWords } from '../connections/DisconnectBody';
 import { McpAddDialog } from '../connections/McpAddDialog';
 import { McpAuthDialog } from '../connections/McpAuthDialog';
 import { McpToolsDialog } from '../connections/McpToolsDialog';
-import { AUTH_WORDS } from '../connections/mcpWords';
-import { CapabilitiesDialog, DefaultsDialog, RenameDialog, TestDialog } from '../connections/ConnectionDialogs';
-import { GROUPS, GROUP_NAME, PROVIDER_NAME, STATUS_WORDS, levelOf, outcomeBanner, reasonWords, type Outcome } from '../connections/words';
-import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, toast, useApiAction, useConfirm } from '../ui';
+import { ToolsToReview } from '../connections/ToolsToReview';
+import { SECTION_WORDS, outcomeBanner, type Outcome } from '../connections/words';
+import { DiagnosticsPanel } from '../diagnostics/DiagnosticsPanel';
+import { getDiagnosticSummary, type DiagnosticSummary, type DiagnosticTarget } from '../diagnostics/api';
+import { ErrorBanner, ListSkeleton, PageContainer, PageHeader, toast, useApiAction, useConfirm } from '../ui';
+import { WebSearchSection } from '../webSearch/WebSearchSection';
 
 const RETURN_TO = '/settings/connections';
-const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
 
-const STATUS_COLOR = { active: 'success', paused: 'default', needs_reconnect: 'warning', revoked: 'error' } as const;
+const hostOf = (url: string): string | null => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+};
 
-function ProviderMark({ provider }: { provider: Connection['provider'] }) {
-  if (provider === 'google') return <GoogleIcon aria-label="Google" />;
-  if (provider === 'microsoft') return <MicrosoftIcon aria-label="Microsoft" />;
-  return <LinkOutlinedIcon aria-label="Other" />;
-}
-
-interface RowProps {
-  connection: Connection;
-  canWrite: boolean;
-  canReadRuns: boolean;
-  busy: boolean;
-  onRename: () => void;
-  onCapabilities: () => void;
-  onDefaults: () => void;
-  onTest: () => void;
-  onTogglePause: () => void;
-  onReconnect: () => void;
-  onDisconnect: () => void;
-  /** MCP servers (E39.9): the tool review, and a new sign-in. */
-  onTools: () => void;
-  onSignIn: () => void;
-}
-
-/** One account: the mark, the label, the email, what it may do, its state and defaults, when it was last used. */
-function ConnectionRow({ connection: c, canWrite, canReadRuns, busy, onRename, onCapabilities, onDefaults, onTest, onTogglePause, onReconnect, onDisconnect, onTools, onSignIn }: RowProps) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const close = () => setAnchor(null);
-  const pick = (fn: () => void) => () => {
-    close();
-    fn();
-  };
-  const reason = reasonWords(c);
-  return (
-    <ListItem aria-label={`Connection ${c.label}`} divider sx={{ alignItems: 'flex-start', pr: canWrite ? 7 : 2, py: 1.5 }} secondaryAction={canWrite ? <IconButton aria-label={`Actions for ${c.label}`} onClick={(e) => setAnchor(e.currentTarget)} sx={{ minWidth: 44, minHeight: 44 }}><MoreVertIcon /></IconButton> : undefined}>
-      <ListItemIcon sx={{ minWidth: 40, mt: 0.5 }}>
-        <ProviderMark provider={c.provider} />
-      </ListItemIcon>
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography component="span" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
-            {c.label}
-          </Typography>
-          <Chip size="small" color={STATUS_COLOR[c.status]} variant={c.status === 'active' ? 'outlined' : 'filled'} label={STATUS_WORDS[c.status]} />
-          {c.defaultFor.map((g) => (
-            <Chip key={g} size="small" variant="outlined" color="primary" label={`Default for ${GROUP_NAME[g].toLowerCase()}`} />
-          ))}
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-          {c.mcp ? c.mcp.url : c.accountEmail}
-          {c.accountName ? ` · ${c.accountName}` : ''}
-        </Typography>
-        {c.mcp ? (
-          <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.75 }} aria-label="What it may do">
-            <Chip size="small" label={`${c.mcp.tools.enabled} of ${c.mcp.tools.total} tools on`} />
-            {c.mcp.tools.needsReview > 0 && <Chip size="small" color="warning" label={`${c.mcp.tools.needsReview} to review`} />}
-            <Chip size="small" variant="outlined" label={AUTH_WORDS[c.mcp.auth]} />
-          </Stack>
-        ) : (
-          <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.75 }} aria-label="What it may do">
-            {GROUPS.map((g) => {
-              const level = levelOf(c.capabilities, g);
-              return level ? <Chip key={g.group} size="small" label={`${g.name}: ${level}`} /> : null;
-            })}
-            {c.capabilities.length === 0 && <Chip size="small" variant="outlined" label="Nothing switched on" />}
-          </Stack>
-        )}
-        {reason && (
-          <Typography variant="body2" color={c.status === 'needs_reconnect' ? 'warning.main' : 'text.secondary'} sx={{ mt: 0.75 }}>
-            {reason}
-          </Typography>
-        )}
-        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
-          {c.lastUsedAt ? <RelativeTime iso={c.lastUsedAt} prefix="Last used " /> : 'Not used yet'}
-        </Typography>
-        <ConnectionDetails connectionId={c.id} canReadRuns={canReadRuns} />
-        {c.status === 'needs_reconnect' && canWrite && (
-          <Button variant="contained" color="warning" size="small" onClick={onReconnect} disabled={busy} sx={{ mt: 1, ...TOUCH }}>
-            {c.mcp ? 'Update sign-in' : 'Reconnect'}
-          </Button>
-        )}
-      </Box>
-      <Menu anchorEl={anchor} open={anchor !== null} onClose={close}>
-        <MenuItem onClick={pick(onRename)}>Rename</MenuItem>
-        {c.mcp && <MenuItem onClick={pick(onTools)}>Tools</MenuItem>}
-        {c.mcp && c.mcp.auth !== 'none' && <MenuItem onClick={pick(onSignIn)}>Update sign-in</MenuItem>}
-        {!c.mcp && c.status !== 'needs_reconnect' && <MenuItem onClick={pick(onCapabilities)}>Change what it can do</MenuItem>}
-        {!c.mcp && c.status !== 'needs_reconnect' && <MenuItem onClick={pick(onDefaults)}>Make default for…</MenuItem>}
-        {c.status === 'active' && <MenuItem onClick={pick(onTest)}>Test</MenuItem>}
-        {c.status === 'active' && <MenuItem onClick={pick(onTogglePause)}>Pause</MenuItem>}
-        {c.status === 'paused' && <MenuItem onClick={pick(onTogglePause)}>Resume</MenuItem>}
-        <MenuItem onClick={pick(onDisconnect)} sx={{ color: 'error.main' }}>
-          Disconnect
-        </MenuItem>
-      </Menu>
-    </ListItem>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Box component="section" aria-label={title} sx={{ mb: 3 }}>
-      <Typography variant="h6" component="h2" sx={{ mb: 1 }}>
-        {title}
-      </Typography>
-      <Paper variant="outlined">
-        <List disablePadding>{children}</List>
-      </Paper>
-    </Box>
-  );
-}
+/** The panel's target for a connection: its name for the title, its capabilities for the expected stages, its host (copied only if ticked). */
+const targetOf = (c: Connection): DiagnosticTarget => ({ kind: 'connection', id: c.id, provider: c.provider, capabilities: c.capabilities, name: c.label, host: c.mcp ? hostOf(c.mcp.url) : null });
 
 /**
- * `/settings/connections` (E39.2, #599): the owner's accounts at Google and Microsoft, several per provider, each with a name,
- * what it may do (Mail, Calendar, Documents: read or read and write), its defaults and its state. Writes need `connections:write`.
- * No token or scope string is ever shown: the API returns none.
+ * `/settings/connections`, "Connections and tools" (E39.2, #599; E50.14, #984): everything the agent may use, in three sections:
+ * Accounts (Google, Microsoft), Added tools (MCP servers) and Web search. What is switched on here is available to the agent in every
+ * task and chat (E50.17); each row has one switch, a visible Test (the diagnostics panel) and its health from the last test. Writes need
+ * `connections:write`. No token or scope string is ever shown: the API returns none.
  */
 export function ConnectionsPage() {
   const { api, viewer } = usePlatformHost();
   const confirm = useConfirm();
   const action = useApiAction('Could not change the connection');
   const canWrite = viewer.hasPermission('connections:write');
+  const canAdmin = viewer.hasPermission('system_settings:read');
   const [params, setParams] = useSearchParams();
   const [connections, setConnections] = useState<Connection[] | null>(null);
+  const [health, setHealth] = useState<Record<string, DiagnosticSummary>>({});
   const [providers, setProviders] = useState<ProviderAvailability[]>([]);
   const [connecting, setConnecting] = useState(false);
   const [mcpEnabled, setMcpEnabled] = useState(false);
@@ -174,13 +58,18 @@ export function ConnectionsPage() {
   const [renaming, setRenaming] = useState<Connection | null>(null);
   const [changing, setChanging] = useState<Connection | null>(null);
   const [defaulting, setDefaulting] = useState<Connection | null>(null);
-  const [testing, setTesting] = useState<{ connection: Connection; result: TestResult | null } | null>(null);
+  const [testing, setTesting] = useState<Connection | null>(null);
   const [banner, setBanner] = useState<{ outcome: string; id: string | null; missing: string[] } | null>(null);
   const { setError } = action;
 
+  const loadHealth = useCallback(async () => {
+    const list = await getDiagnosticSummary(api).catch(() => [] as DiagnosticSummary[]);
+    setHealth(Object.fromEntries(list.map((s) => [s.targetId, s])));
+  }, [api]);
+
   const load = useCallback(async () => {
     try {
-      const [list, provs, mcp] = await Promise.all([listConnections(api), listProviders(api).catch(() => [] as ProviderAvailability[]), getMcpStatus(api).catch(() => ({ enabled: false, restricted: false }))]);
+      const [list, provs, mcp] = await Promise.all([listConnections(api), listProviders(api).catch(() => [] as ProviderAvailability[]), getMcpStatus(api).catch(() => ({ enabled: false, restricted: false })), loadHealth()]);
       setConnections(list);
       setProviders(provs);
       setMcpEnabled(mcp.enabled);
@@ -188,7 +77,7 @@ export function ConnectionsPage() {
       setError(e instanceof Error && e.message ? e.message : 'Could not load your connections');
       setConnections([]);
     }
-  }, [api, setError]);
+  }, [api, setError, loadHealth]);
 
   useEffect(() => {
     void load();
@@ -221,6 +110,13 @@ export function ConnectionsPage() {
     }
   }, [banner, connections]);
 
+  // `#web-search` (the old Web search address lands here): scroll to the section once the page has its sections.
+  const { hash } = useLocation();
+  const loaded = connections !== null;
+  useEffect(() => {
+    if (loaded && hash) document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: 'start' });
+  }, [loaded, hash]);
+
   const go = (url: string) => window.location.assign(url);
 
   const reconnect = async (c: Connection) => {
@@ -237,63 +133,27 @@ export function ConnectionsPage() {
     }
   };
 
-  const runTest = async (c: Connection) => {
-    setTesting({ connection: c, result: null });
-    const result = await action.run(`test-${c.id}`, () => testConnection(api, c.id), 'The test could not run');
-    if (result) setTesting({ connection: c, result });
-    else setTesting(null);
-  };
-
   const disconnect = async (c: Connection) => {
     const detail = await action.run(`detail-${c.id}`, () => getConnection(api, c.id), 'Could not load the connection');
     if (!detail) return;
-    const used = detail.usedBy;
-    const ok = await confirm({
-      title: `Disconnect ${c.label}?`,
-      body: (
-        <>
-          <Typography component="span" sx={{ display: 'block' }}>
-            {c.provider === 'mcp' ? 'Hexactra revokes its sign-in at the server if it can, and deletes the saved sign-in and your choices about its tools. You can add it again later.' : `Hexactra revokes its access at ${PROVIDER_NAME[c.provider]} and deletes the saved sign-in. You can connect it again later.`}
-          </Typography>
-          {used.length > 0 ? (
-            <>
-              <Typography component="span" sx={{ display: 'block', mt: 1 }}>
-                These use it and will show &ldquo;connection removed&rdquo;:
-              </Typography>
-              <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.5 }}>
-                {used.map((u) => (
-                  <li key={`${u.kind}-${u.id}`}>{u.name}</li>
-                ))}
-              </Box>
-            </>
-          ) : (
-            <Typography component="span" sx={{ display: 'block', mt: 1 }}>
-              No task or chat uses it.
-            </Typography>
-          )}
-        </>
-      ),
-      confirmLabel: 'Disconnect',
-      destructive: true,
-    });
+    const ok = await confirm({ title: `Disconnect ${c.label}?`, body: <DisconnectBody connection={c} usedBy={detail.usedBy} />, confirmLabel: 'Disconnect', destructive: true });
     if (!ok) return;
     const r = await action.run(`remove-${c.id}`, () => removeConnection(api, c.id));
     if (r) {
-      toast(r.revoked ? `${c.label} disconnected` : c.provider === 'mcp' ? `${c.label} disconnected. The server could not be asked to revoke the sign-in.` : `${c.label} disconnected. The provider could not be asked: remove the app in your ${PROVIDER_NAME[c.provider]} account settings.`, r.revoked ? 'success' : 'warning');
+      toast(disconnectedWords(c, r.revoked), r.revoked ? 'success' : 'warning');
       await load();
     }
   };
 
-  const saveRename = async (label: string) => {
-    if (!renaming) return;
-    const r = await action.run('rename', () => updateConnection(api, renaming.id, { label }));
-    if (r) {
-      setRenaming(null);
-      toast('Renamed');
-      await load();
-    }
+  const save = async (key: string, fn: () => Promise<unknown>, done: () => void) => {
+    const r = await action.run(key, fn);
+    if (!r) return;
+    done();
+    toast('Saved');
+    await load();
   };
-
+  const saveRename = (label: string) => (renaming ? save('rename', () => updateConnection(api, renaming.id, { label }), () => setRenaming(null)) : Promise.resolve());
+  const saveDefaults = (groups: CapabilityGroup[]) => (defaulting ? save('defaults', () => updateConnection(api, defaulting.id, { defaultFor: groups }), () => setDefaulting(null)) : Promise.resolve());
   const saveCapabilities = async (capabilities: Capability[]) => {
     if (!changing) return;
     const r = await action.run('capabilities', () => updateConnection(api, changing.id, { capabilities, returnTo: RETURN_TO }));
@@ -304,31 +164,22 @@ export function ConnectionsPage() {
     await load();
   };
 
-  const saveDefaults = async (groups: CapabilityGroup[]) => {
-    if (!defaulting) return;
-    const r = await action.run('defaults', () => updateConnection(api, defaulting.id, { defaultFor: groups }));
-    if (r) {
-      setDefaulting(null);
-      toast('Saved');
-      await load();
-    }
-  };
-
   const all = connections ?? [];
   const needsAttention = all.filter((c) => c.status === 'needs_reconnect');
-  const byProvider = (p: Connection['provider']) => all.filter((c) => c.provider === p && c.status !== 'needs_reconnect');
-  const servers = byProvider('mcp');
+  const accounts = all.filter((c) => c.provider !== 'mcp' && c.status !== 'needs_reconnect');
+  const servers = all.filter((c) => c.provider === 'mcp' && c.status !== 'needs_reconnect');
   const rowFor = (c: Connection) => (
     <ConnectionRow
       key={c.id}
       connection={c}
+      health={health[c.id] ?? null}
       canWrite={canWrite}
       canReadRuns={viewer.hasPermission('runs:read')}
       busy={action.busy?.endsWith(c.id) === true}
       onRename={() => setRenaming(c)}
       onCapabilities={() => setChanging(c)}
       onDefaults={() => setDefaulting(c)}
-      onTest={() => void runTest(c)}
+      onTest={() => setTesting(c)}
       onTogglePause={() => void togglePause(c)}
       onReconnect={() => void reconnect(c)}
       onDisconnect={() => void disconnect(c)}
@@ -339,13 +190,7 @@ export function ConnectionsPage() {
 
   return (
     <PageContainer width="default">
-      <PageHeader
-        title="Connections"
-        subtitle="Your accounts at Google and Microsoft, and MCP servers you add, so the agent can read mail, check a calendar, add a row to a spreadsheet or use another tool."
-        back={{ to: '/settings', label: 'Settings' }}
-        actions={[{ key: 'mcp', label: 'Add an MCP server', Icon: ExtensionOutlinedIcon, onClick: () => setAddingMcp(true), hidden: !canWrite || !mcpEnabled }]}
-        primary={{ key: 'connect', label: 'Connect an account', Icon: AddIcon, onClick: () => setConnecting(true), hidden: !canWrite }}
-      />
+      <PageHeader title="Connections and tools" subtitle="Everything the agent may use for you: your accounts, the tools you added and web search." back={{ to: '/settings', label: 'Settings' }} />
       {outcome && (
         <Alert severity={outcome.severity} onClose={() => setBanner(null)} sx={{ mb: 2 }} role="status">
           {outcome.text}
@@ -353,30 +198,58 @@ export function ConnectionsPage() {
       )}
       <ErrorBanner error={action.error} onClose={action.clearError} onRetry={connections && connections.length === 0 ? () => void load() : undefined} />
       {/* The one rule (E50.17): each row's switch is the only place a tool is turned on or off. */}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="connections-rule">
+      <Typography variant="body2" sx={{ mb: 2 }} data-testid="connections-rule">
         What is switched on here is available to the agent in every task and chat. Sending or changing something still asks you first.
       </Typography>
       {connections === null && <ListSkeleton />}
-      {connections !== null && all.length === 0 && (
-        <EmptyState
-          Icon={LinkOutlinedIcon}
-          title="No accounts connected yet"
-          body="A connection lets Hexactra use one of your Google or Microsoft accounts for mail, calendar or documents. Every task and chat can use what you switch on here, and you choose what each account may do: pause it, or switch a capability off, to keep the agent away from it."
-          action={canWrite ? { key: 'connect', label: 'Connect an account', Icon: AddIcon, onClick: () => setConnecting(true) } : undefined}
-        />
+      {connections !== null && (
+        <>
+          {needsAttention.length > 0 && (
+            <ConnectionsSection title="Needs reconnecting" explanation="These no longer work. Connect them again, or remove them.">
+              {needsAttention.map(rowFor)}
+            </ConnectionsSection>
+          )}
+          <ConnectionsSection
+            title="Accounts"
+            explanation={SECTION_WORDS.accounts}
+            action={canWrite ? { label: 'Connect an account', Icon: AddIcon, onClick: () => setConnecting(true) } : null}
+            empty={<SectionEmpty title="No accounts connected yet" body={SECTION_WORDS.accountsEmpty} />}
+          >
+            {accounts.map(rowFor)}
+          </ConnectionsSection>
+          <ToolsToReview servers={servers} onReview={setToolsOf} />
+          <ConnectionsSection
+            title="Added tools"
+            aside="MCP servers"
+            explanation={SECTION_WORDS.tools}
+            action={canWrite && mcpEnabled ? { label: 'Add a tool', Icon: ExtensionOutlinedIcon, onClick: () => setAddingMcp(true) } : null}
+            empty={
+              mcpEnabled ? (
+                <SectionEmpty title="No tools added yet" body={SECTION_WORDS.toolsEmpty} />
+              ) : (
+                <SectionEmpty
+                  title="Added tools are switched off here"
+                  body={
+                    <>
+                      {SECTION_WORDS.toolsOff}{' '}
+                      {canAdmin && (
+                        <Link component={RouterLink} to="/admin/settings/connections">
+                          Open the administrator&apos;s Connections settings
+                        </Link>
+                      )}
+                    </>
+                  }
+                />
+              )
+            }
+          >
+            {servers.map(rowFor)}
+          </ConnectionsSection>
+          {viewer.hasPermission('web_search:read') && <ConnectionsSection id="web-search" title="Web search" explanation={SECTION_WORDS.webSearch} body={<WebSearchSection />} />}
+        </>
       )}
-      {needsAttention.length > 0 && <Section title="Needs reconnecting">{needsAttention.map(rowFor)}</Section>}
-      {servers.length > 0 && <Section title="MCP servers">{servers.map(rowFor)}</Section>}
-      {(['google', 'microsoft'] as const).map((p) => {
-        const rows = byProvider(p);
-        return rows.length > 0 ? (
-          <Section key={p} title={PROVIDER_NAME[p]}>
-            {rows.map(rowFor)}
-          </Section>
-        ) : null;
-      })}
 
-      <ConnectDialog open={connecting} providers={providers} api={api} returnTo={RETURN_TO} onClose={() => setConnecting(false)} onError={setError} />
+      <ConnectDialog open={connecting} providers={providers} hasGoogle={all.some((c) => c.provider === 'google')} api={api} returnTo={RETURN_TO} onClose={() => setConnecting(false)} onError={setError} />
       <McpAddDialog open={addingMcp} api={api} returnTo={RETURN_TO} onClose={() => setAddingMcp(false)} onAdded={() => void load()} />
       <McpToolsDialog open={toolsOf !== null} api={api} connection={toolsOf} canWrite={canWrite} onClose={() => setToolsOf(null)} onChanged={() => void load()} />
       <McpAuthDialog
@@ -393,7 +266,30 @@ export function ConnectionsPage() {
       <RenameDialog connection={renaming} onClose={() => setRenaming(null)} onSave={saveRename} />
       <CapabilitiesDialog connection={changing} onClose={() => setChanging(null)} onSave={saveCapabilities} />
       <DefaultsDialog connection={defaulting} onClose={() => setDefaulting(null)} onSave={saveDefaults} />
-      <TestDialog connection={testing?.connection ?? null} result={testing?.result ?? null} onClose={() => setTesting(null)} />
+      <DiagnosticsPanel
+        target={testing ? targetOf(testing) : null}
+        onClose={() => setTesting(null)}
+        onReport={() => void loadHealth()}
+        actions={{
+          provider: testing?.provider,
+          canAdmin,
+          adminHref: '/admin/settings/connections',
+          onReconnect: testing
+            ? () => {
+                const c = testing;
+                setTesting(null);
+                void reconnect(c);
+              }
+            : undefined,
+          onReviewTools: testing?.mcp
+            ? () => {
+                const c = testing;
+                setTesting(null);
+                setToolsOf(c);
+              }
+            : undefined,
+        }}
+      />
     </PageContainer>
   );
 }

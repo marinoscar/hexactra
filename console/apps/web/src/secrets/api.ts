@@ -56,14 +56,17 @@ export type ActivityField =
 export interface ActivityItem {
   id: string;
   at: string;
-  event: 'lookup' | 'release';
+  /** `service_key` (E50.3): the console's own server read one of the owner's keys of outside services. */
+  event: 'lookup' | 'release' | 'service_key';
+  /** For `service_key`: which key (`web_search.brave`). Never its value. */
+  serviceKey?: string | null;
   runId: string | null;
   site: string | null;
   /** The saved login's name, as the run recorded it; null when unknown. */
   loginName?: string | null;
   field: ActivityField | null;
   /** Why a value was handed over; `save_login` (E37.4b) is the password the owner typed, sent to the provider to be saved. */
-  purpose?: 'login' | 'signup' | 'password_change' | 'mfa' | 'form' | 'purchase' | 'save_login' | null;
+  purpose?: 'login' | 'signup' | 'password_change' | 'mfa' | 'form' | 'purchase' | 'save_login' | 'service_call' | null;
   outcome: string;
   refused: boolean;
   matches: number | null;
@@ -148,7 +151,7 @@ export const getAdminSummary = (api: PlatformApiClient) => api.get<AdminSummary>
 export const getDefaultClient = (api: PlatformApiClient) => api.get<DefaultClient>('/secrets/vault/default-client');
 
 export const saveClient = (api: PlatformApiClient, body: { baseUrl: string; clientId: string; clientSecret?: string }) => api.put<SecretsStatus>('/secrets/vault/client', body);
-export const connect = (api: PlatformApiClient, body: { allowWrite?: boolean; allowIdentity?: boolean; allowCards?: boolean; returnTo?: string }) => api.post<{ authorizeUrl: string; expiresAt: string }>('/secrets/vault/connect', body);
+export const connect = (api: PlatformApiClient, body: { allowWrite?: boolean; allowIdentity?: boolean; allowCards?: boolean; allowServiceKeys?: boolean; returnTo?: string }) => api.post<{ authorizeUrl: string; expiresAt: string }>('/secrets/vault/connect', body);
 export const disconnect = (api: PlatformApiClient, forgetClient = false) => api.post<{ revoked: boolean; status: SecretsStatus }>('/secrets/vault/disconnect', forgetClient ? { forgetClient } : {});
 
 /** The owner's own switch: the user setting `secrets.agentUse.enabled`. */
@@ -206,3 +209,23 @@ export async function setStoreSwitch(api: PlatformApiClient, enabled: boolean): 
   const doc = await api.get<{ version: number }>('/system-settings');
   await api.patch('/system-settings', { secrets: { store: { enabled } } }, { ifMatch: String(doc.version) });
 }
+
+// ---- keys of outside services (E50.3) ----
+
+export type KeyBinding = 'credential_store' | 'vault' | 'builtin';
+
+/** One key of an outside service, as `/api/service-credentials` lists it: where the owner's own key is kept and when it was set. Never a value. */
+export interface ServiceKeyView {
+  service: string;
+  name: string;
+  label: string;
+  tier: 'user' | 'organization' | 'system' | null;
+  tiers: Record<'user' | 'organization' | 'system', { available: boolean; set: boolean; setAt: string | null }>;
+  userBinding: KeyBinding;
+  secretsProvider: { id: 'vault' | 'builtin'; writable: boolean; releasesEnabled: boolean; ready: boolean } | null;
+}
+
+export const getServiceKeys = (api: PlatformApiClient) => api.get<ServiceKeyView[]>('/service-credentials');
+export const moveServiceKey = (api: PlatformApiClient, k: { service: string; name: string }, to: 'credential_store' | 'secrets_provider') =>
+  api.post<{ binding: KeyBinding; sourceRemoved: boolean }>(`/service-credentials/${k.service}/${k.name}/move`, { to });
+export const removeServiceKey = (api: PlatformApiClient, k: { service: string; name: string }) => api.delete(`/service-credentials/${k.service}/${k.name}`);

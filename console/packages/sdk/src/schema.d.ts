@@ -6593,7 +6593,7 @@ export interface paths {
         put?: never;
         /**
          * Start connecting your Vault (OAuth 2.1 authorization code with PKCE)
-         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
+         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` and `allowServiceKeys` adds `vault:service_keys_read` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
          *
          *     **Requires:** authentication, plus permission `secrets:write`.
          */
@@ -8018,6 +8018,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/service-credentials/{service}/{name}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move your own key between the console and your secrets provider
+         * @description Moves your own key (E50.3) to `credential_store` (the console) or `secrets_provider` (your Vault or the built-in store, `secrets.provider`). It is read, written to the other side, and the old copy is removed only after the write is confirmed: a failed write leaves the key where it was. Into a remote Vault the console cannot write: add the key there as a "Service key" opened to the agent, then Move checks that the Vault answers with it and removes the console's copy. Out of a remote Vault the copy there stays (remove it in Vault). The value is never returned. Audited (`service_credential.moved`). Errors: `SERVICE_CREDENTIAL_NOT_SET`, `SERVICE_CREDENTIAL_NOT_IN_PROVIDER`, `SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE`.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["serviceCredentials_move"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/service-credentials/{service}/{name}": {
         parameters: {
             query?: never;
@@ -8028,7 +8050,7 @@ export interface paths {
         get?: never;
         /**
          * Set your own key
-         * @description Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).
+         * @description Stores your own key for this service, encrypted, where your keys are kept (`serviceCredentials`: the console by default, or the built-in store; a key kept in your remote Vault is changed in Vault: `SERVICE_CREDENTIAL_PROVIDER_READ_ONLY`). Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).
          *
          *     **Requires:** authentication, plus permission `connections:write`.
          */
@@ -10753,10 +10775,22 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
+             * @example SECRETS_VAULT_NOT_CONFIGURED
+             * @example SECRETS_VAULT_URL_REFUSED
+             * @example SECRETS_VAULT_DISCONNECT_FIRST
+             * @example SECRETS_VAULT_NOT_CONNECTED
+             * @example SECRETS_VAULT_NEEDS_RECONNECT
+             * @example SECRETS_VAULT_UNAVAILABLE
+             * @example SECRETS_VAULT_CONNECT_FAILED
              * @example SERVICE_CREDENTIAL_UNKNOWN
              * @example SERVICE_CREDENTIAL_TIER_NOT_ALLOWED
              * @example SERVICE_CREDENTIAL_NO_ORGANIZATION
              * @example SERVICE_CREDENTIAL_INVALID
+             * @example SERVICE_CREDENTIAL_NOT_SET
+             * @example SERVICE_CREDENTIAL_NOT_IN_PROVIDER
+             * @example SERVICE_CREDENTIAL_PROVIDER_READ_ONLY
+             * @example SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE
+             * @example WEB_SEARCH_ADDRESS_REFUSED
              * @example WEB_SEARCH_NOT_CONFIGURED
              * @example WEB_SEARCH_AUTH_REFUSED
              * @example WEB_SEARCH_RATE_LIMITED
@@ -10770,13 +10804,6 @@ export interface components {
              * @example TASK_BUILDER_ARCHIVED
              * @example INVALID_TASK_SPEC
              * @example TASK_SPEC_INCOMPLETE
-             * @example SECRETS_VAULT_NOT_CONFIGURED
-             * @example SECRETS_VAULT_URL_REFUSED
-             * @example SECRETS_VAULT_DISCONNECT_FIRST
-             * @example SECRETS_VAULT_NOT_CONNECTED
-             * @example SECRETS_VAULT_NEEDS_RECONNECT
-             * @example SECRETS_VAULT_UNAVAILABLE
-             * @example SECRETS_VAULT_CONNECT_FAILED
              * @example INVALID_DELIVERY
              * @example DELIVERY_NOT_FOUND
              * @example TOO_MANY_DELIVERIES
@@ -11800,6 +11827,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            chat?: {
+                /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                useSavedTasks: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11812,6 +11843,17 @@ export interface components {
                 enabled: boolean;
                 /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                 provider: string | null;
+            };
+            serviceCredentials?: {
+                /**
+                 * @description Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store).
+                 * @enum {string}
+                 */
+                binding: "credential_store" | "secrets_provider";
+                /** @description Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved. */
+                keys?: {
+                    [key: string]: "credential_store" | "secrets_provider";
+                };
             };
             notifications?: {
                 [key: string]: {
@@ -11930,6 +11972,10 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            chat?: {
+                /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                useSavedTasks: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11942,6 +11988,17 @@ export interface components {
                 enabled: boolean;
                 /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                 provider: string | null;
+            };
+            serviceCredentials?: {
+                /**
+                 * @description Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store).
+                 * @enum {string}
+                 */
+                binding: "credential_store" | "secrets_provider";
+                /** @description Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved. */
+                keys?: {
+                    [key: string]: "credential_store" | "secrets_provider";
+                };
             };
             notifications?: {
                 [key: string]: {
@@ -12055,6 +12112,10 @@ export interface components {
             approvals?: {
                 paused?: boolean;
             } | null;
+            chat?: {
+                /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                useSavedTasks?: boolean;
+            } | null;
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -12067,6 +12128,13 @@ export interface components {
                 enabled?: boolean;
                 /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                 provider?: string | null;
+            } | null;
+            serviceCredentials?: {
+                /** @enum {string} */
+                binding?: "credential_store" | "secrets_provider";
+                keys?: {
+                    [key: string]: "credential_store" | "secrets_provider";
+                };
             } | null;
             notifications?: {
                 [key: string]: {
@@ -12244,6 +12312,8 @@ export interface components {
                         enabled?: boolean;
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
+                        allowPrivate?: boolean;
+                        model?: string | null;
                     };
                 };
                 order?: string[];
@@ -12578,6 +12648,8 @@ export interface components {
                         enabled?: boolean;
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
+                        allowPrivate?: boolean;
+                        model?: string | null;
                     };
                 };
                 order?: string[];
@@ -12916,6 +12988,8 @@ export interface components {
                         enabled?: boolean;
                         costPerCallUsd?: number | null;
                         baseUrl?: string | null;
+                        allowPrivate?: boolean;
+                        model?: string | null;
                     };
                 };
                 order?: string[];
@@ -13489,6 +13563,10 @@ export interface components {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
                 };
+                chat?: {
+                    /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
+                    useSavedTasks: boolean;
+                };
                 connections?: {
                     /**
                      * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -13501,6 +13579,17 @@ export interface components {
                     enabled: boolean;
                     /** @description The search provider you prefer among the usable ones; `null` follows the deployment's order. */
                     provider: string | null;
+                };
+                serviceCredentials?: {
+                    /**
+                     * @description Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store).
+                     * @enum {string}
+                     */
+                    binding: "credential_store" | "secrets_provider";
+                    /** @description Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved. */
+                    keys?: {
+                        [key: string]: "credential_store" | "secrets_provider";
+                    };
                 };
                 notifications?: {
                     [key: string]: {
@@ -18819,6 +18908,8 @@ export interface components {
             allowCards?: boolean;
             /** @description Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default. */
             allowIdentity?: boolean;
+            /** @description Also ask for `vault:service_keys_read` (contract 1.4): the console's own server may read the keys of outside services (a web search provider's) you keep in your Vault as a "Service key" opened to the agent, for its calls to that service. Never a login, never a page. A new consent. Off by default. */
+            allowServiceKeys?: boolean;
             /** @description A path on this console to return to after the consent (default `/settings/secrets`). */
             returnTo?: string;
         };
@@ -18972,10 +19063,12 @@ export interface components {
                 /** @description ISO 8601: when the fabric recorded it. */
                 at: string;
                 /**
-                 * @description `lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed.
+                 * @description `lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed. `service_key`: the console's own server read one of your keys of outside services (E50.3), for a call to that service.
                  * @enum {string}
                  */
-                event: "lookup" | "release";
+                event: "lookup" | "release" | "service_key";
+                /** @description For `service_key`: which key (`web_search.brave`). Never its value. */
+                serviceKey: string | null;
                 /** @description The run or chat browser it happened in, when it is yours and still exists. */
                 runId: string | null;
                 /** @description The host of the page, never a path or query. */
@@ -18984,8 +19077,8 @@ export interface components {
                 loginName: string | null;
                 /** @description Which field was typed. Never its value. */
                 field: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email" | "number" | "expiry" | "exp_month" | "exp_year" | "holder_name" | "security_code") | null;
-                /** @description Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup. */
-                purpose: ("login" | "signup" | "password_change" | "mfa" | "form" | "purchase" | "save_login") | null;
+                /** @description Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved), or `service_call` (a key read for a call to its service). Null for a lookup. */
+                purpose: ("login" | "signup" | "password_change" | "mfa" | "form" | "purchase" | "save_login" | "service_call") | null;
                 /** @description A closed code: `typed`, `selected`, `saved`, `ok`, or why nothing was typed or saved (`origin_mismatch`, `not_found`, `name_taken`, `disabled`, `rate_limited`, ...). */
                 outcome: string;
                 /** @description Nothing was typed: the fabric or the provider refused or failed. */
@@ -22794,10 +22887,45 @@ export interface components {
                     setAt: string | null;
                 };
             };
+            /**
+             * @description Where your own key is kept (E50.3): the console, your Vault or the built-in store.
+             * @enum {string}
+             */
+            userBinding: "credential_store" | "vault" | "builtin";
+            /** @description Your secrets provider, for Move here; null when this deployment has none. */
+            secretsProvider: {
+                /**
+                 * @description Your active secrets provider (`secrets.provider`).
+                 * @enum {string}
+                 */
+                id: "vault" | "builtin";
+                /** @description The console can write a key there (the built-in store). Into a remote Vault you add the key yourself, then Move checks it. */
+                writable: boolean;
+                /** @description The deployment's `secrets.agentUse` switch: off, no key is read from a secrets provider (the next tier answers). */
+                releasesEnabled: boolean;
+                /** @description The provider can answer now: the built-in store is offered, or your Vault is connected with `vault:service_keys_read`. */
+                ready: boolean;
+            } | null;
         };
         SetServiceCredentialDto: {
             /** @description The key. Write-only: it is never returned, not even in part. */
             value: string;
+        };
+        MoveServiceCredentialResponseDto: {
+            /**
+             * @description Where your key is kept now.
+             * @enum {string}
+             */
+            binding: "credential_store" | "vault" | "builtin";
+            /** @description The old copy was removed. False when there was none, or it is in your remote Vault (remove it there). */
+            sourceRemoved: boolean;
+        };
+        MoveServiceCredentialDto: {
+            /**
+             * @description `credential_store`: the console. `secrets_provider`: your Vault or the built-in store.
+             * @enum {string}
+             */
+            to: "credential_store" | "secrets_provider";
         };
         WebSearchStatusDto: {
             /** @description A search of yours would be made now. */
@@ -22883,7 +23011,12 @@ export interface components {
                 [key: string]: {
                     enabled: boolean;
                     costPerCallUsd: number | null;
+                    /** @description A self-hosted provider's address (SearXNG). */
                     baseUrl: string | null;
+                    /** @description "This instance is on my private network": http and a private address are accepted for the configured host only. */
+                    allowPrivate: boolean;
+                    /** @description An answer-type provider's model, a model id of the AI catalogue (OpenAI web search). Null: not chosen, the provider is not usable. */
+                    model: string | null;
                 };
             };
             order: string[];
@@ -22918,6 +23051,8 @@ export interface components {
                     enabled?: boolean;
                     costPerCallUsd?: number | null;
                     baseUrl?: string | null;
+                    allowPrivate?: boolean;
+                    model?: string | null;
                 };
             };
             order?: string[];
@@ -52461,6 +52596,63 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    serviceCredentials_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The service (`web_search`). */
+                service: string;
+                /** @description The key within it (`brave`). */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveServiceCredentialDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MoveServiceCredentialResponseDto"];
+                    };
+                };
             };
             /** @description Unauthorized - Invalid or missing token */
             401: {

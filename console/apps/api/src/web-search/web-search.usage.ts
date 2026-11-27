@@ -25,14 +25,18 @@ export interface UsageRow {
 export class WebSearchUsage {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Counts one call (`failed`: it reached the provider and did not answer). `costUsd` is added for a call that answered. */
-  async record(userId: string, provider: string, at: Date, outcome: { failed: boolean; costUsd: number | null }): Promise<void> {
+  /**
+   * Counts one call (`failed`: it reached the provider and did not answer). `costUsd` (per call) is added for a call that answered.
+   * `calls`: an answer-type provider that made several searches in one call counts each (default 1, E50.9); the fee is per search.
+   */
+  async record(userId: string, provider: string, at: Date, outcome: { failed: boolean; costUsd: number | null; calls?: number }): Promise<void> {
     const day = utcDay(at);
-    const cost = new Prisma.Decimal(!outcome.failed && outcome.costUsd ? outcome.costUsd : 0);
+    const calls = Math.max(1, Math.floor(outcome.calls ?? 1));
+    const cost = new Prisma.Decimal(!outcome.failed && outcome.costUsd ? outcome.costUsd * calls : 0);
     await this.prisma.forUser({ userId }).webSearchUsage.upsert({
       where: { userId_day_provider: { userId, day, provider } },
-      create: { userId, day, provider, calls: 1, failures: outcome.failed ? 1 : 0, estimatedCostUsd: cost },
-      update: { calls: { increment: 1 }, failures: { increment: outcome.failed ? 1 : 0 }, estimatedCostUsd: { increment: cost } },
+      create: { userId, day, provider, calls, failures: outcome.failed ? 1 : 0, estimatedCostUsd: cost },
+      update: { calls: { increment: calls }, failures: { increment: outcome.failed ? 1 : 0 }, estimatedCostUsd: { increment: cost } },
     });
   }
 

@@ -17,8 +17,11 @@ import type { DiagnosticStage } from './diagnostic-stage';
 
 export type { WebSearchResult };
 
-/** What a provider needs to make a call. `api_key`: the caller wipes the key after the call. */
-export type ProviderAuth = { kind: 'api_key'; key: SecretBytes } | { kind: 'none'; baseUrl: string } | { kind: 'ai_service'; userId: string; orgId: string | null };
+/**
+ * What a provider needs to make a call. `api_key`: the caller wipes the key after the call. `none`: a self-hosted provider's address
+ * and whether the administrator marked it as on their private network (the address check then exempts that one host, E50.8).
+ */
+export type ProviderAuth = { kind: 'api_key'; key: SecretBytes } | { kind: 'none'; baseUrl: string; allowPrivate: boolean } | { kind: 'ai_service'; userId: string; orgId: string | null };
 
 export interface SearchRequest {
   query: string;
@@ -27,6 +30,14 @@ export interface SearchRequest {
   /** A host name; the adapter turns it into the provider's site filter (`site:` for Brave). */
   site: string | null;
   signal: AbortSignal;
+}
+
+/**
+ * What a provider's `search` returns: the tool's result, plus, for an answer-type provider (E50.9), how many searches it made when
+ * it says so. Each search is one call for the per-day limit and the fee; absent, the call is one.
+ */
+export interface ProviderSearchResult extends WebSearchResult {
+  searches?: number;
 }
 
 export interface SearchProvider {
@@ -43,7 +54,7 @@ export interface SearchProvider {
   /** A DEFAULT estimate in USD per call, from the decision record; the administrator overrides it. Never shown as a fact. */
   readonly estimatedCostPerCallUsd: number | null;
   /** Throws `WebToolError`, never a provider message. */
-  search(req: SearchRequest, auth: ProviderAuth): Promise<WebSearchResult>;
+  search(req: SearchRequest, auth: ProviderAuth): Promise<ProviderSearchResult>;
   /**
    * The provider's own diagnostic stages (E50.13, #983): `network` (its host resolves and connects) then `live_query` (one search of
    * the fixed word, `count: 1`; skipped with `LIMIT_REACHED` when `liveQuery` is false). Built with `providerStages`
@@ -55,7 +66,8 @@ export interface SearchProvider {
   readonly diagnosticCodes?: readonly string[];
   /**
    * The `credential` stage of a provider that has no stored key (`ai_service`: AI is on, a key resolves, a model is chosen). Absent:
-   * the stage passes. `who` is null for the deployment's report.
+   * the stage passes. `who` is null for the deployment's report. For an `ai_service` provider it is also whether the provider is
+   * usable for `who`: the service offers it only while this does not fail (E50.9).
    */
   diagnoseCredential?(who: { userId: string; orgId: string | null } | null): Promise<StageOutcome>;
 }

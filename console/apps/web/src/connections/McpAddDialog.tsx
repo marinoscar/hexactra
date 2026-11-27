@@ -5,7 +5,7 @@ import { useBreakpoint } from '../ui';
 import { addMcpServer, getMcpPresets, setMcpToolMode, type Connection, type McpCatalog, type McpPreset, type McpTool, type McpToolMode } from './api';
 import { McpAuthFields, useMcpAuthForm } from './McpAuthFields';
 import { McpToolList } from './McpToolList';
-import { mcpErrorWords } from './mcpWords';
+import { AUTH_WORDS, mcpErrorWords } from './mcpWords';
 import type { PlatformApiClient } from '@marinoscar/platform-web/core';
 
 interface Props {
@@ -112,7 +112,7 @@ export function McpAddDialog({ open, api, returnTo, onClose, onAdded }: Props) {
               {added.connection.mcp?.serverName ? ` (${added.connection.mcp.serverName})` : ''}. It offers {added.catalog.tools.length} tool{added.catalog.tools.length === 1 ? '' : 's'}, and every one is off.
             </Alert>
             <Typography variant="body2" color="text.secondary">
-              Switch on only what the agent may use. A server describes its own tools, so what is written here is its claim. <strong>Read</strong> is called without asking; <strong>Write</strong> asks you first. Nothing uses this server until a task or chat is told to.
+              Switch on only what the agent may use. A server describes its own tools, so what is written here is its claim. <strong>Read</strong> is called without asking; <strong>Write</strong> asks you first. Every task and chat can use a tool once you switch it on here.
             </Typography>
             {error && (
               <Alert severity="error" onClose={() => setError(null)} role="alert">
@@ -134,12 +134,24 @@ export function McpAddDialog({ open, api, returnTo, onClose, onAdded }: Props) {
             {presets.length > 0 && (
               <Stack spacing={1}>
                 <Typography variant="subtitle2" component="h3">
-                  Well-known servers
+                  Pick one or enter an address
                 </Typography>
                 <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }} role="group" aria-label="Well-known servers">
                   {presets.map((p) => (
-                    <Chip key={p.id} label={p.name} clickable color={preset?.id === p.id ? 'primary' : 'default'} variant={preset?.id === p.id ? 'filled' : 'outlined'} onClick={() => pick(p)} sx={{ minHeight: 36 }} />
+                    <Chip key={p.id} label={`${p.name} · ${AUTH_WORDS[p.auth]}`} clickable color={preset?.id === p.id ? 'primary' : 'default'} variant={preset?.id === p.id ? 'filled' : 'outlined'} onClick={() => pick(p)} sx={{ minHeight: 36, maxWidth: '100%' }} />
                   ))}
+                  <Chip
+                    label="Other server"
+                    clickable
+                    color={preset === null ? 'primary' : 'default'}
+                    variant={preset === null ? 'filled' : 'outlined'}
+                    onClick={() => {
+                      setPreset(null);
+                      setUrl('');
+                      setLabel('');
+                    }}
+                    sx={{ minHeight: 36 }}
+                  />
                 </Stack>
                 {preset && (
                   <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>

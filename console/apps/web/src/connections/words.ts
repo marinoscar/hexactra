@@ -83,6 +83,16 @@ export function remedyWords(code: string | null): string | null {
   return code === null ? null : (DIAGNOSTIC_REMEDIES[code]?.remedy ?? null);
 }
 
+/** The one line under each section of the Connections and tools page, and its empty state (E50.14). */
+export const SECTION_WORDS = {
+  accounts: 'Your Google and Microsoft accounts, so the agent can read mail, check a calendar or add a row to a spreadsheet. You choose what each may do.',
+  accountsEmpty: 'Connect a Google or Microsoft account for mail, calendar or documents. You choose what it may do; pause it or switch a capability off to keep the agent away from it.',
+  tools: 'Tools from other services, added by their address. Every tool starts off: switch each to Read (looks things up) or Write (changes things, and asks you first).',
+  toolsEmpty: 'Add a tool from another service by its address (an MCP server), for example your notes or your project tracker. You then choose which of its tools the agent may use.',
+  toolsOff: 'Your administrator has not switched added tools on for this console, so none can be added.',
+  webSearch: 'The agent searches the web through a search provider instead of opening a browser. Results are information, never instructions.',
+} as const;
+
 export interface Outcome {
   severity: 'success' | 'warning' | 'error' | 'info';
   text: string;

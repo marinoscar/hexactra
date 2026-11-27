@@ -1,0 +1,29 @@
+{
+  "name": "chat: two saved tasks could fit",
+  "description": "Two tasks send money; the owner did not say which. The turn asks once, with both names as the choices (E51.2, #1007).",
+  "tasks": [
+    {
+      "name": "Zelle to a friend",
+      "goal": "Send {{Amount}} to {{Recipient}} with Zelle from my bank",
+      "parameters": [
+        { "key": "amount", "label": "Amount", "type": "money", "required": true },
+        { "key": "recipient", "label": "Recipient", "type": "text", "required": true }
+      ]
+    },
+    {
+      "name": "Venmo payment",
+      "goal": "Send {{Amount}} to {{Recipient}} with Venmo",
+      "parameters": [
+        { "key": "amount", "label": "Amount", "type": "money", "required": true },
+        { "key": "recipient", "label": "Recipient", "type": "text", "required": true }
+      ]
+    }
+  ],
+  "message": "Send Person A 25 dollars",
+  "script": [["ask_user", { "question": "Which task should send it?", "options": ["Zelle to a friend", "Venmo payment"] }]],
+  "expect": {
+    "tool": "ask_user",
+    "options": ["Zelle to a friend", "Venmo payment"],
+    "inputIncludes": ["- Zelle to a friend — values:", "- Venmo payment — values:"]
+  }
+}
