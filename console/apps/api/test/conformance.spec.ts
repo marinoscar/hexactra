@@ -138,6 +138,10 @@ runPlatformConformance({
           why: 'Run retention (#422) ranks a user\'s finished runs per task with a window function (ROW_NUMBER() OVER (PARTITION BY task_id)) to find those beyond the newest N, in one statement shared by the preview and the job. Every value is a bound parameter and the statement is bound to one `user_id`: the caller in the routes, the user being processed in the system job.',
         },
         {
+          file: 'run-insights/run-stats.service.ts',
+          why: 'Run statistics (E53.1, #1069) aggregate the caller\'s runs per group in one statement: count FILTER per status, percentile_cont(0.5) and percentile_disc(0.9) per measure, GROUPING SETS for the groups and the total, and days and weeks in a time zone, which Prisma cannot express. The WHERE is `runWhereSql`, which always starts with `r.user_id = <the caller>`; every value (ids, statuses, the goal search, the time zone) is a bound parameter. It reads numbers and grouping keys only, never a goal, a result or a step.',
+        },
+        {
           file: 'tasks/task-summary.service.ts',
           why: 'The task list filters and sorts on facts computed from schedules and runs, and the summaries and statistics aggregate runs per task (FILTER, DISTINCT ON, percentile_cont, days in a time zone): one statement each instead of one per task. Every statement binds the caller\'s `user_id`.',
         },

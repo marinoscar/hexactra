@@ -1,5 +1,9 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { timeZoneIdSchema } from '@marinoscar/platform-contract/settings';
+
+import { RUN_STATS_GROUP_BY, RUN_STATS_MAX_GROUPS, RUN_STATS_MAX_RUNS } from '../run-insights/run-stats';
+import { runFilterSchema } from '../tasks/runs.schemas';
 
 // The responses of the run and task insights (E52.6, E52.7).
 
@@ -57,3 +61,67 @@ export const taskConsistencyQuerySchema = z.object({
   since: z.iso.datetime({ offset: true }).optional().describe('Only runs created at or after this time (ISO 8601)'),
 });
 export class TaskConsistencyQueryDto extends createZodDto(taskConsistencyQuerySchema) {}
+
+// Run statistics (E53.1, #1069).
+
+/** `GET /runs/stats`: the runs list's filter, a grouping and the time zone of the days and weeks. */
+export const runStatsQuerySchema = runFilterSchema.extend({
+  groupBy: z.enum(RUN_STATS_GROUP_BY).default('none').describe('One grouping: `none` (the total only), `task`, `policy`, `stopReason`, `status`, `trigger`, `origin`, `tier` (the model tier the run ended on), `day` or `week` (by creation time in `tz`; a week starts on Monday).'),
+  tz: timeZoneIdSchema.optional().describe("IANA time zone of the days and weeks; default the caller's time zone setting."),
+});
+export class RunStatsQueryDto extends createZodDto(runStatsQuerySchema) {}
+
+const distributionSchema = z
+  .object({
+    n: z.number().int().describe('Finished runs with a value'),
+    sum: z.number(),
+    mean: z.number(),
+    min: z.number(),
+    p50: z.number().describe('The median (the mean of the two middle values of an even list)'),
+    p90: z.number().describe('The 90th percentile, by the nearest rank'),
+    max: z.number(),
+  })
+  .nullable()
+  .describe('Over the finished runs of the group; null when it has none');
+
+const runStatsGroupSchema = z.object({
+  runs: z.number().int().describe('Every matching run, live or finished'),
+  finished: z.number().int().describe('succeeded + failed + cancelled: what the distributions and the success rate are over'),
+  live: z.number().int().describe('queued + running + waiting_human + paused'),
+  byStatus: z.object({
+    queued: z.number().int(),
+    running: z.number().int(),
+    waiting_human: z.number().int(),
+    paused: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+    cancelled: z.number().int(),
+  }),
+  successRate: z.number().nullable().describe('succeeded ÷ finished, 0 to 1; null with no finished run'),
+  costPerSuccessUsd: z.number().nullable().describe("The finished runs' cost ÷ the succeeded runs; null with none succeeded. A lower bound while costKnown is false"),
+  costKnown: z.boolean().describe('False when a finished run had a model call that could not be priced'),
+  metrics: z.object({
+    workingMs: distributionSchema.describe('Time in `running` (waiting for a person never counts)'),
+    wallMs: distributionSchema.describe('From start to finish, waits included; runs that never started are left out'),
+    steps: distributionSchema,
+    modelCalls: distributionSchema,
+    inputTokens: distributionSchema.describe('Input tokens, cached included'),
+    cachedInputTokens: distributionSchema,
+    outputTokens: distributionSchema,
+    totalTokens: distributionSchema.describe('Input + output'),
+    costUsd: distributionSchema.describe("Each run's stored cost: the prices of the day it ran"),
+  }),
+});
+
+export const runStatsResponseSchema = z.object({
+  groupBy: z.enum(RUN_STATS_GROUP_BY),
+  timeZone: z.string().describe('The time zone of the days and weeks'),
+  scanned: z.number().int().describe(`Runs read: at most ${RUN_STATS_MAX_RUNS}, the newest`),
+  truncated: z.boolean().describe(`True when more than ${RUN_STATS_MAX_RUNS} runs matched: narrow the filter (from, to) for exact numbers`),
+  total: runStatsGroupSchema,
+  groups: z
+    .array(runStatsGroupSchema.extend({ key: z.string().describe('An id, a value, `none`, or the first day of the period (YYYY-MM-DD)'), label: z.string().describe('What a person reads: a task or policy name, else the key') }))
+    .describe('Empty for groupBy=none. Periods oldest first (a period with no run is absent); any other grouping largest first'),
+  groupsTruncated: z.boolean().describe(`True when there were more than ${RUN_STATS_MAX_GROUPS} groups: the largest (or the latest periods) are kept`),
+});
+export class RunStatsResponseDto extends createZodDto(runStatsResponseSchema) {}

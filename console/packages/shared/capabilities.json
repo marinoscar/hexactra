@@ -511,6 +511,25 @@
       "web": "/runs/:id"
     },
     {
+      "id": "runs.stats",
+      "description": "Run statistics: counts per status, the success rate, cost per successful run, and the distribution (p50, p90, max) of working time, wall time, steps, model calls, tokens and cost over the caller's runs, grouped by task, policy, stop reason, status, trigger, origin, tier, day or week",
+      "rest": [
+        "GET /api/runs/stats"
+      ],
+      "cli": {
+        "none": "Not yet: `runs stats` is #1072 (epic #1068)"
+      },
+      "mcp": {
+        "none": "Not yet: `runs_stats` is #1072 (epic #1068)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; statistics are read in the web app or the CLI"
+      },
+      "web": {
+        "none": "Not yet: the Runs Analytics page is #1073 (epic #1068)"
+      }
+    },
+    {
       "id": "runs.delete",
       "description": "Delete finished runs: one, a list, or everything a filter matches",
       "rest": [

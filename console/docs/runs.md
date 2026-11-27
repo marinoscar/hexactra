@@ -1,6 +1,6 @@
-# Runs: list, filter, search, count, delete, export and retention
+# Runs: list, filter, search, count, statistics, delete, export and retention
 
-How a client reads a user's runs when there are thousands of them, and how it deletes them. Every answer is inside the platform's `{ data }` envelope. The two read routes need the `runs:read` permission; [deleting](#deleting-runs) needs `runs:delete`. A user only ever sees, and deletes, their own runs.
+How a client reads a user's runs when there are thousands of them, and how it deletes them. Every answer is inside the platform's `{ data }` envelope. The read routes (the list, the counts and the statistics) need the `runs:read` permission; [deleting](#deleting-runs) needs `runs:delete`. A user only ever sees, and deletes, their own runs.
 
 ## `GET /api/runs`
 
@@ -85,6 +85,43 @@ The number of runs per status, and what they cost, in one query:
 ```
 
 It takes the same filter parameters as the list except `status` and `state` (the counts are per status): `taskId`, `trigger`, `from`, `to`, `q`, `stopReason`, `policyId`. `live` is `queued + running + waiting_human + paused`. `costUsd` is the sum over the counted runs, `null` when none of them made a model call; it is a lower bound ("at least") while `costKnown` is false.
+
+## `GET /api/runs/stats`
+
+How a set of runs behaved as a population (E53.1, #1069): counts per status, the success rate, the cost per successful run, and the **distribution** of working time, wall time, steps, model calls, tokens and cost, overall and per group. It answers "what does a run of this task usually cost, and what does a bad one cost?" without reading the runs one by one.
+
+```
+GET /api/runs/stats?groupBy=task&from=2026-06-01T00:00:00Z
+```
+
+```json
+{ "data": {
+  "groupBy": "task", "timeZone": "America/Costa_Rica", "scanned": 412, "truncated": false, "groupsTruncated": false,
+  "total": { "runs": 412, "finished": 410, "live": 2, "byStatus": { "succeeded": 351, "failed": 41, "cancelled": 18, "queued": 0, "running": 2, "waiting_human": 0, "paused": 0 },
+             "successRate": 0.856, "costPerSuccessUsd": 0.0412, "costKnown": true,
+             "metrics": { "steps": { "n": 410, "sum": 9840, "mean": 24, "min": 2, "p50": 19, "p90": 52, "max": 131 }, "costUsd": { "…": "…" }, "…": "…" } },
+  "groups": [ { "key": "6f1c…", "label": "Check fares", "runs": 120, "…": "the same fields as total" } ]
+} }
+```
+
+- **Filter.** Every filter parameter of [the list](#parameters) (`status`, `state`, `taskId`, `trigger`, `from`, `to`, `q`, `stopReason`, `policyId`, `origin`, `clientId`, `batchId`), with the same meaning and the same `400`s: the statistics count exactly the runs `GET /api/runs` lists for the same filter (`run-stats.db.spec.ts` compares the two for every parameter). Benchmark runs are left out unless `trigger=benchmark`.
+- **`groupBy`** (one): `none` (default; `groups` is empty), `task` (labelled with the task's name; `none` = runs without a task), `policy` (the policy's name; `none` = no policy yet), `stopReason`, `status`, `trigger`, `origin`, `tier` (the model tier the run ended on), `day` or `week` (by creation time; a week starts on Monday). Periods come oldest first and a period with no run is absent; every other grouping comes largest first. At most 400 groups (`groupsTruncated`: the largest groups, or the latest periods, are kept).
+- **`tz`**: the IANA time zone of the days and weeks; by default the caller's time zone setting. `timeZone` in the answer says which was used.
+- **The measures** (`metrics`), each `{ n, sum, mean, min, p50, p90, max }` or `null` when no finished run has a value:
+
+| Measure | What it is |
+|---|---|
+| `workingMs` | Time in `running`; waiting for a person never counts (`active_ms`) |
+| `wallMs` | From start to finish, waits included; a run that never started is left out (`n` can be smaller) |
+| `steps`, `modelCalls` | As on the run |
+| `inputTokens`, `cachedInputTokens`, `outputTokens`, `totalTokens` | Input includes cached; total = input + output |
+| `costUsd` | The run's **stored** cost: the prices of the day it ran, as on the run page and the list ([usage.md](usage.md) prices at today's prices) |
+
+- **Over which runs.** `runs`, `live` and `byStatus` count every matching run. The success rate (succeeded ÷ finished), the cost per successful run (the finished runs' cost ÷ the succeeded runs) and every distribution are over the **finished** runs only: a live run's numbers are still growing. `costKnown` is false when a finished run had a call that could not be priced; the cost is then a lower bound.
+- **Percentiles** are computed by the database: `p50` is the median (the mean of the two middle values of an even list, `percentile_cont(0.5)`), `p90` is by the nearest rank (`percentile_disc(0.9)`). The task page's Consistency card uses the same method, so the two never disagree.
+- **Size.** It reads the newest 100,000 matching runs at most; beyond that `truncated` is true and `scanned` says how many: narrow `from` and `to` for exact numbers. One user's 50,000 runs grouped by day answer in about 0.3 s (measured in `run-stats.db.spec.ts`).
+- **What it never carries.** A goal, a result, a step, a question or another user's run. No model reads anything. The log line `runs stats user=… groupBy=… filters=[names] scanned=… ms=…` names the filters used, never their values.
+- **Code.** `RunStatsService` (`apps/api/src/run-insights/run-stats.service.ts`) runs one aggregate query with the list's filter as SQL (`runWhereSql`, beside `runWhere` in `apps/api/src/tasks/runs.query.ts`); `run-stats.ts` turns the rows into the answer (pure, `test/run-stats.spec.ts`).
 
 ## Deleting runs
 
