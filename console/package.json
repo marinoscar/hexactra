@@ -27,6 +27,7 @@
     "rename": "node scripts/rename.mjs",
     "ui:screens": "node scripts/ui-screens.mjs",
     "docs:hosted-clients": "node scripts/hosted-clients-doc.mjs",
+    "docs:diagnostics": "node scripts/diagnostics-doc.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version && npm install --package-lock-only"
   },

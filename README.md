@@ -28,6 +28,7 @@
 | **Tasks** | Save a goal with a browser profile, an agent policy, the sites it may visit, and confirmation before purchases. |
 | **Agent policies** | Choose which models a run uses (Fast, Standard or Frontier tiers, escalating when it is stuck) and how much it may spend: budgets for actions, model calls, time, tokens and cost, each optionally unlimited. Four built-ins, a default per user, JSON export and import, and a live budget meter on every run. See [Agent policies](console/README.md#agent-policies). |
 | **Runs (the AI goal runner)** | Start a task and the server-side runner works the browser step by step: observe, reason, act, verify. Every run is a durable state machine you can cancel at any time. |
+| **Connections and web search** | Connect your Google and Microsoft accounts and MCP servers, and let the agent search the web and read public pages without the browser. What you switch on is available to every task and chat; each send or change still asks you. Every connection and search provider has a Test that says what is wrong and how to fix it. |
 | **Live run view** | Watch steps stream in with a live screenshot, and take over the browser yourself when you want to. |
 | **Inbox (handoffs)** | Everything agents are waiting for (a CAPTCHA, a code, a sign-in, a confirmation) in one place. Answer it and the run continues. |
 | **Schedules** | Run tasks on a cron schedule in your time zone. |

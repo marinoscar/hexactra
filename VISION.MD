@@ -1707,7 +1707,7 @@ Detail: `console/docs/recordings.md`.
 
 ### 27.1 What the agent can do
 
-It chooses among the browser, the owner's connected accounts and the tools the owner added by capability, not by habit: an account or an added tool when one can do the job, the browser for what lives on a website, both when the goal needs both (tool families, epic #697). Every tool the owner set up and switched on is offered to every run and chat, so the choice is the agent's, among everything the owner allowed (E50.17).
+It chooses among the browser, web search, the owner's connected accounts and the tools the owner added by capability, not by habit: an account or an added tool when one can do the job, a web search to find out something public, the browser for what lives on a website or needs a sign-in, several when the goal needs them (tool families, epic #697; web search, epic E50). Every tool the owner set up and switched on is offered to every run and chat, so the choice is the agent's, among everything the owner allowed (E50.17).
 
 | Capability | How | Where |
 |---|---|---|
@@ -1718,7 +1718,8 @@ It chooses among the browser, the owner's connected accounts and the tools the o
 | Run JavaScript | `run_javascript` / `evaluate`: any script, in the page's main world, whatever its CSP, with top-level `await` | Extension `Runtime.evaluate` |
 | Use the OS desktop | `desktop_click`, `desktop_type`, `desktop_key`, `desktop_scroll`, `desktop_drag`: native file pickers, OS dialogs, permission prompts, other windows | Host agent, `xdotool` (argv only, never a shell) |
 | Open anything | Any URL a person could type (`file:`, `chrome:`, `data:`...), except `javascript:` (use `evaluate`) | Contract `check_navigable_url` |
-| Use the owner's accounts | `mail_*`, `calendar_*`, `docs_*`, `sheet_*`, `file_upload` tools over a connected Google or Microsoft account: read freely, change only after the owner approves (Section 26.9). Per-task opt-in, off by default | Console runner `host/tools/connections/`, `host/gates/connection-gate.ts` |
+| Use the owner's accounts | `mail_*`, `calendar_*`, `docs_*`, `sheet_*`, `file_upload` tools over a connected Google or Microsoft account: read freely, change only after the owner approves (Section 26.9). Offered to every run and chat at the capabilities the owner switched on (E50.17) | Console runner `host/tools/connections/`, `host/gates/connection-gate.ts` |
+| Search the web and read public pages | `web_search` through a search provider the administrator chose (Brave Search by default; Tavily, Exa, a self-hosted SearXNG, OpenAI web search), and `web_fetch`, which reads one public page as text from the console server (https only, every address checked on every hop, no cookies, no sign-in). Offered to every run and chat while web search is set up and switched on; a task's allowed sites bind it (epic E50) | Console `apps/api/src/web-search/`, package `@marinoscar/hexactra-web-agent` |
 | Room to work | An agent policy sets the run's budgets: the default Balanced allows 60 actions, 120 model calls, $2 and 20 active minutes; Thorough 200 actions and 60 minutes; **Unlimited** sets none (Section 26.6) | Console agent policies |
 
 ### 27.2 What stays, and why
@@ -1743,6 +1744,8 @@ Shipped in epic #366 (E29): the contract (#367), the extension (#368), the host 
 Upstream seam: image tool outputs in the platform's `runTools` (marinoscar/EnterpriseAppBase#1175). Until it ships, the console carries the screenshot in the next round's input.
 
 Epic E37 (#579) adds saved logins, identity details and cards the agent uses without seeing them (Sections 11.6, 12.2, 13.3 and the bullets above); it is implemented and tested against fakes, and its acceptance session on the owner's deployed stack is still to be recorded (#624).
+
+Epic E50 (#970) adds web search and page reading without the browser, keys of outside services in tiers (the owner's, the organization's, the deployment's, optionally in the owner's Vault), and a staged diagnostic report with a remedy for every connection and search provider. It is implemented and tested against fakes: no real search provider, page, account or Vault has been used, the comparison with searching in the browser has not been measured, and its acceptance run on a deployed stack is still to be recorded (#986, `console/docs/acceptance-web-search.md`). What a search result or a page says is data and never authorizes anything (`console/docs/security-web-search.md`).
 
 Epic E39 (#581) adds the owner's connected accounts and MCP servers, the agent's tools over them, deliveries after a run and email triggers, with a console UI to choose accounts and edit deliveries (Section 26.9); it is implemented and tested against fakes, and no real Google or Microsoft account has been used. Its acceptance run on the owner's deployed stack, with real accounts, is still to be recorded (#608, `console/docs/acceptance-connections.md`).
 
