@@ -19,6 +19,7 @@ import { alertsModule } from './platform/alerts/alerts.config';
 import { alertsMounted } from './platform/alerts/alerts.enabled';
 import { ChatModule } from './chat/chat.module';
 import { TaskBuilderModule } from './task-builder/task-builder.module';
+import { TaskImproverModule } from './task-improver/task-improver.module';
 import { ConnectedAppsModule } from './connected-apps/connected-apps.module';
 import { QuestionsModule } from './questions/questions.module';
 import { RecordingsModule } from './recordings/recordings.module';
@@ -104,7 +105,7 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     // The goal runner needs the AI slice (packages/shared/slices.json).
     ...(isSliceEnabled('ai') ? [RunnerModule, SchedulesModule] : []),
     // Chat (#482): a thread whose jobs are runs, so it needs the goal runner's slice too.
-    ...(isSliceEnabled('ai') ? [ChatModule, TaskBuilderModule] : []),
+    ...(isSliceEnabled('ai') ? [ChatModule, TaskBuilderModule, TaskImproverModule] : []),
     // Outbound webhooks need the credential store (signing secrets) and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [webhooksModule] : []),
     // Alerts (Administration → Alerts): the platform slice plus the console's rule kinds.

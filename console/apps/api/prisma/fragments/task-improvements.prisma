@@ -1,0 +1,48 @@
+// "Improve this task" (E52.8, #1023): a proposal for a better goal, made by the `task_improver` AI feature from a task's recent runs.
+// A proposal never changes the task: only the owner's Save in the task form does, and `applied` then records what was saved. Registered
+// as user-owned in src/task-improver/task-improver.ownership.ts; deleted with its task and with its user.
+model TaskImprovement {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  taskId       String    @map("task_id") @db.Uuid
+  /// queued | running | ready | failed | applied | dismissed
+  status       String    @default("queued") @db.VarChar(12)
+  /// The runs read, newest first.
+  runIds       String[]  @map("run_ids") @db.Uuid
+  /// The task's goal template when the proposal was asked for.
+  goalBefore   String    @map("goal_before") @db.VarChar(4000)
+  proposedGoal String?   @map("proposed_goal") @db.VarChar(4000)
+  summary      String?   @db.VarChar(1000)
+  /// `[{ kind, text, why, evidence: [{ runId, seqFrom, seqTo, finding? }] }]`, validated by the server (task-improver-validate.ts).
+  changes      Json      @default("[]")
+  /// `[{ site, kind, text, evidence }]`: proposals only; the owner turns one into a Knowledge Graph fact in the console.
+  siteFacts    Json      @default("[]") @map("site_facts")
+  /// low | medium | high
+  confidence   String?   @db.VarChar(8)
+  model        String?   @db.VarChar(200)
+  usedImages   Boolean   @default(false) @map("used_images")
+  inputTokens  Int       @default(0) @map("input_tokens")
+  outputTokens Int       @default(0) @map("output_tokens")
+  costUsd      Decimal?  @map("cost_usd") @db.Decimal(12, 6)
+  /// A reason for a person; never a stack and never model text.
+  error        String?   @db.VarChar(500)
+  /// What the owner saved through the task form (it may differ from the proposal).
+  appliedGoal  String?   @map("applied_goal") @db.VarChar(4000)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  finishedAt   DateTime? @map("finished_at") @db.Timestamptz
+  decidedAt    DateTime? @map("decided_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, taskId, createdAt])
+  @@map("task_improvements")
+}
+
+extend model User {
+  taskImprovements TaskImprovement[]
+}
+
+extend model Task {
+  improvements TaskImprovement[]
+}

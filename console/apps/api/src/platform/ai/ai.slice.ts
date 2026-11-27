@@ -38,6 +38,8 @@ export const aiSlice: ApiSlice = {
     // The OpenAI web search provider's calls (E50.9): attributed to "Web search" on the AI usage pages.
     const { WEB_SEARCH_AI_FEATURE } = require('../../web-search/web-search.feature') as typeof import('../../web-search/web-search.feature');
     registerAiFeature(WEB_SEARCH_AI_FEATURE);
+    const { TASK_IMPROVER_FEATURE } = require('../../task-improver/task-improver.feature') as typeof import('../../task-improver/task-improver.feature');
+    registerAiFeature(TASK_IMPROVER_FEATURE);
   },
   modules: () => {
     const { AiModule } = require('./ai.config') as typeof import('./ai.config');
