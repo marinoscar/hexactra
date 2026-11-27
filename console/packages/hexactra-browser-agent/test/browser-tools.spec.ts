@@ -38,6 +38,29 @@ describe('navigate and new_tab: the site gate', () => {
   });
 });
 
+describe('click: how the extension clicked (E52.1, #1016)', () => {
+  it('reads a real mouse click, and a result from an older extension without a method, as before', async () => {
+    const run = fakeBrowserRun();
+    run.browser.results.set('click', { method: 'pointer', x: 120, y: 40, disabled: false });
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok');
+    run.browser.results.set('click', {});
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok');
+    expect(run.store.rows().map((r) => r.summary)).toEqual(['done', 'done']);
+  });
+
+  it('tells the model and the owner when it clicked by script, and when the element is disabled', async () => {
+    const run = fakeBrowserRun();
+    run.browser.results.set('click', { method: 'synthetic', why: 'covered', disabled: false });
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe(
+      'ok (clicked by script because the element is covered or off screen; the page may ignore that. If nothing changed, use click_mark or click_at.)',
+    );
+    run.browser.results.set('click', { method: 'pointer', x: 1, y: 1, disabled: true });
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok. The element is disabled.');
+    expect(run.store.rows().map((r) => r.summary)).toEqual(['done (clicked by script: the element could not be reached with the mouse)', 'done. The element is disabled.']);
+    expect(run.store.rows().every((r) => r.ok)).toBe(true);
+  });
+});
+
 describe('click: the risk gate and the saved approvals', () => {
   const payRun = (extra: Parameters<typeof fakeBrowserRun>[0] = {}) => {
     const run = fakeBrowserRun({ confirmRisky: true, ...extra });

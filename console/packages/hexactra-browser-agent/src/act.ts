@@ -102,6 +102,18 @@ async function runAction(ctx: BrowserContext, action: Record<string, unknown>, t
     summary = `${tabs.length} tabs`;
     forModel = clip(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), observationChars);
   }
+  if (type === 'click') {
+    // How the extension clicked (E52.1, #1016): a real mouse click is the ordinary case and reads as before. A script click (the mouse
+    // could not reach the element) may be ignored by the page, so the model is told; a result without `method` is an older extension.
+    const disabled = result.disabled === true ? ' The element is disabled.' : '';
+    if (result.method === 'synthetic') {
+      summary = `done (clicked by script: the element could not be reached with the mouse)${disabled}`;
+      forModel = `ok (clicked by script because the element is covered or off screen; the page may ignore that. If nothing changed, use click_mark or click_at.)${disabled}`;
+    } else if (disabled) {
+      summary = `done.${disabled}`;
+      forModel = `ok.${disabled}`;
+    }
+  }
   if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
   if (type === 'type') {
     // A code split into boxes (E49.1, #958): how many were filled, or that the page moved on. A plain field keeps "ok".

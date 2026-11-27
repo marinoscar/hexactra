@@ -60,6 +60,7 @@ const resolvedProviderSchema = z.object({
   costPerCallUsd: z.number().nullable(),
   baseUrl: z.string().nullable().describe("A self-hosted provider's address (SearXNG)."),
   allowPrivate: z.boolean().describe('"This instance is on my private network": http and a private address are accepted for the configured host only.'),
+  model: z.string().nullable().describe("An answer-type provider's model, a model id of the AI catalogue (OpenAI web search). Null: not chosen, the provider is not usable."),
 });
 
 export const adminSettingsSchema = z.object({

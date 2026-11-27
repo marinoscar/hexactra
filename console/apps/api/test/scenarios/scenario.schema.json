@@ -784,6 +784,52 @@
             }
           }
         },
+        "answers": {
+          "default": {},
+          "description": "E50.9: an answer-type provider (OpenAI web search): what a query answers, a written answer and the pages it cites. Wins over `results` for the same query",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "The written answer (third-party text: a model wrote it from pages nobody here read)"
+              },
+              "citations": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "An https address of an invented host"
+                    },
+                    "snippet": {
+                      "default": "",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": false
+          }
+        },
         "pages": {
           "default": {},
           "description": "What web_fetch reads, by address; an injection scenario puts hostile text here",

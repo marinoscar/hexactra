@@ -191,9 +191,10 @@ describe('the administrator', () => {
       { id: 'tavily', label: 'Tavily', credential: 'api_key', hosts: ['api.tavily.com'], defaultEstimatedCostPerCallUsd: 0.008 },
       { id: 'exa', label: 'Exa', credential: 'api_key', hosts: ['api.exa.ai'], defaultEstimatedCostPerCallUsd: 0.01 },
       { id: 'searxng', label: 'SearXNG (self-hosted)', credential: 'none', hosts: [], defaultEstimatedCostPerCallUsd: 0 },
+      { id: 'openai', label: 'OpenAI web search', credential: 'ai_service', hosts: ['api.openai.com'], defaultEstimatedCostPerCallUsd: 0.01 },
     ]);
     const saved = await call(admin, 'PUT', '/api/web-search/admin', { providers: { brave: { costPerCallUsd: 0.004 } } });
-    expect(data<{ providers: Record<string, unknown> }>(saved).providers.brave).toEqual({ enabled: true, costPerCallUsd: 0.004, baseUrl: null, allowPrivate: false });
+    expect(data<{ providers: Record<string, unknown> }>(saved).providers.brave).toEqual({ enabled: true, costPerCallUsd: 0.004, baseUrl: null, allowPrivate: false, model: null });
     expect((await call(admin, 'PUT', '/api/web-search/admin', { limits: { perRun: -1 } })).status).toBe(400);
     expect(await prisma.auditEvent.count({ where: { actorUserId: admin.userId, action: 'web_search.settings_saved' } })).toBeGreaterThan(0);
 
@@ -208,6 +209,7 @@ describe('the administrator', () => {
       ['web_search.tavily', false, ['api.tavily.com', 'example.com']],
       ['web_search.exa', false, ['api.exa.ai', 'example.com']],
       ['web_search.searxng', false, ['example.com']],
+      ['web_search.openai', false, ['api.openai.com', 'example.com']],
     ]);
     expect((await contributor.describe())[0]).toMatchObject({ required: false, degradation: 'The agent searches in the browser instead' });
   });
