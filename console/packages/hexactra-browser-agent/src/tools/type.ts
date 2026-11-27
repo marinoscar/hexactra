@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { defineRunnerTool } from '@marinoscar/hexactra-agent';
 import { act } from '../act';
+import { pageDigest } from '../page';
 import type { BrowserContext } from '../context';
 
 export const typeText = defineRunnerTool({
@@ -19,7 +20,8 @@ export const pressKey = defineRunnerTool({
   family: 'browser',
   description: 'Press a key such as Enter, Tab or Escape, with a real key press at the focused element.',
   parameters: z.object({ key: z.string().max(40) }),
-  execute: (ctx: BrowserContext, { key }) => act(ctx, { type: 'press', key }),
+  // The page before the key (E52.3): `act` says when the key left it exactly so.
+  execute: async (ctx: BrowserContext, { key }) => act(ctx, { type: 'press', key }, undefined, undefined, undefined, { before: await pageDigest(ctx) }),
 });
 
 export const typeKeys = defineRunnerTool({

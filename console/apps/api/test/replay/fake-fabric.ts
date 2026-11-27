@@ -31,12 +31,20 @@ export function fakeFabric<R extends FabricRequest>(mockFn: (impl: FabricRequest
   // What the page says about a click target (#550): by selector, or by point as "x,y". The gate's reads go to `probes`, not `actions`.
   const targets = new Map<string, Record<string, unknown> | null>([['#pay', { tag: 'button', label: 'Pay', role: null }]]);
   const probes: Record<string, unknown>[] = [];
+  /** The page digests the toolset read around clicks and key presses (E52.3). */
+  const digestReads: Record<string, unknown>[] = [];
   const page = { url: 'https://bank.example.test/review' };
   const request = mockFn(async (method, path, opts = {}) => {
     if (method === 'POST' && path === '/v1/sessions') return { id: '00000000-0000-4000-8000-00000000000a' };
     if (method === 'DELETE' && path.startsWith('/v1/sessions/')) return void (ended += 1);
     if (method === 'POST' && path.endsWith('/actions')) {
       const action = opts.body!.action as Record<string, unknown>;
+      // The page digest after a click (E52.3) is the server's own read, not an action and not a gate's read: this fabric cannot say,
+      // so clicks read as before.
+      if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:page-digest */')) {
+        digestReads.push(action);
+        return { id: 'op', state: 'succeeded', result: { type: 'object', value: null } };
+      }
       if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:describe-target */')) {
         probes.push(action);
         const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
@@ -68,7 +76,7 @@ export function fakeFabric<R extends FabricRequest>(mockFn: (impl: FabricRequest
     throw new Error(`unexpected ${method} ${path}`);
   });
   const claimed = () => (request as unknown as { mock: { calls: unknown[][] } }).mock.calls.some(([, path]) => String(path).endsWith('/claim'));
-  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, request, actions, handoffs, ended: () => ended, claimed, targets, probes, page };
+  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, request, actions, handoffs, ended: () => ended, claimed, targets, probes, digestReads, page };
 }
 
 export type ScriptedCall = [name: string, args: Record<string, unknown>];

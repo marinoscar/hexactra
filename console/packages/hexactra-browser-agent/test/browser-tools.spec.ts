@@ -13,6 +13,7 @@ import { answerLine } from '../src/request-human-spec';
 import { typeHandoffSecret } from '../src/tools/type-secret';
 import { observeElements } from '../src/tools/observe';
 import { pressKey, typeText } from '../src/tools/type';
+import { digestScript } from '../src/page';
 
 type Run = ReturnType<typeof fakeBrowserRun>;
 const call = (run: Run, tool: unknown, args: unknown) => executeTool(run.ctx, tool as never, args, new GatePipeline(run.gates as never) as never);
@@ -80,6 +81,85 @@ describe('press_key: how the extension pressed (E52.12, #1030)', () => {
     run.browser.results.set('type', { submitted: 'synthetic' });
     expect(await call(run, typeText, { selector: '#msg', text: 'See you at 7', submit: true })).toMatch(/^ok, typed; the Enter that submits was sent by script/);
     expect(run.store.rows().map((r) => r.summary)).toEqual(['done', 'typed; submitted by script (the page may ignore it)']);
+  });
+});
+
+describe('a click or key press that changes nothing says so (E52.3, #1018)', () => {
+  const NO_CHANGE = 'ok, but nothing changed on the page after this (it may have been ignored, or the change is inside a frame or a drawing this check cannot see). Do not repeat it blindly: look at the page, then try click_mark or click_at at the element, or the keyboard.';
+
+  it('reports a click after which the page digest never changed, in one step that stays ok', async () => {
+    const run = fakeBrowserRun();
+    run.browser.digests = ['aaaa0001'];
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe(NO_CHANGE);
+    expect(run.store.rows()).toMatchObject([{ action: 'click', ok: true, summary: 'done; no change seen on the page' }]);
+    // Once before, then the four reads after.
+    expect(run.browser.digestReads).toBe(5);
+    expect(run.browser.actions.filter((a) => a.type === 'evaluate')).toEqual([]);
+  });
+
+  it('stops reading at the first change, and reads as before', async () => {
+    const run = fakeBrowserRun();
+    run.browser.digests = ['aaaa0001', 'aaaa0001', 'bbbb0002'];
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok');
+    expect(run.browser.digestReads).toBe(3);
+    expect(run.store.rows()).toMatchObject([{ summary: 'done' }]);
+  });
+
+  it('does not poll when the page could not be asked before, and a page that cannot be asked after is "changed"', async () => {
+    const run = fakeBrowserRun();
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok');
+    expect(run.browser.digestReads).toBe(1);
+    const gone = fakeBrowserRun();
+    gone.browser.digests = ['aaaa0001', null];
+    expect(await call(gone, click, { selector: '#send', reason: 'send' })).toBe('ok');
+    expect(gone.browser.digestReads).toBe(2);
+  });
+
+  it('does not read after a failed action', async () => {
+    const run = fakeBrowserRun();
+    run.browser.digests = ['aaaa0001'];
+    run.browser.failNext = { state: 'failed', error: 'no element matches #send' };
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('Failed (failed): no element matches #send');
+    expect(run.browser.digestReads).toBe(1);
+  });
+
+  it('stops reading at once when the owner presses Stop while it waits, and claims nothing', async () => {
+    const run = fakeBrowserRun();
+    run.browser.digests = ['aaaa0001'];
+    const act = run.browser.act.bind(run.browser);
+    run.browser.act = async (a: Record<string, unknown>) => {
+      const op = await act(a);
+      // Stop lands right after the first read that follows the click.
+      if (run.browser.digestReads === 2) run.control.requested = true;
+      return op;
+    };
+    expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok');
+    expect(run.browser.digestReads).toBe(2);
+  });
+
+  it('covers press_key too', async () => {
+    const run = fakeBrowserRun();
+    run.browser.digests = ['aaaa0001'];
+    expect(await call(run, pressKey, { key: 'Enter' })).toBe(NO_CHANGE);
+    expect(run.store.rows()).toMatchObject([{ action: 'press', ok: true, summary: 'done; no change seen on the page' }]);
+  });
+
+  it('a commit-class click that changed nothing is recorded once, its intent closed, and is not sent again', async () => {
+    const run = fakeBrowserRun({ confirmRisky: true, memory: { confirmedTarget: { category: 'payment', label: 'Pay now', host: 'shop.example.test' } } });
+    run.browser.targets.set('#pay', { tag: 'button', label: 'Pay now', role: null });
+    run.browser.digests = ['aaaa0001'];
+    expect(await call(run, click, { selector: '#pay', reason: 'pay' })).toBe(NO_CHANGE);
+    expect(run.browser.actions.filter((a) => a.type === 'click')).toEqual([{ type: 'click', selector: '#pay' }]);
+    expect(run.store.rows()).toMatchObject([{ seq: 1, action: 'click', phase: 'done', ok: true, summary: 'done; no change seen on the page' }]);
+  });
+
+  it('the digest script returns only a hash: no page text or field value leaves the page', () => {
+    const script = digestScript();
+    expect(script.startsWith('/* hexactra:page-digest */')).toBe(true);
+    expect(script).toMatch(/return \{ h: /);
+    expect(script).not.toMatch(/return \{[^}]*text/);
+    // Fields are hashed by length only.
+    expect(script).toContain('add(String(v == null ? \'\' : v).length)');
   });
 });
 
