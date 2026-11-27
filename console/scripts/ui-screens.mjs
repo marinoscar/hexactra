@@ -136,6 +136,8 @@ export const ROUTES = [
   ['settings', '/settings'],
   ['settings-run-history', '/settings/run-history'],
   ['settings-usage', '/settings/usage'],
+  // Runs Analytics (E53.5, #1073).
+  ['runs-analytics', '/runs/analytics'],
   ['settings-model-prices', '/settings/model-prices'],
   ['settings-tokens', '/settings/tokens'],
   ['settings-agent-policies', '/settings/agent-policies'],
@@ -269,6 +271,7 @@ export const ROUTES = [
   ['admin-agent-ceilings', '/admin/settings/agent-ceilings'],
   ['admin-agent-pricing', '/admin/settings/agent-pricing'],
   ['admin-usage', '/admin/settings/usage'],
+  ['admin-runs-analytics', '/admin/runs/analytics'],
   // Benchmarks (E44.5, #743): the list, the new form, a completed benchmark (scorecard, charts, matrix, trials), a live one, the comparison.
   ['admin-benchmarks', '/admin/settings/benchmarks'],
   ['admin-benchmark-new', '/admin/settings/benchmarks/new'],

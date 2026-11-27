@@ -47,7 +47,7 @@ export const IDS = {
 const PERMISSIONS = [
   'chat:read', 'chat:write', 'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
   'agent_policies:read', 'agent_policies:write', 'approvals:read', 'approvals:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
-  'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
+  'run_stats:read_all', 'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'usage:read', 'user_settings:read', 'user_settings:write', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
   'memories:read', 'memories:write', 'skills:read', 'skills:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write', 'web_search:read', 'web_search:write',
@@ -594,6 +594,29 @@ const usageSeries = [
   return { key: m.key, label: m.label, tokens, costUsd: tokens.map((t) => Math.round(t * m.price * 1e6) / 1e6), requests: tokens.map((t) => Math.max(1, Math.round(t / 9000))) };
 });
 const usageSum = (k) => usageSeries.reduce((a, s) => a + s[k].reduce((x, y) => x + y, 0), 0);
+// Runs Analytics (E53.5, #1073): /runs/stats and /admin/runs/stats, a month of days and a breakdown with a long task name.
+const dist = (p50, p90, n = 40) => ({ n, sum: p50 * n, mean: p50, min: 0, p50, p90, max: p90 * 2 });
+const statsGroup = (runs, ok = 0.85) => {
+  const finished = runs - 1;
+  const succeeded = Math.round(finished * ok);
+  return {
+    runs, finished, live: 1,
+    byStatus: { queued: 0, running: 1, waiting_human: 0, paused: 0, succeeded, failed: Math.max(0, finished - succeeded - 1), cancelled: Math.min(1, finished - succeeded) },
+    successRate: Math.round(ok * 1000) / 1000, costPerSuccessUsd: 0.0412, costKnown: true,
+    metrics: { workingMs: dist(95_000, 410_000, finished), wallMs: dist(140_000, 900_000, finished), steps: dist(19, 52, finished), modelCalls: dist(28, 77, finished), inputTokens: dist(41_000, 132_000, finished), cachedInputTokens: dist(12_000, 40_000, finished), outputTokens: dist(1_900, 6_400, finished), totalTokens: dist(43_000, 138_000, finished), costUsd: dist(0.031, 0.112, finished) },
+  };
+};
+const runStats = (url) => {
+  const by = url.searchParams.get('groupBy') ?? 'none';
+  const periods = by === 'day' || by === 'week';
+  const groups = periods
+    ? usageDays.map((day, i) => ({ ...statsGroup(4 + ((i * 7) % 11), 0.7 + ((i * 13) % 30) / 100), key: day, label: day }))
+    : by === 'user'
+      ? [['u1', 'Person A', 180], ['u2', 'Person B', 64], ['u3', 'User 7c1e2f0a', 9]].map(([key, label, n]) => ({ ...statsGroup(n), key, label }))
+      : [[IDS.task, 'Find the cheapest flight from Lisbon to San José for the second week of March, returning on a Sunday', 120], [SECOND_TASK, 'Pay the electricity bill', 48], ['none', 'No task', 23]].map(([key, label, n], i) => ({ ...statsGroup(n, [0.9, 0.62, 0.8][i]), key, label }));
+  return { groupBy: by, timeZone: 'Etc/UTC', scanned: 191, truncated: false, total: statsGroup(191), groups: periods || by !== 'none' ? groups : [], groupsTruncated: false };
+};
+
 const usageReport = {
   range: '30d', scope: 'me', breakdown: 'model', timeZone: 'Etc/UTC', granularity: 'day',
   from: usageDays[0], to: usageDays.at(-1), buckets: usageDays, series: usageSeries,
@@ -677,6 +700,8 @@ export const RESPONSES = {
   'GET /schedules/defaults': { timezone: 'Etc/UTC', source: 'profile' },
   'GET /home/summary': homeSummary,
   'GET /usage/report': usageReport,
+  'GET /runs/stats': runStats,
+  'GET /admin/runs/stats': runStats,
   'GET /runs/counts': runCounts,
   'GET /runs/retention': { keepDays: 90, keepPerTask: 200, keepFailedDays: null, saved: true, maxKeepDays: 365, floorHours: 24 },
   'GET /runs/retention/preview': { wouldDelete: 1_840, finished: 5_010, oldestKept: iso(-89 * 86_400_000), costUsd: 412.5, maxKeepDays: 365, capped: false, floorHours: 24 },

@@ -165,6 +165,8 @@ describe('browser agent cards', () => {
       ['Web search', '/admin/settings/web-search', 'system_settings:read', undefined],
       // #1008, appended: the `skills` namespace of the system settings.
       ['Skills', '/admin/settings/skills', 'system_settings:read', undefined],
+      // E53.5 (#1073), appended: what GET /api/admin/runs/stats enforces.
+      ['Runs analytics', '/admin/runs/analytics', 'run_stats:read_all', undefined],
     ]);
     expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');

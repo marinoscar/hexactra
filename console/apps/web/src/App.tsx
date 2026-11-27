@@ -76,6 +76,7 @@ import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
 import { AdminUsagePage, MyUsagePage } from './pages/UsagePage';
+import { AdminRunAnalyticsPage, MyRunAnalyticsPage } from './pages/RunAnalyticsPage';
 import { BenchmarkComparePage } from './pages/BenchmarkComparePage';
 import { BenchmarkNewPage } from './pages/BenchmarkNewPage';
 import { BenchmarkPage } from './pages/BenchmarkPage';
@@ -281,6 +282,8 @@ export function AppRoutes() {
           <Route path="inbox" element={<Gate permission="runs:read"><InboxPage /></Gate>} />
           <Route path="inbox/q/:id" element={<Gate permission="runs:read"><QuestionPage /></Gate>} />
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />
+          {/* Runs Analytics (E53.5, #1073): `runs:read` is what GET /api/runs/stats enforces; declared before runs/:id. */}
+          <Route path="runs/analytics" element={<Gate permission="runs:read"><MyRunAnalyticsPage /></Gate>} />
           <Route path="runs/:id" element={<Gate permission="runs:read"><RunDetailPage /></Gate>} />
           <Route path="fleet" element={<Gate permission="fleet:read"><FleetPage /></Gate>} />
           <Route path="fleet/hosts/:id/desktop" element={<Gate permission="fleet:desktop"><DesktopPage /></Gate>} />
@@ -323,6 +326,8 @@ export function AppRoutes() {
           {/* My model prices (#735): the user's own `agentPricing` in /user-settings. */}
           <Route path="settings/model-prices" element={<Gate permission="user_settings:read"><AgentPricingPage scope="user" /></Gate>} />
           <Route path="admin/settings/usage" element={<Gate permission="ai_config:read"><AdminUsagePage /></Gate>} />
+          {/* Runs analytics for everyone (E53.5): `run_stats:read_all` is what GET /api/admin/runs/stats enforces. */}
+          <Route path="admin/runs/analytics" element={<Gate permission="run_stats:read_all"><AdminRunAnalyticsPage /></Gate>} />
           {/* Benchmarks (E44.5, #743): `benchmarks:read` is what every GET /api/benchmarks route enforces; starting needs `benchmarks:run`, and so does the new page. */}
           <Route path="admin/settings/benchmarks" element={<Gate permission="benchmarks:read"><BenchmarksPage /></Gate>} />
           <Route path="admin/settings/benchmarks/new" element={<Gate permission="benchmarks:run"><BenchmarkNewPage /></Gate>} />

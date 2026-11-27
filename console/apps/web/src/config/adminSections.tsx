@@ -194,6 +194,14 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: '/admin/settings/skills',
         permission: 'system_settings:read',
       },
+      // Runs analytics for everyone (E53.5, #1073), appended: `run_stats:read_all` is what GET /api/admin/runs/stats enforces.
+      {
+        title: 'Runs analytics',
+        description: "Every user's runs at a glance: counts, success, working time, tokens and cost per user, task, policy and stop reason. Aggregates only.",
+        Icon: InsightsOutlinedIcon,
+        path: '/admin/runs/analytics',
+        permission: 'run_stats:read_all',
+      },
     ],
   },
   // `Danger Zone` stays LAST (docs/specs/settings-ui.md): new groups go above it.
