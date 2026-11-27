@@ -10,6 +10,11 @@ const RUN = '00000000-0000-4000-8000-000000000001';
 const OTHER = '00000000-0000-4000-8000-000000000002';
 const cancelEvent = (runId: string): RunEvent => ({ type: 'run.cancel', runId, ownerUserId: 'u' });
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+/** Waits until `cond()` holds or the deadline passes (#1044): a fixed sleep fails on a loaded CI runner whose timers slip. */
+async function until(cond: () => boolean, deadlineMs = 2_000): Promise<void> {
+  const end = Date.now() + deadlineMs;
+  while (!cond() && Date.now() < end) await tick(5);
+}
 
 describe('RunStopSignal', () => {
   it('starts out not requested, and throwIfRequested does nothing', () => {
@@ -78,8 +83,10 @@ describe('RunStopSignal', () => {
       pollMs: 15,
     });
     try {
-      await tick(80);
+      // The first poll throws; a later one answers true. Still fails if no retry ever happens (the deadline passes, false).
+      await until(() => stop.requested);
       expect(stop.requested).toBe(true);
+      expect(n).toBeGreaterThanOrEqual(2);
     } finally {
       stop.dispose();
     }
