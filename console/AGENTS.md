@@ -113,6 +113,8 @@ npm run build
 cd apps/api && npm run db:compose      # after editing a fragment in apps/api/prisma/fragments/; then prisma:generate
 ```
 
+The db tier boots the app once per spec file. A db spec that reads `/api/openapi.json` or `/api/docs` boots it with `createApp({ docs: true })`; the others leave the API reference out, which saves about 4 s per file (#1043, `apps/api/test/db-tier-jobs.setup.ts`). In CI the tier runs as four shards, each with its own database (`.github/workflows/console.yml`, job `db`); never make one db spec depend on another's data.
+
 Run the dev stack with the Compose commands in README, "Run it". Use the `npm run prisma:*` scripts, never bare `npx prisma`.
 
 ## Commits
