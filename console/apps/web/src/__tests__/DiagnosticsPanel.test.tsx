@@ -199,7 +199,7 @@ describe('the panel', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'History' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'History' }));
     const past = within(screen.getByRole('list', { name: 'Last reports' }));
-    expect(past.getAllByRole('button').map((b) => b.textContent?.split(/\d|just/)[0])).toEqual(['Working', 'Problem']);
+    expect(past.getAllByRole('button').map((b) => /^(Working|Problem)/.exec(b.textContent ?? '')?.[1])).toEqual(['Working', 'Problem']);
     fireEvent.click(past.getByText('Problem'));
     expect(await screen.findByText('You are looking at an earlier report.')).toBeInTheDocument();
     expect(screen.getByTestId('diagnostics-summary')).toHaveTextContent('The access was withdrawn');

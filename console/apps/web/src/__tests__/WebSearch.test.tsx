@@ -179,3 +179,52 @@ describe('E50.14: keys, Test, order, page reading and permissions', () => {
     expect(screen.getByText('No searches yet.')).toBeInTheDocument();
   });
 });
+
+describe('a self-hosted provider (SearXNG, E50.8)', () => {
+  const settings3 = {
+    enabled: true,
+    providers: { searxng: { enabled: true, costPerCallUsd: null, baseUrl: null, allowPrivate: false } },
+    order: ['searxng'],
+    shareDeploymentKey: true,
+    allowUserKeys: true,
+    limits: { perRun: 30, perUserPerDay: 300, fetchPerRun: null },
+    fetch: { enabled: true, blockedHosts: [] },
+    installed: [{ id: 'searxng', label: 'SearXNG', credential: 'none', hosts: [], defaultEstimatedCostPerCallUsd: 0 }],
+  };
+
+  it('sets its address, refuses one with a query, and ticks "private network" (off by default) with a warning', async () => {
+    const host = mount(<AdminWebSearchPage />, ['system_settings:read', 'system_settings:write'], {
+      'GET /web-search/admin': settings3,
+      'PUT /web-search/admin': (r: TestApiRequest) => {
+        const p = (r.body as { providers?: { searxng?: object } }).providers?.searxng ?? {};
+        return { ...settings3, providers: { searxng: { ...settings3.providers.searxng, ...p } } };
+      },
+      'GET /web-search/admin/usage': [],
+      'GET /service-credentials': [],
+    });
+    const card = within(await screen.findByRole('region', { name: 'SearXNG' }));
+    expect(card.getByText(/Calls the address you set below/)).toBeInTheDocument();
+    const tick = card.getByRole('checkbox', { name: 'This instance is on my private network' });
+    expect(tick).not.toBeChecked();
+    expect(card.queryByTestId('allow-private-warning')).toBeNull();
+    const field = card.getByLabelText('SearXNG address');
+    fireEvent.change(field, { target: { value: 'https://search.example.test/?q=x' } });
+    expect(card.getByText('No user name, password, query or fragment')).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Save address' })).toBeDisabled();
+    fireEvent.change(field, { target: { value: 'https://search.example.test' } });
+    fireEvent.click(card.getByRole('button', { name: 'Save address' }));
+    await waitFor(() => expect(sent(host, 'PUT')).toContainEqual(['/web-search/admin', { providers: { searxng: { baseUrl: 'https://search.example.test' } } }]));
+    fireEvent.click(tick);
+    await waitFor(() => expect(sent(host, 'PUT')).toContainEqual(['/web-search/admin', { providers: { searxng: { allowPrivate: true } } }]));
+    expect(await card.findByTestId('allow-private-warning')).toHaveTextContent('only for an instance you run');
+  });
+
+  it('a reader sees the address but cannot change it', async () => {
+    mount(<AdminWebSearchPage />, ['system_settings:read'], { 'GET /web-search/admin': { ...settings3, providers: { searxng: { ...settings3.providers.searxng, baseUrl: 'https://search.example.test' } } }, 'GET /web-search/admin/usage': [], 'GET /service-credentials': [] });
+    const card = within(await screen.findByRole('region', { name: 'SearXNG' }));
+    expect(card.getByLabelText('SearXNG address')).toHaveValue('https://search.example.test');
+    expect(card.getByLabelText('SearXNG address')).toBeDisabled();
+    expect(card.getByRole('checkbox', { name: 'This instance is on my private network' })).toBeDisabled();
+    expect(card.queryByRole('button', { name: 'Save address' })).toBeNull();
+  });
+});

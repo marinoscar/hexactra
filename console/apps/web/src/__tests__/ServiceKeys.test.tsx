@@ -51,7 +51,7 @@ describe('the keys of outside services', () => {
     const section = await screen.findByTestId('service-keys');
     expect(within(section).getByRole('heading', { name: 'Keys of outside services' })).toBeInTheDocument();
     expect((await within(section).findAllByText('In the console')).length).toBeGreaterThan(0);
-    expect(within(section).getAllByRole('link', { name: 'Change' })[0]).toHaveAttribute('href', '/settings/web-search');
+    expect(within(section).getAllByRole('link', { name: 'Change' })[0]).toHaveAttribute('href', '/settings/connections#web-search');
     fireEvent.click(within(section).getAllByRole('button', { name: 'Move here' })[0]!);
     await waitFor(() => expect(host.requests.find((r) => r.method === 'POST' && r.path === '/service-credentials/web_search/brave/move')).toBeTruthy());
     expect(host.requests.find((r) => r.path === '/service-credentials/web_search/brave/move')!.body).toEqual({ to: 'secrets_provider' });
@@ -85,7 +85,7 @@ describe('the keys of outside services', () => {
   it('an unset key says so and links to set it; no outside service shows an empty state', async () => {
     setup([key({ tiers: tiers(false) })]);
     expect((await screen.findAllByText('Not set')).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Set it' })[0]).toHaveAttribute('href', '/settings/web-search');
+    expect(screen.getAllByRole('link', { name: 'Set it' })[0]).toHaveAttribute('href', '/settings/connections#web-search');
     cleanup();
     setup([]);
     expect(await screen.findByText('No outside services yet')).toBeInTheDocument();

@@ -1206,8 +1206,8 @@ const searchProviders = [
 ];
 const searchAdmin = {
   enabled: true,
-  providers: { brave: { enabled: true, costPerCallUsd: null, baseUrl: null }, answers: { enabled: true, costPerCallUsd: 0.008, baseUrl: null } },
-  order: ['brave', 'answers'],
+  providers: { brave: { enabled: true, costPerCallUsd: null, baseUrl: null, allowPrivate: false }, answers: { enabled: true, costPerCallUsd: 0.008, baseUrl: null, allowPrivate: false }, searxng: { enabled: true, costPerCallUsd: null, baseUrl: 'http://searxng.home.example.test:8080', allowPrivate: true } },
+  order: ['brave', 'answers', 'searxng'],
   shareDeploymentKey: true,
   allowUserKeys: true,
   limits: { perRun: 30, perUserPerDay: 300, fetchPerRun: 20 },
@@ -1215,6 +1215,7 @@ const searchAdmin = {
   installed: [
     { id: 'brave', label: 'Brave Search', credential: 'api_key', hosts: ['api.search.brave.com'], defaultEstimatedCostPerCallUsd: 0.005 },
     { id: 'answers', label: 'An answer provider with a long name for narrow screens', credential: 'api_key', hosts: ['api.answers.example.test'], defaultEstimatedCostPerCallUsd: 0.008 },
+    { id: 'searxng', label: 'SearXNG', credential: 'none', hosts: [], defaultEstimatedCostPerCallUsd: 0 },
   ],
 };
 const credTiers = (user, system) => ({ user: { available: true, set: user, setAt: user ? iso(-6 * 86_400_000) : null }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: system, setAt: system ? iso(-20 * 86_400_000) : null } });

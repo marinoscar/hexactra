@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 
 import type { AdminSettings, ServiceCredential } from './api';
 import { KeyField } from './KeyField';
+import { SelfHostedAddress } from './SelfHostedAddress';
 import { estimate, keptWords } from './webSearchWords';
 
 type Installed = AdminSettings['installed'][number];
@@ -32,7 +33,9 @@ export interface AdminProviderCardProps {
 const costText = (v: string): number | null | 'bad' => (v.trim() === '' ? null : /^\d+(\.\d+)?$/.test(v.trim()) && Number(v) <= 10 ? Number(v) : 'bad');
 
 export function AdminProviderCard({ provider: p, settings: s, position, count, credential, canWrite, busy, onSave, onMove, onTest, onSaveKey, onRemoveKey }: AdminProviderCardProps) {
-  const ps = s.providers[p.id] ?? { enabled: true, costPerCallUsd: null, baseUrl: null };
+  const ps = s.providers[p.id] ?? { enabled: true, costPerCallUsd: null, baseUrl: null, allowPrivate: false };
+  // A provider with no fixed host of its own is self-hosted (SearXNG): it is reached at the address set here.
+  const selfHosted = p.hosts.length === 0;
   const [cost, setCost] = useState(ps.costPerCallUsd === null ? '' : String(ps.costPerCallUsd));
   useEffect(() => setCost(ps.costPerCallUsd === null ? '' : String(ps.costPerCallUsd)), [ps.costPerCallUsd]);
   const parsed = costText(cost);
@@ -57,7 +60,7 @@ export function AdminProviderCard({ provider: p, settings: s, position, count, c
           )}
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-          Calls {p.hosts.join(', ')}. Cost: {estimate(ps.costPerCallUsd ?? p.defaultEstimatedCostPerCallUsd)}
+          {selfHosted ? 'Calls the address you set below.' : `Calls ${p.hosts.join(', ')}.`} Cost: {estimate(ps.costPerCallUsd ?? p.defaultEstimatedCostPerCallUsd)}
           {ps.costPerCallUsd !== null ? ', your figure' : ''}. Prices change: check the provider&apos;s own page.
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
@@ -89,6 +92,9 @@ export function AdminProviderCard({ provider: p, settings: s, position, count, c
             </Button>
           )}
         </Stack>
+        {selfHosted && (
+          <SelfHostedAddress label={p.label} baseUrl={ps.baseUrl} allowPrivate={ps.allowPrivate === true} canWrite={canWrite} busy={busy !== null} onSave={(patch) => onSave({ providers: { [p.id]: patch } })} />
+        )}
         {p.credential === 'api_key' && (
           <KeyField
             label={`The deployment's ${p.label} API key`}

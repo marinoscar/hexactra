@@ -32,7 +32,7 @@ export interface SearchResult {
 
 export interface AdminSettings {
   enabled: boolean;
-  providers: Record<string, { enabled: boolean; costPerCallUsd: number | null; baseUrl: string | null }>;
+  providers: Record<string, { enabled: boolean; costPerCallUsd: number | null; baseUrl: string | null; allowPrivate?: boolean }>;
   order: string[];
   shareDeploymentKey: boolean;
   allowUserKeys: boolean;

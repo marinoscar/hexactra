@@ -14,6 +14,7 @@ export const TIER_TEXT: Record<Tier, string> = { user: 'your own key', organizat
 /** "about $0.005 a search (estimate)". */
 export function estimate(usd: number | null): string {
   if (usd === null) return 'no estimate';
+  if (usd === 0) return 'no charge per search (estimate)';
   const digits = usd < 0.01 ? 3 : 2;
   return `about $${usd.toFixed(digits)} a search (estimate)`;
 }
