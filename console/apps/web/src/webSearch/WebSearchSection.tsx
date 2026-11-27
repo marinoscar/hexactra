@@ -10,7 +10,7 @@ import type { DiagnosticTarget } from '../diagnostics/api';
 import { ErrorBanner, ListSkeleton, useApiAction } from '../ui';
 import { getStatus, listCredentials, listProviders, removeOwnKey, saveOwnKey, search, SERVICE, type SearchResult, type ServiceCredential, type WebSearchProvider, type WebSearchStatus } from './api';
 import { KeyField } from './KeyField';
-import { REASON_TEXT, SEARCH_TEST_NOTE, TIER_TEXT, estimate, keptWords, todayWords } from './webSearchWords';
+import { AI_SERVICE_COST_TEXT, AI_SERVICE_KEY_TEXT, REASON_TEXT, SEARCH_TEST_NOTE, TIER_TEXT, estimate, keptWords, todayWords } from './webSearchWords';
 
 /** A result's address as a link only when it is http(s): never `javascript:` or `data:` from a search result. */
 export function webHref(url: string): string | null {
@@ -103,6 +103,21 @@ export function WebSearchSection() {
         </Stack>
       </Paper>
 
+      {providers
+        .filter((p) => p.credential === 'ai_service' && p.enabled && p.listed)
+        .map((p) => (
+          <Paper key={p.id} variant="outlined" sx={box}>
+            <Stack spacing={1}>
+              <Typography variant="subtitle1" component="h3">
+                {p.label}
+              </Typography>
+              <Typography variant="body2">{AI_SERVICE_KEY_TEXT}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Cost: {estimate(p.estimatedCostPerCallUsd)}. {AI_SERVICE_COST_TEXT}
+              </Typography>
+            </Stack>
+          </Paper>
+        ))}
       {keyed.length > 0 && (
         <Paper variant="outlined" sx={box}>
           <Stack spacing={1.5}>
@@ -171,6 +186,11 @@ export function WebSearchSection() {
                 Search
               </Button>
             </Stack>
+            {result?.answer && (
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }} aria-label="Answer">
+                {result.answer.text}
+              </Typography>
+            )}
             {result && (
               <Box component="ol" sx={{ m: 0, pl: 3 }} aria-label="Results">
                 {result.hits.length === 0 && <Typography variant="body2">No results.</Typography>}

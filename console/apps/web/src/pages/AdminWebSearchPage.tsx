@@ -7,7 +7,7 @@ import type { DiagnosticTarget } from '../diagnostics/api';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, useApiAction } from '../ui';
 import { AdminProviderCard } from '../webSearch/AdminProviderCard';
 import { SERVICE, getAdmin, getUsage, listCredentials, removeDeploymentKey, saveAdmin, saveDeploymentKey, type AdminSettings, type ServiceCredential, type UsageRow } from '../webSearch/api';
-import { SEARCH_TEST_NOTE } from '../webSearch/webSearchWords';
+import { AI_SERVICE_COST_TEXT, SEARCH_TEST_NOTE } from '../webSearch/webSearchWords';
 
 // The administrator's Web search card (E50.5, #975; E50.14, #984): `/api/web-search/admin` (settings, usage) and the deployment's keys
 // through `/api/service-credentials/admin` (write-only: no page ever shows a key, nor any part of one).
@@ -167,6 +167,11 @@ export function AdminWebSearchPage() {
             <Typography variant="subtitle1" component="h2" gutterBottom>
               Usage, last 30 days
             </Typography>
+            {s.installed.some((p) => p.credential === 'ai_service') && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {AI_SERVICE_COST_TEXT}
+              </Typography>
+            )}
             {usage.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 No searches yet.

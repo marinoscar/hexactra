@@ -168,15 +168,22 @@ describe('the settings', () => {
   it('merges a patch: fields left out kept, null limits unlimited, providers per id and field', () => {
     let s: WebSearchSystemSettings = mergeWebSearchSystemSettings(undefined, { providers: { brave: { costPerCallUsd: 0.004 } }, limits: { perUserPerDay: null } });
     s = mergeWebSearchSystemSettings(s, { providers: { brave: { enabled: false } }, order: ['brave', 'alpha', 'brave'] });
-    expect(resolveWebSearchSystemSettings(s)).toEqual({ enabled: true, providers: { brave: { enabled: false, costPerCallUsd: 0.004, baseUrl: null, allowPrivate: false } }, order: ['brave', 'alpha'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: null, fetchPerRun: 30 }, fetch: { enabled: true, blockedHosts: [] } });
+    expect(resolveWebSearchSystemSettings(s)).toEqual({ enabled: true, providers: { brave: { enabled: false, costPerCallUsd: 0.004, baseUrl: null, allowPrivate: false, model: null } }, order: ['brave', 'alpha'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: null, fetchPerRun: 30 }, fetch: { enabled: true, blockedHosts: [] } });
     expect(mergeWebSearchSystemSettings(s, undefined)).toEqual(s);
   });
 
   it("a self-hosted provider's address and its private-network tick (E50.8): off by default, kept per field", () => {
     let s = mergeWebSearchSystemSettings(undefined, { providers: { searxng: { baseUrl: 'http://10.0.0.5:8080', allowPrivate: true } } });
     s = mergeWebSearchSystemSettings(s, { providers: { searxng: { enabled: true } } });
-    expect(resolveWebSearchSystemSettings(s).providers.searxng).toEqual({ enabled: true, costPerCallUsd: null, baseUrl: 'http://10.0.0.5:8080', allowPrivate: true });
+    expect(resolveWebSearchSystemSettings(s).providers.searxng).toEqual({ enabled: true, costPerCallUsd: null, baseUrl: 'http://10.0.0.5:8080', allowPrivate: true, model: null });
     expect(resolveWebSearchSystemSettings(mergeWebSearchSystemSettings(s, { providers: { searxng: { allowPrivate: false } } })).providers.searxng!.allowPrivate).toBe(false);
+    // An answer-type provider's model (E50.9): no default, kept per field, cleared with null, an id of the AI catalogue only.
+    let m = mergeWebSearchSystemSettings(undefined, { providers: { openai: { model: 'invented-model-1' } } });
+    m = mergeWebSearchSystemSettings(m, { providers: { openai: { enabled: true } } });
+    expect(resolveWebSearchSystemSettings(m).providers.openai!.model).toBe('invented-model-1');
+    expect(resolveWebSearchSystemSettings(mergeWebSearchSystemSettings(m, { providers: { openai: { model: null } } })).providers.openai!.model).toBeNull();
+    expect(resolveWebSearchSystemSettings(null).providers.openai).toBeUndefined();
+    expect(webSearchSystemSettingsSchema.safeParse({ providers: { openai: { model: 'has spaces' } } }).success).toBe(false);
     const shape = webSearchSystemSettingsSchema.shape.providers;
     for (const bad of ['ftp://search.example.test', 'https://user:pw@search.example.test', 'https://search.example.test/?q=x', 'https://search.example.test/#a', 'not a url']) {
       expect({ bad, ok: shape.safeParse({ searxng: { baseUrl: bad } }).success }).toEqual({ bad, ok: false });
@@ -203,8 +210,9 @@ function fakeStores() {
 
 class MemoryUsage {
   rows: { userId: string; provider: string; failed: boolean; costUsd: number | null }[] = [];
-  async record(userId: string, provider: string, _at: Date, o: { failed: boolean; costUsd: number | null }) {
-    this.rows.push({ userId, provider, ...o });
+  async record(userId: string, provider: string, _at: Date, o: { failed: boolean; costUsd: number | null; calls?: number }) {
+    const { calls: _calls, ...rest } = o;
+    this.rows.push({ userId, provider, ...rest });
   }
   async callsOn(userId: string) {
     return this.rows.filter((r) => r.userId === userId).length;

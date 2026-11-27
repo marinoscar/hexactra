@@ -32,4 +32,9 @@ export function todayWords(s: Pick<WebSearchStatus, 'today' | 'perRunLimit'>): s
   return `Today: ${n} ${n === 1 ? 'search' : 'searches'}${s.today.limit === null ? ' (no daily limit)' : ` of ${s.today.limit}`}${s.perRunLimit === null ? '; no limit per run.' : `; at most ${s.perRunLimit} a run.`}`;
 }
 
+/** What a provider that answers through the AI settings says instead of a key field (E50.9). */
+export const AI_SERVICE_KEY_TEXT = 'Uses your OpenAI key from AI settings. No search key is needed.';
+/** Where the token part of an answer-type provider's cost is (E50.9): the search fee is here, the tokens under AI usage. */
+export const AI_SERVICE_COST_TEXT = 'The cost shown is the search fee only. The tokens the model read and wrote are under AI usage, feature "Web search".';
+
 export const SEARCH_TEST_NOTE = 'A test makes one real search of a common word. It counts against the daily limit like any search.';

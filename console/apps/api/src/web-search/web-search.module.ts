@@ -5,6 +5,7 @@ import { OAuthClientModule } from '../oauth-client/oauth-client.module';
 import { ServiceCredentialsModule } from '../service-credentials/service-credentials.module';
 import { BraveSearchProvider } from './providers/brave.provider';
 import { ExaSearchProvider } from './providers/exa.provider';
+import { OpenAiSearchProvider } from './providers/openai.provider';
 import { SearxngSearchProvider } from './providers/searxng.provider';
 import { TavilySearchProvider } from './providers/tavily.provider';
 import { WebFetchDiagnosticBinding } from './fetch/web-fetch.diagnostic';
@@ -22,7 +23,7 @@ import { WebSearchService } from './web-search.service';
 import { WebSearchUsage } from './web-search.usage';
 
 /**
- * Web search in the host (E50.5, #975): the registry of search providers, Brave Search, Tavily, Exa and SearXNG (E50.8, #978; one
+ * Web search in the host (E50.5, #975): the registry of search providers, Brave Search, Tavily, Exa and SearXNG (E50.8, #978), OpenAI web search through the AI service (E50.9, #979; one
  * file each under `providers/`, docs/web-search.md "How to add a search provider"), the settings, the tiered keys (through the
  * service credentials port), the limits and the usage count, and the routes under `/api/web-search`. Mounted with the credentials
  * slice (app.module.ts), like the service credentials it reads.
@@ -42,6 +43,7 @@ import { WebSearchUsage } from './web-search.usage';
     TavilySearchProvider,
     ExaSearchProvider,
     SearxngSearchProvider,
+    OpenAiSearchProvider,
     WebSearchUsage,
     WebSearchService,
     WebSearchAdminService,

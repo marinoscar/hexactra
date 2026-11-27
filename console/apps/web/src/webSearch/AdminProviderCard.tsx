@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import type { AdminSettings, ServiceCredential } from './api';
 import { KeyField } from './KeyField';
 import { SelfHostedAddress } from './SelfHostedAddress';
+import { AiServiceProviderSettings } from './AiServiceProviderSettings';
 import { estimate, keptWords } from './webSearchWords';
 
 type Installed = AdminSettings['installed'][number];
@@ -35,7 +36,7 @@ const costText = (v: string): number | null | 'bad' => (v.trim() === '' ? null :
 export function AdminProviderCard({ provider: p, settings: s, position, count, credential, canWrite, busy, onSave, onMove, onTest, onSaveKey, onRemoveKey }: AdminProviderCardProps) {
   const ps = s.providers[p.id] ?? { enabled: true, costPerCallUsd: null, baseUrl: null, allowPrivate: false };
   // A provider with no fixed host of its own is self-hosted (SearXNG): it is reached at the address set here.
-  const selfHosted = p.hosts.length === 0;
+  const selfHosted = p.hosts.length === 0 && p.credential === 'none';
   const [cost, setCost] = useState(ps.costPerCallUsd === null ? '' : String(ps.costPerCallUsd));
   useEffect(() => setCost(ps.costPerCallUsd === null ? '' : String(ps.costPerCallUsd)), [ps.costPerCallUsd]);
   const parsed = costText(cost);
@@ -95,6 +96,7 @@ export function AdminProviderCard({ provider: p, settings: s, position, count, c
         {selfHosted && (
           <SelfHostedAddress label={p.label} baseUrl={ps.baseUrl} allowPrivate={ps.allowPrivate === true} canWrite={canWrite} busy={busy !== null} onSave={(patch) => onSave({ providers: { [p.id]: patch } })} />
         )}
+        {p.credential === 'ai_service' && <AiServiceProviderSettings model={ps.model ?? null} disabled={!canWrite || busy !== null} onSave={(model) => void onSave({ providers: { [p.id]: { model } } })} />}
         {p.credential === 'api_key' && (
           <KeyField
             label={`The deployment's ${p.label} API key`}

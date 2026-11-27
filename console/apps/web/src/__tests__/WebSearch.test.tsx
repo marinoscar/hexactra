@@ -228,3 +228,39 @@ describe('a self-hosted provider (SearXNG, E50.8)', () => {
     expect(card.queryByRole('button', { name: 'Save address' })).toBeNull();
   });
 });
+
+describe('OpenAI web search (E50.9): an answer-type provider through the AI settings', () => {
+  const OPENAI: WebSearchProvider = { id: 'openai', label: 'OpenAI web search', credential: 'ai_service', needsKey: false, enabled: true, listed: true, keyTier: null, keys: { user: false, organization: false, system: false }, estimatedCostPerCallUsd: 0.01 };
+
+  it('the user page says it uses the OpenAI key from AI settings, has no key field, and shows a test answer as text', async () => {
+    mount(<WebSearchSettingsPage />, ['web_search:read', 'web_search:write', 'connections:write'], {
+      'GET /web-search/status': { ...ON, provider: { id: 'openai', label: 'OpenAI web search', tier: null } },
+      'GET /web-search/providers': [OPENAI],
+      'GET /user-settings': {},
+      'POST /web-search/search': { provider: 'openai', hits: [{ title: 'Rivertown', url: 'https://facts.example.test/rivertown', snippet: '' }], answer: { text: '<b>48,200</b> inhabitants.', citations: ['https://facts.example.test/rivertown'] } },
+    });
+    expect(await screen.findByText('Uses your OpenAI key from AI settings. No search key is needed.')).toBeInTheDocument();
+    expect(screen.getByText(/under AI usage, feature "Web search"/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/OpenAI web search API key/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Search for'), { target: { value: 'Rivertown population' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(await screen.findByLabelText('Answer')).toHaveTextContent('<b>48,200</b> inhabitants.');
+    expect(screen.getByRole('link', { name: 'Rivertown' })).toHaveAttribute('href', 'https://facts.example.test/rivertown');
+  });
+
+  it('the administrator page has no key field for it, saves its model, and says where the token cost is', async () => {
+    const settings = { enabled: true, providers: {}, order: ['openai'], shareDeploymentKey: true, allowUserKeys: true, limits: { perRun: 30, perUserPerDay: 300 }, installed: [{ id: 'openai', label: 'OpenAI web search', credential: 'ai_service', hosts: ['api.openai.com'], defaultEstimatedCostPerCallUsd: 0.01 }] };
+    const host = mount(<AdminWebSearchPage />, ['system_settings:read', 'system_settings:write'], {
+      'GET /web-search/admin': settings,
+      'PUT /web-search/admin': (r: TestApiRequest) => ({ ...settings, ...(r.body as object) }),
+      'GET /web-search/admin/usage': [],
+      'GET /service-credentials': [],
+    });
+    expect(await screen.findByText(/Not chosen: this provider is not used/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/API key/)).toBeNull();
+    expect(screen.getAllByText(/The cost shown is the search fee only/).length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Model for web search'), { target: { value: 'invented-search-model' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save model' }));
+    await waitFor(() => expect(sent(host, 'PUT')).toEqual([['/web-search/admin', { providers: { openai: { model: 'invented-search-model' } } }]]));
+  });
+});

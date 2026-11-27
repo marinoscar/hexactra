@@ -17,6 +17,8 @@ export interface WebSearchStatus {
 export interface WebSearchProvider {
   id: string;
   label: string;
+  /** `ai_service`: answers through the AI settings' key (OpenAI web search, E50.9); no key field. */
+  credential?: 'api_key' | 'none' | 'ai_service';
   needsKey: boolean;
   enabled: boolean;
   listed: boolean;
@@ -28,11 +30,13 @@ export interface WebSearchProvider {
 export interface SearchResult {
   provider: string;
   hits: { title: string; url: string; snippet: string }[];
+  /** An answer-type provider's written answer (E50.9): third-party text, shown as text. */
+  answer?: { text: string; citations: string[] } | null;
 }
 
 export interface AdminSettings {
   enabled: boolean;
-  providers: Record<string, { enabled: boolean; costPerCallUsd: number | null; baseUrl: string | null; allowPrivate?: boolean }>;
+  providers: Record<string, { enabled: boolean; costPerCallUsd: number | null; baseUrl: string | null; allowPrivate?: boolean; model?: string | null }>;
   order: string[];
   shareDeploymentKey: boolean;
   allowUserKeys: boolean;
