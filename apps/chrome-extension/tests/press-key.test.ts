@@ -112,17 +112,31 @@ describe('type with submit (E52.12)', () => {
     expect(sent).toEqual(['See you at 7']);
   });
 
-  it('falls back to the script submit without the debugger', async () => {
+  it('a field in a form submits its form, with no key and whether or not the debugger works (E52.13)', async () => {
+    for (const works of [true, false]) {
+      debuggerWorks = works;
+      keys = [];
+      document.body.innerHTML = '<form id="f"><input id="msg" type="text"></form>';
+      let submitted = 0;
+      const form = document.getElementById('f') as HTMLFormElement;
+      form.requestSubmit = () => {
+        submitted += 1;
+      };
+      const r = await handleRequest(req({ type: 'type', selector: '#msg', text: 'See you at 7', submit: true, tab_id: 1 }));
+      expect(r).toMatchObject({ ok: true, result: { submitted: 'form' } });
+      expect(submitted).toBe(1);
+      expect(keys).toEqual([]);
+    }
+  });
+
+  it('a composer outside a form falls back to the script Enter without the debugger', async () => {
     debuggerWorks = false;
-    document.body.innerHTML = '<form id="f"><input id="msg" type="text"></form>';
-    let submitted = 0;
-    const form = document.getElementById('f') as HTMLFormElement;
-    form.requestSubmit = () => {
-      submitted += 1;
-    };
+    document.body.innerHTML = '<input id="msg" type="text">';
+    let scripted = 0;
+    document.getElementById('msg')!.addEventListener('keydown', () => (scripted += 1));
     const r = await handleRequest(req({ type: 'type', selector: '#msg', text: 'See you at 7', submit: true, tab_id: 1 }));
     expect(r).toMatchObject({ ok: true, result: { submitted: 'synthetic' } });
-    expect(submitted).toBe(1);
+    expect(scripted).toBe(1);
   });
 
   it('types nothing more and sends no Enter when the tab moved to another origin', async () => {
