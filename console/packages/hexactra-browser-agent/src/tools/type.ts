@@ -17,7 +17,7 @@ export const pressKey = defineRunnerTool({
   name: 'press_key',
   group: 'browser',
   family: 'browser',
-  description: 'Press a key such as Enter, Tab or Escape.',
+  description: 'Press a key such as Enter, Tab or Escape, with a real key press at the focused element.',
   parameters: z.object({ key: z.string().max(40) }),
   execute: (ctx: BrowserContext, { key }) => act(ctx, { type: 'press', key }),
 });

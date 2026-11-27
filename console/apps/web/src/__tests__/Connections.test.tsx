@@ -15,6 +15,8 @@ import { levelOf, outcomeBanner, remedyWords, testCodeWords, GROUPS } from '../c
 import { MenuList } from '@mui/material';
 import { ConfirmProvider } from '../ui';
 import { mockViewport } from './matchMedia';
+import { seriousFindings } from './axe';
+import { webCountWords, webStepLine } from '../components/webSteps';
 
 vi.setConfig({ testTimeout: 20_000 });
 configure({ asyncUtilTimeout: 5_000 });
@@ -130,11 +132,11 @@ describe('the words', () => {
 describe('the list', () => {
   it('shows each account by provider: the label, the email, what it may do, its status, its defaults and its last use', async () => {
     renderPage({ 'GET /connections': [BROKEN, WORK, PERSONAL, OUTLOOK] });
-    expect(await screen.findByRole('heading', { name: 'Connections', level: 1 })).toBeInTheDocument();
-    // Needs-reconnect first, then Google, then Microsoft (no "New chats" choice since E50.17); the rule is said once at the top.
+    expect(await screen.findByRole('heading', { name: 'Connections and tools', level: 1 })).toBeInTheDocument();
+    // Needs-reconnect first, then the three sections of E50.14 (Web search needs `web_search:read`); the rule is said once at the top.
     expect(screen.getByTestId('connections-rule')).toHaveTextContent('What is switched on here is available to the agent in every task and chat. Sending or changing something still asks you first.');
     const sections = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
-    expect(sections).toEqual(['Needs reconnecting', 'Google', 'Microsoft']);
+    expect(sections).toEqual(['Needs reconnecting', 'Accounts', 'Added tools']);
 
     const work = within(row('Work'));
     expect(work.getByText('person.a@example.test · Person A')).toBeInTheDocument();
@@ -167,9 +169,10 @@ describe('the list', () => {
   });
 
   it('empty: says what a connection is, and that every task and chat can use what is switched on (E50.17)', async () => {
-    renderPage({ 'GET /connections': [] });
+    renderPage({ 'GET /connections': [], 'GET /connections/mcp/status': { enabled: true, restricted: false } });
     expect(await screen.findByText('No accounts connected yet')).toBeInTheDocument();
-    expect(screen.getByText(/Every task and chat can use what you switch on here/)).toBeInTheDocument();
+    expect(screen.getByTestId('connections-rule')).toHaveTextContent('available to the agent in every task and chat');
+    expect(screen.getByText('No tools added yet')).toBeInTheDocument();
     expect(screen.queryByText(/a task has to be told to/)).toBeNull();
     expect(screen.getAllByRole('button', { name: 'Connect an account' }).length).toBeGreaterThan(0);
   });
@@ -328,21 +331,56 @@ describe('defaults, rename, pause, test', () => {
     await waitFor(() => expect(host.requests.some((r) => r.path === `/connections/${PERSONAL.id}/resume`)).toBe(true));
   });
 
-  it('tests an account and shows each capability as it fared', async () => {
-    renderPage({ 'GET /connections': [WORK], [`POST /connections/${WORK.id}/test`]: { results: [{ capability: 'mail_read', ok: true, code: null }, { capability: 'calendar_read', ok: false, code: 'FORBIDDEN' }] } });
+  it('Test is a visible button on an active row: it opens the panel with each capability as it fared, and the chip follows', async () => {
+    const report = { id: 'r1', target: { kind: 'connection', id: WORK.id }, trigger: 'owner', overall: 'fail', startedAt: '2026-11-26T10:00:00.000Z', finishedAt: '2026-11-26T10:00:01.000Z', stages: [{ id: 'sign_in', status: 'pass', code: null, remedy: null, ms: 120 }, { id: 'capability:mail_read', status: 'pass', code: null, remedy: null, ms: 80 }, { id: 'capability:calendar_read', status: 'fail', code: 'FORBIDDEN', remedy: 'FORBIDDEN', ms: 90 }] };
+    let summary: unknown[] = [];
+    const host = renderPage({
+      'GET /connections': [WORK, PERSONAL],
+      'GET /connections/diagnostics/summary': () => summary,
+      [`POST /connections/${WORK.id}/diagnose`]: () => {
+        summary = [{ targetId: WORK.id, overall: 'fail', at: report.finishedAt }];
+        return report;
+      },
+      [`GET /connections/${WORK.id}/diagnostics`]: [],
+    });
     await screen.findByRole('listitem', { name: 'Connection Work' });
-    fireEvent.click(within(await openMenu('Work')).getByRole('menuitem', { name: 'Test' }));
+    expect(within(row('Work')).getByTestId('health-chip')).toHaveTextContent('Not checked yet');
+    // Not in the menu any more; not on a paused row.
+    expect(within(row('Personal')).queryByRole('button', { name: 'Test Personal' })).not.toBeInTheDocument();
+    fireEvent.click(within(row('Work')).getByRole('button', { name: 'Test Work' }));
     const dialog = await screen.findByRole('dialog', { name: 'Test of Work' });
-    const results = within(within(dialog).getByRole('list', { name: 'Test results' }));
-    expect(results.getByText('Works')).toBeInTheDocument();
-    expect(results.getByText('The provider refused: the permission is missing')).toBeInTheDocument();
+    const steps = within(await within(dialog).findByRole('list', { name: 'Steps of the test' }));
+    expect(await steps.findByText('Read calendar')).toBeInTheDocument();
+    expect(steps.getByText('Read mail')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('diagnostics-summary')).toHaveTextContent('The provider refused: the permission is missing');
+    expect(host.requests.filter((r) => r.method === 'POST').map((r) => r.path)).toEqual([`/connections/${WORK.id}/diagnose`]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(within(row('Work')).getByTestId('health-chip')).toHaveTextContent(/^Problem · checked/));
   });
 
-  it('offers Test and Pause only while active, and Change and Make default not while it needs reconnecting', async () => {
+  it('on a phone, Test is an icon button with a name', async () => {
+    restore?.();
+    restore = mockViewport(390);
+    renderPage({ 'GET /connections': [WORK] });
+    await screen.findByRole('listitem', { name: 'Connection Work' });
+    const test = within(row('Work')).getByRole('button', { name: 'Test Work' });
+    expect(test.textContent).toBe('');
+  });
+
+  it('a row has one switch: on is active, off is paused', async () => {
+    const host = renderPage({ 'GET /connections': [WORK, PERSONAL], [`POST /connections/${WORK.id}/pause`]: { ...WORK, status: 'paused' } });
+    await screen.findByRole('listitem', { name: 'Connection Work' });
+    expect(within(row('Personal')).getByRole('switch', { name: 'Personal switched on' })).not.toBeChecked();
+    fireEvent.click(within(row('Work')).getByRole('switch', { name: 'Work switched on' }));
+    await waitFor(() => expect(host.requests.some((r) => r.path === `/connections/${WORK.id}/pause`)).toBe(true));
+  });
+
+  it('offers Test only while active, no switch while it needs reconnecting, and Change and Make default not while it needs reconnecting', async () => {
     renderPage({ 'GET /connections': [BROKEN, PERSONAL] });
     await screen.findByRole('listitem', { name: 'Connection Old account' });
+    expect(within(row('Old account')).queryByRole('button', { name: 'Test Old account' })).not.toBeInTheDocument();
+    expect(within(row('Old account')).queryByRole('switch')).not.toBeInTheDocument();
     const broken = within(await openMenu('Old account'));
-    expect(broken.queryByRole('menuitem', { name: 'Test' })).not.toBeInTheDocument();
     expect(broken.queryByRole('menuitem', { name: 'Change what it can do' })).not.toBeInTheDocument();
     expect(broken.getByRole('menuitem', { name: 'Disconnect' })).toBeInTheDocument();
     fireEvent.keyDown(broken.getByRole('menuitem', { name: 'Rename' }), { key: 'Escape' });
@@ -421,8 +459,8 @@ describe('the administrator page', () => {
     expect(await screen.findByRole('heading', { name: 'Google', level: 2 })).toBeInTheDocument();
     const g = within(card('Google'));
     expect(g.getByText('Create a project at Google.')).toBeInTheDocument();
-    expect(g.getByLabelText('Redirect URI')).toHaveValue('https://console.example.test/api/connections/callback/google');
-    expect(g.getByRole('button', { name: 'Copy the Google redirect URI' })).toBeInTheDocument();
+    expect(g.getByLabelText('Redirect address')).toHaveValue('https://console.example.test/api/connections/callback/google');
+    expect(g.getByRole('button', { name: 'Copy the Google redirect address' })).toBeInTheDocument();
     expect(g.getByLabelText('Client ID')).toHaveValue('google-client-id');
     expect(g.getByLabelText('Client secret')).toHaveValue('');
     expect(g.getByText(/A secret is stored/)).toBeInTheDocument();
@@ -460,5 +498,93 @@ describe('the administrator page', () => {
     expect(g.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(g.getByLabelText('Client ID')).toBeDisabled();
     expect(host.requests.every((r) => r.path.startsWith('/connections/admin/'))).toBe(true);
+  });
+});
+
+describe('E50.14: Connections and tools', () => {
+  afterEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      // no storage
+    }
+  });
+
+  it('has three sections with their own button and empty state; web search shows with its permission', async () => {
+    renderPage({ 'GET /connections': [], 'GET /connections/mcp/status': { enabled: true, restricted: false }, 'GET /web-search/status': { enabled: false, reason: 'no_key', provider: null, today: { calls: 0, limit: null, remaining: null }, perRunLimit: null }, 'GET /web-search/providers': [], 'GET /user-settings': {} }, [...WRITE, 'web_search:read']);
+    await screen.findByText('No accounts connected yet');
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual(['Accounts', 'Added tools', 'Web search']);
+    expect(within(screen.getByRole('region', { name: 'Added tools' })).getByText('MCP servers')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Added tools' })).getByRole('button', { name: 'Add a tool' })).toBeInTheDocument();
+    expect(await screen.findByText(/No key is set that your searches may use/)).toBeInTheDocument();
+  });
+
+  it('with added tools switched off, says the administrator must switch them on, with the link for an administrator', async () => {
+    renderPage({ 'GET /connections': [] }, [...WRITE, 'system_settings:read']);
+    const tools = within(await screen.findByRole('region', { name: 'Added tools' }));
+    expect(tools.getByText('Added tools are switched off here')).toBeInTheDocument();
+    expect(tools.queryByRole('button', { name: 'Add a tool' })).toBeNull();
+    expect(tools.getByRole('link', { name: "Open the administrator's Connections settings" })).toHaveAttribute('href', '/admin/settings/connections');
+    cleanup();
+    renderPage({ 'GET /connections': [] });
+    expect(within(await screen.findByRole('region', { name: 'Added tools' })).queryByRole('link')).toBeNull();
+  });
+
+  it('shows the Google checklist before the first Google account, once, and it can be dismissed (#681)', async () => {
+    renderPage({ 'GET /connections': [] });
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Connect an account' }))[0]!);
+    const dialog = await screen.findByRole('dialog', { name: 'Connect an account' });
+    const list = within(dialog).getByTestId('google-checklist');
+    expect(list).toHaveTextContent('Gmail API (mail)');
+    expect(list).toHaveTextContent('Google Drive API, Google Docs API and Google Sheets API (documents)');
+    fireEvent.click(within(list).getByRole('button', { name: 'Close' }));
+    expect(within(dialog).queryByTestId('google-checklist')).toBeNull();
+    cleanup();
+    renderPage({ 'GET /connections': [] });
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Connect an account' }))[0]!);
+    expect(within(await screen.findByRole('dialog', { name: 'Connect an account' })).queryByTestId('google-checklist')).toBeNull();
+  });
+
+  it('no checklist once a Google account is connected', async () => {
+    renderPage({ 'GET /connections': [WORK] });
+    await screen.findByRole('listitem', { name: 'Connection Work' });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect an account' }));
+    expect(within(await screen.findByRole('dialog', { name: 'Connect an account' })).queryByTestId('google-checklist')).toBeNull();
+  });
+
+  it('the administrator tests the app setup in the same panel', async () => {
+    const apps: AdminProvider[] = [{ provider: 'google', displayName: 'Google', enabled: true, clientId: 'id.apps.example.test', hasClientSecret: true, tenant: null, installed: true, redirectUri: 'https://console.example.test/api/connections/callback/google', setupSteps: [], accountTypes: [] }];
+    const host = renderPage({ 'GET /connections/admin/apps': apps, 'POST /connections/admin/apps/google/diagnose': { id: 'r', target: { kind: 'provider_app', id: 'google' }, trigger: 'admin', overall: 'warn', startedAt: '2026-11-26T10:00:00Z', finishedAt: '2026-11-26T10:00:01Z', stages: [{ id: 'picker_key', status: 'warn', code: 'PICKER_KEY_MISSING', remedy: 'PICKER_KEY_MISSING', ms: 0 }] }, 'GET /connections/admin/apps/google/diagnostics': [] }, ['system_settings:read', 'system_settings:write'], '/admin/settings/connections');
+    fireEvent.click(await screen.findByRole('button', { name: 'Test app setup' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Test of the Google app' });
+    expect(await within(dialog).findByText('File picker key')).toBeInTheDocument();
+    expect(host.requests.some((r) => r.method === 'POST' && r.path === '/connections/admin/apps/google/diagnose')).toBe(true);
+  });
+
+  it('the page has no serious accessibility finding', async () => {
+    renderPage({ 'GET /connections': [BROKEN, WORK, PERSONAL, OUTLOOK] });
+    await screen.findByRole('listitem', { name: 'Connection Work' });
+    expect(await seriousFindings(document.body)).toEqual([]);
+  });
+});
+
+describe('web steps on the run page', () => {
+  it('reads a search and a page read, and counts them', () => {
+    expect(webStepLine({ kind: 'action', action: 'web_search', args: { query: 'opening hours' }, summary: 'searched the web for "opening hours" (5 results, brave)', ok: true })).toEqual({ primary: 'Searched the web for “opening hours”', secondary: '5 results · brave' });
+    expect(webStepLine({ kind: 'action', action: 'web_fetch', args: { url: 'https://docs.example.test/a?b=1' }, summary: 'docs.example.test', ok: true })).toEqual({ primary: 'Read docs.example.test', secondary: null });
+    expect(webStepLine({ kind: 'action', action: 'web_search', args: { query: 'x' }, summary: 'web search failed (RATE_LIMITED)', ok: false }).primary).toBe('Searched the web for “x” (failed)');
+    expect(webCountWords([{ kind: 'action', action: 'web_search' }, { kind: 'action', action: 'web_search' }, { kind: 'action', action: 'web_fetch' }])).toBe('2 web searches · 1 page read');
+    expect(webCountWords([{ kind: 'action', action: 'click' }])).toBeNull();
+  });
+});
+
+describe('E50.14: changed tools', () => {
+  it('a banner names the added tool whose tools are new or changed, and links to the review', async () => {
+    const NOTES: Connection = { ...WORK, id: 'eeeeeeee-5555-4555-8555-555555555555', provider: 'mcp', label: 'Notes', accountEmail: 'mcp.example.test', capabilities: [], granted: [], defaultFor: [], mcp: { url: 'https://mcp.example.test/mcp', auth: 'none', serverName: null, tools: { total: 3, enabled: 1, needsReview: 2 }, toolsFetchedAt: null } };
+    renderPage({ 'GET /connections': [NOTES], 'GET /connections/mcp/status': { enabled: true, restricted: false }, [`GET /connections/${NOTES.id}/tools`]: { tools: [], needsReview: 2, fetchedAt: null } });
+    const banner = await screen.findByTestId('tools-to-review');
+    expect(banner).toHaveTextContent('Notes: 2 tools are new or changed. They stay off until you choose.');
+    fireEvent.click(within(banner).getByRole('button', { name: 'Review the tools of Notes' }));
+    expect(await screen.findByRole('dialog', { name: 'Tools of Notes' })).toBeInTheDocument();
   });
 });

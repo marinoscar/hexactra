@@ -12,7 +12,7 @@ import { requestHuman } from '../src/tools/request-human';
 import { answerLine } from '../src/request-human-spec';
 import { typeHandoffSecret } from '../src/tools/type-secret';
 import { observeElements } from '../src/tools/observe';
-import { typeText } from '../src/tools/type';
+import { pressKey, typeText } from '../src/tools/type';
 
 type Run = ReturnType<typeof fakeBrowserRun>;
 const call = (run: Run, tool: unknown, args: unknown) => executeTool(run.ctx, tool as never, args, new GatePipeline(run.gates as never) as never);
@@ -58,6 +58,28 @@ describe('click: how the extension clicked (E52.1, #1016)', () => {
     expect(await call(run, click, { selector: '#send', reason: 'send' })).toBe('ok. The element is disabled.');
     expect(run.store.rows().map((r) => r.summary)).toEqual(['done (clicked by script: the element could not be reached with the mouse)', 'done. The element is disabled.']);
     expect(run.store.rows().every((r) => r.ok)).toBe(true);
+  });
+});
+
+describe('press_key: how the extension pressed (E52.12, #1030)', () => {
+  it('reads a real key press and an older result as before, and says when the key was pressed by script', async () => {
+    const run = fakeBrowserRun();
+    run.browser.results.set('press', { method: 'keys' });
+    expect(await call(run, pressKey, { key: 'Enter' })).toBe('ok');
+    run.browser.results.set('press', {});
+    expect(await call(run, pressKey, { key: 'Enter' })).toBe('ok');
+    run.browser.results.set('press', { method: 'synthetic' });
+    expect(await call(run, pressKey, { key: 'Enter' })).toBe('ok (pressed by script, because the debugger was not available; the page may ignore it. If nothing changed, click the control instead.)');
+    expect(run.store.rows().map((r) => r.summary)).toEqual(['done', 'done', 'done (pressed by script: the page may ignore it)']);
+  });
+
+  it('says when type_text submitted by script, and reads a real Enter as before', async () => {
+    const run = fakeBrowserRun();
+    run.browser.results.set('type', { submitted: 'keys' });
+    expect(await call(run, typeText, { selector: '#msg', text: 'See you at 7', submit: true })).toBe('ok');
+    run.browser.results.set('type', { submitted: 'synthetic' });
+    expect(await call(run, typeText, { selector: '#msg', text: 'See you at 7', submit: true })).toMatch(/^ok, typed; the Enter that submits was sent by script/);
+    expect(run.store.rows().map((r) => r.summary)).toEqual(['done', 'typed; submitted by script (the page may ignore it)']);
   });
 });
 
