@@ -80,6 +80,8 @@ jobs:
         with:
           node-version: '22'
       - run: node --test scripts/crx3.test.mjs
+      # The run dataset summariser of the analyze-runs skill (E53.6, #1074).
+      - run: node --test scripts/runs/analyze-dataset.test.mjs
       - run: node scripts/extension-id.mjs --check
       # The extension's copy of the console's sensitive-text patterns is generated, never hand-copied (#538).
       - run: node scripts/gen-sensitive-patterns.mjs --check
