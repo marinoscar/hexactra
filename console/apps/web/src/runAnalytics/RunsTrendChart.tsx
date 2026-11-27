@@ -1,7 +1,5 @@
 // Runs Analytics (E53.5, #1073): runs per day (or week), one bar per period stacked by how they ended. Loaded lazily, so
 // `@mui/x-charts` stays out of the entry bundle. The numbers are also in the visually hidden table the page names in `describedBy`.
-import { Box } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import { BarChart } from '@mui/x-charts/BarChart';
 
 import type { StatsGroupRow } from './api';
@@ -10,6 +8,9 @@ export interface RunsTrendChartProps {
   groups: StatsGroupRow[];
   describedBy: string;
   label: string;
+  /** One colour per series of `TREND_SERIES`, from the page's theme. The chart imports nothing of MUI but the chart itself: a
+   * lazy chunk that imports `Box` or the theme hook moves them into new shared chunks (bundle:compare, #894). */
+  colors: Record<(typeof TREND_SERIES)[number]['key'], string>;
 }
 
 const MIN_BAR_PX = 12;
@@ -29,14 +30,12 @@ export const TREND_SERIES = [
   { key: 'live', label: 'Live' },
 ] as const;
 
-export default function RunsTrendChart({ groups, describedBy, label }: RunsTrendChartProps) {
-  const theme = useTheme();
+export default function RunsTrendChart({ groups, describedBy, label, colors: color }: RunsTrendChartProps) {
   const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const color: Record<(typeof TREND_SERIES)[number]['key'], string> = { succeeded: theme.palette.success.main, failed: theme.palette.error.main, cancelled: theme.palette.grey[500], live: theme.palette.info.main };
   const value = (g: StatsGroupRow, key: (typeof TREND_SERIES)[number]['key']) => (key === 'live' ? g.live : g.byStatus[key]);
   return (
-    <Box role="img" aria-label={label} aria-describedby={describedBy} data-testid="runs-trend-chart" sx={{ overflowX: 'auto', maxWidth: '100%' }}>
-      <Box sx={{ minWidth: Math.max(280, groups.length * MIN_BAR_PX + 72), height: HEIGHT }}>
+    <div role="img" aria-label={label} aria-describedby={describedBy} data-testid="runs-trend-chart" style={{ overflowX: 'auto', maxWidth: '100%' }}>
+      <div style={{ minWidth: Math.max(280, groups.length * MIN_BAR_PX + 72), height: HEIGHT }}>
         <BarChart
           height={HEIGHT}
           margin={{ top: 8, right: 8, bottom: 8, left: 0 }}
@@ -46,7 +45,7 @@ export default function RunsTrendChart({ groups, describedBy, label }: RunsTrend
           hideLegend
           skipAnimation={reduced}
         />
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

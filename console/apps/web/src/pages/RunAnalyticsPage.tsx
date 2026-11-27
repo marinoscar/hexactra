@@ -2,6 +2,7 @@ import { Alert, Box, FormControl, InputLabel, Link, MenuItem, Paper, Select, Ske
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
+import { useTheme } from '@mui/material/styles';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { Suspense, lazy, useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -67,6 +68,7 @@ export interface RunAnalyticsPageProps {
  */
 export function RunAnalyticsPage({ scope }: RunAnalyticsPageProps) {
   const { api } = usePlatformHost();
+  const theme = useTheme();
   const tableId = useId();
   const [range, setRange] = useState<AnalyticsRange>('30d');
   const [breakdown, setBreakdown] = useState<Breakdown>(scope === 'all' ? 'user' : 'task');
@@ -101,6 +103,7 @@ export function RunAnalyticsPage({ scope }: RunAnalyticsPageProps) {
   }, [api, exporting, range]);
 
   const t = trend?.total;
+  const trendColors = { succeeded: theme.palette.success.main, failed: theme.palette.error.main, cancelled: theme.palette.grey[500], live: theme.palette.info.main };
   const empty = t !== undefined && t.runs === 0;
   const title = scope === 'all' ? 'Runs analytics' : 'Run analytics';
   const subtitle =
@@ -205,7 +208,7 @@ export function RunAnalyticsPage({ scope }: RunAnalyticsPageProps) {
                   Runs per {periodOf(range)}
                 </Typography>
                 <Suspense fallback={<Skeleton variant="rounded" height={260} />}>
-                  <RunsTrendChart groups={trend.groups} describedBy={tableId} label={`Runs per ${periodOf(range)}, ${ANALYTICS_RANGE_LABEL[range]}, stacked by outcome`} />
+                  <RunsTrendChart groups={trend.groups} colors={trendColors} describedBy={tableId} label={`Runs per ${periodOf(range)}, ${ANALYTICS_RANGE_LABEL[range]}, stacked by outcome`} />
                 </Suspense>
                 <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1.5, mt: 1 }} aria-label="Legend" data-testid="analytics-legend">
                   {TREND_SERIES.map((s) => (
