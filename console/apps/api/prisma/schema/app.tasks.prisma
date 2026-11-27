@@ -129,6 +129,7 @@ model Task {
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   runs Run[]
   connections TaskConnection[]
+  batches RunBatch[]
 
   // composed from app:deliveries.prisma
   deliveries TaskDelivery[]
@@ -292,9 +293,15 @@ model Run {
   /// Whether this run records a video of its browser tab (epic #755): the task's `record_video`, or the start request's `record`, fixed
   /// when the run is created. Nothing the run reads (a page, the model, a task parameter, a policy) can change it.
   recordVideo      Boolean       @default(false) @map("record_video")
+  /// The batch this run is one row of (E51.1, #1006); null for a run outside a batch.
+  batchId          String?       @map("batch_id") @db.Uuid
+  /// The row of the batch (1..n); null outside a batch.
+  batchSeq         Int?          @map("batch_seq")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  batch        RunBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batchItem    RunBatchItem? @relation("RunBatchItemRun")
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   steps        RunStep[]
   chatMessages ChatMessage[]
@@ -324,6 +331,8 @@ model Run {
   @@index([userId, clientId, createdAt])
   @@index([status])
   @@index([remindAt])
+  /// The runs of one batch, in row order (E51.1).
+  @@index([batchId, batchSeq])
   @@map("runs")
 }
 
@@ -403,4 +412,69 @@ model RunRecording {
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@map("run_recordings")
+}
+
+/// A batch (E51.1, #1006): one saved task run once per row of values, one run after another. Each row is an ordinary run
+/// started by TaskRunStarter; the batch only decides when the next one starts (when the previous one ended, RunEndHooks).
+model RunBatch {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  taskId         String     @map("task_id") @db.Uuid
+  /// The chat that made it (`run_task_batch`); null for the API, the web form, the CLI and MCP.
+  conversationId String?    @map("conversation_id") @db.Uuid
+  trigger        RunTrigger @default(manual)
+  origin         RunOrigin  @default(web)
+  /// The agent policy every run of the batch starts under; null follows the task's.
+  policyRef      String?    @map("policy_ref") @db.VarChar(64)
+  /// Who started it (an AI app's columns, as on a run), copied to each run.
+  clientId       String?    @map("client_id") @db.Uuid
+  clientName     String?    @map("client_name") @db.VarChar(64)
+  grantId        String?    @map("grant_id") @db.Uuid
+  appLimits      Json?      @map("app_limits")
+  /// review (a chat's batch waits for the owner's Start) | running | done | cancelled
+  status         String     @default("running") @db.VarChar(12)
+  total          Int
+  /// continue (the default: a failed row does not stop the batch) | stop
+  onFailure      String     @default("continue") @map("on_failure") @db.VarChar(12)
+  /// Why it stopped early: `owner_stopped`, `unknown_outcome` (with the row), `row_failed`; null otherwise.
+  stopReason     String?    @map("stop_reason") @db.VarChar(40)
+  /// The row whose run stopped the batch, when one did.
+  stoppedAtSeq   Int?       @map("stopped_at_seq")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  startedAt      DateTime?  @map("started_at") @db.Timestamptz
+  finishedAt     DateTime?  @map("finished_at") @db.Timestamptz
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task         Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  conversation Conversation?  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  items        RunBatchItem[]
+  runs         Run[]
+
+  @@index([userId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([status])
+  @@map("run_batches")
+}
+
+/// One row of a batch: the checked values (never a sensitive one) and how its run ended.
+model RunBatchItem {
+  id      String  @id @default(uuid()) @db.Uuid
+  batchId String  @map("batch_id") @db.Uuid
+  /// 1..n, unique per batch.
+  seq     Int
+  /// The checked values, by parameter key (strings). Never a `sensitive` parameter: a task with one cannot be batched.
+  inputs  Json
+  /// pending | running | succeeded | failed | cancelled | skipped
+  status  String  @default("pending") @db.VarChar(12)
+  runId   String? @unique @map("run_id") @db.Uuid
+  /// When the row was claimed to start (reconcile: a claimed row whose run was never created goes back to pending).
+  startedAt DateTime? @map("started_at") @db.Timestamptz
+
+  batch RunBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  /// The row's run: deleting the run (retention, the owner) clears it; the row keeps its status.
+  run   Run?     @relation("RunBatchItemRun", fields: [runId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, seq])
+  @@map("run_batch_items")
 }

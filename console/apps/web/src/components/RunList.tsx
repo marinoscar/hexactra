@@ -192,6 +192,37 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
     };
   }, [api, scopedApp, canReadApps]);
 
+  // ---- The batch filter (E51.1): its size, for the "2 of 5" chips, and its task, for the filter's chip ----
+  const [batchInfo, setBatchInfo] = useState<{ id: string; total: number; taskName: string | null } | null>(null);
+  useEffect(() => {
+    const id = filters.batchId;
+    if (!id) return setBatchInfo(null);
+    let stale = false;
+    api
+      .get<{ id: string; total: number; taskName: string | null }>(`/batches/${encodeURIComponent(id)}`)
+      .then((b) => {
+        if (!stale) setBatchInfo({ id: b.id, total: b.total, taskName: b.taskName });
+      })
+      .catch(() => {
+        if (!stale) setBatchInfo(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [api, filters.batchId]);
+  /** A batch run's row: "2 of 5" when the batch's size is known (its filter is on), "Row 2" otherwise. */
+  const batchChip = (r: RunListItem) =>
+    r.batchId && r.batchSeq ? (
+      <Chip
+        size="small"
+        variant="outlined"
+        label={batchInfo && batchInfo.id === r.batchId ? `${r.batchSeq} of ${batchInfo.total}` : `Row ${r.batchSeq}`}
+        title="A row of a batch"
+        data-testid="run-batch-seq"
+        sx={{ flexShrink: 0 }}
+      />
+    ) : null;
+
   // ---- The phone's filter drawer ----
   const [drawer, setDrawer] = useState(false);
   const [draft, setDraft] = useState(filters);
@@ -392,7 +423,10 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
       header: 'Status',
       render: (r) => (
         <>
-          <StatusChip status={r.status} stopReason={r.stopReason} />
+          <Stack direction="row" spacing={0.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+            <StatusChip status={r.status} stopReason={r.stopReason} />
+            {batchChip(r)}
+          </Stack>
           {/* Without the Goal column, what a running run is doing sits under its status. */}
           {compact && scoped && <Box sx={{ maxWidth: 200 }}>{activityLine(r)}</Box>}
         </>
@@ -466,7 +500,10 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
       <Paper variant="outlined" sx={{ display: 'flex', alignItems: 'flex-start', minWidth: 0 }} data-testid={`run-row-${r.id}`}>
         <CardActionArea component={RouterLink} to={`/runs/${r.id}`} sx={{ p: 1.5, flexGrow: 1, minWidth: 0 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5, minWidth: 0 }}>
-            <StatusChip status={r.status} stopReason={r.stopReason} />
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <StatusChip status={r.status} stopReason={r.stopReason} />
+              {batchChip(r)}
+            </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
               <RelativeTime iso={r.startedAt ?? r.createdAt} />
             </Typography>
@@ -513,6 +550,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
     ...(filters.taskId && !scoped
       ? [{ key: 'task', label: filters.taskId === 'none' ? ONE_OFF.name : `Task: ${tasks?.find((t) => t.id === filters.taskId)?.name ?? items.find((r) => r.taskId === filters.taskId)?.taskName ?? 'one task'}`, clear: { ...filters, taskId: null } }]
       : []),
+    ...(filters.batchId ? [{ key: 'batch', label: `Batch${batchInfo?.id === filters.batchId ? `: ${batchInfo.taskName ?? 'a deleted task'}, ${batchInfo.total} rows` : ''}`, clear: { ...filters, batchId: null } }] : []),
     ...(filters.trigger.length ? [{ key: 'trigger', label: `Trigger: ${filters.trigger.map((t) => TRIGGER_LABEL[t]).join(', ')}`, clear: { ...filters, trigger: [] } }] : []),
     ...(preset
       ? [

@@ -35,6 +35,8 @@ enum ChatMessageKind {
   memory
   /// A request a chat's run made of the owner (E40.1, #685): `meta.questionId`; the outcome is read from the question, never a value.
   request
+  /// A batch of runs of one task (E51.1, #1006): `meta.batchId`; the card reads the batch (review, then each row's status, then the summary).
+  batch
 
   @@map("chat_message_kind")
 }
@@ -94,6 +96,7 @@ model Conversation {
   runs     Run[]
   guidance RunGuidance[]
   connections ConversationConnection[]
+  batches  RunBatch[]
 
   /// The chat list: one status, most recent first.
   @@index([userId, status, lastMessageAt])

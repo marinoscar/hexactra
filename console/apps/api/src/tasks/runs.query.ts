@@ -47,6 +47,7 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
     ...(filter.policyId ? { policyRef: filter.policyId } : {}),
     ...(filter.origin ? { origin: { in: filter.origin } } : {}),
     ...(filter.clientId ? { clientId: filter.clientId } : {}),
+    ...(filter.batchId ? { batchId: filter.batchId } : {}),
   };
 }
 

@@ -28,7 +28,7 @@ const as = (token: string) => ({ authorization: `Bearer ${token}` });
 const body = <T,>(res: { json: <U>() => U }): T => res.json<{ data: T }>().data;
 
 beforeAll(async () => {
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

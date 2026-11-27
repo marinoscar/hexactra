@@ -39,7 +39,7 @@ const usable = (list: { provider: string; modelId: string; capabilities: string[
   );
 
 beforeAll(async () => {
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

@@ -63,7 +63,7 @@ async function call<T = unknown>(s: Session, method: 'GET' | 'PATCH' | 'DELETE' 
 
 beforeAll(async () => {
   process.env.JOBS_WORKER_MODE = 'off';
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   prisma = app.get(PrismaService);

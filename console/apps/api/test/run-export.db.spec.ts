@@ -39,7 +39,7 @@ const SECRET = 'S3cr3t-ANSWER-9182';
 const TRANSCRIPT_MARKER = 'TRANSCRIPT-MARKER-7f3a';
 
 beforeAll(async () => {
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   prisma = app.get(PrismaService);
