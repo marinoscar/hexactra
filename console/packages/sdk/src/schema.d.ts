@@ -8884,6 +8884,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runBatches_list"];
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["runBatches_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runBatches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/batches/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["runBatches_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/batches/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["runBatches_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schedules": {
         parameters: {
             query?: never;
@@ -10718,6 +10787,16 @@ export interface components {
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
              * @example REPORT_LINK_INVALID
+             * @example BATCH_TOO_SMALL
+             * @example BATCH_TOO_LARGE
+             * @example BATCH_INPUTS_MISSING
+             * @example BATCH_SENSITIVE_PARAMETER
+             * @example BATCH_DUPLICATE_ROW
+             * @example BATCH_NO_ROWS
+             * @example BATCH_UNKNOWN_ROW
+             * @example BATCH_NOT_FOUND
+             * @example BATCH_LIVE
+             * @example BATCH_NOT_IN_REVIEW
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -12203,6 +12282,8 @@ export interface components {
                 maxKeepDays: number | null;
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
+                /** @description The most rows a batch of runs may have (E51.1). Absent: 25. */
+                batchMaxRows?: number;
             };
             kgraph: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -12539,6 +12620,8 @@ export interface components {
                 maxKeepDays: number | null;
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
+                /** @description The most rows a batch of runs may have (E51.1). Absent: 25. */
+                batchMaxRows?: number;
             };
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -12880,6 +12963,8 @@ export interface components {
                 maxKeepDays?: number | null;
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
+                /** @description The most rows a batch of runs may have (E51.1). Absent: 25. */
+                batchMaxRows?: number;
             };
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -21070,6 +21155,11 @@ export interface components {
                  * @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).
                  */
                 clientId?: string;
+                /**
+                 * Format: uuid
+                 * @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.
+                 */
+                batchId?: string;
             };
             /** @description With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`. */
             expectedCount?: number;
@@ -21346,6 +21436,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -21589,6 +21683,10 @@ export interface components {
                 }[] | null;
                 /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
                 memoryIds: string[];
+                /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+                batchId?: string | null;
+                /** @description The row of the batch (1..n); null outside a batch. */
+                batchSeq?: number | null;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
                 startedAt: string | null;
@@ -22192,6 +22290,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -22526,6 +22628,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -24157,6 +24263,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -24203,6 +24313,152 @@ export interface components {
              * @default false
              */
             record?: boolean;
+        };
+        BatchResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            taskName: string | null;
+            /** @description The chat that made it (`run_task_batch`); null for every other caller */
+            conversationId: string | null;
+            trigger: string;
+            origin: string;
+            policyRef: string | null;
+            /**
+             * @description `review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)
+             * @enum {string}
+             */
+            status: "review" | "running" | "done" | "cancelled";
+            total: number;
+            /** @enum {string} */
+            onFailure: "continue" | "stop";
+            /** @description Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted */
+            stopReason: ("owner_stopped" | "unknown_outcome" | "row_failed" | "task_deleted") | null;
+            /** @description The row whose run stopped it */
+            stoppedAtSeq: number | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            startedAt: string | null;
+            finishedAt: string | null;
+            counts: {
+                total: number;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+                skipped: number;
+                pending: number;
+                running: number;
+            };
+            /** @description "3 of 3 done", "2 done, 1 failed, 2 not started" */
+            summary: string;
+            items: {
+                /** @description The row, 1..n */
+                seq: number;
+                /**
+                 * @description `skipped`: never started (the batch was stopped, or the row was unticked at review)
+                 * @enum {string}
+                 */
+                status: "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped";
+                /** @description The run of this row; null until it starts */
+                runId: string | null;
+                /** @description The row's values, by parameter */
+                values: {
+                    key: string;
+                    label: string;
+                    /** @description Masked with the same rules as a run's inputs */
+                    value: string;
+                }[];
+                /** @description The run's status; null until it starts */
+                runStatus: string | null;
+                /** @description The first 300 characters of the run's result (or error), masked; null until it ends */
+                result: string | null;
+            }[];
+        };
+        CreateBatchDto: {
+            /** @description One object per run, in order. 2 to 25 rows (the deployment setting `runs.batchMaxRows`). Every row is checked before anything is written. */
+            rows: {
+                /** @description This row's values for the task's `{{Name}}` parameters, by key or display name. */
+                inputs?: {
+                    [key: string]: string | number;
+                };
+            }[];
+            /** @description Run every row under this agent policy instead of the task's or the user's default. */
+            policyId?: string;
+            /**
+             * @description `continue` (the default): a failed row does not stop the batch. `stop`: it does, and the rows not started are skipped.
+             * @default continue
+             * @enum {string}
+             */
+            onFailure?: "continue" | "stop";
+        };
+        BatchPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                taskId: string;
+                taskName: string | null;
+                /** @description The chat that made it (`run_task_batch`); null for every other caller */
+                conversationId: string | null;
+                trigger: string;
+                origin: string;
+                policyRef: string | null;
+                /**
+                 * @description `review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)
+                 * @enum {string}
+                 */
+                status: "review" | "running" | "done" | "cancelled";
+                total: number;
+                /** @enum {string} */
+                onFailure: "continue" | "stop";
+                /** @description Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted */
+                stopReason: ("owner_stopped" | "unknown_outcome" | "row_failed" | "task_deleted") | null;
+                /** @description The row whose run stopped it */
+                stoppedAtSeq: number | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+                counts: {
+                    total: number;
+                    succeeded: number;
+                    failed: number;
+                    cancelled: number;
+                    skipped: number;
+                    pending: number;
+                    running: number;
+                };
+                /** @description "3 of 3 done", "2 done, 1 failed, 2 not started" */
+                summary: string;
+                items: {
+                    /** @description The row, 1..n */
+                    seq: number;
+                    /**
+                     * @description `skipped`: never started (the batch was stopped, or the row was unticked at review)
+                     * @enum {string}
+                     */
+                    status: "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped";
+                    /** @description The run of this row; null until it starts */
+                    runId: string | null;
+                    /** @description The row's values, by parameter */
+                    values: {
+                        key: string;
+                        label: string;
+                        /** @description Masked with the same rules as a run's inputs */
+                        value: string;
+                    }[];
+                    /** @description The run's status; null until it starts */
+                    runStatus: string | null;
+                    /** @description The first 300 characters of the run's result (or error), masked; null until it ends */
+                    result: string | null;
+                }[];
+            }[];
+            nextCursor: string | null;
+        };
+        StartBatchDto: {
+            /** @description The rows to keep (their `seq`), default all; the others are skipped. At least one. */
+            rows?: number[];
         };
         ScheduleResponseDto: {
             /** Format: uuid */
@@ -24378,10 +24634,10 @@ export interface components {
                     /** @enum {string} */
                     role: "user" | "assistant" | "system";
                     /**
-                     * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                     * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                      * @enum {string}
                      */
-                    kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                    kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
                     /** @description The start of the newest message, on one line */
                     text: string;
                 } | null;
@@ -24574,10 +24830,10 @@ export interface components {
                 /** @enum {string} */
                 role: "user" | "assistant" | "system";
                 /**
-                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                 * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                  * @enum {string}
                  */
-                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
                 /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
                 text: string;
                 /** @description The run a `run` or `result` message is about */
@@ -24654,10 +24910,10 @@ export interface components {
             /** @enum {string} */
             role: "user" | "assistant" | "system";
             /**
-             * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+             * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
              * @enum {string}
              */
-            kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+            kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
             /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
             text: string;
             /** @description The run a `run` or `result` message is about */
@@ -24954,10 +25210,10 @@ export interface components {
                 /** @enum {string} */
                 role: "user" | "assistant" | "system";
                 /**
-                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                 * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                  * @enum {string}
                  */
-                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
                 /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
                 text: string;
                 /** @description The run a `run` or `result` message is about */
@@ -51638,6 +51894,8 @@ export interface operations {
                 origin?: string | string[];
                 /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
                 clientId?: string;
+                /** @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`. */
+                batchId?: string;
                 /** @description `1` returns `{ items, nextCursor }` instead of an array. */
                 envelope?: "1" | "true";
                 /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
@@ -51766,6 +52024,8 @@ export interface operations {
                 origin?: string | string[];
                 /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
                 clientId?: string;
+                /** @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`. */
+                batchId?: string;
             };
             header?: never;
             path?: never;
@@ -54899,6 +55159,269 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_list: {
+        parameters: {
+            query?: {
+                /** @description Batches to return, 1 to 100. Default 20. */
+                limit?: number;
+                /** @description The previous page's `nextCursor`. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchPageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBatchDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartBatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
             /** @description Unauthorized - Invalid or missing token */
             401: {
                 headers: {
