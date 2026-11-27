@@ -77,6 +77,8 @@ const epicChildren = new Map([
   [970, [971, 972, 973, 974, 975, 976, 977, 978, 979, 980, 981, 982, 983, 984, 985, 986, 987]],
   // E52 consistent runs (epic #1015): E52.1 to E52.11, then E52.12 (a real key press) and E52.13 (its form fix), then the follow-ups.
   [1015, [1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1030, 1046, 1047, 1048, 1049, 1050, 1051]],
+  // E53 run analytics (epic #1068): stats, admin stats, dataset export, CLI/SDK/MCP, the pages, the analyze-runs skill, then the goal-search bug E53.1 found.
+  [1068, [1069, 1070, 1071, 1072, 1073, 1074, 1075]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
