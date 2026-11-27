@@ -526,6 +526,27 @@
       }
     },
     {
+      "id": "runs.dataset",
+      "description": "The run dataset: the owner's runs as one masked file for analysis (runs, findings and optionally steps; JSON, CSV or XLSX), made by the exports slice",
+      "rest": [
+        "POST /api/exports",
+        "GET /api/exports/{id}"
+      ],
+      "cli": [
+        "runs dataset export",
+        "runs dataset status"
+      ],
+      "mcp": {
+        "none": "A dataset is a file of up to 5,000 runs: too large for a tool result. An assistant reads runs_stats and run_export instead"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; make the file with the CLI or the web app"
+      },
+      "web": {
+        "none": "Not in the app's own pages yet: the Runs Analytics page's Export dataset is #1073. Today the platform's Your data page (Settings, Export your data, /settings/data-export) lists it as Run dataset"
+      }
+    },
+    {
       "id": "runs.delete",
       "description": "Delete finished runs: one, a list, or everything a filter matches",
       "rest": [

@@ -5,11 +5,20 @@ import type { Command } from 'commander';
 import { consoleApi } from './console-api.js';
 import { consistencyLines, findingsLines, improvementLines, type Consistency, type Finding, type Improvement } from './insights.js';
 import { STATS_GROUP_BY, statsLines, statsQuery, type RunStats, type StatsFlags } from './run-stats.js';
+import { DATASET_FORMATS, DATASET_STATUSES, datasetBody, exportDataset, type DatasetFlags, type ExportView } from './run-dataset.js';
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
 };
 const json = (v: unknown): void => out(JSON.stringify(v, null, 2));
+
+/** How long `runs dataset export` waits for the file. */
+export const DATASET_WAIT_MS = 10 * 60_000;
+/** The plain fetch of a dataset's signed link (never the console client: the link goes to object storage). */
+let fetchFile: (url: string) => Promise<Response> = (url) => fetch(url);
+export function setDatasetFetchForTests(next: ((url: string) => Promise<Response>) | null): void {
+  fetchFile = next ?? ((url) => fetch(url));
+}
 
 /** How long `tasks improve --wait` polls, and how often. */
 export const WAIT_FOR_MS = 4 * 60_000;
@@ -66,6 +75,36 @@ export function insightsCommands(program: Command): void {
       const s = await consoleApi().get<RunStats>('/runs/stats', { query: statsQuery(o, task) });
       if (o.json) return json(s);
       for (const line of statsLines(s)) out(line);
+    });
+
+  const dataset = runs.command('dataset').description('Your runs as one masked file for analysis: runs, findings and (with --steps) steps');
+  dataset
+    .command('export')
+    .description('Make the run dataset, wait for it and save it (JSON, a zip of CSV files, or XLSX)')
+    .option('--from <day>', 'runs created on or after: 7d, 2w, or 2026-06-01 (days in your time zone)')
+    .option('--to <day>', 'runs created on or before (same forms)')
+    .option('--status <status>', `which runs: ${DATASET_STATUSES.join(', ')}`, 'finished')
+    .option('--task <task>', 'one task: its name, id or id prefix; `none` for runs without a task')
+    .option('--stop-reason <reason>', 'stop reasons, comma-separated; `budget` for every budget stop')
+    .option('--trigger <trigger>', 'what started the runs, comma-separated')
+    .option('--steps', 'add every step (tool, outcome, masked summary, arguments and reasoning)')
+    .option('--format <format>', `the file: ${DATASET_FORMATS.join(', ')}`, 'json')
+    .option('-o, --output <file>', "write to this file (default: the console's file name, in the current directory)")
+    .action(async (o: DatasetFlags & { task?: string; output?: string }) => {
+      const task = o.task === undefined ? undefined : o.task === 'none' ? 'none' : await taskId(o.task);
+      const file = await exportDataset(consoleApi(), datasetBody(o, task), { waitMs: DATASET_WAIT_MS, pollMs: POLL_MS, sleep, fetchFile, ...(o.output ? { output: o.output } : {}) });
+      const counts = Object.entries(file.rowCounts).map(([k, n]) => `${n} ${k}`).join(', ');
+      out(`wrote ${file.path} (${file.bytes} bytes${counts ? `; ${counts}` : ''})`);
+    });
+  dataset
+    .command('status <export>')
+    .description('Where a dataset export is (pending, running, ready, expired, failed)')
+    .option('--json', 'print JSON')
+    .action(async (id: string, o: { json?: boolean }) => {
+      const { download: _link, ...v } = await consoleApi().get<ExportView>(`/exports/${id}`);
+      // Never print the signed link: it is a credential for the file until it expires.
+      if (o.json) return json(v);
+      out(`${v.id}  ${v.status}${v.sizeBytes ? `  ${v.sizeBytes} bytes` : ''}${v.error ? `  ${v.error}` : ''}`);
     });
 
   const tasks = group(program, 'tasks', 'Saved browser goals');

@@ -61,7 +61,7 @@ const inbox = await hx.data(hx.api.GET('/api/inbox')); // what the agent is wait
 HEXACTRA_CONSOLE_URL=https://console.example.test HEXACTRA_TOKEN=pat_… node dist/examples/tasks.js
 ```
 
-The example (`src/examples/tasks.ts`) saves a task, changes its goal, lists tasks and runs, then uses the schedule preview, a task with schedules, pause and resume, a page of runs and a delete by filter. `src/examples/policies.ts` creates, edits, exports and imports a policy, then runs a goal and a task under it. `src/examples/task-outputs.ts` saves a task with outputs, starts a run and reads the history of what runs returned. `src/examples/run-stats.ts` prints the last 7 days of runs per task: success rate and the p50/p90 of steps, tokens and cost. CI runs them against a live console: `apps/api/test/sdk.db.spec.ts`.
+The example (`src/examples/tasks.ts`) saves a task, changes its goal, lists tasks and runs, then uses the schedule preview, a task with schedules, pause and resume, a page of runs and a delete by filter. `src/examples/policies.ts` creates, edits, exports and imports a policy, then runs a goal and a task under it. `src/examples/task-outputs.ts` saves a task with outputs, starts a run and reads the history of what runs returned. `src/examples/run-stats.ts` prints the last 7 days of runs per task: success rate and the p50/p90 of steps, tokens and cost. `src/examples/run-dataset.ts` saves the last 7 days of runs as the masked run dataset (it needs object storage, so CI checks its route, not the example). CI runs the others against a live console: `apps/api/test/sdk.db.spec.ts`.
 
 ## Regenerating
 

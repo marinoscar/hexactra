@@ -385,7 +385,7 @@ The same file from the other clients: `hexactra runs export <id> [--no-screensho
 
 ### The file
 
-`type: "hexactra.run-trace"`, `formatVersion: 1`. Its JSON Schema is `packages/sdk/run-trace.schema.json`, generated from the API's zod schema (`apps/api/src/tasks/run-trace.schemas.ts`); `apps/api/test/run-trace-export.spec.ts` fails when the two differ (`UPDATE_RUN_TRACE_SCHEMA=1` rewrites it), and `apps/api/test/run-export.db.spec.ts` validates a real export against it.
+`type: "hexactra.run-trace"`, `formatVersion: 2` (version 2 added `findings`, #1047 and #1071; a version 1 file, with no `findings`, still validates). Its JSON Schema is `packages/sdk/run-trace.schema.json`, generated from the API's zod schema (`apps/api/src/tasks/run-trace.schemas.ts`); `apps/api/test/run-trace-export.spec.ts` fails when the two differ (`UPDATE_RUN_TRACE_SCHEMA=1` rewrites it), and `apps/api/test/run-export.db.spec.ts` validates a real export against it.
 
 | Key | What it holds |
 |---|---|
@@ -397,6 +397,7 @@ The same file from the other clients: `hexactra runs export <id> [--no-screensho
 | `budget` | The run budget: effective limits, use, percent, source, enforcement, `over` |
 | `models` | The tiers the run used, in order, with their model; `calls` is the run's model calls when it used one tier, `null` when it used several (calls are counted per run) |
 | `steps` | Every step: `seq`, `at`, `kind`, `action`, `args`, `ok`, `summary`, `reasoning`, `durationMs`, `question` (the question it asked or answered, with the answer's outcome, channel and time) and `screenshot` (`moment`, `masked`, `note`, `contentType`, `bytes`, and `data` with `screenshots=embed`) |
+| `findings` | Version 2: the run's findings ([What happened](#what-happened-run-findings-e526-1021)): the same rules, first 2,000 steps and masking as `GET /api/runs/{id}/diagnostics`, so the file says what went wrong without the console. Absent in a version 1 file |
 | `chat` | The messages of the run's conversation (a chat run): `seq`, `role`, `kind`, `text`, `at`; the newest 1,000. Empty for any other run |
 
 **Masked at export time.** Every string in the file goes through `maskValue` ([What is masked](#what-is-masked)) when the file is built, so a run recorded before masking existed is masked too. Step arguments are the stored, already redacted ones, masked again.
@@ -410,6 +411,25 @@ The MCP tool `run_export` (title "Export a run's trace", scope `runs:read`, read
 ### For code in this repository
 
 `RunTraceService.build(userId, runId, { screenshots, maxBytes? })` (`apps/api/src/tasks/run-trace.service.ts`, exported by `TasksModule`) is the one builder of the trace: the JSON file here and the PDF report read it. It returns a `RunTrace` (`run-trace.schemas.ts`), reads the run through `prisma.forUser`, and refuses with `413 EXPORT_TOO_LARGE` as soon as the embedded images pass `maxBytes`. `exportJson` adds the rate limit, the audit event, the counter and the log line.
+
+## Exporting runs as a dataset
+
+Many runs in one file, for analysis in a spreadsheet, a notebook or by a coding agent (E53.3, #1071): "which steps do my failed runs spend their effort on?". It is a source of the platform's exports slice, so the file is made by a queue job, stored, and fetched through a short-lived signed link.
+
+```
+POST /api/exports   { "source": "run-dataset", "format": "json" | "csv" | "xlsx", "request": { … } }   → 202 { id, status: "pending" }
+GET  /api/exports/{id}                                                                         → status; while ready, download { url, expiresAt }
+hexactra runs dataset export [--from 7d] [--to 2026-06-30] [--status finished|succeeded|failed|cancelled|all] [--task <name|id|none>] [--stop-reason …] [--trigger …] [--steps] [--format json|csv|xlsx] [-o file]
+hexactra runs dataset status <export id> [--json]
+hx.runs.dataset(request, { format }) / hx.runs.datasetStatus(id)          (example packages/sdk/src/examples/run-dataset.ts)
+```
+
+- **The request** (all optional): `from`, `to` (days, `YYYY-MM-DD`, in your time zone; `to` is inclusive), `status` (`finished`, the default, or one status, or `all`), `taskId` (or `none`), `stopReason` and `trigger` (comma-separated, as the list's), `includeSteps` (default `false`). The filter is the runs list's (`runWhere`), so the file holds exactly what `GET /api/runs` lists for it, newest first, **5,000 runs at most**. Benchmark runs are left out unless `trigger=benchmark`. An unknown value answers `400`.
+- **The tables.** `runs`: one row per run (`run_id`, times, `status`, `stop_reason`, `trigger`, `origin`, `task_id`, `task_name`, `policy_id`, `policy_name`, `policy_version`, `tier`, `escalations`, `recoveries`, `steps`, `model_calls`, input, cached, output and total tokens, `cost_usd`, `cost_known`, `working_ms`, `wall_ms`, and the masked `goal`, `result` and `error`). `findings`: one row per finding of a run, as [What happened](#what-happened-run-findings-e526-1021) computes it (`run_id`, `code`, `severity`, `title`, `detail`, `seq_from`, `seq_to`, `steps_spent`). `steps` (with `includeSteps`): one row per step (`run_id`, `seq`, `kind`, `action`, `ok`, `phase`, `duration_ms`, `created_at`, and the masked `summary`, `args` as JSON text, and `reasoning`). JSON holds `datasets.<table>` with its `columns` and `rows`; CSV is a zip of one file per table; XLSX one sheet per table.
+- **Masked like the trace.** Every text passes the same pattern table (`maskSensitive`; the goal also `maskRunGoal`). Never a screenshot, a recording, `runs.transcript`, a secret or sign-in value, a token or an object key: none is read. `run-dataset.db.spec.ts` plants a card number in every text field and finds none in the file.
+- **Your runs only, for every role.** The source is `scope: user` and every query filters on the requester. An administrator's cross-user view is the statistics of #1070 (aggregates), never another person's runs.
+- **Limits, audit and the link** are the exports slice's: at most 3 exports in progress per account (`429` beyond), the file kept 7 days, the download link valid 5 minutes, an audit event when the file is made (source, format, row counts and size; never a value), and an `export.ready` notification. The CLI fetches the signed link without your token; `runs dataset status` never prints the link.
+- **Code.** `apps/api/src/run-insights/run-dataset.source.ts` (registered in `apps/api/src/platform/exports/notes.export-source.ts`); tested through the platform's own JSON and CSV writers in `apps/api/test/run-dataset.db.spec.ts`.
 
 ## The PDF report
 
@@ -432,10 +452,11 @@ What it holds, in order:
 
 1. **Cover block** (top of page 1): the Hexactra mark and "Run report", the goal as the title, an outcome chip (Succeeded, Failed, Stopped, Ended after a confirmed step, In progress) and the facts: started, finished, duration (and working time), started from (chat, a task, a schedule, an AI app, the console), node, browser profile, policy and models, steps, model calls and cost ("at least" when part of the run could not be priced).
 2. **Outcome**: the stop reason, the result and the error in full; a boxed note listing every step you confirmed that the run carried out (#540).
-3. **Questions and answers**: every request to you in order, with its time, what was asked, the answer (Allowed, Declined, Provided, the chosen option; a secret or withheld value prints "Provided (not recorded)"), where it was answered (console, notification, inbox) and how long it waited.
-4. **Budget**: used, limit and percent of each budget; a chat run's limits are marked "not enforced (chat run)" (#537).
-5. **Timeline**: every step with its number, time, the step's summary and its duration. Failed steps are red and start with "✗ Failed:", so they read in greyscale too; two or more page observations in a row fold into one line ("54–55. Observed the page (2 steps)"), as on the run page; the agent's stated reason is a smaller "Why:" line; your guidance is a call-out. A key-moment screenshot follows its step with a caption ("Step 57 · the screen when the agent asked for confirmation · 2 areas masked"), scaled to the page width and never split across pages; a key moment without a picture says why in the caption.
-6. **Footer on every page**: the run id (first 8), "Page x of y", the export time and "Sensitive data masked. Not a bank or legal record."
+3. **What happened** (#1047): the run's findings, warnings first, each with the steps it is about ("Warning: The run went round in a loop (steps 3 to 9)."); "Nothing in the steps points to wasted effort." when there are none. Left out for a live run and a version 1 trace.
+4. **Questions and answers**: every request to you in order, with its time, what was asked, the answer (Allowed, Declined, Provided, the chosen option; a secret or withheld value prints "Provided (not recorded)"), where it was answered (console, notification, inbox) and how long it waited.
+5. **Budget**: used, limit and percent of each budget; a chat run's limits are marked "not enforced (chat run)" (#537).
+6. **Timeline**: every step with its number, time, the step's summary and its duration. Failed steps are red and start with "✗ Failed:", so they read in greyscale too; two or more page observations in a row fold into one line ("54–55. Observed the page (2 steps)"), as on the run page; the agent's stated reason is a smaller "Why:" line; your guidance is a call-out. A key-moment screenshot follows its step with a caption ("Step 57 · the screen when the agent asked for confirmation · 2 areas masked"), scaled to the page width and never split across pages; a key moment without a picture says why in the caption.
+7. **Footer on every page**: the run id (first 8), "Page x of y", the export time and "Sensitive data masked. Not a bank or legal record."
 
 Times are UTC. The PDF's metadata is title "Run report: <goal, 80 characters>" and author "Hexactra" (never your email); text is selectable, and each section is a bookmark in the reader's outline.
 

@@ -181,6 +181,25 @@ export interface RunsClient {
    * and per `groupBy`. Takes the runs list's filters. Needs `runs:read`. Example: `src/examples/run-stats.ts`.
    */
   stats(query?: RunStatsQuery): Promise<Schema<'RunStatsResponseDto'>>;
+  /**
+   * Start the run dataset (E53.3): your runs as one masked file for analysis (tables `runs`, `findings` and, with
+   * `includeSteps`, `steps`), made by a queue job of the exports slice. Poll `datasetStatus(id)` until `ready`, then fetch
+   * `download.url` (a short-lived signed link; send no token to it). Needs `runs:read`. Example: `src/examples/run-dataset.ts`.
+   */
+  dataset(request?: RunDatasetRequest, options?: { format?: 'json' | 'csv' | 'xlsx' }): Promise<Schema<'ExportResponseDto'>>;
+  /** Where a dataset export is: `pending`, `running`, `ready` (with `download`), `expired` or `failed`. */
+  datasetStatus(id: string): Promise<Schema<'ExportResponseDto'>>;
+}
+
+/** The request of `runs.dataset` (docs/runs.md, "Exporting runs as a dataset"). Days are cut in your time zone; `to` is inclusive. */
+export interface RunDatasetRequest {
+  from?: string;
+  to?: string;
+  status?: 'finished' | 'succeeded' | 'failed' | 'cancelled' | 'all';
+  taskId?: string;
+  stopReason?: string;
+  trigger?: string;
+  includeSteps?: boolean;
 }
 
 /** The query of `runs.stats`: the runs list's filters, `groupBy` and `tz`. */
@@ -255,6 +274,8 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     retryDelivery: (id, runDeliveryId) => data(api.POST('/api/runs/{id}/deliveries/{runDeliveryId}/retry', { params: { path: { id, runDeliveryId } } })) as never,
     diagnostics: (id) => data(api.GET('/api/runs/{id}/diagnostics', { params: { path: { id } } })) as never,
     stats: (query) => data(api.GET('/api/runs/stats', { params: { query: { ...query } } } as never)) as never,
+    dataset: (request, o) => data(api.POST('/api/exports', { body: { source: 'run-dataset', format: o?.format ?? 'json', request: { ...request } } } as never)) as never,
+    datasetStatus: (id) => data(api.GET('/api/exports/{id}', { params: { path: { id } } } as never)) as never,
   };
   const taskImprovements: TaskImprovementsClient = {
     get: (id) => data(api.GET('/api/task-improvements/{id}', { params: { path: { id } } })) as never,
