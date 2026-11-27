@@ -53747,6 +53747,7 @@
               "SERVICE_CREDENTIAL_NOT_IN_PROVIDER",
               "SERVICE_CREDENTIAL_PROVIDER_READ_ONLY",
               "SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE",
+              "WEB_SEARCH_ADDRESS_REFUSED",
               "WEB_SEARCH_NOT_CONFIGURED",
               "WEB_SEARCH_AUTH_REFUSED",
               "WEB_SEARCH_RATE_LIMITED",
@@ -59145,6 +59146,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "allowPrivate": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -60698,6 +60702,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "allowPrivate": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -62252,6 +62259,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "allowPrivate": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -105751,16 +105761,22 @@
                   ]
                 },
                 "baseUrl": {
+                  "description": "A self-hosted provider's address (SearXNG).",
                   "type": [
                     "string",
                     "null"
                   ]
+                },
+                "allowPrivate": {
+                  "type": "boolean",
+                  "description": "\"This instance is on my private network\": http and a private address are accepted for the configured host only."
                 }
               },
               "required": [
                 "enabled",
                 "costPerCallUsd",
-                "baseUrl"
+                "baseUrl",
+                "allowPrivate"
               ]
             },
             "description": "Saved per-provider settings; a provider not listed has the defaults (on, the default estimate)."
@@ -105939,6 +105955,9 @@
                       "type": "null"
                     }
                   ]
+                },
+                "allowPrivate": {
+                  "type": "boolean"
                 }
               }
             }

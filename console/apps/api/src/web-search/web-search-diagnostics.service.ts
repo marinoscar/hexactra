@@ -172,9 +172,9 @@ export class WebSearchDiagnostics {
 
   private async credential(scope: SearchDiagnosticScope, provider: SearchProvider, s: ResolvedWebSearchSystemSettings): Promise<{ outcome: StageOutcome; auth: ProviderAuth | null }> {
     if (provider.credential === 'none') {
-      const baseUrl = providerSettingsOf(s, provider.id).baseUrl;
+      const { baseUrl, allowPrivate } = providerSettingsOf(s, provider.id);
       if (!baseUrl) return { outcome: { status: 'fail', code: 'ADDRESS_MISSING' }, auth: null };
-      return { outcome: { status: 'pass', data: { host: new URL(baseUrl).hostname } }, auth: { kind: 'none', baseUrl } };
+      return { outcome: { status: 'pass', data: { host: new URL(baseUrl).hostname } }, auth: { kind: 'none', baseUrl, allowPrivate } };
     }
     if (provider.credential === 'ai_service') {
       const who = scope.kind === 'user' ? scope.who : null;
