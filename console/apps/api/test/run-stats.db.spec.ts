@@ -295,9 +295,15 @@ describe('GET /runs/stats at scale', () => {
     times.sort((a, b) => a - b);
     // The measured number goes in the pull request; the bound only catches a regression by an order of magnitude.
     process.stdout.write(`run stats, 50,000 runs, groupBy=day: median ${times[2]} ms, max ${times[4]} ms\n`);
-    expect(last!.total.runs).toBe(50_000);
-    expect(last!.groups).toHaveLength(365);
-    expect(times[2]).toBeLessThan(5_000);
+    try {
+      expect(last!.total.runs).toBe(50_000);
+      expect(last!.groups).toHaveLength(365);
+      expect(times[2]).toBeLessThan(5_000);
+    } finally {
+      // The db tier shares one database per shard: 50,000 year-old runs left behind would make the next spec's nightly retention
+      // job delete them all (run-retention.db.spec.ts timed out on exactly that).
+      await prisma.$executeRaw`DELETE FROM runs WHERE user_id = ${carol.userId}::uuid`;
+    }
   }, 180_000);
 });
 
