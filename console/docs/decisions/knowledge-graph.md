@@ -73,7 +73,7 @@ apps/api/src/runner/host/kgraph/   bindings only: ToolInvokerPort -> executeTool
 |---|---|---|---|
 | Deployment | Admin setting `kgraph.enabled` (a settings card, `kgraph:admin`) | **off** | No capture, replay, job, agent tool or MCP tool. Pages show "turned off by your administrator". Data kept. |
 | User | User setting `kgraph.enabled` | **off** (opt-in) | Same, for that user. Data kept. |
-| Task | `kg_task_settings.mode`: `off`, `learn`, `reuse` (route `/api/tasks/{id}/kgraph`) | **off** | That task runs AI only. |
+| Task | `kg_task_settings.mode`: `off`, `learn`, `reuse` (route `/api/tasks/{id}/kgraph`) | **learn** without a row, effective only while the deployment and user switches are on (owner's decision, #1031; was `off`). An explicit `off` is stored and kept | That task runs AI only. |
 | Run | "Run with AI only this time" on the start form and API | n/a | That run ignores the procedure. **Not built yet** (#794): the package's `effectiveMode` takes the flag, but the start form and `POST /api/tasks/{id}/runs` have no field for it. Audit runs and runs of a suspended procedure are the only AI-only runs today. |
 
 Until phase 5, chat goals never used the feature: only saved tasks could opt in. Phase 5 adds a fifth switch for chats and one-off runs, **everyday**, with a narrower effect: see below.

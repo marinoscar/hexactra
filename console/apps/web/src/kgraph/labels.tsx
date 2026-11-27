@@ -6,10 +6,16 @@ import { formatCost } from '../ui';
 /** The three choices of a task, each with one line of help. `off` is "AI only". */
 export const MODE_CHOICES: { value: KgMode; label: string; help: string }[] = [
   { value: 'off', label: 'AI only', help: 'The agent does every run, as today. Nothing is learned.' },
-  { value: 'learn', label: 'Learn only', help: 'The agent still does every run; its steps are saved as a procedure you can read.' },
+  { value: 'learn', label: 'Learn only (default)', help: 'The agent still does every run; its steps are saved as a procedure you can read.' },
   { value: 'reuse', label: 'Learn and reuse', help: 'Saved steps run without the model; the agent takes over or repairs when a page changed.' },
 ];
 export const MODE_LABEL: Record<KgMode, string> = { off: 'AI only', learn: 'Learn only', reuse: 'Learn and reuse' };
+
+/** The task control's status chip (#1031): what this task's next run does, at a glance. A switch that is off wins over the task's mode. */
+export function modeChip(mode: KgMode, switchedOff: boolean): { label: string; color: 'default' | 'info' | 'success' } {
+  if (switchedOff || mode === 'off') return { label: 'Not learning', color: 'default' };
+  return mode === 'reuse' ? { label: 'Learning and reusing', color: 'success' } : { label: 'Learning', color: 'info' };
+}
 export const RUN_MODE_LABEL: Record<KgRunMode, string> = { ...MODE_LABEL, everyday: 'Chat or one-off run' };
 /** "Used in chats and one-off runs: N" (E46.29): from the procedure's `everyday` ledger rows. */
 export const everydayUsesText = (n: number) => `Used in chats and one-off runs: ${n}`;

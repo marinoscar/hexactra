@@ -94,6 +94,8 @@ export function TaskEditPage() {
     <PageContainer width="default">
       <PageHeader title="Edit task" back={{ to: taskPath(id), label: task?.name ?? 'Task' }} />
       <ErrorBanner error={error} onRetry={() => void load()} />
+      {/* The Knowledge Graph (E46.20, #1031): first, above the form, since it saves on its own through /api/tasks/{id}/kgraph; nothing without `kgraph:read`. */}
+      {task !== null && <TaskKgraphControl taskId={task.id} mb={3} />}
       {proposal && (
         <Alert severity="info" sx={{ mb: 2 }}>
           The goal below is the one proposed from your last {proposal.runIds.length} {proposal.runIds.length === 1 ? 'run' : 'runs'}. Nothing changes until you save.
@@ -103,8 +105,6 @@ export function TaskEditPage() {
       {task !== null && initial !== null && (
         <TaskForm key={proposal?.id ?? 'task'} mode="edit" taskId={task.id} initial={initial} savedSchedules={task.summary?.schedules} cancelTo={taskPath(id)} onSaved={proposal ? onSaved : undefined} />
       )}
-      {/* The Knowledge Graph (E46.20): saved on its own through /api/tasks/{id}/kgraph; nothing without `kgraph:read`. */}
-      {task !== null && <TaskKgraphControl taskId={task.id} mt={3} />}
     </PageContainer>
   );
 }

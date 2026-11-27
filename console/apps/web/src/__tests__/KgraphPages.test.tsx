@@ -249,8 +249,10 @@ describe("a task's Knowledge Graph control", () => {
 
   it('offers three choices with help and saves through /tasks/{id}/kgraph', async () => {
     const host = control(ON);
-    expect(await screen.findByRole('radio', { name: 'Learn only' })).toBeChecked();
+    expect(await screen.findByRole('radio', { name: 'Learn only (default)' })).toBeChecked();
     expect(screen.getByText(/Saved steps run without the model/)).toBeInTheDocument();
+    // #1031: the chip says what the next run does.
+    expect(screen.getByTestId('task-kgraph-chip')).toHaveTextContent('Learning');
     fireEvent.click(screen.getByRole('radio', { name: 'Learn and reuse' }));
     await waitFor(() => expect(host.requests.find((r) => r.method === 'PUT')).toMatchObject({ path: `/tasks/${TASK}/kgraph`, body: { mode: 'reuse' } }));
   });
@@ -259,6 +261,7 @@ describe("a task's Knowledge Graph control", () => {
     control(DEPLOYMENT_OFF);
     expect(await screen.findByRole('radio', { name: 'AI only' })).toBeDisabled();
     expect(screen.getByText(/Only an administrator can turn it on/)).toBeInTheDocument();
+    expect(screen.getByTestId('task-kgraph-chip')).toHaveTextContent('Not learning');
   });
 
   it('renders nothing (and asks nothing) without kgraph:read', async () => {

@@ -4,7 +4,7 @@ The Knowledge Graph (epic E46, [decision record](decisions/knowledge-graph.md), 
 
 Phase 5 (#847) adds two things, each off until you turn it on: your chats and one-off runs can be **offered** the procedures your tasks learned ([Chats and one-off runs](#chats-and-one-off-runs-everyday)), and you can keep short **site facts** that runs read as data ([Site facts](#site-facts)).
 
-**Status: experimental, and off at every level.** A fresh deployment has the deployment switch off, every user's switch off and every task on AI only, so runs behave exactly as before. The engine is the package `@marinoscar/hexactra-kgraph` ([README](../packages/hexactra-kgraph/README.md)).
+**Status: experimental, and off until you turn it on.** A fresh deployment has the deployment switch off and every user's switch off, so runs behave exactly as before. Once both are on for you, a task you never set learns by default (**Learn only**: the agent still does every run; its steps are saved as a procedure). A task you set to **AI only** stays that way (#1031). The engine is the package `@marinoscar/hexactra-kgraph` ([README](../packages/hexactra-kgraph/README.md)).
 
 Four rules hold whatever you turn on:
 
@@ -19,7 +19,7 @@ Four rules hold whatever you turn on:
 |---|---|---|---|
 | Deployment | Administration → Knowledge Graph (`/admin/settings/kgraph`; the system setting `kgraph.enabled`; `kgraph:admin`) | off | No capture, replay, job, agent tool or MCP tool for anyone. |
 | You | Settings → Knowledge Graph (`/settings/kgraph`; your user setting `kgraph.enabled`; `hexactra kgraph on` / `off`) | off | The same, for you. Your administrator must allow it too. |
-| Task | The task page's Knowledge Graph control (`PUT /api/tasks/{id}/kgraph`) | AI only (`off`) | That task runs with AI only. |
+| Task | The Knowledge Graph card, right after the goal on the task page and first on the edit page, with a chip saying what the next run does (`PUT /api/tasks/{id}/kgraph`) | Learn only (`learn`) while the two switches above are on (#1031); a task you set keeps your choice | **AI only** (`off`): that task runs with AI only and nothing is learned. |
 | Chats and one-off runs | Settings → Knowledge Graph, **Use in chats and one-off runs** (your user setting `kgraph.everyday`; `hexactra kgraph everyday on` / `off`); disabled, with the reason, while the switch above or the deployment's is off | off | A chat or one-off run is exactly as before: no saved procedures, no site facts, no procedure or site fact tools. When on, a run whose goal fits a procedure is offered it, and reads your active facts of its sites; you still approve anything sensitive. The run page names the procedure an everyday run used, and the procedure page and the Map count those runs (E46.28, E46.29). See [Chats and one-off runs](#chats-and-one-off-runs-everyday). |
 | Approve facts automatically | Settings → Knowledge Graph, **Approve facts from server records automatically** (your user setting `kgraph.autoApproveFacts`; `hexactra kgraph auto-approve-facts on` / `off`); disabled, with the reason, while your switch or the deployment's is off | off | Every derived fact waits for you in Reviews. When on, a newly derived navigation, timing or quirk fact is active at once, marked "Approved automatically"; sign-in facts, the agent's proposals and imported facts always wait (E46.36). Turning it off changes nothing already active. See [Site facts](#site-facts). |
 | Run | AI only for one run | off for audit runs only | That run ignores the procedure. |
@@ -43,8 +43,10 @@ With your everyday switch on (and the deployment's and yours), a chat run or a o
 
 ## The three modes of a task
 
+Only runs made while a task learns can be learned from. Earlier runs cannot be used: the run history keeps no typed text (only its length), no fingerprint of the element a click acted on (read from the live page while learning) and only a summary of what each step read back.
+
 - **AI only** (`off`): the task runs as before, and nothing is captured.
-- **Learn only** (`learn`): the task runs as before. After each clean, successful run, the run's tool calls are compiled into a candidate procedure, which is never executed.
+- **Learn only** (`learn`, the default for a task you never set, #1031): the task runs as before. After each clean, successful run, the run's tool calls are compiled into a candidate procedure, which is never executed.
 - **Learn and reuse** (`reuse`): the procedure runs without the model, and the AI repairs it when needed. The first run of a new, restored, repaired or imported version is a **verification run**: it asks you before every step that sends or pays, whatever the task's confirmation setting and saved approvals say. After one clean verification run, the version becomes the task's active one.
 
 ### How a run is captured (and what it costs the run)
