@@ -7,6 +7,7 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 import { CHAT_CONNECTION_TOOLS } from '../src/chat/chat-connection-tools';
 import { ChatTurnService } from '../src/chat/chat-turn.service';
 import { ChatService } from '../src/chat/chat.service';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { attributesFromPairs } from '../src/memories/memory-attribute-pairs';
 import { createApp } from '../src/main';
 import { finishParameters } from '../src/runner/outputs';
@@ -30,13 +31,15 @@ afterAll(async () => {
 type Sent = { tool: { name: string; strict?: boolean; parameters: unknown } };
 
 /** The tools one chat turn sends to the model, as the app wires them (every optional collaborator present). */
-async function toolsOfATurn(): Promise<Sent[]> {
+async function toolsOfATurn(savedTasks = 0): Promise<Sent[]> {
   const chats = app.get(ChatService, { strict: false });
   const turns = app.get(ChatTurnService, { strict: false });
   const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `tools-${Date.now()}@example.test`, role: 'contributor' } });
   const token = new URL(String(res.headers.location)).searchParams.get('token')!;
   const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { authorization: `Bearer ${token}` } });
   const userId = me.json<{ data: { id: string } }>().data.id;
+  // More saved tasks than the chat's task block holds (#1007): list_tasks is offered too.
+  for (let i = 0; i < savedTasks; i += 1) await app.get(PrismaService).task.create({ data: { userId, name: `Task ${i}`, goal: `Do task ${i}` } });
   let sent: Sent[] = [];
   const ai = { forUser: () => ({ runTools: async (req: { tools: Sent[] }) => ((sent = req.tools), { final: { outputText: 'ok' }, steps: [], stopReason: 'done' }) }) } as unknown as AiService;
   (turns as unknown as { ai: AiService }).ai = ai;
@@ -56,8 +59,17 @@ describe('the chat tools against strict function calling', () => {
     expect(problems).toEqual([]);
   });
 
+  it('offers list_tasks to an owner with more tasks than the block holds, as a schema OpenAI accepts (#1007)', async () => {
+    const sent = await toolsOfATurn(16);
+    const listTasks = sent.find((t) => t.tool.name === 'list_tasks');
+    expect(listTasks).toBeDefined();
+    expect(listTasks!.tool.strict).not.toBe(false);
+    expect(sent.filter((t) => t.tool.strict !== false).flatMap((t) => strictViolations(t.tool.name, jsonSchemaOf(t.tool.parameters)))).toEqual([]);
+    expect((await toolsOfATurn()).map((t) => t.tool.name)).not.toContain('list_tasks');
+  });
+
   it('keeps a tool with no arguments out of strict mode, and every other tool strict', async () => {
-    const sent = await toolsOfATurn();
+    const sent = await toolsOfATurn(16);
     for (const t of sent) {
       const noArguments = Object.keys((jsonSchemaOf(t.tool.parameters).properties ?? {})).length === 0;
       expect({ tool: t.tool.name, strictOff: t.tool.strict === false }).toEqual({ tool: t.tool.name, strictOff: noArguments });
