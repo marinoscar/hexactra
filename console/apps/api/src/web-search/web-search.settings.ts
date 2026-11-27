@@ -4,7 +4,9 @@
 //     enabled                      the deployment's switch, default ON: search works as soon as a provider has a usable key.
 //     providers.<id>.enabled       per provider, default ON.
 //     providers.<id>.costPerCallUsd  an override of the provider's ESTIMATED cost per call (null: the provider's default estimate).
-//     providers.<id>.baseUrl       a self-hosted provider's address (SearXNG, E50.8).
+//     providers.<id>.baseUrl       a self-hosted provider's address (SearXNG, E50.8): https, or http only with allowPrivate.
+//     providers.<id>.allowPrivate  default OFF: "this instance is on my private network". The address check then accepts a private
+//                                  address and http FOR THIS ONE CONFIGURED HOST ONLY (docs/web-search.md, "Threat model").
 //     order                        provider ids, first usable wins (default ['brave']). A provider not listed is not used.
 //     shareDeploymentKey           default ON: everyone may use the deployment's key (the system tier).
 //     allowUserKeys                default ON: a user's own key (the user tier) is used.
@@ -38,7 +40,23 @@ const hostList = z.array(hostPattern).max(200);
 const providerSettingsSchema = z.object({
   enabled: z.boolean().optional(),
   costPerCallUsd: z.number().min(0).max(10).nullable().optional(),
-  baseUrl: z.string().trim().url().max(500).nullable().optional(),
+  baseUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(500)
+    .refine((v) => /^https?:\/\//i.test(v), 'An http or https address')
+    .refine((v) => {
+      try {
+        const u = new URL(v);
+        return !u.username && !u.password && !u.search && !u.hash;
+      } catch {
+        return false;
+      }
+    }, 'An address without a user name, password, query or fragment')
+    .nullable()
+    .optional(),
+  allowPrivate: z.boolean().optional(),
 });
 
 export const webSearchSystemSettingsSchema = z.object({
@@ -56,6 +74,8 @@ export interface ResolvedProviderSettings {
   enabled: boolean;
   costPerCallUsd: number | null;
   baseUrl: string | null;
+  /** The administrator ticked "this instance is on my private network" (a self-hosted provider only). */
+  allowPrivate: boolean;
 }
 
 export interface ResolvedWebSearchSystemSettings {
@@ -71,12 +91,12 @@ export interface ResolvedWebSearchSystemSettings {
 export const WEB_SEARCH_DEFAULT_ORDER = ['brave'];
 export const WEB_SEARCH_DEFAULT_LIMITS = { perRun: 30, perUserPerDay: 300, fetchPerRun: 30 } as const;
 
-export const PROVIDER_DEFAULTS: ResolvedProviderSettings = { enabled: true, costPerCallUsd: null, baseUrl: null };
+export const PROVIDER_DEFAULTS: ResolvedProviderSettings = { enabled: true, costPerCallUsd: null, baseUrl: null, allowPrivate: false };
 
 export function resolveWebSearchSystemSettings(v: WebSearchSystemSettings | null | undefined): ResolvedWebSearchSystemSettings {
   const providers: Record<string, ResolvedProviderSettings> = {};
   for (const [id, p] of Object.entries(v?.providers ?? {})) {
-    providers[id] = { enabled: p?.enabled ?? true, costPerCallUsd: p?.costPerCallUsd ?? null, baseUrl: p?.baseUrl ?? null };
+    providers[id] = { enabled: p?.enabled ?? true, costPerCallUsd: p?.costPerCallUsd ?? null, baseUrl: p?.baseUrl ?? null, allowPrivate: p?.allowPrivate ?? false };
   }
   return {
     enabled: v?.enabled ?? true,
@@ -107,6 +127,7 @@ export function mergeWebSearchSystemSettings(current: WebSearchSystemSettings | 
       enabled: p?.enabled ?? was.enabled,
       costPerCallUsd: p && 'costPerCallUsd' in p ? (p.costPerCallUsd ?? null) : was.costPerCallUsd,
       baseUrl: p && 'baseUrl' in p ? (p.baseUrl ?? null) : was.baseUrl,
+      allowPrivate: p?.allowPrivate ?? was.allowPrivate,
     };
   }
   return toStored({

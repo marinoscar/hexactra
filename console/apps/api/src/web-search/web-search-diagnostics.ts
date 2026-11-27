@@ -101,11 +101,14 @@ export function transportOutcome(e: unknown): StageOutcome {
   }
 }
 
-/** `network`: one GET of the provider's root with no key. Any HTTP answer means the host resolved and connected. */
-export async function probeHost(http: OutboundHttp, url: string, signal: AbortSignal): Promise<StageOutcome> {
+/**
+ * `network`: one GET of the provider's root with no key. Any HTTP answer means the host resolved and connected. `transport`: the
+ * address-check exemptions of a self-hosted provider's configured host (E50.8), the same as its searches use.
+ */
+export async function probeHost(http: OutboundHttp, url: string, signal: AbortSignal, transport: { allowedHosts?: readonly string[]; allowInsecureHttp?: boolean } = {}): Promise<StageOutcome> {
   const host = new URL(url).hostname;
   try {
-    await http.send({ method: 'GET', url, headers: { accept: '*/*' }, timeoutMs: NETWORK_PROBE_TIMEOUT_MS, maxBytes: NETWORK_PROBE_MAX_BYTES, signal });
+    await http.send({ method: 'GET', url, headers: { accept: '*/*' }, timeoutMs: NETWORK_PROBE_TIMEOUT_MS, maxBytes: NETWORK_PROBE_MAX_BYTES, signal, ...transport });
     return { status: 'pass', data: { host } };
   } catch (e) {
     // More than a few bytes came back: it connected.

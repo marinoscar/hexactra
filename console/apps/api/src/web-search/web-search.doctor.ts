@@ -137,7 +137,7 @@ export class WebSearchEgressContributor implements EgressContributor, OnModuleIn
       const ps = providerSettingsOf(s, p.id);
       return egressDependency({
         id: `web_search.${p.id}`,
-        capability: `Web search (${p.label})`,
+        capability: `Web search (${p.label}${p.credential === 'none' && ps.allowPrivate ? ', private network allowed for its configured host' : ''})`,
         direction: 'server',
         enabled: s.enabled && ps.enabled && s.order.includes(p.id),
         required: false,

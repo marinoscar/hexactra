@@ -83,13 +83,13 @@ export class FakeWeb extends OutboundHttp {
     return this.requests.filter((r) => new URL(r.url).hostname === host);
   }
 
-  async check(url: string, allowedHosts: readonly string[] = []): Promise<void> {
-    await checkOutboundUrl(url, this.resolver, allowedHosts, false);
+  async check(url: string, allowedHosts: readonly string[] = [], allowInsecureHttp = false): Promise<void> {
+    await checkOutboundUrl(url, this.resolver, allowedHosts, false, allowInsecureHttp);
   }
 
   async send(req: OutboundRequest): Promise<OutboundResponse> {
     if (req.signal?.aborted) throw new OutboundHttpError('aborted', 'The request was cancelled.');
-    const target = await checkOutboundUrl(req.url, this.resolver, req.allowedHosts ?? [], false);
+    const target = await checkOutboundUrl(req.url, this.resolver, req.allowedHosts ?? [], false, req.allowInsecureHttp ?? false);
     this.requests.push({ url: target.url.href, address: target.address, headers: { ...(req.headers ?? {}) }, timeoutMs: req.timeoutMs, maxBytes: req.maxBytes });
     const page = this.pages.get(target.url.href) ?? { status: 404, headers: { 'content-type': 'text/plain' }, body: 'Not found' };
     if (page.delayMs) await this.wait(page.delayMs, req);
