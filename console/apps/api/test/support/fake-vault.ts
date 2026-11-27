@@ -1,6 +1,7 @@
 // A FAKE VAULT for tests (E37.2, #591): a small HTTP server that behaves like Vault's OAuth server and agent
 // credential API as documented in marinoscar/vault `docs/agent-credential-api.md` (commit 749cbc69, contract 1.2, beta; plus
-// contract 1.3, marinoscar/vault#233: the purpose `save_login` on `POST /credentials` and the feature id `save_login` in `whoami`). It holds only invented data (`Person A`, `*.example.test`, random canaries as the values).
+// contract 1.3, marinoscar/vault#233: the purpose `save_login` on `POST /credentials` and the feature id `save_login` in `whoami`;
+// contract 1.4, marinoscar/vault#241: `GET /service-keys/{service}/{name}`, scope `vault:service_keys_read`, feature `service_keys`). It holds only invented data (`Person A`, `*.example.test`, random canaries as the values).
 //
 // What it implements:
 //   OAuth      discovery (`/api/oauth/.well-known/authorization-server`), `GET /api/oauth/authorize` (PKCE S256,
@@ -11,7 +12,8 @@
 //   Agent API  `/api/agent/v1`: `GET /whoami`, `GET /credentials?origin=`, `POST /credentials` (create: exactly one of
 //              `password` and `generate`; scope `vault:items_write`; `409` with no code for a name already used; a purpose outside
 //              the contract's set is a `400`, `save_login` only from contract 1.3), `POST /credentials/{id}/fill`,
-//              `POST /credentials/{id}/totp`. The deployment kill switch (`403 AGENT_ACCESS_DISABLED`), scopes
+//              `POST /credentials/{id}/totp`, `GET /service-keys/{service}/{name}` (contract 1.4 only; `{ data: { value } }`, the one
+//              identical `404` for a missing, closed or foreign key, `409 SERVICE_KEY_AMBIGUOUS`). The deployment kill switch (`403 AGENT_ACCESS_DISABLED`), scopes
 //              (`403` with `WWW-Authenticate: ... insufficient_scope`), per-login opt-in with ONE identical `404`,
 //              exact origin binding (`403 ORIGIN_MISMATCH`; a site-only match is listed but never fillable),
 //              `429 RATE_LIMITED` with `Retry-After`, and `Cache-Control: no-store` on every response.
@@ -58,7 +60,15 @@ export interface FakeVaultOptions {
   /** Extra delay on every refresh grant, to make concurrent refreshes overlap. */
   refreshDelayMs?: number;
   /** The agent contract this Vault speaks: `1.3` (default) adds the purpose and the feature `save_login`; `1.2` rejects the purpose with a `400`. */
-  contract?: '1.2' | '1.3';
+  contract?: '1.2' | '1.3' | '1.4';
+}
+
+/** A `Service Key` item (contract 1.4): a key of an outside service. `value` is a canary. */
+export interface FakeServiceKey {
+  service: string;
+  name: string;
+  value: string;
+  open: boolean;
 }
 
 /** What the server saw: no secret values; the token requests keep their field NAMES and the non-secret values. */
@@ -98,6 +108,8 @@ export class FakeVault {
   readonly issuedCodes: string[] = [];
   /** The login values are canaries: a test scans logs, spans and responses for them. */
   readonly logins: FakeLogin[];
+  /** Keys of outside services (contract 1.4). Values are canaries. */
+  readonly serviceKeys: FakeServiceKey[];
   baseUrl = '';
   private server: Server | null = null;
   private readonly codes = new Map<string, { clientId: string; redirectUri: string; challenge: string; scopes: string[]; resource: string; used: boolean }>();
@@ -127,6 +139,10 @@ export class FakeVault {
       { id: '7f1c2e9a-0000-4000-8000-000000000002', name: 'Forum login (1)', username: 'person-a', password: canary('forum1-password'), origins: ['https://forum.example.test'], open: true, totpSeed: null },
       { id: '7f1c2e9a-0000-4000-8000-000000000003', name: 'Forum login (2)', username: 'person-a-alt', password: canary('forum2-password'), origins: ['https://forum.example.test'], open: true, totpSeed: null },
       { id: '7f1c2e9a-0000-4000-8000-000000000004', name: 'Closed login', username: 'person-a', password: canary('closed-password'), origins: ['https://closed.example.test'], open: false, totpSeed: null },
+    ];
+    this.serviceKeys = [
+      { service: 'web_search', name: 'brave', value: canary('brave-key'), open: true },
+      { service: 'web_search', name: 'closed', value: canary('closed-key'), open: false },
     ];
   }
 
@@ -195,7 +211,7 @@ export class FakeVault {
 
   /** Every value this server can hand out: scan logs, spans, audit rows and responses for these. */
   canaries(): string[] {
-    return this.logins.flatMap((l) => [l.password, ...(l.totpSeed ? [l.totpSeed] : [])]);
+    return [...this.logins.flatMap((l) => [l.password, ...(l.totpSeed ? [l.totpSeed] : [])]), ...this.serviceKeys.map((k) => k.value)];
   }
 
   /** Plays the browser at the consent screen: GETs the authorize URL (auto-consent) and returns the redirect Location it answers with. */
@@ -241,7 +257,7 @@ export class FakeVault {
       authorization_endpoint: `${this.baseUrl}/api/oauth/authorize`,
       token_endpoint: `${this.baseUrl}/api/oauth/token`,
       revocation_endpoint: `${this.baseUrl}/api/oauth/revoke`,
-      scopes_supported: ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'vault:identity_read', 'vault:identity_fill', 'offline_access'],
+      scopes_supported: ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'vault:identity_read', 'vault:identity_fill', 'offline_access', ...(this.options.contract === '1.4' ? ['vault:service_keys_read'] : [])],
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code', 'refresh_token'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post', 'client_secret_basic'],
@@ -272,7 +288,8 @@ export class FakeVault {
     if (q.get('code_challenge_method') !== 'S256' || !q.get('code_challenge')) return back({ error: 'invalid_request' });
     if (q.get('resource') !== this.resource) return back({ error: 'invalid_target' });
     const scopes = (q.get('scope') ?? '').split(/\s+/).filter(Boolean);
-    const allowed = ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'vault:identity_read', 'vault:identity_fill', 'offline_access'];
+    // A Vault older than contract 1.4 does not know `vault:service_keys_read` and refuses it (`invalid_scope`).
+    const allowed = ['vault:items_read', 'vault:items_fill', 'vault:items_write', 'vault:identity_read', 'vault:identity_fill', 'offline_access', ...(this.options.contract === '1.4' ? ['vault:service_keys_read'] : [])];
     if (scopes.some((s) => !allowed.includes(s))) return back({ error: 'invalid_scope' });
     if (this.denyNext) {
       this.denyNext = false;
@@ -388,7 +405,7 @@ export class FakeVault {
     const insufficient = () => this.json(res, 403, { message: 'Insufficient scope' }, { 'www-authenticate': 'Bearer error="insufficient_scope"' });
     if (route === '/whoami' && req.method === 'GET') {
       if (!need('vault:items_read')) return insufficient();
-      return this.json(res, 200, { data: { userId: grant.userId, scopes: grant.scopes.filter((s) => s !== 'offline_access'), clientId: grant.clientId, contract: { version: this.options.contract, features: this.options.contract === '1.3' ? ['logins', 'totp', 'save_login'] : ['logins', 'totp'] } } });
+      return this.json(res, 200, { data: { userId: grant.userId, scopes: grant.scopes.filter((s) => s !== 'offline_access'), clientId: grant.clientId, contract: { version: this.options.contract, features: this.options.contract === '1.4' ? ['logins', 'totp', 'save_login', 'service_keys'] : this.options.contract === '1.3' ? ['logins', 'totp', 'save_login'] : ['logins', 'totp'] } } });
     }
     if (route === '/credentials' && req.method === 'GET') {
       if (!need('vault:items_read')) return insufficient();
@@ -423,6 +440,16 @@ export class FakeVault {
           },
         ],
       });
+    }
+    const sk = /^\/service-keys\/([^/]+)\/([^/]+)$/.exec(route);
+    if (sk && req.method === 'GET' && this.options.contract === '1.4') {
+      if (!need('vault:service_keys_read')) return insufficient();
+      const [service, name] = [decodeURIComponent(sk[1]!).trim().toLowerCase(), decodeURIComponent(sk[2]!).trim().toLowerCase()];
+      rec.params = { service, name };
+      const matches = this.serviceKeys.filter((k) => k.open && k.service === service && k.name === name);
+      if (matches.length === 0) return this.notFound(res);
+      if (matches.length > 1) return this.json(res, 409, { code: 'SERVICE_KEY_AMBIGUOUS', message: 'More than one service key opened to agents has this service and name' });
+      return this.json(res, 200, { data: { value: matches[0]!.value } });
     }
     const m = /^\/credentials\/([^/]+)\/(fill|totp)$/.exec(route);
     if (m && req.method === 'POST') {

@@ -236,7 +236,14 @@ export class WebSearchService {
 
   /** One call to one provider: resolve its key, call, wipe, count. Throws `WebToolError` only. */
   private async callOne(who: Who, provider: SearchProvider, s: ResolvedWebSearchSystemSettings, req: SearchRequest): Promise<WebSearchResult> {
-    const auth = await this.authFor(who, provider, s);
+    let auth: ProviderAuth | null;
+    try {
+      auth = await this.authFor(who, provider, s);
+    } catch (e) {
+      // The owner's secrets provider could not answer (E50.3): counted as this provider unavailable, so the fallback may try the next.
+      this.metrics?.add('webSearchCalls', 1, { provider: provider.id, outcome: outcomeOf('UNAVAILABLE') });
+      throw isWebToolError(e) ? e : new WebToolError('UNAVAILABLE');
+    }
     if (!auth) throw new WebToolError('NOT_CONFIGURED'); // removed between the check and the call; never counted
     const started = Date.now();
     let code: string | null = null;
@@ -262,8 +269,12 @@ export class WebSearchService {
 
   private async authFor(who: Who, provider: SearchProvider, s: ResolvedWebSearchSystemSettings): Promise<ProviderAuth | null> {
     if (provider.credential === 'api_key') {
-      const r = await this.credentials.resolve(credentialRefOf(provider.id), who, { allowTiers: allowedTiers(s) });
-      return r ? { kind: 'api_key', key: r.value } : null;
+      const r = await this.credentials.resolveDetailed(credentialRefOf(provider.id), who, { allowTiers: allowedTiers(s) });
+      if (r.found) return { kind: 'api_key', key: r.found.value };
+      // The user's key is in their secrets provider and it could not answer, and no later tier held one (E50.3): "not available",
+      // never a failed run; the agent may use the browser. Counted as an unavailable call of this provider.
+      if (r.reason === 'PROVIDER_UNAVAILABLE') throw new WebToolError('UNAVAILABLE');
+      return null;
     }
     if (provider.credential === 'none') {
       const { baseUrl, allowPrivate } = providerSettingsOf(s, provider.id);
