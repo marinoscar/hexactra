@@ -249,6 +249,53 @@ export async function webauthnPending(tabId: number, waitMs: number): Promise<{ 
 // Page functions. These run inside the page via chrome.scripting.executeScript
 // and must be self-contained (no closures over module scope).
 
+/**
+ * Where a real mouse click on the element a selector names should land (E52.1, #1016): it scrolls the element into view and reads,
+ * never acts. The centre first, then a point a quarter in from each corner, the first one where the page's own hit test finds the
+ * element (or something inside it, or a label of it). `point: null` with a reason when there is none: the caller clicks by script.
+ */
+export function pageClickPoint(selector: string) {
+  const el = document.querySelector(selector) as HTMLElement | null;
+  if (!el) return { __error: `no element matches ${selector}` };
+  try {
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' as ScrollBehavior });
+  } catch {
+    el.scrollIntoView();
+  }
+  const disabled = Boolean((el as HTMLButtonElement).disabled) || el.getAttribute('aria-disabled') === 'true';
+  const r = el.getBoundingClientRect();
+  if (!(r.width > 0) || !(r.height > 0)) return { point: null, why: 'zero_size', disabled };
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  if (r.right <= 0 || r.bottom <= 0 || r.left >= vw || r.top >= vh) return { point: null, why: 'offscreen', disabled };
+  const clamp = (v: number, max: number) => Math.min(Math.max(Math.round(v), 0), Math.max(max - 1, 0));
+  const candidates = [
+    [r.left + r.width / 2, r.top + r.height / 2],
+    [r.left + r.width / 4, r.top + r.height / 4],
+    [r.right - r.width / 4, r.top + r.height / 4],
+    [r.left + r.width / 4, r.bottom - r.height / 4],
+    [r.right - r.width / 4, r.bottom - r.height / 4],
+  ];
+  const hits = (hit: Element | null): boolean => {
+    if (!hit) return false;
+    if (hit === el || el.contains(hit)) return true;
+    const label = hit.closest('label') as HTMLLabelElement | null;
+    return Boolean(label && (label.control === el || label.contains(el)));
+  };
+  for (const [cx, cy] of candidates) {
+    const x = clamp(cx, vw);
+    const y = clamp(cy, vh);
+    let hit: Element | null = null;
+    try {
+      hit = document.elementFromPoint(x, y);
+    } catch {
+      hit = null;
+    }
+    if (hits(hit)) return { point: { x, y }, disabled };
+  }
+  return { point: null, why: 'covered', disabled };
+}
+
 export function pageClick(selector: string) {
   const el = document.querySelector(selector) as HTMLElement | null;
   if (!el) return { __error: `no element matches ${selector}` };
@@ -789,8 +836,20 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       return { tab_id: tab.id, url: done.url, title: done.title };
     }
     case 'click': {
+      // A real, trusted mouse click at the element (E52.1, #1016); the script click only when the mouse cannot reach it.
       const tab = await resolveTab(action.tab_id);
-      return inPage(tab.id!, pageClick, [action.selector]);
+      const where = await inPage(tab.id!, pageClickPoint, [action.selector]);
+      if (where.point) {
+        const { x, y } = where.point;
+        try {
+          await cdp.clickAt(tab.id!, x, y);
+          return { method: 'pointer', x, y, disabled: where.disabled };
+        } catch {
+          // No debugger on this tab (a DevTools window, a restricted page): fall through to the script click.
+        }
+      }
+      await inPage(tab.id!, pageClick, [action.selector]);
+      return { method: 'synthetic', why: where.point ? 'no_debugger' : where.why, disabled: where.disabled };
     }
     case 'type': {
       const tab = await resolveTab(action.tab_id);

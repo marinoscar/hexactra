@@ -5,7 +5,8 @@ The MV3 extension that drives the browser for Hexactra. It works standalone (sid
 ## How it acts (full powers, VISION §27)
 
 `src/remote.ts` executes the fabric's actions; the wire shapes are in [docs/remote-control-api.md](../../docs/remote-control-api.md#actions).
-- **DOM actions** (`click`, `type`, `text`, `elements`, ...) run as page functions through `chrome.scripting`.
+- **DOM actions** (`type`, `text`, `elements`, ...) run as page functions through `chrome.scripting`.
+- **`click` by selector is a real mouse click** (E52.1, #1016): a page function scrolls the element into view and finds a point on it with the page's own hit test (the centre, else a point a quarter in from a corner), then the click is a trusted `Input.dispatchMouseEvent` there. Only when no point reaches the element (covered, zero size, off screen) or the debugger cannot attach does it fall back to the script click (synthetic events and `el.click()`), and the result says so: `{ method: 'pointer', x, y, disabled }` or `{ method: 'synthetic', why, disabled }`. Many web apps ignore script events (`isTrusted === false`), so the script click alone could report success and do nothing.
 - **Trusted input and JavaScript** go through `chrome.debugger` (`src/cdp.ts`, permission `debugger`):
   - `click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key` dispatch `Input.*` events that pages see as `isTrusted`; `type` and `type_keys` take an optional `expect_origin` and type nothing (error `origin_mismatch: ...`) when the tab's top-level origin is not that one at the moment of typing (E37.10);
   - `evaluate` runs `Runtime.evaluate` in REPL mode, whatever the page's CSP.
