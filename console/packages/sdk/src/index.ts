@@ -175,7 +175,16 @@ export interface RunsClient {
    * clicks, reads per action, a slow start, waiting for the owner, budget pressure, failures, unknown outcomes). Needs `runs:read`.
    */
   diagnostics(id: string): Promise<Schema<'RunDiagnosticsResponseDto'>>;
+  /**
+   * How your runs behaved as a population (E53.1): counts per status, the success rate, cost per successful run, and the distribution
+   * (n, sum, mean, min, p50, p90, max) of working time, wall time, steps, model calls, tokens and cost over the finished runs, overall
+   * and per `groupBy`. Takes the runs list's filters. Needs `runs:read`. Example: `src/examples/run-stats.ts`.
+   */
+  stats(query?: RunStatsQuery): Promise<Schema<'RunStatsResponseDto'>>;
 }
+
+/** The query of `runs.stats`: the runs list's filters, `groupBy` and `tz`. */
+export type RunStatsQuery = NonNullable<paths['/api/runs/stats']['get']['parameters']['query']>;
 
 export interface SchedulesClient {
   /** Always resolves: `{ valid: true, description, next, … }` or `{ valid: false, code, message }`. Saves nothing. */
@@ -245,6 +254,7 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     deliveries: (id) => data(api.GET('/api/runs/{id}/deliveries', { params: { path: { id } } })) as never,
     retryDelivery: (id, runDeliveryId) => data(api.POST('/api/runs/{id}/deliveries/{runDeliveryId}/retry', { params: { path: { id, runDeliveryId } } })) as never,
     diagnostics: (id) => data(api.GET('/api/runs/{id}/diagnostics', { params: { path: { id } } })) as never,
+    stats: (query) => data(api.GET('/api/runs/stats', { params: { query: { ...query } } } as never)) as never,
   };
   const taskImprovements: TaskImprovementsClient = {
     get: (id) => data(api.GET('/api/task-improvements/{id}', { params: { path: { id } } })) as never,

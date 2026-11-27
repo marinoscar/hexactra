@@ -1,9 +1,10 @@
-// `hexactra runs diagnostics`, `tasks consistency`, `tasks improve`, `tasks improvements` and `tasks improvement` (E52.10, #1025).
+// `hexactra runs stats` (E53.4, #1072), `runs diagnostics`, `tasks consistency`, `tasks improve`, `tasks improvements` and `tasks improvement` (E52.10, #1025).
 // Read and request only: no command applies a proposal or changes a task. Applying is the task form's Save, in the console.
 import type { Command } from 'commander';
 
 import { consoleApi } from './console-api.js';
 import { consistencyLines, findingsLines, improvementLines, type Consistency, type Finding, type Improvement } from './insights.js';
+import { STATS_GROUP_BY, statsLines, statsQuery, type RunStats, type StatsFlags } from './run-stats.js';
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
@@ -43,6 +44,28 @@ export function insightsCommands(program: Command): void {
       if (o.json) return json(d);
       for (const line of findingsLines(d.findings)) out(line);
       if (d.truncated) out('(The run is long: the findings cover its first 2,000 steps.)');
+    });
+
+  runs
+    .command('stats')
+    .description('How your runs behaved: success rate and p50/p90 of steps, working time, tokens and cost, optionally grouped')
+    .option('--by <group>', `group by: ${STATS_GROUP_BY.join(', ')}`, 'none')
+    .option('--from <time>', 'runs created at or after: 7d, 24h, 2w, 2026-06-01 or an ISO date-time')
+    .option('--to <time>', 'runs created before (same forms)')
+    .option('--task <task>', 'one task: its name, id or id prefix; `none` for runs without a task')
+    .option('--status <status>', 'run statuses, comma-separated (succeeded, failed, cancelled, ...)')
+    .option('--stop-reason <reason>', 'stop reasons, comma-separated; `budget` for every budget stop')
+    .option('--policy <id>', 'an agent policy id, or builtin:<key>')
+    .option('--trigger <trigger>', 'what started the runs, comma-separated (manual, schedule, api, mcp, chat, ...)')
+    .option('--origin <origin>', 'where the runs were started from, comma-separated (web, cli, api, mcp, ...)')
+    .option('--q <text>', 'goal contains this text')
+    .option('--tz <zone>', 'IANA time zone for --by day|week (default your time zone setting)')
+    .option('--json', 'print the API answer as JSON (stable: scripts and coding agents read it)')
+    .action(async (o: StatsFlags & { task?: string; json?: boolean }) => {
+      const task = o.task === undefined ? undefined : o.task === 'none' ? 'none' : await taskId(o.task);
+      const s = await consoleApi().get<RunStats>('/runs/stats', { query: statsQuery(o, task) });
+      if (o.json) return json(s);
+      for (const line of statsLines(s)) out(line);
     });
 
   const tasks = group(program, 'tasks', 'Saved browser goals');

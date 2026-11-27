@@ -112,6 +112,8 @@ describe('structured results validate against the output schemas (real REST answ
       await app.get(PrismaService).run.update({ where: { id: String((taskRun as { id?: string; run?: { id: string } }).id ?? (taskRun as { run?: { id: string } }).run?.id) }, data: { status: 'succeeded', stepCount: 3 } });
       expect(await call(t, 'run_diagnostics', { run_id: run.id })).toMatchObject({ runId: run.id, truncated: false });
       expect(await call(t, 'task_consistency', { task_id: task.id })).toMatchObject({ taskId: task.id, runs: 1, label: 'not_enough_runs' });
+      // Run statistics (E53.4): the same runs the list shows, grouped by task.
+      expect(await call(t, 'runs_stats', { group_by: 'task', task_id: task.id })).toMatchObject({ groupBy: 'task', total: { runs: 1, finished: 1, successRate: 1 }, groups: [{ key: task.id, label: `Contract ${stamp}`, runs: 1 }] });
       const proposal = await call(t, 'task_improvement_request', { task_id: task.id });
       expect(proposal).toMatchObject({ status: 'queued' });
       expect(await call(t, 'task_improvement_get', { improvement_id: proposal.id })).toMatchObject({ id: proposal.id });

@@ -132,4 +132,17 @@ describe('the console SDK', () => {
     expect(file.run.id).toBe(out.runId);
     expect(stdout).not.toContain(token);
   });
+
+  it('reads run statistics (E53.4, #1072)', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-stats-${Date.now()}@example.test`, role: 'contributor' } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const { stdout } = await promisify(execFile)(process.execPath, [resolve(__dirname, '../../../packages/sdk/dist/examples/run-stats.js')], {
+      env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token, HEXACTRA_EXAMPLE_START: '1' },
+      timeout: 60_000,
+    });
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as { runs: number; groups: number; groupBy: string; truncated: boolean };
+    expect(out).toMatchObject({ runs: 1, groups: 1, groupBy: 'task', truncated: false });
+    expect(stdout).toContain('No task: 1 runs');
+    expect(stdout).not.toContain(token);
+  });
 });
