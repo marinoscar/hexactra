@@ -139,7 +139,7 @@ runPlatformConformance({
         },
         {
           file: 'run-insights/run-stats.service.ts',
-          why: 'Run statistics (E53.1, #1069) aggregate the caller\'s runs per group in one statement: count FILTER per status, percentile_cont(0.5) and percentile_disc(0.9) per measure, GROUPING SETS for the groups and the total, and days and weeks in a time zone, which Prisma cannot express. The WHERE is `runWhereSql`, which always starts with `r.user_id = <the caller>`; every value (ids, statuses, the goal search, the time zone) is a bound parameter. It reads numbers and grouping keys only, never a goal, a result or a step.',
+          why: 'Run statistics (E53.1, #1069) aggregate the caller\'s runs per group in one statement: count FILTER per status, percentile_cont(0.5) and percentile_disc(0.9) per measure, GROUPING SETS for the groups and the total, and days and weeks in a time zone, which Prisma cannot express. The WHERE is `runWhereSql`, which starts with `r.user_id = <the caller>`, except for the admin statistics (E53.2): a route behind `run_stats:read_all`, read through the system client with the reason `admin-aggregate`, aggregates only, labels by id (never another user\'s task or policy name); every value (ids, statuses, the goal search, the time zone) is a bound parameter. It reads numbers and grouping keys only, never a goal, a result or a step.',
         },
         {
           file: 'tasks/task-summary.service.ts',

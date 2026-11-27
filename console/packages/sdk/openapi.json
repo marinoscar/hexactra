@@ -38941,7 +38941,7 @@
     },
     "/api/runs/{id}/export": {
       "get": {
-        "description": "A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "description": "A `hexactra.run-trace` file (`formatVersion` 2; version 1 files still validate): the run, its policy, budget and models, every step with its question and answer, its findings (as `GET /runs/{id}/diagnostics`), the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).\n\n**Requires:** authentication, plus permission `runs:read`.",
         "operationId": "runs_export",
         "parameters": [
           {
@@ -42411,6 +42411,286 @@
           "permissions": [
             "tasks:read",
             "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/runs/stats": {
+      "get": {
+        "description": "The answer of `GET /api/runs/stats` over every user's runs, plus `groupBy=user` (labelled with the display name, or `User <first 8 of id>`; never an email). Aggregates only: another user's task is labelled `Task <first 8 of id>` and an own policy `Policy <first 8 of id>` (never their names), no goal, result or step is read, and `q` is refused (`400`). Each call writes the audit event `runs.stats_admin_read` (the grouping and the names of the filters used, never their values). Permission `run_stats:read_all` (organization administrators by default).\n\n**Requires:** authentication, plus permission `run_stats:read_all`.",
+        "operationId": "adminRunStats_allStats",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "description": "Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "finished"
+              ]
+            }
+          },
+          {
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "description": "A task's id, or `none` for runs without a task (ad-hoc and external runs).",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "none"
+                },
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "trigger",
+            "required": false,
+            "in": "query",
+            "description": "What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Runs created at or after this ISO 8601 date-time (inclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Runs created before this ISO 8601 date-time (exclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopReason",
+            "required": false,
+            "in": "query",
+            "description": "Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "policyId",
+            "required": false,
+            "in": "query",
+            "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "required": false,
+            "in": "query",
+            "description": "Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchId",
+            "required": false,
+            "in": "query",
+            "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupBy",
+            "required": false,
+            "in": "query",
+            "description": "As `GET /runs/stats`, plus `user`.",
+            "schema": {
+              "default": "none",
+              "type": "string",
+              "enum": [
+                "none",
+                "task",
+                "policy",
+                "stopReason",
+                "status",
+                "trigger",
+                "origin",
+                "tier",
+                "day",
+                "week",
+                "user"
+              ]
+            }
+          },
+          {
+            "name": "tz",
+            "required": false,
+            "in": "query",
+            "description": "IANA time zone of the days and weeks; default the caller's time zone setting.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Refused: a goal is the person’s own text.",
+            "not": {},
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunStatsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Run statistics across every user's runs",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "run_stats:read_all"
           ]
         }
       }
@@ -102004,9 +102284,17 @@
             "const": "hexactra.run-trace"
           },
           "formatVersion": {
-            "type": "number",
-            "const": 1,
-            "description": "Version of this file format"
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 1
+              },
+              {
+                "type": "number",
+                "const": 2
+              }
+            ],
+            "description": "Version of this file format: 2 since findings were added (a version 1 file has no `findings`)"
           },
           "exportedAt": {
             "type": "string",
@@ -103436,6 +103724,113 @@
                 "durationMs",
                 "question",
                 "screenshot"
+              ]
+            }
+          },
+          "findings": {
+            "description": "Version 2: the run's findings (E52.6), computed from its steps with no model and masked, as `GET /runs/{id}/diagnostics` answers them; absent in a version 1 file",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "loop",
+                    "selector_miss",
+                    "repeated_click",
+                    "observation_heavy",
+                    "slow_start",
+                    "waited_for_owner",
+                    "budget_pressure",
+                    "failures",
+                    "unknown_outcome"
+                  ],
+                  "description": "What kind of finding it is"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "description": "One line for a person"
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "One or two sentences, facts only"
+                },
+                "seqFrom": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The first step it is about, or null"
+                },
+                "seqTo": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The last step it is about, or null"
+                },
+                "stepsSpent": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Steps attributable to it; 0 when not applicable"
+                },
+                "evidence": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    ]
+                  },
+                  "description": "The facts behind it"
+                }
+              },
+              "required": [
+                "code",
+                "severity",
+                "title",
+                "detail",
+                "seqFrom",
+                "seqTo",
+                "stepsSpent",
+                "evidence"
               ]
             }
           },
@@ -109241,7 +109636,8 @@
               "origin",
               "tier",
               "day",
-              "week"
+              "week",
+              "user"
             ]
           },
           "timeZone": {

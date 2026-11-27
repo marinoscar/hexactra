@@ -11,7 +11,9 @@ import type { RunStatus } from '../tasks/run-status';
 
 /** What a statistic can be grouped by. `none` answers the total only. */
 export const RUN_STATS_GROUP_BY = ['none', 'task', 'policy', 'stopReason', 'status', 'trigger', 'origin', 'tier', 'day', 'week'] as const;
-export type RunStatsGroupBy = (typeof RUN_STATS_GROUP_BY)[number];
+/** The admin route (E53.2) also groups by user. */
+export const RUN_STATS_ADMIN_GROUP_BY = [...RUN_STATS_GROUP_BY, 'user'] as const;
+export type RunStatsGroupBy = (typeof RUN_STATS_ADMIN_GROUP_BY)[number];
 
 /** The most runs one answer reads (the newest); beyond it `truncated` is true. */
 export const RUN_STATS_MAX_RUNS = 100_000;

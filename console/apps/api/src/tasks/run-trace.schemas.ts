@@ -12,12 +12,18 @@ import { runBudgetSchema, runOutputResponseSchema, runStepResponseSchema } from 
 import { TIERS } from '../policies/agent-policy.schema';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { POLICY_SOURCES } from '../policies/policy-snapshot';
+import { runFindingSchema } from '../openapi/run-insights.responses';
 import { RUN_STOP_REASONS } from '../runner/budget';
 
 /** The `type` of every run trace file. */
 export const RUN_TRACE_TYPE = 'hexactra.run-trace';
-/** The file format this build writes. A change that older readers cannot follow bumps it. */
-export const RUN_TRACE_FORMAT_VERSION = 1;
+/**
+ * The file format this build writes. A change that older readers cannot follow bumps it. 2 (E53.3, #1071, #1047): `findings`, the
+ * run's findings as `GET /runs/{id}/diagnostics` answers them. A version 1 file (no `findings`) still reads: the schema accepts both.
+ */
+export const RUN_TRACE_FORMAT_VERSION = 2;
+/** Every version a reader of this build accepts. */
+export const RUN_TRACE_FORMAT_VERSIONS = [1, 2] as const;
 /** The largest file the route sends; above it, 413 `EXPORT_TOO_LARGE` (use `screenshots=none`). */
 export const RUN_EXPORT_MAX_BYTES = 50 * 1024 * 1024;
 /** How many exports one user may ask for in a minute. */
@@ -73,7 +79,7 @@ export const runTraceStepSchema = z.object({
 export const runTraceSchema = z
   .object({
     type: z.literal(RUN_TRACE_TYPE),
-    formatVersion: z.literal(RUN_TRACE_FORMAT_VERSION).describe('Version of this file format'),
+    formatVersion: z.union([z.literal(1), z.literal(2)]).describe('Version of this file format: 2 since findings were added (a version 1 file has no `findings`)'),
     exportedAt: iso,
     partial: z.boolean().describe('True for a run that was live (queued, running, waiting for its person) when it was exported'),
     console: z.object({ version: z.string().describe('The console version that wrote the file') }),
@@ -138,6 +144,10 @@ export const runTraceSchema = z
       .array(z.object({ tier: z.enum(TIERS), model: z.string().nullable(), calls: z.number().int().nullable().describe('Model calls on this tier; null when the run used several tiers (calls are counted per run)') }))
       .describe('The tiers the run used, in order, with their models'),
     steps: z.array(runTraceStepSchema),
+    findings: z
+      .array(runFindingSchema)
+      .optional()
+      .describe("Version 2: the run's findings (E52.6), computed from its steps with no model and masked, as `GET /runs/{id}/diagnostics` answers them; absent in a version 1 file"),
     chat: z
       .array(z.object({ seq: z.number().int(), role: z.enum(['user', 'assistant', 'system']), kind: z.string(), text: z.string(), at: iso }))
       .describe("The messages of the run's conversation (a chat run); empty for any other run"),

@@ -154,6 +154,28 @@ describe('the rendered PDF', () => {
   });
 });
 
+describe('what happened (#1047)', () => {
+  const finding = { code: 'loop' as const, severity: 'warn' as const, title: 'The run went round in a loop', detail: 'Steps 3 to 9 repeated the same two actions.', seqFrom: 3, seqTo: 9, stepsSpent: 6, evidence: {} };
+
+  it('lists the findings after the outcome, warnings named as such, with their steps', async () => {
+    const trace = { ...traceFixture({ images: 0 }), formatVersion: 2 as const, findings: [finding, { ...finding, code: 'slow_start' as const, severity: 'info' as const, title: 'A slow start', detail: 'The first action came after 2 minutes.', seqFrom: 1, seqTo: 1 }] };
+    const text = allText(readPdf(await renderPdfBuffer(buildReportDefinition(trace))).text);
+    expect(text).toContain('What happened');
+    expect(text).toContain('Warning: The run went round in a loop (steps 3 to 9).');
+    expect(text).toContain('Note: A slow start (step 1).');
+    expect(text.indexOf('What happened')).toBeGreaterThan(text.indexOf('Outcome'));
+  });
+
+  it('says so when the steps point to nothing, and has no section for a version 1 file or a live run', async () => {
+    const none = allText(readPdf(await renderPdfBuffer(buildReportDefinition({ ...traceFixture({ images: 0 }), formatVersion: 2, findings: [] }))).text);
+    expect(none).toContain('Nothing in the steps points to wasted effort.');
+    const v1 = allText(readPdf(await renderPdfBuffer(buildReportDefinition(traceFixture({ images: 0 })))).text);
+    expect(v1).not.toContain('What happened');
+    const live = allText(readPdf(await renderPdfBuffer(buildReportDefinition({ ...traceFixture({ partial: true, status: 'running', images: 0 }), formatVersion: 2, findings: [finding] }))).text);
+    expect(live).not.toContain('What happened');
+  });
+});
+
 describe('outcomes and banners', () => {
   it('a soft (chat run) budget prints "not enforced"', async () => {
     const text = allText(readPdf(await renderPdfBuffer(buildReportDefinition(traceFixture({ soft: true, images: 0 })))).text);

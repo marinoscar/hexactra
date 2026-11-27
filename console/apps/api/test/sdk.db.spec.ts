@@ -126,7 +126,7 @@ describe('the console SDK', () => {
       timeout: 60_000,
     });
     const out = JSON.parse(stdout.trim().split('\n').pop()!) as { runId: string; file: string; type: string; formatVersion: number; steps: number };
-    expect(out).toMatchObject({ type: 'hexactra.run-trace', formatVersion: 1 });
+    expect(out).toMatchObject({ type: 'hexactra.run-trace', formatVersion: 2 });
     expect(out.file).toBe(`hexactra-run-${out.runId.slice(0, 8)}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.json`);
     const file = JSON.parse(readFileSync(join(cwd, out.file), 'utf8')) as { run: { id: string } };
     expect(file.run.id).toBe(out.runId);
