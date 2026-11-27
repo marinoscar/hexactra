@@ -130,6 +130,14 @@ The `browser.runs.delete` job ("Delete runs by filter" under **Administration �
 - Each call writes one line to the API log (`runs.delete user=… mode=single|ids|filter matched=… deleted=… skippedLive=… job=… ms=…`), adds to the `app.runs.deleted` counter (label `mode`) and writes an audit event (`runs.deleted`, or `runs.delete_queued` for a `202`) with the counts and the names of the filter keys. None of them holds goal text, results or step content.
 - If a screenshot cannot be removed from object storage, the run is deleted all the same and the API logs how many objects were left.
 
+## Batches (E51.1)
+
+A run can be one row of a **batch**: a saved task run once per row of values, one run after another ([api-tasks-runs.md, "Batches"](api-tasks-runs.md#batches)). Such a run is an ordinary run in every way (`executeTool`, Stop and Pause, the gates, intent recording, the audit trail, masking) and carries `batchId` and `batchSeq`; `GET /api/runs?batchId=<id>` lists a batch's runs, and the runs list shows a small "2 of 5" chip on each.
+
+- **Stop on a batch run stops the batch**: the rows not started are skipped and never get a run.
+- **A row whose run ended with a step left `unknown` (or `intent`) stops the batch** ([Crash safety](#crash-safety-e383)): a batch never repeats or carries on past a step that may or may not have happened. The batch's `stopReason` is `unknown_outcome` and `stoppedAtSeq` names the row.
+- **A row is never started twice**: it is claimed under a lock on the batch before its run is created, and the reconcile sweep restarts a claimed row only when no run exists for it.
+
 ## Stop (E38.1)
 
 `POST /api/runs/{id}/cancel` is the brake. The agent stops acting within about two seconds, and nothing it had decided but not yet done is carried out.
@@ -255,6 +263,28 @@ The console shows the trace on the run's page (#544; README, "A run's page"): ea
 | The Export menu on a phone |
 |---|
 | ![The Export menu opened from the run page's sticky bar on a phone: PDF report, JSON trace, Include screenshots and the note](images/run-export-phone.png) |
+
+## What happened: run findings (E52.6, #1021)
+
+`GET /api/runs/{id}/diagnostics` answers where a run spent effort it did not need, computed on read from its own step rows: no table, no cache and **no model** (`apps/api/src/run-insights/run-diagnostics.ts`, pure). The run page shows them under the outcome as **What happened**, once the run has ended, each with a link that scrolls the timeline to its steps. Permission `runs:read`; another user's run is a 404. At most 2,000 steps are read (`truncated: true` beyond).
+
+| Code | Severity | When |
+|---|---|---|
+| `loop` | warn (info when each lap read something new) | A block of 1–8 actions that change the page repeated 3 times or more in a row, one other action allowed between laps. Up to 3 that do not overlap. `stepsSpent` counts every step in the range, reads included. |
+| `selector_miss` | info; warn from 3 | Failed steps whose selector matched nothing (`no element matches …`), by selector (clipped to 120 characters). |
+| `repeated_click` | warn | The same control (selector, position within 10 px, or the gate's label) clicked again within 12 steps with only reads between. Says so when a click reported no change (E52.3). |
+| `observation_heavy` | info | From 20 steps, more than 2 reads (text, elements, scripts, looks) per action that changes the page. |
+| `slow_start` | info | More than 30 seconds from the run's start to its first step. |
+| `waited_for_owner` | info | The time between each question and its answer, and the number of questions. |
+| `budget_pressure` | warn | A budget used to 80% or more (the same budget view as the run page). |
+| `failures` | info | 3 or more failed actions. |
+| `unknown_outcome` | warn | A step left in `intent` or `unknown` (E38.3). |
+
+Findings read only server-recorded facts (the tool, its redacted arguments, ok, the summary, the phase), **never** `reasoning` (the model's own words). Every text is masked like the trace. Each code is a unit-tested rule (`test/run-diagnostics.spec.ts`); a diagnosis that throws answers no findings and never fails the run page.
+
+### Across a task's runs: consistency (E52.7, #1022)
+
+The task page's **Consistency** card (`GET /api/tasks/{id}/consistency`, [api-tasks-runs.md](api-tasks-runs.md)) puts a task's runs side by side: "Usually 35 steps; the longest of the last 5 took 124", the median and range of steps, cost and working time, the share that succeeded, and one bar per run with its first warning finding. Its label is `steady`, `varies`, `erratic` or "Not enough runs yet" (fewer than 3). Pure maths in `apps/api/src/run-insights/task-consistency.ts`; no model.
 
 ## Traces (OpenTelemetry)
 

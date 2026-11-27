@@ -446,6 +446,24 @@ export function pageCodeBoxes(op: 'prepare' | 'verify' | 'fill', selector: strin
  * Focus what a key press goes to (E52.12, #1030): the element a selector names, or the focused element. It dispatches nothing: the
  * key itself is a trusted CDP key event. The errors are `pagePress`'s.
  */
+/**
+ * Submit the form a field is in (E52.13, #1046): `requestSubmit()` fires the form's own submit, which does not depend on the keyboard
+ * focus of the window. Outside a form (a message composer) it submits nothing and the caller sends a real Enter. The origin is checked
+ * in the page first, as `pageType` does.
+ */
+export function pageSubmitForm(selector: string, expectOrigin: string | null = null) {
+  if (expectOrigin !== null && location.origin !== expectOrigin) {
+    return { __error: 'origin_mismatch: the tab is no longer on the page the value was released for; nothing was submitted' };
+  }
+  const el = document.querySelector(selector) as HTMLElement | null;
+  if (!el) return { __error: `no element matches ${selector}` };
+  const form = ((el as HTMLInputElement).form ?? el.closest('form')) as HTMLFormElement | null;
+  if (!form) return { submitted: false };
+  if (typeof form.requestSubmit === 'function') form.requestSubmit();
+  else form.submit();
+  return { submitted: true };
+}
+
 export function pageFocusFor(selector: string | null) {
   const target = (selector ? document.querySelector(selector) : document.activeElement) as HTMLElement | null;
   if (!target) return { __error: selector ? `no element matches ${selector}` : 'no focused element' };
@@ -870,10 +888,13 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
         if (prep.group) return typeCodeBoxes(tab, action);
       }
       if (!action.submit) return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, false, action.expect_origin ?? null]);
-      // Type, then submit with a real, trusted Enter at the field (E52.12, #1030): a script Enter is ignored by many composers. The
-      // tab's origin is checked again before the key; without the debugger, the script submit as before.
+      // Type, then submit (E52.12, #1030; E52.13, #1046): a field in a form submits its form (`requestSubmit`, which does not depend on
+      // the window's keyboard focus); a composer outside a form gets a real, trusted Enter, which a script Enter is not. The tab's origin
+      // is checked again before either; without the debugger, the script Enter as before.
       const typed = await inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, false, action.expect_origin ?? null]);
       assertTabOrigin(await resolveTab(tab.id), action.expect_origin);
+      const viaForm = await inPage(tab.id!, pageSubmitForm, [action.selector, action.expect_origin ?? null]);
+      if (viaForm.submitted) return { ...(typed ?? {}), submitted: 'form' };
       try {
         await cdp.pressKey(tab.id!, 'Enter');
         return { ...(typed ?? {}), submitted: 'keys' };

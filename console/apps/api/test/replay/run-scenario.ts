@@ -28,6 +28,7 @@ import {
   type RunnerTool,
   type StoredStep,
   type Tier,
+  type ToolFamily,
 } from '@marinoscar/hexactra-agent';
 import { createRunContext, runLoop } from '@marinoscar/hexactra-agent/engine';
 import { FakeApprovals, FakeRunStore, FakeTelemetry } from '@marinoscar/hexactra-agent/testing';
@@ -76,6 +77,8 @@ export interface ScenarioOptions {
   tier?: Tier;
   /** How each tier resolves to a model (live mode: the real resolver). Absent: a label per tier, which a scripted model ignores. */
   routing?: PolicyPort['routing'];
+  /** The owner's skills (#1008): the block and `skill_read`, bound as the host binds them (host/skills.ts). Absent: none, as before. */
+  skills?: { block: string; tools: readonly RunnerTool<never>[]; family: ToolFamily<never> } | null;
 }
 
 export interface ScenarioResult {
@@ -199,6 +202,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
     needsBrowser: scenario.needsBrowser,
     connections: accounts !== null,
     ...(accounts ? await mcpToolset(accounts.deps, 'user-1', accounts.list).then((m) => ({ mcp: m.tools as unknown as RunnerTool<never>[], mcpFamilies: m.families as never })) : { mcp: [] }),
+    skills: options.skills ?? null,
   });
   // `gates_off` replaces both gates with ones that allow everything, as a broken change to them would.
   const openGates = [
@@ -246,6 +250,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
       state: { labels: new Map(), marks: new Map(), view: null },
       shotWindow: new ScreenshotWindow(scenario.vision ? 2 : 0, 5),
       observationChars: 4_000,
+      settleDelaysMs: [0, 0, 0, 0],
       confirmRisky: () => scenario.task.confirmRiskyActions,
       sensitiveParams: () => [],
       masking: NO_MASKING,
@@ -298,7 +303,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
       contextLines: (c) => runContextLines(registry, c as never),
       firstRoundHint: () => FIRST_ROUND_HINT,
       summarizeGuidance: (note) => note,
-      aboutOwner: '',
+      aboutOwner: options.skills?.block ?? '',
     };
     return { ctx, profile };
   };

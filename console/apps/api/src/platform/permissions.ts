@@ -20,6 +20,7 @@ import { CONNECTIONS_PERMISSIONS } from '../connections/connections.permissions'
 import { CONNECTED_APPS_PERMISSIONS } from '../connected-apps/connected-apps.permissions';
 import { KGRAPH_PERMISSIONS } from '../kgraph/kgraph.permissions';
 import { MEMORIES_PERMISSIONS } from '../memories/memories.permissions';
+import { SKILLS_PERMISSIONS } from '../skills/skills.permissions';
 import { MCP_PERMISSIONS } from '../mcp/mcp.permissions';
 import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
 import { FLEET_PERMISSIONS } from '../fleet/fleet.permissions';
@@ -44,7 +45,7 @@ export const PERMISSION_OPTIONS = {
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
     ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS, CONNECTIONS_PERMISSIONS, BENCHMARKS_PERMISSIONS, USAGE_PERMISSIONS, KGRAPH_PERMISSIONS, WEB_SEARCH_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, SKILLS_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS, CONNECTIONS_PERMISSIONS, BENCHMARKS_PERMISSIONS, USAGE_PERMISSIONS, KGRAPH_PERMISSIONS, WEB_SEARCH_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
 
 // The permission id type. `@marinoscar/vault-api` (the built-in secrets store, E37.5) augments the platform's
@@ -62,6 +63,7 @@ type AppPermissionSet =
   | typeof CONNECTED_APPS_PERMISSIONS
   | typeof MCP_PERMISSIONS
   | typeof MEMORIES_PERMISSIONS
+  | typeof SKILLS_PERMISSIONS
   | typeof APPROVALS_PERMISSIONS
   | typeof SECRETS_PERMISSIONS
   | typeof CONNECTIONS_PERMISSIONS

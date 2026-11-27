@@ -165,7 +165,9 @@ describe('nudge_then_escalate', () => {
     expect(await routingOf(db, run.id, prisma)).toEqual([{ from: 'standard', to: 'frontier', reason: 'repeated click on #x 3 times', kind: 'escalate' }]);
     const steps = await prisma.runStep.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' } });
     // Routing steps and the closing `end` step (#541) are records, not actions.
-    expect(steps.filter((s) => s.kind !== 'routing' && s.kind !== 'end')).toHaveLength(7);
+    expect(steps.filter((s) => s.kind !== 'routing' && s.kind !== 'end')).toHaveLength(8);
+    // The nudge is in the trace (E52.2): a note step in the harness's own words. The escalation's routing step says why on its own.
+    expect(steps.filter((s) => s.kind === 'note').map((s) => [s.ok, s.summary])).toEqual([[false, 'Stalled: repeated click on #x 3 times. Nudged the agent to try another way.']]);
     expect(new Set(steps.map((s) => s.seq)).size).toBe(steps.length);
   });
 

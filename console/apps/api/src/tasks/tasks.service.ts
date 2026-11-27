@@ -212,8 +212,10 @@ export class TasksService {
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
     // The memories it used (#553), by label: the ones that still exist.
     const memories = r.memoryIds.length ? await this.db(userId).memory.findMany({ where: { id: { in: r.memoryIds } }, select: { id: true, label: true, status: true }, orderBy: { label: 'asc' } }) : [];
+    // The skills it read (#1008), by name: the ones that still exist. Never their text.
+    const skills = r.skillIds.length ? (await this.db(userId).skill.findMany({ where: { id: { in: r.skillIds } }, select: { id: true, name: true, archivedAt: true }, orderBy: { name: 'asc' } })).map((k) => ({ id: k.id, name: k.name, archived: k.archivedAt !== null })) : [];
     // Steps carry the masked question and whether they have a trace picture, never its object key (#541).
-    return withCost({ ...r, steps: r.steps.map(stepView), confirmedActions: readConfirmedActions(r.confirmedActions), memories });
+    return withCost({ ...r, steps: r.steps.map(stepView), confirmedActions: readConfirmedActions(r.confirmedActions), memories, skills });
   }
 
   /** The owner's unlisted accounts a finished run could have used instead of the browser (E41.5): information only. */

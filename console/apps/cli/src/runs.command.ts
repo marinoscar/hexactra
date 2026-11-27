@@ -2,11 +2,14 @@ import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { resolveApp, startedBy } from './apps.js';
+import { agentToolsLine, type ConnectionView } from './connections.command.js';
+import type { WebSearchStatusView } from './web-search.js';
 import { consoleApi, consoleCredentials, consoleWebUrl } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
 import { triggerLine, type MailTriggerView } from './mail-triggers.js';
 import { countOlderThan, deleteOlderThan, exportRun, exportRunPdf, parseDays, runsWord, sizeText, type ReportTarget } from './runs.js';
+import { batchEnded, batchLines, parseRowsFile, rowLines, type CliBatch } from './batches.js';
 import { collectInput, missingParameters, parseInputFlags, promptMissing, type CliTaskParameter } from './task-inputs.js';
 import { outputLines, outputsCsv, outputsTable, type CliOutputsPage, type CliRunOutput } from './task-outputs.js';
 import { deliveryLines, findDelivery, runDeliveryLines, type CliDelivery, type CliRunDelivery } from './deliveries.js';
@@ -133,6 +136,38 @@ async function findTask(ref: string): Promise<Task> {
   return matches[0]!;
 }
 
+/** `tasks run --rows`: read the rows, list them, ask "Start N runs?" at a terminal (unless --yes), start the batch and follow it. */
+async function runBatch(task: Task, params: readonly CliTaskParameter[], o: { policy?: string; rows?: string; onFailure?: string; yes?: boolean; json?: boolean }): Promise<void> {
+  const { readFile } = await import('node:fs/promises');
+  const rows = parseRowsFile(await readFile(o.rows!, 'utf8'), params);
+  if (o.onFailure && o.onFailure !== 'continue' && o.onFailure !== 'stop') throw new Error('--on-failure takes continue or stop');
+  if (!o.json) for (const l of rowLines(rows)) out(l);
+  if (!o.yes && process.stdin.isTTY && process.stderr.isTTY) {
+    const { createInterface } = await import('node:readline/promises');
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    const answer = await rl.question(`Start ${rows.length} runs of "${task.name}"? [y/N] `).finally(() => rl.close());
+    if (!/^y(es)?$/i.test(answer.trim())) return out('Nothing started.');
+  }
+  const body = { rows: rows.map((inputs) => ({ inputs })), ...(o.policy ? { policyId: await resolvePolicyId(o.policy) } : {}), ...(o.onFailure ? { onFailure: o.onFailure } : {}) };
+  const b = await consoleApi().post<CliBatch>(`/tasks/${task.id}/batches`, body);
+  if (o.json) return json(b);
+  await followBatch(b);
+}
+
+/** Print a batch, then each change until it ends. */
+async function followBatch(first: CliBatch): Promise<void> {
+  let b = first;
+  let last = '';
+  for (;;) {
+    const text = batchLines(b).join('\n');
+    if (text !== last) out(text);
+    last = text;
+    if (batchEnded(b)) return;
+    await new Promise((r) => setTimeout(r, 3000));
+    b = await consoleApi().get<CliBatch>(`/batches/${b.id}`);
+  }
+}
+
 /** `hexactra tasks …` and `hexactra runs …` over /api/tasks and /api/runs. */
 export const runsCommand: CliCommandRegistration = (program: Command) => {
   const tasks = program.command('tasks').description('Saved browser goals');
@@ -143,6 +178,23 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       const list = await consoleApi().get<Task[]>('/tasks');
       if (o.json) return json(list);
       for (const t of list) out(`${t.id.slice(0, 8)}  ${t.name}  [${t.profile}]  ${t.allowedDomains.join(',') || 'any site'}`);
+    });
+  tasks
+    .command('show <task>')
+    .description('One task (id, id prefix or name), and the one line of what its runs can use: everything you switched on (E50.17)')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { json?: boolean }) => {
+      const found = await findTask(ref);
+      const api = consoleApi();
+      const t = await api.get<Task>(`/tasks/${found.id}`);
+      if (o.json) return json(t);
+      // What a run can use is not chosen per task: the Connections page and `search on|off` are the switches.
+      const [connections, web] = await Promise.all([api.get<ConnectionView[]>('/connections').catch(() => null), api.get<WebSearchStatusView>('/web-search/status').catch(() => null)]);
+      out(`${t.name}  (${t.id})`);
+      out(`goal: ${t.goal}`);
+      out(`profile: ${t.profile}; sites: ${t.allowedDomains.join(', ') || 'any site'}`);
+      if (t.parameters?.length) out(`parameters: ${t.parameters.map((p) => p.label).join(', ')}`);
+      out(agentToolsLine(connections, web));
     });
   tasks
     .command('create <name> <goal>')
@@ -203,17 +255,21 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     });
   tasks
     .command('run <task>')
-    .description('Run a task (by id or id prefix); --watch follows it to the end')
+    .description('Run a task (by id or id prefix); --watch follows it to the end. --rows <file> runs it once per row (a batch)')
     .option('--policy <policy>', 'run under this agent policy for this run only')
     .option('--input <name=value>', "a value for one of the task's {{parameters}}, by key or name (repeatable)", collectInput, [])
+    .option('--rows <file>', 'run once per row: a JSON array of objects, or a CSV with a header of parameter keys or labels (2 to 25 rows)')
+    .option('--on-failure <mode>', 'with --rows: continue (default) or stop when a row fails')
+    .option('--yes', 'with --rows: start without asking')
     .option('--watch', 'follow the run')
     .option('--json', 'print JSON')
-    .action(async (ref: string, o: { policy?: string; input?: string[]; watch?: boolean; json?: boolean }) => {
+    .action(async (ref: string, o: { policy?: string; input?: string[]; rows?: string; onFailure?: string; yes?: boolean; watch?: boolean; json?: boolean }) => {
       const list = await consoleApi().get<Task[]>('/tasks');
       const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
       if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
       const task = matches[0]!;
       const params = task.parameters ?? [];
+      if (o.rows) return runBatch(task, params, o);
       const inputs = parseInputFlags(o.input);
       // At a terminal, the values still missing are asked for here (#552); a sensitive one never is.
       if (process.stdin.isTTY && process.stderr.isTTY) Object.assign(inputs, await promptMissing(missingParameters(params, inputs)));
@@ -415,6 +471,25 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       out(label(r.status));
     });
 
+  const batches = program.command('batches').description('Batches of runs: a saved task run once per row of values (start one with `tasks run <task> --rows <file>`)');
+  batches
+    .command('show <id>')
+    .description('A batch: each row, its run and how it ended; --watch follows it to the end')
+    .option('--watch', 'follow until it ends')
+    .option('--json', 'print JSON')
+    .action(async (id: string, o: { watch?: boolean; json?: boolean }) => {
+      const b = await consoleApi().get<CliBatch>(`/batches/${id}`);
+      if (o.json) return json(b);
+      if (o.watch) return followBatch(b);
+      for (const l of batchLines(b)) out(l);
+    });
+  batches
+    .command('cancel <id>')
+    .description('Cancel a batch: its live run is stopped and the rows not started are skipped')
+    .action(async (id: string) => {
+      const b = await consoleApi().post<CliBatch>(`/batches/${id}/cancel`, {});
+      for (const l of batchLines(b)) out(l);
+    });
   const schedules = program.command('schedules').description('Run tasks on a schedule (cron + time zone)');
   schedules
     .command('list')

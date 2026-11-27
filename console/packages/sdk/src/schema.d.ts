@@ -8366,6 +8366,50 @@ export interface paths {
         patch: operations["connectedApps_patch"];
         trace?: never;
     };
+    "/api/runs/{id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A run's findings
+         * @description Where the run spent effort it did not need, computed on read from its recorded steps (E52.6): loops, selectors that matched nothing, the same control clicked again, many reads per action, a slow start, time waiting for the owner, budget pressure, failures and steps whose outcome is unknown. Deterministic: no model reads anything. Texts are masked like the trace. Reads at most 2,000 steps (`truncated`). Permission `runs:read`; 404 `RUN_NOT_FOUND` for a run that is not yours.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runInsights_diagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/consistency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How consistent a task's runs are
+         * @description The spread of steps, model calls, working time and cost over the task's newest finished runs (E52.7): min, median, 90th percentile, max and max ÷ median, the success rate and a label (`steady`, `varies`, `erratic`, `not_enough_runs`). `last` is 3 to 50 (default 20); `since` counts only runs created at or after a time (the web passes the time the goal last changed). Benchmark runs are left out. The findings of the 10 newest runs are included. Permissions `tasks:read` and `runs:read`; 404 `TASK_NOT_FOUND` for a task that is not yours.
+         *
+         *     **Requires:** authentication, plus permissions `tasks:read` and `runs:read`.
+         */
+        get: operations["taskInsights_consistency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage/report": {
         parameters: {
             query?: never;
@@ -8884,6 +8928,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runBatches_list"];
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["runBatches_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runBatches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/batches/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["runBatches_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/batches/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["runBatches_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schedules": {
         parameters: {
             query?: never;
@@ -9170,6 +9283,100 @@ export interface paths {
         put?: never;
         /** @description **Requires:** authentication, plus permissions `tasks:write` and `tasks:read`. */
         post: operations["taskBuilder_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/improvements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's proposals
+         * @description Newest first, at most 50, without their changes. Permission `tasks:read`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
+        get: operations["taskImprover_list"];
+        put?: never;
+        /**
+         * Propose a better goal for a task
+         * @description Queues a proposal (E52.8): an AI reads the task's recent finished runs (default the 5 newest; `runIds`: 1 to 10 of its finished runs) and proposes a better goal, each change cited to steps. It never changes the task. 400 `INVALID_RUNS` / `NO_FINISHED_RUNS`; 409 `IMPROVEMENT_RUNNING` while one is being made; 429 `IMPROVEMENT_LIMIT` above 20 a day; 404 when the task is not yours or the feature is off. Permission `tasks:write`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskImprover_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-improvements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One proposal
+         * @description With its summary, proposed goal, changes and their evidence, and site facts. Permission `tasks:read`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
+        get: operations["taskImprover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-improvements/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a proposal
+         * @description A `ready` proposal becomes `dismissed`. Permission `tasks:write`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskImprover_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/task-improvements/{id}/applied": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that a proposed goal was saved
+         * @description Marks a `ready` proposal `applied` and stores the goal the owner saved. It does NOT change the task: the web calls it after the task form's own save, and it is refused (409 `GOAL_NOT_SAVED`) unless the task's goal is the one given. Permission `tasks:write`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskImprover_applied"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10600,6 +10807,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your skills
+         * @description The skills in use by default (`archived=true` lists the archived ones, `all` both). `q` searches the name, the description and the sites, ignoring case.
+         *
+         *     **Requires:** authentication, plus permission `skills:read`.
+         */
+        get: operations["skills_list"];
+        put?: never;
+        /**
+         * Add a skill
+         * @description Refused with `400 SKILL_SECRET` when a field looks like a password, a code, a token or a full card, account, IBAN or Social Security number; `400 INVALID_SITE` for a site that is not a registrable domain; `409 SKILL_NAME_TAKEN` and `409 SKILL_LIMIT` (100 skills).
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        post: operations["skills_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one skill
+         * @description With its text.
+         *
+         *     **Requires:** authentication, plus permission `skills:read`.
+         */
+        get: operations["skills_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a skill
+         * @description Permanently. Runs that read it keep its id.
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        delete: operations["skills_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a skill
+         * @description The name, when to use it, the text, the sites and whether it is on. The same checks as when it is added.
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        patch: operations["skills_update"];
+        trace?: never;
+    };
+    "/api/skills/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a skill
+         * @description An archived skill is kept but never offered to a run or a chat.
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        post: operations["skills_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unarchive a skill
+         * @description It is offered again when it fits a job (and it is on).
+         *
+         *     **Requires:** authentication, plus permission `skills:write`.
+         */
+        post: operations["skills_unarchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -10718,6 +11031,16 @@ export interface components {
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
              * @example REPORT_LINK_INVALID
+             * @example BATCH_TOO_SMALL
+             * @example BATCH_TOO_LARGE
+             * @example BATCH_INPUTS_MISSING
+             * @example BATCH_SENSITIVE_PARAMETER
+             * @example BATCH_DUPLICATE_ROW
+             * @example BATCH_NO_ROWS
+             * @example BATCH_UNKNOWN_ROW
+             * @example BATCH_NOT_FOUND
+             * @example BATCH_LIVE
+             * @example BATCH_NOT_IN_REVIEW
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -10818,6 +11141,11 @@ export interface components {
              * @example MAIL_TRIGGER_POLL_TOO_FAST
              * @example MAIL_TRIGGER_INPUTS_INVALID
              * @example MAIL_TRIGGER_CONNECTION_UNAVAILABLE
+             * @example SKILL_NOT_FOUND
+             * @example SKILL_NAME_TAKEN
+             * @example SKILL_LIMIT
+             * @example SKILL_SECRET
+             * @example INVALID_SITE
              * @example BENCHMARK_NOT_FOUND
              * @example BENCHMARK_RUNNING
              * @example BENCHMARK_SITE_UNREACHABLE
@@ -11831,6 +12159,10 @@ export interface components {
                 /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                 useSavedTasks: boolean;
             };
+            skills?: {
+                /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                enabled: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -11976,6 +12308,10 @@ export interface components {
                 /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                 useSavedTasks: boolean;
             };
+            skills?: {
+                /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                enabled: boolean;
+            };
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -12116,6 +12452,10 @@ export interface components {
                 /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                 useSavedTasks?: boolean;
             } | null;
+            skills?: {
+                /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                enabled?: boolean;
+            } | null;
             connections?: {
                 /**
                  * @description Deprecated (E50.17): has no effect. Every chat may use everything you switched on in Connections and tools; each send or change still asks you first. Kept so stored settings still parse.
@@ -12203,6 +12543,8 @@ export interface components {
                 maxKeepDays: number | null;
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
+                /** @description The most rows a batch of runs may have (E51.1). Absent: 25. */
+                batchMaxRows?: number;
             };
             kgraph: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -12232,6 +12574,9 @@ export interface components {
             };
             notes: {
                 archiveAfterDays: number;
+            };
+            taskImprover: {
+                enabled: boolean;
             };
             /** @description The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck). */
             browserAgentTiers: {
@@ -12285,6 +12630,10 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
+            };
+            skills: {
+                /** @description Skills for every user's runs and chats (default on). */
+                enabled?: boolean;
             };
             connections: {
                 mcp?: {
@@ -12539,6 +12888,8 @@ export interface components {
                 maxKeepDays: number | null;
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
+                /** @description The most rows a batch of runs may have (E51.1). Absent: 25. */
+                batchMaxRows?: number;
             };
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -12568,6 +12919,9 @@ export interface components {
             };
             notes?: {
                 archiveAfterDays: number;
+            };
+            taskImprover?: {
+                enabled: boolean;
             };
             /** @description The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck). */
             browserAgentTiers?: {
@@ -12621,6 +12975,10 @@ export interface components {
                 keepDays: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes: number;
+            };
+            skills?: {
+                /** @description Skills for every user's runs and chats (default on). */
+                enabled?: boolean;
             };
             connections?: {
                 mcp?: {
@@ -12880,6 +13238,8 @@ export interface components {
                 maxKeepDays?: number | null;
                 /** @description The most hours a run may stay paused (E38.2). A run paused longer is cancelled with the reason "Paused too long" and its owner is told. Absent: 72. `null`: no limit (a paused run waits for its owner). */
                 maxPausedHours?: number | null;
+                /** @description The most rows a batch of runs may have (E51.1). Absent: 25. */
+                batchMaxRows?: number;
             };
             kgraph?: {
                 /** @description Allow the Knowledge Graph on this deployment. Off by default: no capture, replay, job, agent tool or MCP tool. Turning it off keeps what was learned. */
@@ -12909,6 +13269,9 @@ export interface components {
             };
             notes?: {
                 archiveAfterDays?: number;
+            };
+            taskImprover?: {
+                enabled?: boolean;
             };
             browserAgentTiers?: {
                 fast?: {
@@ -12961,6 +13324,10 @@ export interface components {
                 keepDays?: number | null;
                 /** @description The longest one recording may be. The recorder stops at this length; the run goes on. Default 60. */
                 maxMinutes?: number;
+            };
+            skills?: {
+                /** @description Skills for every user's runs and chats (default on). */
+                enabled?: boolean;
             };
             connections?: {
                 mcp?: {
@@ -13566,6 +13933,10 @@ export interface components {
                 chat?: {
                     /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                     useSavedTasks: boolean;
+                };
+                skills?: {
+                    /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
+                    enabled: boolean;
                 };
                 connections?: {
                     /**
@@ -21070,6 +21441,11 @@ export interface components {
                  * @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).
                  */
                 clientId?: string;
+                /**
+                 * Format: uuid
+                 * @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.
+                 */
+                batchId?: string;
             };
             /** @description With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`. */
             expectedCount?: number;
@@ -21346,6 +21722,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -21589,6 +21969,10 @@ export interface components {
                 }[] | null;
                 /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
                 memoryIds: string[];
+                /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+                batchId?: string | null;
+                /** @description The row of the batch (1..n); null outside a batch. */
+                batchSeq?: number | null;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
                 startedAt: string | null;
@@ -22192,6 +22576,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -22268,6 +22656,13 @@ export interface components {
                 label: string;
                 /** @enum {string} */
                 status: "active" | "superseded" | "archived";
+            }[];
+            /** @description The skills this run read with skill_read that still exist, by name (#1008; `runs.skill_ids`): the run page says "Skills read: …". Never their text. */
+            skills?: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                archived: boolean;
             }[];
             /** @description E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied. */
             suggestedConnections?: {
@@ -22526,6 +22921,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -23293,6 +23692,101 @@ export interface components {
             allowConnections?: boolean;
             allowWebSearch?: boolean;
             paused?: boolean;
+        };
+        RunDiagnosticsResponseDto: {
+            /** Format: uuid */
+            runId: string;
+            /** @description When the findings were computed (on read, ISO 8601) */
+            computedAt: string;
+            stepsRead: number;
+            /** @description True when the run has more than 2,000 steps: the findings cover the first 2,000 */
+            truncated: boolean;
+            /** @description Warnings first, then by steps spent */
+            findings: {
+                /**
+                 * @description What kind of finding it is
+                 * @enum {string}
+                 */
+                code: "loop" | "selector_miss" | "repeated_click" | "observation_heavy" | "slow_start" | "waited_for_owner" | "budget_pressure" | "failures" | "unknown_outcome";
+                /** @enum {string} */
+                severity: "info" | "warn";
+                /** @description One line for a person */
+                title: string;
+                /** @description One or two sentences, facts only */
+                detail: string;
+                /** @description The first step it is about, or null */
+                seqFrom: number | null;
+                /** @description The last step it is about, or null */
+                seqTo: number | null;
+                /** @description Steps attributable to it; 0 when not applicable */
+                stepsSpent: number;
+                /** @description The facts behind it */
+                evidence: {
+                    [key: string]: string | number | boolean | number[];
+                };
+            }[];
+        };
+        TaskConsistencyResponseDto: {
+            /** Format: uuid */
+            taskId: string;
+            /** @description The finished runs counted */
+            runs: number;
+            succeeded: number;
+            /** @description 0 to 1 */
+            successRate: number;
+            steps: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            modelCalls: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            activeMs: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            /** @description Null when the cost of a counted run is unknown */
+            costUsd: {
+                min: number;
+                median: number;
+                p90: number;
+                max: number;
+                /** @description max ÷ median; 1 when the median is 0 */
+                ratio: number;
+            } | null;
+            /**
+             * @description Fewer than 3 runs: not_enough_runs. steady: the largest run is at most 1.5× the median in steps and 90% succeeded; erratic: over 3× or under 60% succeeded; varies otherwise
+             * @enum {string}
+             */
+            label: "not_enough_runs" | "steady" | "varies" | "erratic";
+            since: string | null;
+            perRun: {
+                /** Format: uuid */
+                runId: string;
+                status: string;
+                createdAt: string;
+                stepCount: number;
+                costUsd: number | null;
+                activeMs: number;
+                /** @description The findings of the 10 newest runs; empty for older ones */
+                findings: {
+                    code: string;
+                    severity: string;
+                }[];
+            }[];
         };
         UsageReportResponseDto: {
             /** @enum {string} */
@@ -24157,6 +24651,10 @@ export interface components {
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
+            /** @description The batch this run is one row of (E51.1, #1006); null for a run outside a batch. */
+            batchId?: string | null;
+            /** @description The row of the batch (1..n); null outside a batch. */
+            batchSeq?: number | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -24203,6 +24701,152 @@ export interface components {
              * @default false
              */
             record?: boolean;
+        };
+        BatchResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            taskName: string | null;
+            /** @description The chat that made it (`run_task_batch`); null for every other caller */
+            conversationId: string | null;
+            trigger: string;
+            origin: string;
+            policyRef: string | null;
+            /**
+             * @description `review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)
+             * @enum {string}
+             */
+            status: "review" | "running" | "done" | "cancelled";
+            total: number;
+            /** @enum {string} */
+            onFailure: "continue" | "stop";
+            /** @description Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted */
+            stopReason: ("owner_stopped" | "unknown_outcome" | "row_failed" | "task_deleted") | null;
+            /** @description The row whose run stopped it */
+            stoppedAtSeq: number | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            startedAt: string | null;
+            finishedAt: string | null;
+            counts: {
+                total: number;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+                skipped: number;
+                pending: number;
+                running: number;
+            };
+            /** @description "3 of 3 done", "2 done, 1 failed, 2 not started" */
+            summary: string;
+            items: {
+                /** @description The row, 1..n */
+                seq: number;
+                /**
+                 * @description `skipped`: never started (the batch was stopped, or the row was unticked at review)
+                 * @enum {string}
+                 */
+                status: "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped";
+                /** @description The run of this row; null until it starts */
+                runId: string | null;
+                /** @description The row's values, by parameter */
+                values: {
+                    key: string;
+                    label: string;
+                    /** @description Masked with the same rules as a run's inputs */
+                    value: string;
+                }[];
+                /** @description The run's status; null until it starts */
+                runStatus: string | null;
+                /** @description The first 300 characters of the run's result (or error), masked; null until it ends */
+                result: string | null;
+            }[];
+        };
+        CreateBatchDto: {
+            /** @description One object per run, in order. 2 to 25 rows (the deployment setting `runs.batchMaxRows`). Every row is checked before anything is written. */
+            rows: {
+                /** @description This row's values for the task's `{{Name}}` parameters, by key or display name. */
+                inputs?: {
+                    [key: string]: string | number;
+                };
+            }[];
+            /** @description Run every row under this agent policy instead of the task's or the user's default. */
+            policyId?: string;
+            /**
+             * @description `continue` (the default): a failed row does not stop the batch. `stop`: it does, and the rows not started are skipped.
+             * @default continue
+             * @enum {string}
+             */
+            onFailure?: "continue" | "stop";
+        };
+        BatchPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                taskId: string;
+                taskName: string | null;
+                /** @description The chat that made it (`run_task_batch`); null for every other caller */
+                conversationId: string | null;
+                trigger: string;
+                origin: string;
+                policyRef: string | null;
+                /**
+                 * @description `review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)
+                 * @enum {string}
+                 */
+                status: "review" | "running" | "done" | "cancelled";
+                total: number;
+                /** @enum {string} */
+                onFailure: "continue" | "stop";
+                /** @description Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted */
+                stopReason: ("owner_stopped" | "unknown_outcome" | "row_failed" | "task_deleted") | null;
+                /** @description The row whose run stopped it */
+                stoppedAtSeq: number | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+                counts: {
+                    total: number;
+                    succeeded: number;
+                    failed: number;
+                    cancelled: number;
+                    skipped: number;
+                    pending: number;
+                    running: number;
+                };
+                /** @description "3 of 3 done", "2 done, 1 failed, 2 not started" */
+                summary: string;
+                items: {
+                    /** @description The row, 1..n */
+                    seq: number;
+                    /**
+                     * @description `skipped`: never started (the batch was stopped, or the row was unticked at review)
+                     * @enum {string}
+                     */
+                    status: "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped";
+                    /** @description The run of this row; null until it starts */
+                    runId: string | null;
+                    /** @description The row's values, by parameter */
+                    values: {
+                        key: string;
+                        label: string;
+                        /** @description Masked with the same rules as a run's inputs */
+                        value: string;
+                    }[];
+                    /** @description The run's status; null until it starts */
+                    runStatus: string | null;
+                    /** @description The first 300 characters of the run's result (or error), masked; null until it ends */
+                    result: string | null;
+                }[];
+            }[];
+            nextCursor: string | null;
+        };
+        StartBatchDto: {
+            /** @description The rows to keep (their `seq`), default all; the others are skipped. At least one. */
+            rows?: number[];
         };
         ScheduleResponseDto: {
             /** Format: uuid */
@@ -24378,10 +25022,10 @@ export interface components {
                     /** @enum {string} */
                     role: "user" | "assistant" | "system";
                     /**
-                     * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                     * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                      * @enum {string}
                      */
-                    kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                    kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
                     /** @description The start of the newest message, on one line */
                     text: string;
                 } | null;
@@ -24574,10 +25218,10 @@ export interface components {
                 /** @enum {string} */
                 role: "user" | "assistant" | "system";
                 /**
-                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                 * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                  * @enum {string}
                  */
-                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
                 /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
                 text: string;
                 /** @description The run a `run` or `result` message is about */
@@ -24654,10 +25298,10 @@ export interface components {
             /** @enum {string} */
             role: "user" | "assistant" | "system";
             /**
-             * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+             * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
              * @enum {string}
              */
-            kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+            kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
             /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
             text: string;
             /** @description The run a `run` or `result` message is about */
@@ -24954,10 +25598,10 @@ export interface components {
                 /** @enum {string} */
                 role: "user" | "assistant" | "system";
                 /**
-                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
+                 * @description `batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value.
                  * @enum {string}
                  */
-                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request";
+                kind: "text" | "clarify" | "run" | "result" | "task_draft" | "memory" | "request" | "batch";
                 /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
                 text: string;
                 /** @description The run a `run` or `result` message is about */
@@ -25213,6 +25857,124 @@ export interface components {
             }[];
             /** @description What could not be carried over as the spec said (an unknown account, an invalid schedule), in words for the form */
             warnings: string[];
+        };
+        ImprovementRequestedResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "queued";
+        };
+        RequestImprovementDto: {
+            runIds?: string[];
+        };
+        ImprovementListResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                taskId: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "ready" | "failed" | "applied" | "dismissed";
+                /** @description The runs read, newest first */
+                runIds: string[];
+                /** @description The task's goal template when the proposal was asked for */
+                goalBefore: string;
+                proposedGoal: string | null;
+                /** @description What went wrong across the runs, in plain words */
+                summary: string | null;
+                /** @description Each change with the steps that show why; absent in a list */
+                changes?: {
+                    /** @enum {string} */
+                    kind: "add" | "replace" | "remove";
+                    text: string;
+                    why: string;
+                    evidence: {
+                        /** Format: uuid */
+                        runId: string;
+                        seqFrom: number;
+                        seqTo: number;
+                        finding?: string;
+                    }[];
+                }[];
+                /** @description Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list */
+                siteFacts?: {
+                    site: string;
+                    /** @enum {string} */
+                    kind: "navigation" | "timing" | "quirk";
+                    text: string;
+                    evidence: {
+                        /** Format: uuid */
+                        runId: string;
+                        seqFrom: number;
+                        seqTo: number;
+                    }[];
+                }[];
+                confidence: ("low" | "medium" | "high") | null;
+                model: string | null;
+                usedImages: boolean;
+                /** @description Why a failed proposal failed, for a person */
+                error: string | null;
+                /** @description The goal the owner saved, when applied */
+                appliedGoal: string | null;
+                createdAt: string;
+                finishedAt: string | null;
+                decidedAt: string | null;
+            }[];
+        };
+        ImprovementResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taskId: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "ready" | "failed" | "applied" | "dismissed";
+            /** @description The runs read, newest first */
+            runIds: string[];
+            /** @description The task's goal template when the proposal was asked for */
+            goalBefore: string;
+            proposedGoal: string | null;
+            /** @description What went wrong across the runs, in plain words */
+            summary: string | null;
+            /** @description Each change with the steps that show why; absent in a list */
+            changes?: {
+                /** @enum {string} */
+                kind: "add" | "replace" | "remove";
+                text: string;
+                why: string;
+                evidence: {
+                    /** Format: uuid */
+                    runId: string;
+                    seqFrom: number;
+                    seqTo: number;
+                    finding?: string;
+                }[];
+            }[];
+            /** @description Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list */
+            siteFacts?: {
+                site: string;
+                /** @enum {string} */
+                kind: "navigation" | "timing" | "quirk";
+                text: string;
+                evidence: {
+                    /** Format: uuid */
+                    runId: string;
+                    seqFrom: number;
+                    seqTo: number;
+                }[];
+            }[];
+            confidence: ("low" | "medium" | "high") | null;
+            model: string | null;
+            usedImages: boolean;
+            /** @description Why a failed proposal failed, for a person */
+            error: string | null;
+            /** @description The goal the owner saved, when applied */
+            appliedGoal: string | null;
+            createdAt: string;
+            finishedAt: string | null;
+            decidedAt: string | null;
+        };
+        AppliedDto: {
+            goal: string;
         };
         WebhookEventCatalogDto: {
             items: {
@@ -27634,6 +28396,55 @@ export interface components {
              * @default false
              */
             deleteRuns?: boolean;
+        };
+        SkillResponseDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            /** @description The guidance. Only its owner reads it here; a run reads it through `skill_read`, and it is never kept in a step. */
+            body: string;
+            sites: string[];
+            enabled: boolean;
+            archivedAt: string | null;
+            /** @description When a run last read it. */
+            lastUsedAt: string | null;
+            /** @description How many runs read it. */
+            useCount: number;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+        };
+        CreateSkillDto: {
+            /** @description What you call it: "Google Messages". 1 to 60 characters, unique among your skills ignoring case. */
+            name: string;
+            /** @description When to use it: "How I send text messages from Google Messages on the web". 1 to 200 characters. The agent is shown it, not the text. */
+            description: string;
+            /** @description The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number. */
+            body: string;
+            /**
+             * @description Registrable domains the skill is about ("google.com"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`.
+             * @default []
+             */
+            sites?: string[];
+            /**
+             * @description Off: the skill is kept but not offered to a run or a chat.
+             * @default true
+             */
+            enabled?: boolean;
+        };
+        UpdateSkillDto: {
+            /** @description What you call it: "Google Messages". 1 to 60 characters, unique among your skills ignoring case. */
+            name?: string;
+            /** @description When to use it: "How I send text messages from Google Messages on the web". 1 to 200 characters. The agent is shown it, not the text. */
+            description?: string;
+            /** @description The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number. */
+            body?: string;
+            /** @description Registrable domains the skill is about ("google.com"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`. */
+            sites?: string[];
+            /** @description Off: the skill is kept but not offered to a run or a chat. */
+            enabled?: boolean;
         };
     };
     responses: never;
@@ -51638,6 +52449,8 @@ export interface operations {
                 origin?: string | string[];
                 /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
                 clientId?: string;
+                /** @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`. */
+                batchId?: string;
                 /** @description `1` returns `{ items, nextCursor }` instead of an array. */
                 envelope?: "1" | "true";
                 /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
@@ -51766,6 +52579,8 @@ export interface operations {
                 origin?: string | string[];
                 /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
                 clientId?: string;
+                /** @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`. */
+                batchId?: string;
             };
             header?: never;
             path?: never;
@@ -53569,6 +54384,111 @@ export interface operations {
             };
         };
     };
+    runInsights_diagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDiagnosticsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskInsights_consistency: {
+        parameters: {
+            query?: {
+                /** @description How many of the newest finished runs to count (3 to 50) */
+                last?: number;
+                /** @description Only runs created at or after this time (ISO 8601) */
+                since?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskConsistencyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     usage_report: {
         parameters: {
             query?: {
@@ -54928,6 +55848,269 @@ export interface operations {
             };
         };
     };
+    runBatches_list: {
+        parameters: {
+            query?: {
+                /** @description Batches to return, 1 to 100. Default 20. */
+                limit?: number;
+                /** @description The previous page's `nextCursor`. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchPageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBatchDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartBatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runBatches_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BatchResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     schedules_list: {
         parameters: {
             query?: {
@@ -55965,6 +57148,264 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ChatMessageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestImprovementDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementRequestedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskImprover_applied: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppliedDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImprovementResponseDto"];
                     };
                 };
             };
@@ -60521,6 +61962,355 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_list: {
+        parameters: {
+            query?: {
+                /** @description Searches the name, the description and the sites, ignoring case. */
+                q?: string;
+                /** @description `false` (the default): the skills in use; `true`: the archived ones; `all`: both. */
+                archived?: "true" | "false" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSkillDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSkillDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    skills_unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SkillResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

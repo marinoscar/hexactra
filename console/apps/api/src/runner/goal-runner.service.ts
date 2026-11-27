@@ -9,6 +9,7 @@ import { ASK_TOPICS } from '../approvals/approval-match';
 import { FabricClient } from '../fabric/fabric.client';
 import { MemoryContext } from '../memories/memory-context';
 import { MemoryProposals } from '../memories/memory-proposals.service';
+import { SkillContext } from '../skills/skill-context';
 import { PolicyModelCheck } from '../policies/policy-model-check';
 import { ModelTiersService } from '../policies/model-tiers.service';
 import { PolicyResolver } from '../policies/policy.resolver';
@@ -93,6 +94,8 @@ export class GoalRunnerService {
     /** Web search and web_fetch (E50.7): absent without the web search module, and then no run is offered them. */
     @Optional() public webSearch?: WebSearchService,
     @Optional() public webFetch?: WebFetchService,
+    /** The owner's skills (#1008): absent, and no run is offered one. */
+    @Optional() public skills?: SkillContext,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -125,6 +128,7 @@ export class GoalRunnerService {
       kgraphSiteFacts: this.kgraphSiteFacts,
       webSearch: this.webSearch,
       webFetch: this.webFetch,
+      skills: this.skills,
       clock: () => this.clock(),
       log: this.log,
     };

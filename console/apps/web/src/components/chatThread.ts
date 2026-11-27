@@ -98,6 +98,7 @@ export function previewLine(item: Pick<ChatListItem, 'preview'>): string {
   if (!p) return 'No messages yet';
   if (p.kind === 'run') return `Started: ${p.text}`;
   if (p.kind === 'result') return `Result: ${p.text}`;
+  if (p.kind === 'batch') return `Rows to run: ${p.text}`;
   if (p.kind === 'task_draft') return 'Drafted a task';
   if (p.kind === 'request') return `Asked you: ${p.text}`;
   if (p.kind === 'memory') return p.text.startsWith('Offered to save') ? p.text : 'Suggested remembering something';

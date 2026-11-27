@@ -199,9 +199,16 @@ model User {
   secretsStoreCallbackTokens SecretsStoreCallbackToken[]
   passkeyCredentials         PasskeyCredential[]         @relation("PasskeyCredentialOwner")
 
+  // composed from app:skills.prisma
+  skills Skill[]
+
+  // composed from app:task-improvements.prisma
+  taskImprovements TaskImprovement[]
+
   // composed from app:tasks.prisma
   tasks Task[]
   runs  Run[]
+  runBatches RunBatch[]
   runRecordings RunRecording[]
 
   // composed from app:vault.backups.prisma

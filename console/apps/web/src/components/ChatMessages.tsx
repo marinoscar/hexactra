@@ -12,6 +12,7 @@ import type { RunFrame } from './useRunFrame';
 import { ChatRequestRecord } from './ChatRequestRecord';
 import { MemoryProposalCard } from './MemoryProposalCard';
 import { SaveLoginCard } from './SaveLoginCard';
+import { BatchCard, BatchSummaryCard, isBatchSummary } from '../batches/BatchCard';
 
 const BUBBLE_MAX = { xs: '88%', sm: '76%' } as const;
 
@@ -152,6 +153,10 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
           onResume={cards.onResumeRun}
           onVisible={cards.onCardVisible}
         />
+      ) : message.kind === 'batch' ? (
+        <BatchCard message={message} cards={cards} />
+      ) : isBatchSummary(message) ? (
+        <BatchSummaryCard message={message} />
       ) : message.kind === 'result' ? (
         <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} onSaveAsTask={cards.onSaveAsTask} saving={cards.savingTask} />
       ) : message.kind === 'task_draft' ? (

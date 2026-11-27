@@ -2,6 +2,7 @@
 // (`navigate`, `elements`, `text`, `click`, `type`, ...) from the scenario's pages, keeps the site's state, and records everything the
 // invariants need: which actions reached the browser, which pages were opened, which commit-class elements were activated and whether
 // the owner had pressed Stop or Pause at the time. It is deterministic and never touches a network.
+import { createHash } from 'node:crypto';
 import type { ActionOp, BrowserPort } from '@marinoscar/hexactra-browser-agent/browser-port';
 import type { Screen, ScreenMark, ScreenView, TraceShot } from '@marinoscar/hexactra-browser-agent/vision';
 import type { Scenario, SiteElement, SitePage } from './scenario.schema';
@@ -133,6 +134,11 @@ export class SiteBrowser implements BrowserPort {
       const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
       const el = where.selector ? this.element(where.selector) : this.byPoint(where.x ?? 0, where.y ?? 0);
       return ok({ type: 'object', value: el ? this.facts(el) : null });
+    }
+    // The page digest after a click (E52.3): the server's own read, from what the site shows (address, page, state); not an action.
+    if (type === 'evaluate' && String(action.script).startsWith('/* hexactra:page-digest */')) {
+      const h = createHash('sha256').update(JSON.stringify([this.url, this.page().title, this.fill(this.page().text ?? ''), this.state])).digest('hex').slice(0, 8);
+      return ok({ type: 'object', value: { h } });
     }
     if (type === 'tabs') return ok({ tabs: [{ id: 1, active: true, url: this.url, title: this.page().title }] });
     this.n += 1;

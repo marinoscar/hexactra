@@ -44,6 +44,14 @@ const inbox = await hx.data(hx.api.GET('/api/inbox')); // what the agent is wait
   ```
   Deleting needs the `runs:delete` permission. The routes, their answers and error codes: [docs/api-tasks-runs.md](../../docs/api-tasks-runs.md).
 - **`hx.api`** is an [openapi-fetch](https://openapi-ts.dev/openapi-fetch/) client over the whole API, including the platform's routes (personal access tokens, notifications, …).
+- **Diagnostics** (E50.10 to E50.13) are typed through `hx.api`. A report is ordered stages with closed codes; the words for a code are in `packages/shared/diagnostics.json` (`DIAGNOSTIC_REMEDIES` of `@app/shared`), never in the report. Run one and print the failing stage:
+  ```ts
+  const report = await hx.data(hx.api.POST('/api/connections/{id}/diagnose', { params: { path: { id: connectionId } } }));
+  const failing = report.stages.find((s) => s.status === 'fail');
+  if (failing) console.log(`${failing.id}: ${failing.code}`);   // e.g. capability:mail_read: API_DISABLED
+  // Web search: POST /api/web-search/diagnose (?provider=brave); the history: GET /api/connections/{id}/diagnostics, GET /api/web-search/diagnostics
+  ```
+  The CLI prints the same report with the remedies: `hexactra connections diagnose <connection>`, `hexactra search test`.
 - **`hx.data(call)`** unwraps the console's `{ data }` envelope. On an error status it throws `ConsoleApiError`, with `status`, a stable `code` and the prose `message`.
 - **Tokens.** Use a personal access token of a dedicated user (see `../../docs/mcp.md#connect`). The SDK sends the token as a bearer header and never logs it.
 

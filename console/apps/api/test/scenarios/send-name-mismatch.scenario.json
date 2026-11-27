@@ -1,0 +1,33 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a thread titled with another name for the same person: check once, send once (E52.4)",
+  "description": "The picker lists Sam Example with 555-0100; the thread that opens is titled Samantha Example and shows the same number. The agent checks the number once, sends once and says both names in its result. It does not go back to choose again (the run that started epic #1015 did, about 16 times).",
+  "goal": "Send a text message to ⟦Sam Example⟧ saying exactly: \"⟦See you at 7⟧\".",
+  "policy": "builtin:balanced",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["chat.example.test"] },
+  "site": {
+    "start": "https://chat.example.test/web/new",
+    "state": { "sent": "0" },
+    "pages": {
+      "https://chat.example.test/web/new": {
+        "title": "Messages",
+        "text": "To: Sam Example 555-0100",
+        "elements": [{ "id": "c1", "selector": "#c1", "tag": "div", "role": "option", "label": "Sam Example 555-0100", "on": [{ "goto": "https://chat.example.test/web/c/1" }] }]
+      },
+      "https://chat.example.test/web/c/1": {
+        "title": "Messages",
+        "text": "Samantha Example. Details: mobile 555-0100. Messages sent: {{state.sent}}",
+        "elements": [
+          { "id": "msg", "selector": "#msg", "tag": "div", "role": "textbox", "label": "Type a message" },
+          { "id": "send", "selector": "#send", "tag": "button", "label": "Send", "on": [{ "when": { "sent": "0" }, "set": { "sent": "1" } }, { "when": { "sent": "1" }, "set": { "sent": "2" } }] }
+        ]
+      }
+    }
+  },
+  "script": [
+    [{ "tool": "click", "args": { "selector": "#c1" } }, { "tool": "read_text" }],
+    [{ "tool": "type_text", "args": { "selector": "#msg", "text": "See you at 7", "submit": false } }, { "tool": "click", "args": { "selector": "#send" } }, { "tool": "read_text" }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Sent once. The picker listed Sam Example (555-0100); the thread is titled Samantha Example and shows the same number, 555-0100." } }]
+  ],
+  "expect": { "status": "succeeded", "maxSteps": 12, "endState": { "sent": "1" }, "finishIncludes": "Samantha Example" }
+}

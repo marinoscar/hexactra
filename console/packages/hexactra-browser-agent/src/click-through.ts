@@ -4,7 +4,7 @@ import type { GateDecision } from '@marinoscar/hexactra-agent';
 import { act } from './act';
 import type { BrowserContext } from './context';
 import { allowedByRule, RISK_GATE, spend, type RiskDecision } from './gates/risk-gate';
-import { lastStepOk } from './page';
+import { lastStepOk, pageDigest } from './page';
 
 /** `action` is the name a saved approval records (`click`, `click_at`); `box` is where the click lands, for the run page. */
 export async function clickThrough(ctx: BrowserContext, decision: GateDecision, fabricAction: Record<string, unknown>, name: string, reason: string, box?: { x: number; y: number; w?: number; h?: number }): Promise<string> {
@@ -12,7 +12,9 @@ export async function clickThrough(ctx: BrowserContext, decision: GateDecision, 
   const seqBefore = ctx.state.seq;
   const hooks = ctx.ext.hooks;
   const cardPay = rule ? false : ((await hooks.payBegin?.(target)) ?? false);
-  const out = await act(ctx, fabricAction, reason, box, target);
+  // The page as it was before the click (E52.3): `act` says when the click left it exactly so.
+  const before = await pageDigest(ctx);
+  const out = await act(ctx, fabricAction, reason, box, target, { before });
   if (rule) await allowedByRule(ctx, rule, seqBefore, name);
   else spend(ctx, target);
   if (cardPay) await hooks.payEnd?.(await lastStepOk(ctx, seqBefore));

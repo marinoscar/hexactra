@@ -22,7 +22,7 @@ let operations: Set<string>;
 const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
   process.env.JOBS_WORKER_MODE = 'off';
-  app = await createApp();
+  app = await createApp({ docs: true });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   const res = await app.inject({ method: 'GET', url: '/api/openapi.json' });

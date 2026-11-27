@@ -110,9 +110,9 @@ describe('the seeded generator', () => {
 });
 
 describe('the suite registry', () => {
-  it('is the core suite, version 4 (#961: auth-otp-segmented added), well formed', () => {
+  it('is the core suite, version 5 (#1020: the messaging pack added), well formed', () => {
     expect(SUITE.key).toBe('core');
-    expect(SUITE.version).toBe(4);
+    expect(SUITE.version).toBe(5);
     expect(suiteProblems()).toEqual([]);
     expect(challengeById('no-such-challenge')).toBeUndefined();
   });
