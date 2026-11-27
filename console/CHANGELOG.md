@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A click on an element the agent names by selector is now a real mouse click** (#1016, console 1.152.1; E52.1, epic #1015). Before, `click` sent script events, which many web apps ignore: the agent was told "ok", nothing happened, and it tried again (about 8 wasted steps on a messaging app's Send button). The extension now clicks with a trusted mouse event at a point its hit test finds on the element, as `click_mark` and `click_at` already did. When the mouse cannot reach the element (covered, off screen) or the debugger cannot attach, it still clicks by script, and the agent is told the page may have ignored it.
+
 ### Changed
 
 - **Connected accounts and added tools are now available to every task and chat. Switch one off on the Connections page if you do not want that.** (#987, console 1.149.0; E50.17, epic #970). One rule now holds everywhere: a tool that is set up and switched on is always available to the agent. Each Google or Microsoft account you connected is offered to every run and every chat with exactly the capabilities you switched on (Mail, Calendar, Documents: read, or read and change); each MCP server's tools that you set to `read` or `write` are offered too. A paused account, one that needs reconnecting, a capability that is off and an MCP tool that is `off` are not offered. **Availability is not approval:** sending mail, creating or changing an event or a file, and an MCP `write` tool still wait for you on a card unless a saved approval covers that exact call, mail to someone new always asks, what a tool returns is data, and with two accounts that could do a job the agent asks which. A task's allowed sites still bind where the browser goes.
