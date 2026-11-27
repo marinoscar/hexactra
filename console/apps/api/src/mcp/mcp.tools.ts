@@ -1005,6 +1005,40 @@ export const MCP_TOOLS: McpTool[] = [
       return toolOutput({ text: c, structured: c, summary: `${c.label} over ${c.runs} run${c.runs === 1 ? '' : 's'}.` });
     },
   },
+  // Run statistics (E53.4, #1072): GET /runs/stats. Numbers and grouping keys only: never a goal, a result or a step.
+  {
+    name: 'runs_stats',
+    title: 'Run statistics',
+    description:
+      "Read how the owner's runs behaved as a population: counts per status, the success rate, cost per successful run, and the n, sum, mean, min, p50, p90 and max of working time, wall time, steps, model calls, tokens and cost over the finished runs, overall and per group_by (task, policy, stopReason, status, trigger, origin, tier, day, week). " +
+      'Filters are those of runs_list (from, to as ISO 8601 date-times with a zone, task_id or none, status, stop_reason with budget for every budget stop, policy_id, trigger, origin). Use it to find which tasks or policies cost the most or fail most, then run_diagnostics on their runs.',
+    input: z.object({
+      group_by: z.enum(['none', 'task', 'policy', 'stopReason', 'status', 'trigger', 'origin', 'tier', 'day', 'week']).optional().describe('One grouping; default none (the total only).'),
+      from: z.string().max(40).optional().describe('Runs created at or after this ISO 8601 date-time with a zone.'),
+      to: z.string().max(40).optional().describe('Runs created before this ISO 8601 date-time with a zone.'),
+      task_id: z.union([z.literal('none'), id]).optional().describe("A task's id, or none for runs without a task."),
+      status: z.array(z.string().max(20)).max(7).optional().describe('Run statuses: queued, running, waiting_human, paused, succeeded, failed, cancelled.'),
+      stop_reason: z.array(z.string().max(30)).max(12).optional().describe('Stop reasons; budget is every budget stop.'),
+      policy_id: z.string().max(64).optional().describe('An agent policy id, or builtin:<key>.'),
+      trigger: z.array(z.string().max(20)).max(8).optional().describe('What started the runs: manual, schedule, api, mcp, external, chat, email, benchmark.'),
+      origin: z.array(z.string().max(20)).max(7).optional().describe('Where the runs were started from: web, android, cli, api, mcp, schedule, system.'),
+      tz: z.string().max(64).optional().describe("IANA time zone for day and week; default the owner's setting."),
+    }),
+    output: z.object({ groupBy: z.string(), total: z.object({ runs: z.number() }).passthrough(), groups: z.array(z.object({ key: z.string(), label: z.string(), runs: z.number() }).passthrough()) }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const q = new URLSearchParams();
+      if (a.group_by) q.set('groupBy', String(a.group_by));
+      for (const [key, param] of [['from', 'from'], ['to', 'to'], ['task_id', 'taskId'], ['policy_id', 'policyId'], ['tz', 'tz']] as const) if (a[key]) q.set(param, String(a[key]));
+      for (const [key, param] of [['status', 'status'], ['stop_reason', 'stopReason'], ['trigger', 'trigger'], ['origin', 'origin']] as const) if (Array.isArray(a[key]) && (a[key] as string[]).length) q.set(param, (a[key] as string[]).join(','));
+      const s = await ctx.api<Record<string, unknown> & { groupBy: string; total: { runs: number; successRate: number | null }; groups: unknown[] }>('GET', `/runs/stats${q.size ? `?${q}` : ''}`);
+      const rate = s.total.successRate === null ? 'no finished run' : `${Math.round(s.total.successRate * 100)}% succeeded`;
+      return toolOutput({ text: s, structured: s, summary: `${s.total.runs} run${s.total.runs === 1 ? '' : 's'}, ${rate}${s.groupBy === 'none' ? '' : `, ${s.groups.length} group${s.groups.length === 1 ? '' : 's'} by ${s.groupBy}`}.` });
+    },
+  },
   {
     name: 'task_improvement_request',
     title: 'Propose a better goal for a task',

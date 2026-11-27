@@ -133,6 +133,12 @@ describe('every tool stays within the limits with the largest plausible answer',
     // A proposal (E52.8): the longest goal, 12 changes and 5 facts, each with 10 pieces of evidence.
     if (path.startsWith('/task-improvements/')) return { id: RID, taskId: RID, status: 'ready', runIds: Array.from({ length: 10 }, () => RID), goalBefore: 'g'.repeat(4000), proposedGoal: 'p'.repeat(4000), summary: big.slice(0, 1000), changes: Array.from({ length: 12 }, () => ({ kind: 'add', text: big.slice(0, 500), why: big.slice(0, 500), evidence: Array.from({ length: 10 }, () => ({ runId: RID, seqFrom: 1, seqTo: 2 })) })), siteFacts: Array.from({ length: 5 }, () => ({ site: 'example.com', kind: 'quirk', text: big.slice(0, 300), evidence: [] })), confidence: 'high', model: 'm', usedImages: true, error: null, appliedGoal: null, createdAt: 'now', finishedAt: 'now', decidedAt: null };
     if (method === 'POST' && path.endsWith('/improvements')) return { id: RID, status: 'queued' };
+    // Run statistics (E53.1): the 400-group cap, each labelled with the longest task name and every measure filled in.
+    if (method === 'GET' && path.startsWith('/runs/stats')) {
+      const d = { n: 100_000, sum: 1e12, mean: 1e7, min: 0, p50: 1e7, p90: 1e8, max: 1e9 };
+      const g = { runs: 100_000, finished: 100_000, live: 0, byStatus: { queued: 0, running: 0, waiting_human: 0, paused: 0, succeeded: 90_000, failed: 9_000, cancelled: 1_000 }, successRate: 0.9, costPerSuccessUsd: 0.123456, costKnown: false, metrics: Object.fromEntries(['workingMs', 'wallMs', 'steps', 'modelCalls', 'inputTokens', 'cachedInputTokens', 'outputTokens', 'totalTokens', 'costUsd'].map((m) => [m, d])) };
+      return { groupBy: 'task', timeZone: 'UTC', scanned: 100_000, truncated: true, total: g, groups: Array.from({ length: 400 }, (_, i) => ({ ...g, key: `${RID}${i}`, label: big.slice(0, 200) })), groupsTruncated: true };
+    }
     // The trace file (#542): the run and 2,000 steps with big summaries, arguments and reasoning.
     if (path.startsWith('/runs/') && path.includes('/export')) return { type: 'hexactra.run-trace', formatVersion: 1, partial: false, masking: { applied: true, patternsVersion: 1, hits: {} }, run: { id: RID, status: 'failed', goal: big, result: big, error: big }, policy: null, budget: null, models: [], steps: Array.from({ length: 2000 }, (_, i) => ({ ...step(i), question: { prompt: big }, screenshot: null })), chat: Array.from({ length: 200 }, (_, i) => ({ seq: i, role: 'user', kind: 'text', text: big, at: 'now' })) };
     if (path.startsWith('/runs/') && method === 'GET') return { ...run(0), steps: Array.from({ length: 2000 }, (_, i) => step(i)) };
@@ -151,7 +157,7 @@ describe('every tool stays within the limits with the largest plausible answer',
     policy_create: { name: 'n', spec: {} }, policy_update: { policy_id: 'builtin:balanced' }, policy_set_default: { policy_id: null }, policies_export: {}, policies_import: { file: {} }, hosts_list: {}, browser_open: { goal: 'g' },
     procedures_list: { limit: 50 }, procedure_get: { procedure_id: 'kgp-1' }, procedure_run: { procedure_id: 'kgp-1', inputs: { Customer: 'ACME' } },
     site_facts_list: {}, site_fact_propose: { site: 'example.com', kind: 'navigation', text: 'Invoices are under Billing' },
-    run_diagnostics: { run_id: RID }, task_consistency: { task_id: RID, last: 50 }, task_improvement_request: { task_id: RID }, task_improvement_get: { improvement_id: RID },
+    run_diagnostics: { run_id: RID }, runs_stats: { group_by: 'task', status: ['failed'], from: '2026-06-01T00:00:00Z' }, task_consistency: { task_id: RID, last: 50 }, task_improvement_request: { task_id: RID }, task_improvement_get: { improvement_id: RID },
     browser_request_human: { session_id: SID, kind: 'other', prompt: 'p' }, browser_handoff_status: { session_id: SID, handoff_id: RID }, browser_close: { session_id: SID },
   };
   const args = (t: McpTool): Record<string, unknown> => {

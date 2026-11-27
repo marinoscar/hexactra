@@ -516,12 +516,8 @@
       "rest": [
         "GET /api/runs/stats"
       ],
-      "cli": {
-        "none": "Not yet: `runs stats` is #1072 (epic #1068)"
-      },
-      "mcp": {
-        "none": "Not yet: `runs_stats` is #1072 (epic #1068)"
-      },
+      "cli": "runs stats",
+      "mcp": "runs_stats",
       "tui": {
         "none": "The TUI is for watching and answering; statistics are read in the web app or the CLI"
       },

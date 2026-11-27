@@ -150,6 +150,21 @@
     "outputSchema": "9f16db8ab192b56f"
   },
   {
+    "name": "runs_stats",
+    "title": "Run statistics",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Run statistics",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "bb833e4890f060ef",
+    "outputSchema": "0efe94b2ea42ea74"
+  },
+  {
     "name": "task_improvement_request",
     "title": "Propose a better goal for a task",
     "scope": "tasks:write",
