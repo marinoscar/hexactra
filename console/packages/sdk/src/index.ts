@@ -83,6 +83,8 @@ export interface ConsoleClient {
   runs: RunsClient;
   /** Schedules: check an expression before saving it. */
   schedules: SchedulesClient;
+  /** Proposals for better task goals (E52.8): read and dismiss. Applying one is the task form's Save, in the console. */
+  taskImprovements: TaskImprovementsClient;
 }
 
 /** A policy reference: an own policy's UUID, or `builtin:economy|balanced|thorough|unlimited`. */
@@ -121,6 +123,29 @@ export interface TasksClient {
   pauseSchedules(id: string): Promise<Schema<'TaskSchedulesChangedResponseDto'>>;
   /** Resume every schedule of the task; `skipped` lists the schedules that could not be resumed. */
   resumeSchedules(id: string): Promise<Schema<'TaskSchedulesChangedResponseDto'>>;
+  /**
+   * How consistent the task's runs are (E52.7): the spread of steps, model calls, working time and cost over its newest finished runs
+   * (`last`: 3 to 50, default 20; `since`: an ISO time), the success rate and a label. Needs `tasks:read` and `runs:read`.
+   */
+  consistency(id: string, query?: { last?: number; since?: string }): Promise<Schema<'TaskConsistencyResponseDto'>>;
+  /**
+   * Ask for a proposal of a better goal (E52.8): an AI reads the task's recent finished runs (or `runIds`, 1 to 10) and proposes a goal,
+   * each change cited to steps. It never changes the task: the owner applies a proposal by saving the task form. 409 while one is being
+   * made; 429 above 20 a day. Needs `tasks:write`.
+   */
+  improve(id: string, options?: { runIds?: string[] }): Promise<{ id: string; status: 'queued' }>;
+  /** The task's proposals, newest first, without their changes. */
+  improvements(id: string): Promise<TaskImprovement[]>;
+}
+
+/** A proposal for a better goal (E52.8). `changes` and `siteFacts` are present when read one by one. */
+export type TaskImprovement = Schema<'ImprovementResponseDto'>;
+
+export interface TaskImprovementsClient {
+  /** One proposal, with its summary, goal, changes and their evidence, and site facts. */
+  get(id: string): Promise<TaskImprovement>;
+  /** Set a `ready` proposal aside. */
+  dismiss(id: string): Promise<TaskImprovement>;
 }
 
 export interface RunsClient {
@@ -145,6 +170,11 @@ export interface RunsClient {
   deliveries(id: string): Promise<RunDelivery[]>;
   /** Retry a delivery that failed (or is stuck): it gets a fresh set of attempts. 409 `DELIVERY_NOT_RETRYABLE` otherwise. */
   retryDelivery(id: string, runDeliveryId: string): Promise<RunDelivery>;
+  /**
+   * What happened in a run (E52.6): findings computed from its steps with no model (loops, selectors that matched nothing, repeated
+   * clicks, reads per action, a slow start, waiting for the owner, budget pressure, failures, unknown outcomes). Needs `runs:read`.
+   */
+  diagnostics(id: string): Promise<Schema<'RunDiagnosticsResponseDto'>>;
 }
 
 export interface SchedulesClient {
@@ -198,6 +228,9 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     testDelivery: (id, deliveryId) => data(api.POST('/api/tasks/{id}/deliveries/{deliveryId}/test', { params: { path: { id, deliveryId } } })) as never,
     pauseSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/pause', { params: { path: { id } } })) as never,
     resumeSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/resume', { params: { path: { id } } })) as never,
+    consistency: (id, query) => data(api.GET('/api/tasks/{id}/consistency', { params: { path: { id }, query: { ...query } } } as never)) as never,
+    improve: (id, o) => data(api.POST('/api/tasks/{id}/improvements', { params: { path: { id } }, body: o?.runIds?.length ? { runIds: o.runIds } : {} } as never)) as never,
+    improvements: async (id) => ((await data(api.GET('/api/tasks/{id}/improvements', { params: { path: { id } } }))) as { items: TaskImprovement[] }).items,
   };
   const runs: RunsClient = {
     start: (body) => data(api.POST('/api/runs', { body } as never)) as never,
@@ -211,9 +244,14 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     export: (id, o) => data(api.GET('/api/runs/{id}/export', { params: { path: { id }, query: { format: 'json', screenshots: o?.screenshots ?? 'embed' } } } as never)) as Promise<RunTrace>,
     deliveries: (id) => data(api.GET('/api/runs/{id}/deliveries', { params: { path: { id } } })) as never,
     retryDelivery: (id, runDeliveryId) => data(api.POST('/api/runs/{id}/deliveries/{runDeliveryId}/retry', { params: { path: { id, runDeliveryId } } })) as never,
+    diagnostics: (id) => data(api.GET('/api/runs/{id}/diagnostics', { params: { path: { id } } })) as never,
+  };
+  const taskImprovements: TaskImprovementsClient = {
+    get: (id) => data(api.GET('/api/task-improvements/{id}', { params: { path: { id } } })) as never,
+    dismiss: (id) => data(api.POST('/api/task-improvements/{id}/dismiss', { params: { path: { id } } })) as never,
   };
   const schedules: SchedulesClient = {
     preview: (body) => data(api.POST('/api/schedules/preview', { body })) as never,
   };
-  return { api, data, policies, tasks, runs, schedules };
+  return { api, data, policies, tasks, runs, schedules, taskImprovements };
 }

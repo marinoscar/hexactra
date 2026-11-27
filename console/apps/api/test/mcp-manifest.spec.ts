@@ -176,8 +176,8 @@ describe('MCP tool manifest (#462)', () => {
 
   it('classifies the tools by the rules of #462', () => {
     const by = (n: string) => MCP_TOOLS.find((t) => t.name === n)!;
-    // 66 tools for the model (run_pause and run_resume, E38.2; usage_report, #733; procedures_list, procedure_get and procedure_run, E46.22; site_facts_list and site_fact_propose, E46.35; task_run_batch and batch_status, E51.1), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
-    expect(MCP_TOOLS).toHaveLength(68);
+    // 70 tools for the model (run_pause and run_resume, E38.2; usage_report, #733; procedures_list, procedure_get and procedure_run, E46.22; site_facts_list and site_fact_propose, E46.35; task_run_batch and batch_status, E51.1; run_diagnostics, task_consistency, task_improvement_request and task_improvement_get, E52.10), plus the widgets' app-only helpers: run_card_poll (#466) and question_card_answer (#467).
+    expect(MCP_TOOLS).toHaveLength(72);
     for (const n of ['run_cancel', 'browser_close', 'task_update', 'policy_update', 'policy_set_default', 'policies_import', 'task_pause', 'browser_click', 'browser_type', 'browser_press', 'browser_click_at', 'browser_drag', 'browser_type_keys', 'browser_key', 'browser_evaluate', 'browser_type_secret']) {
       expect([n, by(n).effect]).toEqual([n, 'destructive']);
     }
@@ -185,7 +185,10 @@ describe('MCP tool manifest (#462)', () => {
     for (const n of ['browser_navigate', 'browser_scroll', 'browser_hover_at', 'browser_wait_for', 'browser_back', 'browser_open', 'run_goal', 'task_run', 'ask_human', 'inbox_answer', 'browser_request_human', 'run_pause', 'run_resume', 'procedure_run', 'site_fact_propose']) {
       expect([n, by(n).effect]).toEqual([n, 'write']);
     }
-    for (const n of ['policies_export', 'run_export', 'schedule_preview', 'browser_handoff_status', 'browser_screenshot', 'browser_text', 'browser_elements', 'browser_tabs']) expect([n, by(n).effect]).toEqual([n, 'read']);
+    for (const n of ['policies_export', 'run_export', 'schedule_preview', 'browser_handoff_status', 'browser_screenshot', 'browser_text', 'browser_elements', 'browser_tabs', 'run_diagnostics', 'task_consistency', 'task_improvement_get']) expect([n, by(n).effect]).toEqual([n, 'read']);
+    // Proposals (E52.10): asking for one writes a proposal row only; nothing applies, dismisses or approves.
+    expect([by('task_improvement_request').effect, by('task_improvement_request').scope]).toEqual(['write', 'tasks:write']);
+    expect(MCP_TOOLS.filter((t) => /improvement/.test(t.name) && /apply|approve|dismiss/.test(t.name))).toEqual([]);
     for (const t of MCP_TOOLS) {
       const web = t.name.startsWith('browser_') || t.name === 'run_goal' || t.name === 'task_run' || t.name === 'task_run_batch' || t.name === 'procedure_run';
       expect([t.name, t.openWorld]).toEqual([t.name, web]);

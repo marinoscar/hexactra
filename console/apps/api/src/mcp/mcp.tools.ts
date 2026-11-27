@@ -968,6 +968,77 @@ export const MCP_TOOLS: McpTool[] = [
       return toolOutput({ text: v, structured: v, summary, untrusted: traceHasPageText(trace) });
     },
   },
+  // Run findings, task consistency and proposals for a better goal (E52.10, #1025): read and request only. No tool applies a proposal,
+  // dismisses one or adds a site fact: applying is the task form's Save, in the console.
+  {
+    name: 'run_diagnostics',
+    title: 'What happened in a run',
+    description:
+      'Read the findings of one run: where it spent effort it did not need, computed from its recorded steps with no model (a loop, a selector that matched nothing, the same control clicked again, many reads per action, a slow start, time waiting for the owner, budget pressure, failures, steps whose outcome is unknown). ' +
+      'Each finding has a severity (warn or info), a title, a detail and the steps it is about. Texts are masked like the trace.',
+    input: z.object({ run_id: runId }),
+    output: z.object({ runId: z.string(), truncated: z.boolean(), findings: z.array(z.object({ code: z.string(), severity: z.string(), title: z.string(), detail: z.string(), seqFrom: z.number().nullable(), seqTo: z.number().nullable() }).passthrough()) }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const d = await ctx.api<Record<string, unknown> & { findings: unknown[] }>('GET', `/runs/${String(a.run_id)}/diagnostics`);
+      // A finding's detail can quote a selector or a step summary: page-derived text.
+      return toolOutput({ text: d, structured: d, summary: `${d.findings.length} finding${d.findings.length === 1 ? '' : 's'}.`, untrusted: d.findings.length > 0 });
+    },
+  },
+  {
+    name: 'task_consistency',
+    title: "How consistent a task's runs are",
+    description:
+      "Read how consistent a task's newest finished runs are: the min, median, 90th percentile and max of steps, model calls, working time and cost, the success rate, and a label (steady, varies, erratic, not_enough_runs), with the warning findings of the 10 newest runs. " +
+      'last is 3 to 50 (default 20). Use it to see whether a task needs a better goal (task_improvement_request).',
+    input: z.object({ task_id: taskId, last: z.number().int().min(3).max(50).optional().describe('How many of the newest finished runs to count (default 20).') }),
+    output: z.object({ taskId: z.string(), runs: z.number(), label: z.string() }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const c = await ctx.api<Record<string, unknown> & { runs: number; label: string }>('GET', `/tasks/${String(a.task_id)}/consistency${a.last ? `?last=${Number(a.last)}` : ''}`);
+      return toolOutput({ text: c, structured: c, summary: `${c.label} over ${c.runs} run${c.runs === 1 ? '' : 's'}.` });
+    },
+  },
+  {
+    name: 'task_improvement_request',
+    title: 'Propose a better goal for a task',
+    description:
+      "Ask for a proposal of a better goal for a saved task: an AI reads the task's recent finished runs (or run_ids, 1 to 10) and proposes a goal, each change cited to steps, plus facts about a site worth keeping. " +
+      'It never changes the task: the owner applies a proposal by saving the task form in the console. It takes a minute or two: read it with task_improvement_get. At most 20 a day; one at a time per task.',
+    input: z.object({ task_id: taskId, run_ids: z.array(id).min(1).max(10).optional().describe('The runs to read; default the 5 newest finished runs of the task.') }),
+    output: z.object({ id: z.string(), status: z.string() }).passthrough(),
+    scope: 'tasks:write',
+    effect: 'write',
+    openWorld: false,
+    async call(a, ctx) {
+      const r = await ctx.api<{ id: string; status: string }>('POST', `/tasks/${String(a.task_id)}/improvements`, a.run_ids ? { runIds: a.run_ids } : {});
+      return toolOutput({ text: r, structured: r, summary: `Proposal ${r.id.slice(0, 8)} queued: read it with task_improvement_get.` });
+    },
+  },
+  {
+    name: 'task_improvement_get',
+    title: 'Read a proposed goal',
+    description:
+      "Read one proposal for a better goal: its status (queued, running, ready, failed, applied, dismissed), what the runs showed, the proposed goal, each change with the steps that show why, and site facts. " +
+      'To use a ready proposal, the owner saves the goal in the task form in the console; this tool cannot apply it.',
+    input: z.object({ improvement_id: id.describe('The proposal id (from task_improvement_request).') }),
+    output: z.object({ id: z.string(), status: z.string(), proposedGoal: z.string().nullable() }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const p = await ctx.api<Record<string, unknown> & { id: string; status: string }>('GET', `/task-improvements/${String(a.improvement_id)}`);
+      // The summary and the goal were written by a model that read runs, which read pages: page-derived text.
+      return toolOutput({ text: p, structured: p, summary: `Proposal ${p.id.slice(0, 8)}: ${p.status}.`, untrusted: p.status === 'ready' || p.status === 'applied' });
+    },
+  },
   {
     name: 'tasks_list',
     title: 'List saved tasks',

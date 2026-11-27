@@ -464,12 +464,15 @@
         "POST /api/task-improvements/{id}/dismiss",
         "POST /api/task-improvements/{id}/applied"
       ],
-      "cli": {
-        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
-      },
-      "mcp": {
-        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
-      },
+      "cli": [
+        "tasks improve",
+        "tasks improvements",
+        "tasks improvement"
+      ],
+      "mcp": [
+        "task_improvement_request",
+        "task_improvement_get"
+      ],
       "tui": {
         "none": "The TUI is for watching and answering; a proposal is reviewed in the web app"
       },
@@ -484,12 +487,8 @@
       "rest": [
         "GET /api/tasks/{id}/consistency"
       ],
-      "cli": {
-        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
-      },
-      "mcp": {
-        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
-      },
+      "cli": "tasks consistency",
+      "mcp": "task_consistency",
       "tui": {
         "none": "The TUI is for watching and answering; consistency is read on the task page"
       },
@@ -501,12 +500,8 @@
       "rest": [
         "GET /api/runs/{id}/diagnostics"
       ],
-      "cli": {
-        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
-      },
-      "mcp": {
-        "none": "Added with the SDK, CLI and MCP parity of epic #1015 (#1025)"
-      },
+      "cli": "runs diagnostics",
+      "mcp": "run_diagnostics",
       "tui": {
         "none": "The TUI is for watching and answering; findings are read on the run page"
       },
