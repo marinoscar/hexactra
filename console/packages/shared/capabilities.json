@@ -473,9 +473,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; a proposal is reviewed in the web app"
       },
-      "web": {
-        "none": "Added with the review page of epic #1015 (#1024)"
-      }
+      "web": [
+        "/tasks/:id",
+        "/tasks/:taskId/improvements/:id"
+      ]
     },
     {
       "id": "tasks.consistency",

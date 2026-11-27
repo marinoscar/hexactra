@@ -12,6 +12,7 @@ export const IDS = {
   host: '22222222-2222-4222-8222-222222222222',
   liveRun: '33333331-3333-4333-8333-333333333333',
   finishedRun: '33333334-3333-4333-8333-333333333333',
+  improvement: '52000000-0000-4000-8000-000000000001',
   chatRun: '33333335-3333-4333-8333-333333333333',
   traceRun: '33333336-3333-4333-8333-333333333333',
   pausedRun: '33333337-3333-4333-8333-333333333333',
@@ -627,6 +628,30 @@ export const RESPONSES = {
   'GET /tasks': tasksList,
   // The task page (#428) reads the task with its summary, and its statistics.
   [`GET /tasks/${IDS.task}`]: taskRows[0],
+  // A proposal for a better goal (E52.9): ready, with a change, its evidence and a site fact.
+  [`GET /task-improvements/${IDS.improvement}`]: {
+    id: IDS.improvement,
+    taskId: IDS.task,
+    status: 'ready',
+    runIds: [IDS.finishedRun, '33333333-3333-4333-8333-333333333333'],
+    goalBefore: 'Using the messaging app at https://chat.example.com/web, send a text message to {{Recipient}} saying exactly: "{{Message}}".',
+    proposedGoal: 'Using the messaging app at https://chat.example.com/web, send ONE text message to {{Recipient}} saying exactly: "{{Message}}".\n1. Read the account email from the profile picture label; do not open the menu.\n2. Click "Start chat", type {{Recipient}} in To, and select the first contact once.\n3. Click the Send arrow once, by position. Check once that the message is the last bubble.',
+    summary: 'The agent went back to the contact list 12 times in one run, and pressed Send three times in both: the page ignored script clicks and keys.',
+    changes: [
+      { kind: 'add', text: 'Select the first contact once.', why: 'It re-picked the contact 12 times.', evidence: [{ runId: IDS.finishedRun, seqFrom: 53, seqTo: 110 }] },
+      { kind: 'replace', text: 'Click the Send arrow once, by position.', why: 'Enter and the selector click did nothing.', evidence: [{ runId: '33333333-3333-4333-8333-333333333333', seqFrom: 23, seqTo: 33 }] },
+    ],
+    siteFacts: [{ site: 'example.com', kind: 'quirk', text: 'The Send button ignores script events.', evidence: [{ runId: '33333333-3333-4333-8333-333333333333', seqFrom: 23, seqTo: 33 }] }],
+    confidence: 'high',
+    model: 'provider-a:model-large-2026',
+    usedImages: true,
+    error: null,
+    appliedGoal: null,
+    createdAt: iso(-600_000),
+    finishedAt: iso(-540_000),
+    decidedAt: null,
+  },
+  [`GET /tasks/${IDS.task}/improvements`]: { items: [{ id: IDS.improvement, taskId: IDS.task, status: 'ready', runIds: [IDS.finishedRun, '33333333-3333-4333-8333-333333333333'], goalBefore: '', proposedGoal: null, summary: null, confidence: 'high', model: null, usedImages: true, error: null, appliedGoal: null, createdAt: iso(-600_000), finishedAt: iso(-540_000), decidedAt: null }] },
   // How consistent the task's runs are (E52.7): erratic, with a long run that looped.
   [`GET /tasks/${IDS.task}/consistency`]: {
     taskId: IDS.task,
@@ -1290,4 +1315,4 @@ Object.assign(RESPONSES, {
   'POST /web-search/search': { provider: 'brave', hits: [{ title: 'Opening hours of the city library', url: 'https://library.example.test/hours', snippet: '' }, { title: '', url: 'https://a-very-long-host-name-for-narrow-screens.example.test/a/long/path/to/a/page?with=a&query=string', snippet: '' }], answer: null },
 });
 
-export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id, scanQuestion: scanQuestion.id, benchmark: IDS.benchmark, liveBenchmark: IDS.liveBenchmark, baselineBenchmark: IDS.baselineBenchmark, signinWaiting: IDS.signinWaiting, signinDone: IDS.signinDone };
+export const MOCK_IDS = { builder: IDS.builder, liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, outputsTask: IDS.outputsTask, outputsRun: IDS.outputsRun, carTask: IDS.carTask, carRun: IDS.carRun, saveLoginQuestion: saveLogin.id, scanQuestion: scanQuestion.id, benchmark: IDS.benchmark, liveBenchmark: IDS.liveBenchmark, baselineBenchmark: IDS.baselineBenchmark, signinWaiting: IDS.signinWaiting, signinDone: IDS.signinDone, improvement: IDS.improvement };

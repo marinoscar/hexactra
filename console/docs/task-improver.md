@@ -6,6 +6,19 @@
 - Deployment switch: the system setting `taskImprover.enabled` (on by default; `PATCH /api/system-settings` with `{ "taskImprover": { "enabled": false } }`). Off: every route below is a 404 and the web shows no button.
 - It runs only when an owner asks. Nothing runs in the background.
 
+## Using it
+
+1. On a task's page, the **Consistency** card has **Improve this task** (with `tasks:write`; disabled until the task has a finished run). On a finished run of a task, **Improve the task from this run** asks for a proposal from that run alone.
+2. The proposal page (`/tasks/:taskId/improvements/:id`) says "Reading N runs…" while it is made (a minute or two; you can leave and come back). Then it shows:
+   - **What the runs showed**: a summary, with a link to each run read;
+   - **Proposed goal**: a word-by-word diff against the current goal (removed struck through, added highlighted, each named for a screen reader), or the new text; `{{Name}}` parameters show as chips;
+   - **Why**: each change, its reason, and links to the steps that show it (`Run 2, steps 23–33`);
+   - **Site facts to keep**, only while your Knowledge Graph is on: each unticked; tick the ones runs should read.
+3. **Use this goal** opens the task's edit form with the proposed goal filled in and a banner, "Nothing changes until you save." Change it if you like. **Save** is the form's own save. After it succeeds, the proposal is marked applied with the goal as saved, then the facts you ticked are added as your own (a fact that cannot be added is said, and never undoes the save).
+4. **Dismiss** sets a proposal aside. The task page lists its proposals under **Improvements**.
+
+The page and the form were checked at 360, 390, 768, 1024 and 1440 px, light and dark, with `npm run ui:screens -- --mock` (routes `task-improvement` and `task-edit-improvement`).
+
 ## What it reads
 
 | It reads | It never reads |
