@@ -157,6 +157,8 @@ export interface Run {
   memoryIds?: string[];
   /** `GET /runs/:id`: the used memories that still exist, with their labels (#553). */
   memories?: { id: string; label: string; status: 'active' | 'superseded' | 'archived' }[];
+  /** `GET /runs/:id`: the skills the run read with skill_read that still exist, by name (#1008). */
+  skills?: { id: string; name: string; archived: boolean }[];
   /** `GET /runs/:id` (E41.5): the owner's unlisted accounts that could have done what this finished run did in the browser. */
   suggestedConnections?: { connectionId: string; label: string; provider: string; site: string; scope: 'task' | 'chat'; text: string }[];
 }

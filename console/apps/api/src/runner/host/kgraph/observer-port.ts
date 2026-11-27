@@ -189,7 +189,8 @@ export class KgraphObserver implements ObserverPort {
       const host = this.lastHost;
       if (recipe) this.enqueue(() => this.rememberSite(host, { signIn: recipe }));
     }
-    this.earlier.push({ seq: o.seq, text: o.resultText.slice(0, EARLIER_CHARS) });
+    // A skill's text (#1008) is never kept for argument binding: it never reaches a kg_ table.
+    if (o.family !== 'skills') this.earlier.push({ seq: o.seq, text: o.resultText.slice(0, EARLIER_CHARS) });
     if (this.earlier.length > EARLIER_KEPT) this.earlier.shift();
     const data = { userId: this.i.userId, runId: this.i.runId, seq: o.seq, tool: o.tool.slice(0, 64), family: o.family.slice(0, 200), commits: o.commits, bindings: bindings as unknown as Prisma.InputJsonValue, post: post as Prisma.InputJsonValue, ok: o.ok, outcome: o.outcome };
     this.enqueue(async () => {

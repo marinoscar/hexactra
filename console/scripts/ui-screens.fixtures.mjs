@@ -49,7 +49,7 @@ const PERMISSIONS = [
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'usage:read', 'user_settings:read', 'user_settings:write', 'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
-  'memories:read', 'memories:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write', 'web_search:read', 'web_search:write',
+  'memories:read', 'memories:write', 'skills:read', 'skills:write', 'secrets:read', 'secrets:write', 'connections:read', 'connections:write', 'web_search:read', 'web_search:write',
   'kgraph:read', 'kgraph:write', 'kgraph:admin',
   'benchmarks:read', 'benchmarks:run',
 ];
@@ -112,6 +112,8 @@ const finishedRun = run(IDS.finishedRun, 'failed', {
   // The memories its goal used (#553): the run page says "Used: …".
   memoryIds: ['aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
   memories: [{ id: 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'My partner', status: 'active' }, { id: 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Checking account', status: 'active' }],
+  // The skills it read (#1008): the run page says "Skills read: …".
+  skills: [{ id: 'b1000000-0000-4000-8000-000000000001', name: 'Google Messages', archived: false }],
   // The cards it paid with (E37.7): brand, last four, the shop and the declared and the confirmed amount; the second one differs.
   usedSavedCards: [
     { provider: 'vault', itemName: 'Everyday card', brand: 'visa', last4: '4242', merchant: 'checkout.shop.example.com', origin: 'https://checkout.shop.example.com', currency: 'USD', declaredAmount: '42.50', confirmedAmount: '42.50', mismatch: false, at: iso(-3_000_000) },
@@ -568,6 +570,16 @@ const memories = [
   memory('a1000000-0000-4000-8000-000000000004', 'fact', 'Old address', { city: 'Example City' }, { status: 'archived' }),
 ];
 
+// Skills (#1008): one on a site, one for any site with a long description, one switched off.
+const skill = (id, name, description, sites, extra = {}) => ({
+  id, name, description, body: 'Open the site. Start chat is top left. Write short messages, first name only.', sites, enabled: true, archivedAt: null,
+  lastUsedAt: null, useCount: 0, createdAt: '2026-11-10T09:00:00.000Z', updatedAt: '2026-11-10T09:00:00.000Z', ...extra,
+});
+const skills = [
+  skill('b1000000-0000-4000-8000-000000000001', 'Google Messages', 'How I send text messages from Google Messages on the web', ['google.com'], { lastUsedAt: '2026-11-25T18:00:00.000Z', useCount: 4 }),
+  skill('b1000000-0000-4000-8000-000000000002', 'Work email tone', 'How I write emails to colleagues and clients: short, friendly, a clear ask in the first line, no emojis, signed with my first name only', []),
+  skill('b1000000-0000-4000-8000-000000000003', 'Expense reports', 'How I file an expense report', ['example-expenses.test'], { enabled: false }),
+];
 
 // AI usage and cost (#734): 30 days of three models, one unpriced, stacked by model.
 const usageDays = Array.from({ length: 30 }, (_, i) => new Date(now - (29 - i) * 86_400_000).toISOString().slice(0, 10));
@@ -629,6 +641,19 @@ export const RESPONSES = {
   [`GET /runs/${IDS.liveRun}`]: liveRun,
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
+  // Run findings (E52.6): a long loop, a selector that matched nothing, the repeated Send, a slow start.
+  [`GET /runs/${IDS.finishedRun}/diagnostics`]: {
+    runId: IDS.finishedRun,
+    computedAt: iso(0),
+    stepsRead: 124,
+    truncated: false,
+    findings: [
+      { code: 'loop', severity: 'warn', title: 'Repeated the same 2 actions (click at 90,100; click at 1160,540) 12 times', detail: '58 steps, 47% of the run.', seqFrom: 53, seqTo: 110, stepsSpent: 58, evidence: { laps: 12, blockLength: 2, percentOfRun: 47, progressing: false } },
+      { code: 'selector_miss', severity: 'warn', title: 'A selector matched nothing 4 times', detail: '`a[aria-label="Start chat"]` was not on the page at steps 4, 26, 35, 45.', seqFrom: 4, seqTo: 45, stepsSpent: 4, evidence: { selector: 'a[aria-label="Start chat"]', seqs: [4, 26, 35, 45] } },
+      { code: 'repeated_click', severity: 'warn', title: 'Clicked the same control 2 times', detail: 'click on button[aria-label="Send message"], at steps 114, 119, with only reads of the page between.', seqFrom: 114, seqTo: 119, stepsSpent: 6, evidence: { seqs: [114, 119], noChangeSeen: false } },
+      { code: 'slow_start', severity: 'info', title: '66 s before the first step', detail: 'The run started, then waited before it did anything (a browser starting, a page loading, or a model slow to answer).', seqFrom: 1, seqTo: 1, stepsSpent: 0, evidence: { seconds: 66 } },
+    ],
+  },
   [`GET /runs/${IDS.chatRun}`]: chatRun,
   [`GET /runs/${IDS.pausedRun}`]: pausedRun,
   [`GET /runs/${IDS.pausedRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
@@ -659,6 +684,8 @@ export const RESPONSES = {
   'GET /connected-apps': connectedApps,
   // Memories (#551): a person, an account suggested by the agent, a preference and an archived fact.
   'GET /memories': (url) => (url.searchParams.get('status') === 'all' ? memories : memories.filter((m) => m.status === 'active')),
+  // Skills (#1008).
+  'GET /skills': skills,
   // Saved approvals (#554): three rules on two sites, one limited, one off.
   'GET /approval-rules': { paused: false, rules: approvalRules },
   // Secrets (#593).

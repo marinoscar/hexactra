@@ -9,6 +9,8 @@ import { MemoryContext } from '../memories/memory-context';
 import { attributePairs, attributesFromPairs } from '../memories/memory-attribute-pairs';
 import { providerWhy } from '../platform/ai/provider-why';
 import { MemoryProposals } from '../memories/memory-proposals.service';
+import { SKILL_BLOCK_HEADER, SkillContext } from '../skills/skill-context';
+import { sitesInText } from '@marinoscar/hexactra-kgraph';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgentTrace } from '../runner/agent-trace';
@@ -80,10 +82,20 @@ export const CONNECTION_CHAT_INSTRUCTIONS = [
   "- Anything that sends, creates, changes or deletes something is a job: call start_run and name the account in the goal. The agent uses that account's tools and asks the owner before it sends or changes anything. You have no tool to change their accounts.",
 ].join('\n');
 
+/** Added to the instructions only when the input holds the owner's skills block (#1008): the chat names a skill in the goal; it reads none. */
+export const SKILLS_CHAT_INSTRUCTION =
+  '- "The owner\'s skills" lists the owner\'s own guidance for kinds of jobs. You cannot read one; the agent can. When one fits, name it in the goal ("following the owner\'s Google Messages skill").';
+
 /** The most proposals one turn may make. */
 const MAX_PROPOSALS_PER_TURN = 2;
 /** How many recent owner messages the memory selection reads. */
 const MEMORY_TEXT_MESSAGES = 10;
+
+/** Whether the input holds the skills block (it sits before the conversation, so an owner's message quoting the header does not count). */
+function hasSkillsBlock(input: string): boolean {
+  const at = input.indexOf(SKILL_BLOCK_HEADER);
+  return at >= 0 && at < input.indexOf('Conversation, oldest first:');
+}
 
 /** Thrown from `onStep` once the turn has done its one thing (asked, or started a run). */
 class TurnDone extends Error {}
@@ -121,6 +133,8 @@ export class ChatTurnService {
     @Optional() private readonly webFetch?: WebFetchService,
     /** Batch runs (E51.1): `run_task_batch`, and a live batch makes the chat live. */
     @Optional() private readonly batches?: RunBatchService,
+    /** The owner's skills (#1008): names and descriptions only; the chat has no skill_read. Absent: no block. */
+    @Optional() private readonly skillContext?: SkillContext,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<ChatTurnOutcome> {
@@ -218,7 +232,9 @@ export class ChatTurnService {
     const about = this.memoryContext ? (await this.memoryContext.forText(userId, ownerText)).block : '';
     // The owner's saved tasks (#1007), after the memories (the stable part of the input): data, never an instruction. None: nothing at all.
     const saved = (tasks ?? (this.starter ? await chatTaskContext(this.prisma, userId, ownerText) : NO_TASK_CONTEXT)).block;
-    return [...(about ? [about, ''] : []), ...(saved ? [saved, ''] : []), 'Conversation, oldest first:', ...rows.reverse().map(line), '', batch ? `State: a batch of ${batch.total} runs of this chat is ${batch.status === 'review' ? 'waiting for the owner to review it' : `live${live ? ` (its current run is ${live.status})` : ''}`}.` : live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.', ...(connectionsLine ? ['', connectionsLine] : [])].join('\n');
+    // The owner's skills that fit what they wrote (#1008), after the memories and the saved tasks: names and descriptions, never the text.
+    const skills = this.skillContext ? (await this.skillContext.forJob(userId, { text: ownerText, sites: sitesInText(ownerText) })).block : '';
+    return [...(about ? [about, ''] : []), ...(saved ? [saved, ''] : []), ...(skills ? [skills, ''] : []), 'Conversation, oldest first:', ...rows.reverse().map(line), '', batch ? `State: a batch of ${batch.total} runs of this chat is ${batch.status === 'review' ? 'waiting for the owner to review it' : `live${live ? ` (its current run is ${live.status})` : ''}`}.` : live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.', ...(connectionsLine ? ['', connectionsLine] : [])].join('\n');
   }
 
   /** The memories a chat run's goal uses (#553): recorded on the run (the run page says "Used: …") and marked used. */
@@ -528,7 +544,7 @@ export class ChatTurnService {
       const base = [CHAT_INSTRUCTIONS, ...(reading.tools.length ? [CONNECTION_CHAT_INSTRUCTIONS] : []), ...(web.length ? [WEB_CHAT_INSTRUCTIONS] : [])].join('\n');
       const result = await tr.within(() =>
         this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
-          instructions: savedTasks.block ? withSavedTaskInstructions(base) : base,
+          instructions: [savedTasks.block ? withSavedTaskInstructions(base) : base, ...(hasSkillsBlock(input) ? [SKILLS_CHAT_INSTRUCTION] : [])].join('\n'),
           input,
           tools,
           maxSteps: MAX_MODEL_STEPS,

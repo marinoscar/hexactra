@@ -264,6 +264,24 @@ The console shows the trace on the run's page (#544; README, "A run's page"): ea
 |---|
 | ![The Export menu opened from the run page's sticky bar on a phone: PDF report, JSON trace, Include screenshots and the note](images/run-export-phone.png) |
 
+## What happened: run findings (E52.6, #1021)
+
+`GET /api/runs/{id}/diagnostics` answers where a run spent effort it did not need, computed on read from its own step rows: no table, no cache and **no model** (`apps/api/src/run-insights/run-diagnostics.ts`, pure). The run page shows them under the outcome as **What happened**, once the run has ended, each with a link that scrolls the timeline to its steps. Permission `runs:read`; another user's run is a 404. At most 2,000 steps are read (`truncated: true` beyond).
+
+| Code | Severity | When |
+|---|---|---|
+| `loop` | warn (info when each lap read something new) | A block of 1–8 actions that change the page repeated 3 times or more in a row, one other action allowed between laps. Up to 3 that do not overlap. `stepsSpent` counts every step in the range, reads included. |
+| `selector_miss` | info; warn from 3 | Failed steps whose selector matched nothing (`no element matches …`), by selector (clipped to 120 characters). |
+| `repeated_click` | warn | The same control (selector, position within 10 px, or the gate's label) clicked again within 12 steps with only reads between. Says so when a click reported no change (E52.3). |
+| `observation_heavy` | info | From 20 steps, more than 2 reads (text, elements, scripts, looks) per action that changes the page. |
+| `slow_start` | info | More than 30 seconds from the run's start to its first step. |
+| `waited_for_owner` | info | The time between each question and its answer, and the number of questions. |
+| `budget_pressure` | warn | A budget used to 80% or more (the same budget view as the run page). |
+| `failures` | info | 3 or more failed actions. |
+| `unknown_outcome` | warn | A step left in `intent` or `unknown` (E38.3). |
+
+Findings read only server-recorded facts (the tool, its redacted arguments, ok, the summary, the phase), **never** `reasoning` (the model's own words). Every text is masked like the trace. Each code is a unit-tested rule (`test/run-diagnostics.spec.ts`); a diagnosis that throws answers no findings and never fails the run page.
+
 ## Traces (OpenTelemetry)
 
 With the telemetry slice on, every job of a run is one OpenTelemetry trace (E38.4, #585): the job, its chunks, each model call, each tool call, each fabric action and each question, in the deployment's own collector. The run keeps the ids: `GET /api/runs/{id}` has `traceId` (the latest job's; null before the first job and with the slice off), the run page shows it as a copyable **Trace id**, and the JSON export lists every job's in `run.traceIds` (the newest 100). A queued chat run holds the chat turn's trace id until its first job starts. The span tree, the attributes, how to find a run by id and what a trace never holds are in the operations runbook, [Reading a run's trace](runbooks/operations.md#find-a-runs-trace-and-read-it). A trace is telemetry, not the audit trail: the durable record is the steps above.
