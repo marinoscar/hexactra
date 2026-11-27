@@ -131,8 +131,7 @@ describe('browser agent cards', () => {
       ['/settings/model-prices', 'user_settings:read', undefined],
       // E46.20 (#794), appended: what GET /api/kgraph/status enforces.
       ['/settings/kgraph', 'kgraph:read', undefined],
-      // E50.5 (#975), appended: what GET /api/web-search/status enforces.
-      ['/settings/web-search', 'web_search:read', undefined],
+      // E50.5 (#975) appended `/settings/web-search`; E50.14 (#984) made it a section of Connections and tools (one card).
     ]);
   });
 

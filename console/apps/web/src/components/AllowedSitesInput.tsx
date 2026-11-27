@@ -12,7 +12,7 @@ export interface AllowedSitesInputProps {
   id?: string;
 }
 
-export const ALLOWED_SITES_HELP = 'Leave empty to allow any site. Use *.example.test for every subdomain.';
+export const ALLOWED_SITES_HELP = 'Leave empty to allow any site. Use *.example.test for every subdomain. Web search and page reading stay inside these sites.';
 
 /**
  * The sites a task may visit, as chips. Enter, a comma, a space or a paste

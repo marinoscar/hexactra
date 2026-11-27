@@ -1,10 +1,10 @@
-import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, List, ListItem, ListItemText, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, Stack, TextField } from '@mui/material';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 
 import { useBreakpoint } from '../ui';
-import type { Capability, CapabilityGroup, Connection, TestResult } from './api';
+import type { Capability, CapabilityGroup, Connection } from './api';
 import { CapabilityPicker } from './CapabilityPicker';
-import { CAPABILITY_WORDS, GROUPS, PROVIDER_NAME, testCodeWords } from './words';
+import { CAPABILITY_WORDS, GROUPS, PROVIDER_NAME } from './words';
 
 /** A dialog that is full-screen on a phone, with buttons that stack there. */
 function Shell({ open, title, onClose, children, actions, busy }: { open: boolean; title: string; onClose: () => void; children: ReactNode; actions: ReactNode; busy?: boolean }) {
@@ -153,26 +153,6 @@ export function DefaultsDialog({ connection, onClose, onSave }: { connection: Co
           );
         })}
       </Stack>
-    </Shell>
-  );
-}
-
-/** What the test found: one line per capability that is on. */
-export function TestDialog({ connection, result, onClose }: { connection: Connection | null; result: TestResult | null; onClose: () => void }) {
-  return (
-    <Shell open={connection !== null && result !== null} title={connection ? `Test of ${connection.label}` : ''} onClose={onClose} actions={<Button onClick={onClose} sx={TOUCH}>Close</Button>}>
-      {result && result.results.length === 0 && (
-        <Typography color={connection?.provider === 'mcp' ? 'success.main' : 'text.secondary'}>
-          {connection?.provider === 'mcp' ? 'The server answered and listed its tools.' : 'Nothing is switched on for this account, so there is nothing to test.'}
-        </Typography>
-      )}
-      <List aria-label="Test results">
-        {result?.results.map((r) => (
-          <ListItem key={r.capability} disableGutters>
-            <ListItemText primary={CAPABILITY_WORDS[r.capability]} secondary={testCodeWords(r.code)} slotProps={{ secondary: { color: r.ok ? 'success.main' : 'error.main' } }} />
-          </ListItem>
-        ))}
-      </List>
     </Shell>
   );
 }
