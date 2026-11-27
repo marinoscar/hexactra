@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.154.1",
+  "version": "1.154.2",
   "private": true,
   "engines": {
     "node": ">=24"
