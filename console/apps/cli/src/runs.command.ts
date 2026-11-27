@@ -2,6 +2,8 @@ import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { resolveApp, startedBy } from './apps.js';
+import { agentToolsLine, type ConnectionView } from './connections.command.js';
+import type { WebSearchStatusView } from './web-search.js';
 import { consoleApi, consoleCredentials, consoleWebUrl } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
@@ -176,6 +178,23 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       const list = await consoleApi().get<Task[]>('/tasks');
       if (o.json) return json(list);
       for (const t of list) out(`${t.id.slice(0, 8)}  ${t.name}  [${t.profile}]  ${t.allowedDomains.join(',') || 'any site'}`);
+    });
+  tasks
+    .command('show <task>')
+    .description('One task (id, id prefix or name), and the one line of what its runs can use: everything you switched on (E50.17)')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { json?: boolean }) => {
+      const found = await findTask(ref);
+      const api = consoleApi();
+      const t = await api.get<Task>(`/tasks/${found.id}`);
+      if (o.json) return json(t);
+      // What a run can use is not chosen per task: the Connections page and `search on|off` are the switches.
+      const [connections, web] = await Promise.all([api.get<ConnectionView[]>('/connections').catch(() => null), api.get<WebSearchStatusView>('/web-search/status').catch(() => null)]);
+      out(`${t.name}  (${t.id})`);
+      out(`goal: ${t.goal}`);
+      out(`profile: ${t.profile}; sites: ${t.allowedDomains.join(', ') || 'any site'}`);
+      if (t.parameters?.length) out(`parameters: ${t.parameters.map((p) => p.label).join(', ')}`);
+      out(agentToolsLine(connections, web));
     });
   tasks
     .command('create <name> <goal>')
