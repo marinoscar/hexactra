@@ -1,0 +1,32 @@
+{
+  "name": "chat: text three people, each in a personal tone (one batch, reviewed first)",
+  "description": "E51.1 (#1006): the owner asks for the same saved task for three people. The chat makes one batch of three rows with each message written in full, and nothing starts before the owner reviews it.",
+  "tasks": [
+    {
+      "name": "Send a text",
+      "goal": "Send a text message to {{Recipient}} from Google Messages on the web: {{Message}}",
+      "parameters": [
+        { "key": "recipient", "label": "Recipient", "type": "text", "required": true },
+        { "key": "message", "label": "Message", "type": "text", "required": true }
+      ]
+    }
+  ],
+  "message": "Text Ana, Luis and Marta that dinner moved to 7, each in a personal tone",
+  "script": [
+    [
+      "run_task_batch",
+      {
+        "task": "Send a text",
+        "rows": [
+          { "inputs": [{ "name": "Recipient", "value": "Ana" }, { "name": "Message", "value": "Hi Ana! Small change: dinner is now at 7. See you there." }] },
+          { "inputs": [{ "name": "Recipient", "value": "Luis" }, { "name": "Message", "value": "Luis, heads up, dinner moved to 7." }] },
+          { "inputs": [{ "name": "Recipient", "value": "Marta" }, { "name": "Message", "value": "Marta, dinner is at 7 now instead. Can't wait!" }] }
+        ]
+      }
+    ]
+  ],
+  "expect": {
+    "tool": "run_task_batch",
+    "batchRows": 3
+  }
+}

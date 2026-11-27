@@ -395,7 +395,8 @@ function argsFor(tool: (typeof MCP_TOOLS)[number], ids: Record<string, string>):
     else if (type === 'string') out[name] = name === 'cron' ? '0 9 * * 1-5' : name === 'url' ? 'https://shop.example.test/' : 'x';
     else if (type === 'integer' || type === 'number') out[name] = typeof p.minimum === 'number' ? p.minimum : 1;
     else if (type === 'boolean') out[name] = false;
-    else if (type === 'array') out[name] = [];
+    // task_run_batch's rows (E51.1): the 2 rows its schema asks for.
+    else if (type === 'array') out[name] = name === 'rows' ? [{ inputs: { a: 'x' } }, { inputs: { a: 'y' } }] : [];
     else if (type === 'object') out[name] = {};
     else out[name] = 'x';
   }

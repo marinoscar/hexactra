@@ -44,6 +44,7 @@ import type { Scenario } from './scenario.schema';
 import { evaluate, evaluatePending } from './expectations';
 import { newModelRecord, recording, ScriptedScenarioModel, ScriptExhausted, type ModelRecord } from './scripted-model';
 import { OwnerSecrets, SiteBrowser } from './site';
+import { scenarioWeb, webSiteGate } from './web';
 
 /** The store of a scenario: the fakes' store, plus the run's usage totals and step count that a new job starts from. */
 export class ScenarioStore extends FakeRunStore {
@@ -110,6 +111,8 @@ export interface ScenarioResult {
   accounts: ScenarioAccounts | null;
   /** The pending expectations that do not hold yet (reported, not failing). */
   pendingFailures: string[];
+  /** The calls that reached the fake search provider and page reader (E50.7). */
+  webCalls: number;
 }
 
 const MAX_JOBS_DEFAULT = 20;
@@ -133,6 +136,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
   let crashArmed = Boolean(scenario.harness.crash);
 
   const sites = { allowed: (url: string) => domainAllowed(url, scenario.task.allowedDomains), text: scenario.task.allowedDomains.join(', ') };
+  const budget = { ...spec.budget, ...Object.fromEntries(Object.entries(scenario.harness.budget ?? {}).filter(([, v]) => v !== undefined)) } as BudgetSpec & { maxWebCalls?: number | null };
   const site = new SiteBrowser(scenario, {
     allowed: sites.allowed,
     owner,
@@ -169,7 +173,6 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
   let model: ModelPort = options.model ? recording(options.model, modelRecord) : new ScriptedScenarioModel(scenario.script, modelRecord);
   const newScriptedModel = (chunks: typeof scenario.script): void => void (model = new ScriptedScenarioModel(chunks, modelRecord));
 
-  const budget = { ...spec.budget, ...Object.fromEntries(Object.entries(scenario.harness.budget ?? {}).filter(([, v]) => v !== undefined)) } as BudgetSpec;
   const effectiveBudget = computeEffectiveBudget(budget, null, scenario.trigger === 'chat' ? 'soft' : 'hard');
   const stall = { ...spec.stall, ...scenario.harness.stall };
   const startTier = options.tier ?? spec.models.startTier;
@@ -192,7 +195,10 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
 
   // The owner's accounts and MCP servers (E41.1): the real connection tools over doubles, registered as the host registers them.
   const accounts = scenarioAccounts(scenario.connections, scenario.previousJob);
+  const web = // Web search (E50.7), bound as the host binds it.
+    scenarioWeb(scenario, sites.allowed, budget.maxWebCalls ?? null);
   const registry = registerRunTools<never>({
+    web: web ? { tools: web.tools as never, family: web.family as never } : null,
     needsBrowser: scenario.needsBrowser,
     connections: accounts !== null,
     ...(accounts ? await mcpToolset(accounts.deps, 'user-1', accounts.list).then((m) => ({ mcp: m.tools as unknown as RunnerTool<never>[], mcpFamilies: m.families as never })) : { mcp: [] }),
@@ -203,7 +209,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
     { name: 'site', check: async () => ({ kind: 'allow' as const }) },
     { name: 'risk', check: async () => ({ kind: 'allow' as const, data: { target: null, rule: null } }) },
   ];
-  const pipeline = new GatePipeline<never>((sabotage.has('gates_off') ? [...openGates, { name: 'connection', check: async () => ({ kind: 'allow' as const }) }] : [siteGate, riskGate, connectionGate]) as never[]);
+  const pipeline = new GatePipeline<never>((sabotage.has('gates_off') ? [...openGates, { name: 'connection', check: async () => ({ kind: 'allow' as const }) }] : [siteGate, riskGate, connectionGate, ...(web ? [webSiteGate] : [])]) as never[]);
 
   const buildJob = async (memory: BrowserMemory) => {
     const stallState = (memory.stall = readStallState(memory.stall));
@@ -256,6 +262,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
             connections: { list: accounts.list, needsBrowser: scenario.needsBrowser, lazyBrowser: false, limits: DEFAULT_CONNECTION_READ_LIMITS },
           }
         : {}),
+      ...(web ? { web: web.ext } : {}),
     } as BrowserExt;
     const newest = await store.newestSeq();
     const ctx = createRunContext<BrowserMemory, BrowserExt>({
@@ -391,6 +398,7 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
     knownTools: registry.all().map((t) => t.name),
     accounts,
     pendingFailures: [],
+    webCalls: web ? web.search.calls.length + web.fetch.calls.length : 0,
   };
   result.familiesUsed = [...new Set(result.calls.map((c) => c.family))].sort();
   result.failures = evaluate(result);

@@ -240,6 +240,9 @@ export interface SharedElementStore {
 /** The state after a call: host and path of the last URL a step saw, the view digest, and for an API family the result's shape. */
 export function postStateOf(o: ToolCallObservation): PostState {
   const post: PostState = {};
+  // A web search or page read (E50.7) is recorded as the call (tool and argument bindings): its result is third-party text, so no shape, and
+  // the page it read is not where the browser is (its host would be taken for the site of the next click).
+  if (o.family === 'web') return post;
   const last = [...o.steps].reverse().find((s) => s.url || s.contentHash);
   const at = hostAndPath(last?.url ?? null);
   if (at) {

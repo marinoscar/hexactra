@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "d5722ecc9058da70"
+    "outputSchema": "7c803f066100ee48"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ac6591144e58419a",
-    "outputSchema": "7ce470d998d041d0"
+    "outputSchema": "9b670309e71262ce"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_pause",
@@ -87,7 +87,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_resume",
@@ -102,7 +102,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_export",
@@ -117,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "89f9db4989ae95db"
+    "outputSchema": "15f3fda8ded4b91f"
   },
   {
     "name": "tasks_list",
@@ -177,7 +177,37 @@
       "openWorldHint": true
     },
     "inputSchema": "c1aba3cd46e48851",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
+  },
+  {
+    "name": "task_run_batch",
+    "title": "Run a saved task for several rows",
+    "scope": "runs:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Run a saved task for several rows",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "a640c7dd21676613",
+    "outputSchema": "8800cf5898ea2432"
+  },
+  {
+    "name": "batch_status",
+    "title": "See a batch",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "See a batch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "fd80deb2f6e7c965",
+    "outputSchema": "8800cf5898ea2432"
   },
   {
     "name": "schedule_create",
@@ -357,7 +387,7 @@
       "openWorldHint": false
     },
     "inputSchema": "137c4def79c3d9a2",
-    "outputSchema": "0b22c0b26f0795e6"
+    "outputSchema": "01f71c0f9a7ba52f"
   },
   {
     "name": "policy_create",
@@ -371,8 +401,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "0f5719a76f7d6bc9",
-    "outputSchema": "0b22c0b26f0795e6"
+    "inputSchema": "5d8e7d472e49f99e",
+    "outputSchema": "01f71c0f9a7ba52f"
   },
   {
     "name": "policy_update",
@@ -386,8 +416,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "50199fc1491d99e4",
-    "outputSchema": "0b22c0b26f0795e6"
+    "inputSchema": "6348e84e72548b7b",
+    "outputSchema": "01f71c0f9a7ba52f"
   },
   {
     "name": "policy_set_default",
@@ -972,7 +1002,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "question_card_answer",

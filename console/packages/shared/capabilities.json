@@ -95,6 +95,58 @@
       ]
     },
     {
+      "id": "tasks.run_batch",
+      "description": "Run a saved task once per row of values, one run after another (a batch, E51.1)",
+      "rest": [
+        "POST /api/tasks/{id}/batches",
+        "POST /api/batches/{id}/start"
+      ],
+      "cli": "tasks run",
+      "mcp": "task_run_batch",
+      "tui": {
+        "none": "The TUI is for watching and answering; a batch's runs are watched there like any run, and starting one needs a table of values, so use the CLI or the web app"
+      },
+      "web": [
+        "/tasks/:id",
+        "/chat/:id"
+      ]
+    },
+    {
+      "id": "batches.read",
+      "description": "A batch of runs: its rows, how each ended, and a task's batches",
+      "rest": [
+        "GET /api/batches/{id}",
+        "GET /api/tasks/{id}/batches"
+      ],
+      "cli": "batches show",
+      "mcp": "batch_status",
+      "tui": {
+        "none": "The TUI is for watching and answering; a batch's runs are watched there like any run"
+      },
+      "web": [
+        "/tasks/:id",
+        "/chat/:id"
+      ]
+    },
+    {
+      "id": "batches.cancel",
+      "description": "Cancel a batch: its live run is stopped and the rows not started are skipped",
+      "rest": [
+        "POST /api/batches/{id}/cancel"
+      ],
+      "cli": "batches cancel",
+      "mcp": {
+        "none": "run_cancel stops a batch's live run, which stops the batch; a separate tool would only repeat it"
+      },
+      "tui": {
+        "none": "The TUI stops a batch's live run like any run, which stops the batch"
+      },
+      "web": [
+        "/tasks/:id",
+        "/chat/:id"
+      ]
+    },
+    {
       "id": "tasks.outputs",
       "description": "What a task's finished runs returned (the named values its outputs ask for): a history, newest first, and as a CSV",
       "rest": [
@@ -1591,11 +1643,13 @@
     },
     {
       "id": "connections.admin",
-      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist. No access to users' connections",
+      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist, and the test of each app before anyone connects (E50.11). No access to users' connections",
       "rest": [
         "GET /api/connections/admin/apps",
         "PUT /api/connections/admin/apps/{provider}",
-        "DELETE /api/connections/admin/apps/{provider}"
+        "DELETE /api/connections/admin/apps/{provider}",
+        "POST /api/connections/admin/apps/{provider}/diagnose",
+        "GET /api/connections/admin/apps/{provider}/diagnostics"
       ],
       "cli": {
         "none": "Deliberate: an administrator sets the deployment's apps in Administration; the client secret is write-only"
@@ -1610,9 +1664,10 @@
     },
     {
       "id": "connections.mcp",
-      "description": "Add an MCP server as a connection (Streamable HTTP only; nothing, a bearer token, a header or OAuth), and give it a new sign-in when it needs reconnecting. The server is tested first and every one of its tools starts off",
+      "description": "Add an MCP server as a connection (Streamable HTTP only; nothing, a bearer token, a header or OAuth), optionally from a reviewed list of well-known servers, and give it a new sign-in when it needs reconnecting. The server is tested first and every one of its tools starts off",
       "rest": [
         "GET /api/connections/mcp/status",
+        "GET /api/connections/mcp/presets",
         "POST /api/connections/mcp",
         "POST /api/connections/{id}/mcp-auth"
       ],
@@ -1629,11 +1684,12 @@
     },
     {
       "id": "connections.mcp_tools",
-      "description": "See the tools of an MCP server (what each says it does, the server's hints, your decision), refresh the list, and decide for each tool: off, read or write. A tool that changed after you decided is off until you review it",
+      "description": "See the tools of an MCP server (what each says it does, the server's hints, your decision), refresh the list, decide for each tool: off, read or write, and try a read tool from the screen. A tool that changed after you decided is off until you review it",
       "rest": [
         "GET /api/connections/{id}/tools",
         "POST /api/connections/{id}/tools/refresh",
-        "PATCH /api/connections/{id}/tools/{toolId}"
+        "PATCH /api/connections/{id}/tools/{toolId}",
+        "POST /api/connections/{id}/tools/{toolId}/try"
       ],
       "cli": [
         "connections tools"
@@ -1666,11 +1722,12 @@
     },
     {
       "id": "service_credentials.own",
-      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, and setting or removing your own key. Write-only: a key is never returned, not even in part",
+      "description": "The keys of outside services the console calls for you (a web search provider): which ones exist, whether your own key, your organization's and the deployment's are stored and when, where your own key is kept (the console, your Vault or the built-in store, E50.3), setting or removing your own key, and moving it between the console and your secrets provider. Write-only: a key is never returned, not even in part",
       "rest": [
         "GET /api/service-credentials",
         "PUT /api/service-credentials/{service}/{name}",
-        "DELETE /api/service-credentials/{service}/{name}"
+        "DELETE /api/service-credentials/{service}/{name}",
+        "POST /api/service-credentials/{service}/{name}/move"
       ],
       "cli": {
         "none": "Deliberate: a key is typed in a form in the web app, never passed on a command line or kept in a shell history"
@@ -1756,6 +1813,28 @@
         "none": "The TUI is for watching and answering; web search is set up in the web app"
       },
       "web": "/admin/settings/web-search"
+    },
+    {
+      "id": "web_search.diagnose",
+      "description": "Diagnose web search: an ordered report (switches, credential tier, network, one live query of a fixed word counted as a call, today's limit, the page-reading check), each stage with a closed code and a remedy from the shared remedy table; for yourself, or for the deployment's key by an administrator; the last reports (E50.13)",
+      "rest": [
+        "POST /api/web-search/diagnose",
+        "GET /api/web-search/diagnostics",
+        "POST /api/web-search/admin/providers/{id}/diagnose",
+        "GET /api/web-search/admin/providers/{id}/diagnostics"
+      ],
+      "cli": {
+        "none": "Not yet: `search diagnose` comes with E50.15 (#985)"
+      },
+      "mcp": {
+        "none": "Deliberate: a diagnostic is about the owner's keys and the deployment's setup; it is read in the console, not by a hosted AI app (E50.13)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; web search is set up in the web app"
+      },
+      "web": {
+        "none": "Not yet: the diagnostics panel of the Web search pages comes with E50.14 (#984)"
+      }
     },
     {
       "id": "mail_triggers.read",

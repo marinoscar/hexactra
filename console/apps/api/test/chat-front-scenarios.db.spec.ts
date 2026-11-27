@@ -25,8 +25,8 @@ afterAll(async () => {
 });
 
 describe('the chat-front scenarios', () => {
-  it('finds the six chat scenarios (a suite that found none must fail)', () => {
-    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'two-accounts-send-report.chat.json']);
+  it('finds the twelve chat scenarios (a suite that found none must fail)', () => {
+    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'public-fact-web.chat.json', 'task-named-like-an-instruction.chat.json', 'task-none-fits.chat.json', 'task-send-a-text.chat.json', 'task-two-fit.chat.json', 'text-three-people.chat.json', 'two-accounts-send-report.chat.json']);
   });
 
   it.each(loaded.map((l) => [l.scenario.name, l.scenario] as const))('%s passes scripted', async (_name, scenario) => {
@@ -40,11 +40,48 @@ describe('the chat-front scenarios', () => {
     expect(r.calls.map((c) => c.tool)).toEqual(['mail_search']);
   });
 
+  it('a public fact is answered with web_search in the chat, with no run (E50.7)', async () => {
+    const r = await runChatScenario(app, loaded.find((l) => l.file.endsWith('public-fact-web.chat.json'))!.scenario);
+    expect(r.failures).toEqual([]);
+    expect(r.calls.map((c) => c.tool)).toEqual(['web_search']);
+  });
+
+  it('the chat model is offered no web tool when web search is not set up (E50.7)', async () => {
+    const { web: _web, ...rest } = loaded.find((l) => l.file.endsWith('public-fact-web.chat.json'))!.scenario;
+    const r = await runChatScenario(app, rest as never);
+    expect(r.failures.join(' ')).toContain('which the chat does not offer');
+  });
+
   it('the chat front names the account, states the facts and the outcome, and sets expects (E41.3)', async () => {
     const r = await runChatScenario(app, loaded.find((l) => l.file.endsWith('email-found-balance-with-screenshot.chat.json'))!.scenario);
     expect(r.pass).toBe(true);
     expect(r.pendingFailures).toEqual([]);
     expect(r.args).toMatchObject({ expects: 'accounts' });
+  });
+
+  const scenarioNamed = (file: string) => loaded.find((l) => l.file.endsWith(file))!.scenario;
+
+  it('runs the saved task that fits, with both values, as the task\'s own run (E51.2, #1007)', async () => {
+    const r = await runChatScenario(app, scenarioNamed('task-send-a-text.chat.json'));
+    expect(r.failures).toEqual([]);
+    expect(r.calls.map((c) => c.tool)).toEqual(['run_task']);
+    expect(r.calls[0]!.output).toBe('Started. The owner watches it in the chat.');
+    expect(r.runs).toHaveLength(1);
+    expect(r.runs[0]!.taskId).toEqual(expect.any(String));
+    // Two tasks: the block holds both, so list_tasks is not offered.
+    expect(r.offered).not.toContain('list_tasks');
+  });
+
+  it('a task named like an instruction changes nothing: no tool beyond the chat\'s own, no widened run (#1007)', async () => {
+    const baseline = await runChatScenario(app, { ...scenarioNamed('task-named-like-an-instruction.chat.json'), tasks: [], script: [] });
+    const r = await runChatScenario(app, scenarioNamed('task-named-like-an-instruction.chat.json'));
+    expect(r.failures).toEqual([]);
+    // The same tools as for an owner without the task: the name added none (and the chat never has a mail tool that sends).
+    expect([...r.offered].sort()).toEqual([...baseline.offered].sort());
+    expect(r.offered.filter((n) => /send|email|mail_/.test(n))).toEqual([]);
+    // The extra values the "instruction" asked for are refused by the server: nothing started.
+    expect(r.calls[0]!.output).toMatch(/^Refused: /);
+    expect(r.runs).toEqual([]);
   });
 
   it('names what differs', () => {

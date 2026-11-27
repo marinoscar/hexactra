@@ -1,0 +1,102 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: allowed sites bind the web tools without removing them",
+  "description": "E50.7: a task with allowed sites is still offered web_search and web_fetch; the search is filtered to the list and a read outside it is refused before anything is sent.",
+  "goal": "Find the widget guide on docs.example.test.",
+  "task": {
+    "allowedDomains": [
+      "docs.example.test"
+    ]
+  },
+  "site": {
+    "start": "https://docs.example.test/",
+    "pages": {
+      "https://docs.example.test/": {
+        "title": "Docs",
+        "text": "Documentation.",
+        "elements": []
+      }
+    }
+  },
+  "web": {
+    "results": {
+      "widget guide": [
+        {
+          "title": "Widget guide",
+          "url": "https://docs.example.test/widgets",
+          "snippet": "How to use widgets."
+        },
+        {
+          "title": "Widget guide mirror",
+          "url": "https://mirror.example.test/widgets",
+          "snippet": "A copy elsewhere."
+        }
+      ]
+    },
+    "pages": {
+      "https://docs.example.test/widgets": {
+        "title": "Widgets",
+        "text": "Turn the widget clockwise."
+      },
+      "https://mirror.example.test/widgets": {
+        "title": "Mirror",
+        "text": "A copy."
+      }
+    }
+  },
+  "script": [
+    [
+      {
+        "tool": "web_search",
+        "args": {
+          "query": "widget guide"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "web_fetch",
+        "args": {
+          "url": "https://mirror.example.test/widgets"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "web_fetch",
+        "args": {
+          "url": "https://docs.example.test/widgets"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "Turn the widget clockwise."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 4,
+    "finishIncludes": "clockwise",
+    "offered": [
+      "web_search",
+      "web_fetch"
+    ],
+    "modelReadIncludes": [
+      "1 result was left out: outside the sites allowed for this task",
+      "Refused: that site is not allowed for this task (docs.example.test)."
+    ],
+    "modelReadExcludes": [
+      "mirror.example.test/widgets \u2014"
+    ],
+    "mustNot": [
+      "navigate:outside_allowed_sites"
+    ],
+    "webCalls": 2
+  }
+}

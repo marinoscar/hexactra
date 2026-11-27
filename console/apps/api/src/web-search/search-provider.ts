@@ -12,12 +12,16 @@ import type { WebSearchResult } from '@marinoscar/hexactra-web-agent';
 import type { SecretBytes } from '../secrets/secrets-provider.port';
 import { CREDENTIAL_TIERS } from '../service-credentials/service-credential.port';
 import { apiKeyShape, ServiceCredentialRegistry } from '../service-credentials/service-credential.registry';
+import type { StageOutcome } from '../diagnostics/stages';
 import type { DiagnosticStage } from './diagnostic-stage';
 
 export type { WebSearchResult };
 
-/** What a provider needs to make a call. `api_key`: the caller wipes the key after the call. */
-export type ProviderAuth = { kind: 'api_key'; key: SecretBytes } | { kind: 'none'; baseUrl: string } | { kind: 'ai_service'; userId: string; orgId: string | null };
+/**
+ * What a provider needs to make a call. `api_key`: the caller wipes the key after the call. `none`: a self-hosted provider's address
+ * and whether the administrator marked it as on their private network (the address check then exempts that one host, E50.8).
+ */
+export type ProviderAuth = { kind: 'api_key'; key: SecretBytes } | { kind: 'none'; baseUrl: string; allowPrivate: boolean } | { kind: 'ai_service'; userId: string; orgId: string | null };
 
 export interface SearchRequest {
   query: string;
@@ -43,8 +47,25 @@ export interface SearchProvider {
   readonly estimatedCostPerCallUsd: number | null;
   /** Throws `WebToolError`, never a provider message. */
   search(req: SearchRequest, auth: ProviderAuth): Promise<WebSearchResult>;
-  /** The provider's own diagnostic stages (E50.13 adds more). Never a key, a query or a provider message. */
-  diagnose(auth: ProviderAuth | null, signal: AbortSignal): Promise<DiagnosticStage[]>;
+  /**
+   * The provider's own diagnostic stages (E50.13, #983): `network` (its host resolves and connects) then `live_query` (one search of
+   * the fixed word, `count: 1`; skipped with `LIMIT_REACHED` when `liveQuery` is false). Built with `providerStages`
+   * (`web-search-diagnostics.ts`). The switches, the credential, the limits and the fetch check are the service's. Never a key, a
+   * query, a result or a provider message.
+   */
+  diagnose(auth: ProviderAuth, signal: AbortSignal, opts?: ProviderDiagnoseOptions): Promise<DiagnosticStage[]>;
+  /** Codes of its own beyond `SEARCH_DIAGNOSTIC_CODES` (each with a remedy entry). */
+  readonly diagnosticCodes?: readonly string[];
+  /**
+   * The `credential` stage of a provider that has no stored key (`ai_service`: AI is on, a key resolves, a model is chosen). Absent:
+   * the stage passes. `who` is null for the deployment's report.
+   */
+  diagnoseCredential?(who: { userId: string; orgId: string | null } | null): Promise<StageOutcome>;
+}
+
+export interface ProviderDiagnoseOptions {
+  /** False when today's limit is reached: no query is sent. Default true. */
+  liveQuery?: boolean;
 }
 
 /** A provider id: lower-case, permanent. */

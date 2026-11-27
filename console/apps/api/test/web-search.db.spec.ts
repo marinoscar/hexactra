@@ -186,9 +186,14 @@ describe('the tiers, a search and the usage', () => {
 describe('the administrator', () => {
   it('reads and changes the settings (audited), reads the usage by day and provider, and the egress list shows the provider', async () => {
     const v = data<{ installed: { id: string; hosts: string[]; defaultEstimatedCostPerCallUsd: number }[]; providers: Record<string, unknown> }>(await call(admin, 'GET', '/api/web-search/admin'));
-    expect(v.installed).toEqual([{ id: 'brave', label: 'Brave Search', credential: 'api_key', hosts: ['api.search.brave.com'], defaultEstimatedCostPerCallUsd: 0.005 }]);
+    expect(v.installed).toEqual([
+      { id: 'brave', label: 'Brave Search', credential: 'api_key', hosts: ['api.search.brave.com'], defaultEstimatedCostPerCallUsd: 0.005 },
+      { id: 'tavily', label: 'Tavily', credential: 'api_key', hosts: ['api.tavily.com'], defaultEstimatedCostPerCallUsd: 0.008 },
+      { id: 'exa', label: 'Exa', credential: 'api_key', hosts: ['api.exa.ai'], defaultEstimatedCostPerCallUsd: 0.01 },
+      { id: 'searxng', label: 'SearXNG (self-hosted)', credential: 'none', hosts: [], defaultEstimatedCostPerCallUsd: 0 },
+    ]);
     const saved = await call(admin, 'PUT', '/api/web-search/admin', { providers: { brave: { costPerCallUsd: 0.004 } } });
-    expect(data<{ providers: Record<string, unknown> }>(saved).providers.brave).toEqual({ enabled: true, costPerCallUsd: 0.004, baseUrl: null });
+    expect(data<{ providers: Record<string, unknown> }>(saved).providers.brave).toEqual({ enabled: true, costPerCallUsd: 0.004, baseUrl: null, allowPrivate: false });
     expect((await call(admin, 'PUT', '/api/web-search/admin', { limits: { perRun: -1 } })).status).toBe(400);
     expect(await prisma.auditEvent.count({ where: { actorUserId: admin.userId, action: 'web_search.settings_saved' } })).toBeGreaterThan(0);
 
@@ -198,7 +203,13 @@ describe('the administrator', () => {
     expect(Object.keys(usage[0]!).sort()).toEqual(['calls', 'day', 'estimatedCostUsd', 'failures', 'provider']);
 
     const contributor = app.get(EgressRegistry, { strict: false }).list().find((c) => c.id === 'web_search')!;
-    expect(await contributor.describe()).toEqual([expect.objectContaining({ id: 'web_search.brave', enabled: true, required: false, hosts: ['api.search.brave.com'], degradation: 'The agent searches in the browser instead' })]);
+    expect((await contributor.describe()).map((d) => [d.id, d.enabled, d.hosts])).toEqual([
+      ['web_search.brave', true, ['api.search.brave.com', 'example.com']],
+      ['web_search.tavily', false, ['api.tavily.com', 'example.com']],
+      ['web_search.exa', false, ['api.exa.ai', 'example.com']],
+      ['web_search.searxng', false, ['example.com']],
+    ]);
+    expect((await contributor.describe())[0]).toMatchObject({ required: false, degradation: 'The agent searches in the browser instead' });
   });
 
   it('switched off by the administrator: off for everyone, with the reason', async () => {

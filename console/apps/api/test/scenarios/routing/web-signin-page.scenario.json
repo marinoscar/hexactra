@@ -1,0 +1,72 @@
+{
+  "$schema": "../scenario.schema.json",
+  "name": "routing: a page that needs sign-in is opened in the browser",
+  "description": "E50.7: web_fetch cannot read a page behind a sign-in and says to open it in the browser; the agent does.",
+  "goal": "Read the notice on https://portal.example.test/notice.",
+  "site": {
+    "start": "https://start.example.test/",
+    "pages": {
+      "https://start.example.test/": {
+        "title": "Start",
+        "text": "A blank start page.",
+        "elements": []
+      },
+      "https://portal.example.test/notice": {
+        "title": "Notice",
+        "text": "Maintenance on Sunday from 02:00.",
+        "elements": []
+      }
+    }
+  },
+  "web": {
+    "blocked": [
+      "https://portal.example.test/notice"
+    ]
+  },
+  "script": [
+    [
+      {
+        "tool": "web_fetch",
+        "args": {
+          "url": "https://portal.example.test/notice"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "navigate",
+        "args": {
+          "url": "https://portal.example.test/notice"
+        }
+      }
+    ],
+    [
+      {
+        "tool": "read_text",
+        "args": {}
+      }
+    ],
+    [
+      {
+        "tool": "finish",
+        "args": {
+          "success": true,
+          "result": "Maintenance on Sunday from 02:00."
+        }
+      }
+    ]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "maxSteps": 5,
+    "finishIncludes": "Sunday",
+    "modelReadIncludes": [
+      "That page could not be read this way. Open it in the browser."
+    ],
+    "toolsUsed": [
+      "navigate",
+      "read_text"
+    ],
+    "browserOpened": true
+  }
+}

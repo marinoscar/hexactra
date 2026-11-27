@@ -38,6 +38,8 @@ import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
 import { RunRecorder, fabricRecorderCalls } from './host/run-recorder';
 import { startRun } from './host/start';
+import { WebFetchService } from '../web-search/fetch/web-fetch.service';
+import { WebSearchService } from '../web-search/web-search.service';
 
 export { GUIDANCE_PREFIX } from '@marinoscar/hexactra-agent/engine';
 export { describeScript } from '@marinoscar/hexactra-browser-agent/page';
@@ -89,6 +91,9 @@ export class GoalRunnerService {
     @Optional() public kgraphAfterRun?: KgraphAfterRun,
     @Optional() public kgraphStore?: PrismaProcedureStore,
     @Optional() public kgraphSiteFacts?: KgraphSiteFactsService,
+    /** Web search and web_fetch (E50.7): absent without the web search module, and then no run is offered them. */
+    @Optional() public webSearch?: WebSearchService,
+    @Optional() public webFetch?: WebFetchService,
     /** The owner's skills (#1008): absent, and no run is offered one. */
     @Optional() public skills?: SkillContext,
   ) {}
@@ -121,6 +126,8 @@ export class GoalRunnerService {
       kgraphAfterRun: this.kgraphAfterRun,
       kgraphStore: this.kgraphStore,
       kgraphSiteFacts: this.kgraphSiteFacts,
+      webSearch: this.webSearch,
+      webFetch: this.webFetch,
       skills: this.skills,
       clock: () => this.clock(),
       log: this.log,

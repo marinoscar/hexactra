@@ -24,6 +24,8 @@ import type { RunArtifactStore } from '../../tasks/run-delete.service';
 import type { RunNotifier } from '../../tasks/run-notifier';
 import type { RunTraceService } from '../../tasks/run-trace.service';
 import type { TasksService } from '../../tasks/tasks.service';
+import type { WebFetchService } from '../../web-search/fetch/web-fetch.service';
+import type { WebSearchService } from '../../web-search/web-search.service';
 
 export interface HostDeps {
   prisma: PrismaService;
@@ -60,6 +62,10 @@ export interface HostDeps {
   kgraphSiteFacts?: Pick<KgraphSiteFactsService, 'propose' | 'activeFor' | 'offeredTo' | 'recordOffered' | 'markUsed' | 'afterRun'>;
   /** After a run's final transition (E46.7): enqueues the compile job when the run was captured. Best effort. */
   kgraphAfterRun?: Pick<KgraphAfterRun, 'finished'>;
+  /** Web search (E50.5, E50.7): who answers for the owner, and the port of a run. Absent without the module: no run is offered web search. */
+  webSearch?: Pick<WebSearchService, 'system' | 'userSettings' | 'candidates' | 'costOf' | 'forUser'>;
+  /** `web_fetch` on the console server (E50.6): the port of a run. Absent: no run is offered `web_fetch`. */
+  webFetch?: Pick<WebFetchService, 'forRun'>;
   /** The wall clock; tests replace it to pass time without waiting. */
   clock: () => number;
   log: Logger;

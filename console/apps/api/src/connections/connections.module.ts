@@ -15,20 +15,24 @@ import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry } from './connection-usage.registry';
 import { ConnectionActivityService } from './connection-activity.service';
 import { ConnectionDiagnosticsController } from './connection-diagnostics.controller';
+import { ConnectionAppDiagnostics } from './connection-app-diagnostics.service';
 import { ConnectionDiagnosticsService } from './connection-diagnostics.service';
 import { ConnectionFilesController } from './connection-files.controller';
 import { ConnectionFilesService } from './connection-files.service';
 import { ConnectionsAdminController } from './connections-admin.controller';
 import { ConnectionsController } from './connections.controller';
+import { ConnectionAccountsCheck, ConnectionsEgressContributor, ConnectionsHealthJobCheck, GoogleAppCheck, McpServersCheck, MicrosoftAppCheck } from './connections.doctor';
 import { ConnectionEvents } from './connections.events';
 import { ConnectionsHealth, ConnectionsHealthHandler, ConnectionsHealthTask } from './connections.jobs';
 import { ConnectionsService } from './connections.service';
 import { McpCatalogService } from './mcp/mcp-catalog.service';
 import { McpConnectionsService } from './mcp/mcp-connections.service';
 import { McpConnector } from './mcp/mcp-connector.service';
+import { McpDiagnostics } from './mcp/mcp-diagnostics';
 import { McpOAuthService } from './mcp/mcp-oauth.service';
 import { McpRunService } from './mcp/mcp-run.service';
 import { McpSecretStore } from './mcp/mcp-secrets';
+import { McpTryService } from './mcp/mcp-try.service';
 
 /**
  * Connections (E39.2, #599): the owner's accounts at Google and Microsoft, several per service, each with a label and its own
@@ -58,6 +62,7 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     ConnectionActivityService,
     ConnectionCapabilities,
     ConnectionDiagnosticsService,
+    ConnectionAppDiagnostics,
     ConnectionsHealth,
     ConnectionsHealthHandler,
     ConnectionsHealthTask,
@@ -67,8 +72,17 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     McpOAuthService,
     McpConnectionsService,
     McpRunService,
+    // Doctor and egress (E50.13): read-only lines for the apps, the accounts, the health job and MCP servers.
+    GoogleAppCheck,
+    MicrosoftAppCheck,
+    ConnectionAccountsCheck,
+    ConnectionsHealthJobCheck,
+    McpServersCheck,
+    ConnectionsEgressContributor,
+    McpDiagnostics,
+    McpTryService,
   ],
-  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionDiagnosticsService, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService],
+  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionDiagnosticsService, ConnectionAppDiagnostics, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService, McpTryService],
 })
 export class ConnectionsModule implements OnModuleInit {
   constructor(

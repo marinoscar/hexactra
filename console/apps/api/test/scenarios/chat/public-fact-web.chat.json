@@ -1,0 +1,31 @@
+{
+  "name": "chat: a public fact is answered with a web search, no run",
+  "description": "E50.7: web search set up and switched on: \"what is the capital of X\" is looked up in the chat with web_search; no job is started.",
+  "web": {
+    "results": {
+      "capital of Exampleland": [
+        {
+          "title": "Exampleland - facts",
+          "url": "https://atlas.example.test/exampleland",
+          "snippet": "The capital of Exampleland is Sampleton."
+        }
+      ]
+    }
+  },
+  "message": "What is the capital of Exampleland?",
+  "script": [
+    [
+      "web_search",
+      {
+        "query": "capital of Exampleland",
+        "count": null,
+        "freshness": null,
+        "site": null
+      }
+    ]
+  ],
+  "expect": {
+    "tool": "web_search",
+    "noRun": true
+  }
+}

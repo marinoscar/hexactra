@@ -437,7 +437,7 @@ const chatMessages = [
   chatMessage(6, 'assistant', 'clarify', 'Which showing would you like?', { meta: { options: ['4:30 PM', '7:30 PM', 'The latest one'] } }),
   chatMessage(7, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),
   // The live run: its Browser card shows the run's picture (the mocked screenshot).
-  chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
+  chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun, meta: { taskId: IDS.task, taskName: 'Book cinema tickets for the usual Friday showing at the cinema near home' } }),
   // The agent offers to remember a person the owner named (#553): the "Remember this?" card.
   chatMessage(9, 'assistant', 'memory', 'Suggested remembering: My partner', { meta: { questionId: memoryProposal.id } }),
   // The agent offers to save the sign-in the owner typed by hand (E37.4b): the "Save this sign-in for <site>?" card.
@@ -687,6 +687,11 @@ export const RESPONSES = {
   'GET /secrets/reach': secretsReach,
   'GET /secrets/identity': secretsIdentity,
   'GET /secrets/cards': secretsCards,
+  // Keys of outside services (E50.3): one key in the built-in store, one not set.
+  'GET /service-credentials': [
+    { service: 'web_search', name: 'brave', label: 'Brave Search API key', tier: 'user', tiers: { user: { available: true, set: true, setAt: '2026-11-20T10:00:00.000Z' }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: true, setAt: '2026-11-01T10:00:00.000Z' } }, userBinding: 'builtin', secretsProvider: { id: 'builtin', writable: true, releasesEnabled: true, ready: true } },
+    { service: 'web_search', name: 'searxng_with_a_long_reference_name', label: 'A self-hosted search provider with a long name that has to wrap on a phone', tier: null, tiers: { user: { available: true, set: false, setAt: null }, organization: { available: false, set: false, setAt: null }, system: { available: true, set: false, setAt: null } }, userBinding: 'credential_store', secretsProvider: { id: 'builtin', writable: true, releasesEnabled: true, ready: true } },
+  ],
   'GET /secrets/admin/summary': { deploymentEnabled: true, usersConnected: 3, usersNeedingReconnect: 1, usesThisWeek: 41, refusalsThisWeek: 4 },
   'GET /secrets/vault/default-client': { baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, allowedHosts: [], redirectUri: 'https://console.example.test/api/secrets/vault/callback' },
   'GET /connected-apps/preflight': preflight,

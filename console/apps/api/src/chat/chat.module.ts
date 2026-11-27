@@ -15,6 +15,7 @@ import { ChatTurnHandler, ChatTurnQueue } from './chat-turn.job';
 import { ChatTurnService } from './chat-turn.service';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
+import { WebSearchModule } from '../web-search/web-search.module';
 
 /**
  * Chats (#482): conversations and their messages, and the turn engine that
@@ -22,7 +23,7 @@ import { ChatService } from './chat.service';
  * slice (its configured AiModule); the job queue is global.
  */
 @Module({
-  imports: [AiModule, TasksModule, PoliciesModule, QuestionsModule, MemoriesModule, ApprovalsModule, ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule] : [])],
+  imports: [AiModule, TasksModule, PoliciesModule, QuestionsModule, MemoriesModule, ApprovalsModule, ...(isSliceEnabled('credentials') ? [WebSearchModule] : []), ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule] : [])],
   // ChatStreamController first: its fixed `:id/stream` path is declared before the `:id` routes.
   controllers: [ChatStreamController, ChatController],
   providers: [ChatOwnerGuard, ChatStreamService, ChatTaskDraftService, ChatService, ChatResults, ChatTurnService, ChatTurnQueue, ChatTurnHandler],

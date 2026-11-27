@@ -80,13 +80,27 @@ Hexactra does not ship a Google project or a Microsoft app: **the deployment's a
 3. Paste the client id and secret (Microsoft: and set the **tenant**) and switch the provider on. It can be switched on only when the client id and secret are set.
 4. MCP servers have their own switch, **off by default**, and host lists in the same page ([MCP servers](#mcp-servers-e399)).
 
+### Test the app before anyone connects (E50.11)
+
+Under **Administration, Connections** (or `POST /api/connections/admin/apps/{provider}/diagnose`, `system_settings:write`; the last reports at `GET .../diagnostics`, `system_settings:read`) the administrator tests the deployment's app with no user and no account. The stages, each on its own (one failing hides none of the others):
+
+| Stage | What it checks | What it can say |
+|---|---|---|
+| `app_config` | The code is installed, a client id and a secret are set. The switch off only warns, so the app can be tested before it is switched on. Shows the client id's last four characters, never more, never the secret | `NOT_INSTALLED`, `APP_NOT_CONFIGURED`, `PROVIDER_OFF` (warn) |
+| `redirect_uri` | The address the console sends (`<APP_URL>/api/connections/callback/<provider>`) is https and has the origin you reached the console on (host names only: the full address is on the page above) | `REDIRECT_NOT_HTTPS` (fail; a warning for http on the loopback address), `APP_URL_MISMATCH` (warn) |
+| `discovery` | The provider's sign-in endpoints answer: Google's discovery document; Microsoft's for the configured tenant | `TENANT_NOT_FOUND` (Microsoft), `UNAVAILABLE` |
+| `client_check` | A token request with a deliberately invalid code: the provider answers `invalid_grant` for a good client id and secret and `invalid_client` (or `unauthorized_client`) otherwise (RFC 6749 §5.2; Google's and Microsoft's token endpoint documentation). Nothing is issued. An answer that tells neither is `skipped` | `APP_CREDENTIALS_REFUSED`, `NEEDS_A_SIGN_IN` (skipped), `TENANT_NOT_FOUND` |
+| `picker_key` | Google only: the Picker API key is set (Documents offers the file picker) | `PICKER_KEY_MISSING` (warn) |
+
+The report is stored in `connection_diagnostics` with target kind `provider_app`, the provider as its id and **no user** (it is not in any owner's summary or export). Read calls only. The same stages, without storing them, are `ConnectionAppDiagnostics.stages(provider)` and the `provider_app` entries of the `DiagnosticsRegistry`: what the Doctor check of E50.13 shows. **Not verified on a real app** (#661): that Google and Microsoft answer a bad client before a bad code is from their documentation.
+
 The client id, tenant and switch are the `connections` system settings; the secret is a write-only system credential (`connection_app_google`, `connection_app_microsoft`), never returned. Switching a provider off stops new connections; existing connections keep refreshing. Removing the app deletes the id and secret and switches it off: connected accounts stay but cannot refresh until an app is set again. [Rotating the secret](runbooks/operations.md#rotate-the-providers-app-secret) keeps the client id, so owners do not reconnect. The Connect dialog explains which kinds of account work (personal accounts, work or school accounts) before the owner starts; that text is provisional until the record's experiments are done.
 
 ### Setup checklist for the administrator
 
 Follows the decision record (provisional until the experiments of #598 are done).
 
-1. In the Google Cloud console create a project and enable the **Gmail, Google Calendar, Google Docs, Google Sheets and Google Drive** APIs. A switched-off API shows up in the connection's **Test** as "the service is switched off" (`API_DISABLED`).
+1. In the Google Cloud console create a project and enable the **Gmail, Google Calendar, Google Docs, Google Sheets and Google Drive** APIs (APIs & Services, Library, the API, Enable). A switched-off API shows up in the connection's **Test** and its diagnostics as `API_DISABLED` with the API named (`data.api`: `gmail.googleapis.com`, `calendar-json.googleapis.com`, `drive.googleapis.com`, `docs.googleapis.com`, `sheets.googleapis.com`), and its remedy (`API_DISABLED_DRIVE`, ...) says where to enable it (#681).
 2. **Google Auth Platform:** set the audience to **External** and the publishing status to **In production**. A project left in **Testing** ends every sign-in after about seven days (the connection then says it needs to be connected again). You do not submit the app for verification for your own use; users click through the "Google hasn't verified this app" page. Adding the restricted Gmail permissions is what makes Google say verification is needed: for your own accounts you do not take that step.
 3. **Clients, Create client:** type **Web application**. Authorised redirect URI, to copy exactly: `<console base>/api/connections/callback/google` (the page under Administration shows it with your address filled in). It must be `https` with a public domain name (a tunnel or a reverse proxy is enough); Google refuses a raw IP address and a private name.
 4. Paste the client id and secret into **Administration, Connections** and switch Google on.
@@ -199,12 +213,27 @@ The provider refused the saved grant (`invalid_grant`): the owner removed the ap
 
 A **paused** connection is not used by anything (`CONNECTION_PAUSED`); its sign-in is kept alive by the health job.
 
+**Which step failed: the diagnostics of a Google or Microsoft connection (E50.11).** `POST /api/connections/{id}/diagnose` runs, after `status` and `provider_installed`, the provider's own stages, in the same order for both providers:
+
+| Stage | What it checks | What it can say |
+|---|---|---|
+| `app_config` | The deployment's app has a client id and a secret | `APP_NOT_CONFIGURED`, `PROVIDER_OFF` (warn) |
+| `sign_in` | A token through the normal path (refreshed when due) | `GRANT_REVOKED`, `NO_REFRESH_TOKEN`, `TOKEN_STORE_FAILED` (the owner reconnects), `APP_CREDENTIALS_REFUSED` (the provider answered `invalid_client`: the administrator's to fix, no reconnect), `ADMIN_CONSENT_REQUIRED` (Microsoft), `UNAVAILABLE` |
+| `token_lifetime` | When the access token expires and when it was last renewed, as stored when the report started | `REFRESH_STALE` (warn: renewed more than 44 hours ago, 20 hours plus a day of the daily health job) |
+| `permissions` | Each capability that is on against what the provider granted | `PERMISSION_MISSING` with `data.capability`: the owner reconnects with **Change what it can do** and ticks that permission (the incremental consent) |
+| `capability:<name>` | One cheap read per capability that is on, the calls of **Test** (Google Documents also reads Docs and Sheets), each on its own: one failing hides none of the others; all `skipped` when `sign_in` failed | Google: `API_DISABLED` with `data.api` (read from the answer's reason and service id only, a closed list), `PERMISSION_MISSING`, `FORBIDDEN`, `RATE_LIMITED`, `QUOTA_EXCEEDED`, `UNAVAILABLE`. Microsoft (Graph's error `code` only): `PERMISSION_MISSING`, `MAILBOX_NOT_FOUND`, `LICENSE_MISSING`, `ADMIN_CONSENT_REQUIRED`, and the same others |
+| `clock` | The provider's `Date` header against the server's clock | `CLOCK_SKEW` (warn over two minutes: tokens fail to validate with a skewed clock; the administrator's) |
+
+A diagnostic never widens a grant: it reports a missing permission and the owner decides to reconnect. No mail is read beyond the one-item list Test already makes, and nothing is sent, created, changed or deleted.
+
 ## Diagnostics (E50.10)
 
 `POST /api/connections/{id}/test` answers one code per capability and stores nothing (kept as is for the SDK and the CLI). **Diagnostics** say at which step a connection fails and what to do about it, and remember the last results.
 
 - **A report** (`src/diagnostics/diagnostic-report.ts`) is a list of ordered stages, each with a status (`pass`, `warn`, `fail`, `skipped`), a `code` from a closed list (`/^[A-Z][A-Z_]{0,39}$/`; anything else is `UNKNOWN`), a `remedy` key and the time it took. Every connection gets the generic stages: `status` (paused warns; needs a reconnect or revoked fails, with its reason as the remedy), `provider_installed` (the adapter or the MCP module is installed and the administrator's switch is on), then the provider's own stages, then `latency` (a warning over 5 s). After a failure the dependent stages are `skipped`.
-- **The provider's own stages** come from the `DiagnosticsRegistry` (a `Diagnosable` per provider) or the adapter's optional `diagnose`. Until a provider has one (Google and Microsoft: E50.11; MCP servers: E50.12), the report falls back to today's test: `sign_in`, then one `capability:<name>` probe per capability that is on, side by side; for an MCP server, `server` (it answers `initialize` and lists its tools, with the count).
+- **The provider's own stages** come from the `DiagnosticsRegistry` (a `Diagnosable` per provider) or the adapter's optional `diagnose`. Until a provider has one (Google and Microsoft: E50.11), the report falls back to today's test: `sign_in`, then one `capability:<name>` probe per capability that is on, side by side. MCP servers have their own stages (E50.12): [MCP servers, Diagnostics](#diagnostics-of-an-mcp-server-e5012).
+
+- **The provider's own stages** come from the `DiagnosticsRegistry` (a `Diagnosable` per provider) or the adapter's optional `diagnose`. Google and Microsoft implement `diagnose` (E50.11, [above](#what-needs-reconnect-means)) and `diagnoseApp` ([the app's test](#test-the-app-before-anyone-connects-e5011)); the shared stages are `src/connections/oauth-diagnostics.ts`. A provider without one (MCP servers until E50.12, a test's fake adapter) falls back to today's test: `sign_in`, then one `capability:<name>` probe per capability that is on, side by side; for an MCP server, `server` (it answers `initialize` and lists its tools, with the count).
 - **The remedy table** is `packages/shared/diagnostics.json`: for each code, a title, the remedy in plain words, who can fix it (`owner` or `admin`) and where. The API returns codes; the web app (the Test dialog today) and the CLI (`connections test`) render the words. `test/diagnostics.spec.ts` fails when a code a stage can return has no entry.
 - **Bounded and read-only.** 20 s for the report, 8 s per stage; closing the request stops it. It runs inline. It changes nothing a test would not change (a refused sign-in may set `statusReason`; a due token is refreshed through the normal path, also for a paused connection, as the health job does); nothing is sent, created or deleted at the provider. At most 6 a minute per connection (`DIAGNOSTICS_RATE_LIMITED`).
 - **What a report holds:** codes, counts, booleans, a host name, an API or permission id. A zod schema refuses a `data` value that looks like an email address, a token, a URL path or query, or prose, and anything over 200 characters; such a value is dropped before the report is returned or stored. Never content, a provider message, an address or a token.
@@ -401,14 +430,52 @@ Every active MCP connection of the owner is offered to every run (E50.17; [the r
 | `GET /api/connections/{id}/tools` | The stored tools: title, description as plain text, parameters, the server's hints, what they suggest, the owner's decision, the review flag |
 | `POST /api/connections/{id}/tools/refresh` | List them again (changed or new tools are off until reviewed) |
 | `PATCH /api/connections/{id}/tools/{toolId}` | The owner's decision: `off`, `read` or `write` |
+| `POST /api/connections/{id}/tools/{toolId}/try` | Try a `read` tool with arguments: the cleaned, redacted, capped answer ([Try a tool](#try-a-tool-e5012)) |
+| `GET /api/connections/mcp/presets` | Well-known servers the Add dialog offers ([Presets](#presets-e5012)) |
 | `POST /api/connections/{id}/mcp-auth` | A new token or header value (tested first) or a new consent |
 | `GET\|PUT /api/connections/admin/mcp` | Administrator: the switch and the allow-list and block-list |
 
 `GET /api/connections` and `GET /api/connections/{id}` carry `mcp` (`url`, `auth`, `serverName`, tool counts) for these connections; `PATCH /api/connections/{id}` renames one (an MCP server has tools, not capabilities or defaults); pause, resume, test and remove work as for any connection. The CLI is `hexactra connections tools <connection> [--refresh]` (reading only: tools are decided on the screen that shows what each says). No MCP tool of Hexactra's own server lists, adds or uses these connections ([parity.md](parity.md)).
 
+### Diagnostics of an MCP server (E50.12)
+
+`POST /api/connections/{id}/diagnose` on an MCP connection runs these stages between the generic `status`/`provider_installed` and `latency` (`src/connections/mcp/mcp-diagnostics.ts`, registered with the `DiagnosticsRegistry`). After a failure the dependent stages are `skipped`; `enabled_tools` and `offered_cap` read only the stored catalogue and always run.
+
+| Stage | What it checks | Codes |
+|---|---|---|
+| `switch` | `connections.mcp.enabled` is on (at the moment of the report) | `MCP_OFF` (who: admin) |
+| `address` | The URL's shape and the administrator's lists; `data.host` | `INVALID_URL`, `SCHEME_NOT_ALLOWED`, `QUERY_NOT_ALLOWED`, ..., `HOST_NOT_ALLOWED`, `HOST_BLOCKED` |
+| `network` | The name resolves to a public address (`OutboundHttp.check`, again at every request) and a connection is made | `UNRESOLVABLE`, `PRIVATE_TARGET`, `TLS_FAILED`, `TIMEOUT`, `NETWORK` |
+| `initialize` | The server answers `initialize`: `data.revision` (agreed) and `data.server_name` (cleaned: letters, digits and `. _ : -`, at most 60) | `NOT_AN_MCP_SERVER` (not JSON-RPC, not an event stream, or no answer to the request), `REVISION_NOT_SPOKEN` (`data.offered`), `UNAVAILABLE` (429 or 5xx), `REDIRECT`, `RPC` |
+| `sign_in` | The sign-in kept for it is accepted: none, the bearer token or header, or OAuth (refreshed when due); `data.kind` | `AUTH_REFUSED` (sets `statusReason`), `GRANT_REVOKED`, `SECRET_MISSING`, `OAUTH_DISCOVERY_FAILED`, `NO_REFRESH_TOKEN` |
+| `tool_list` | `tools/list` answers; `data.count`, `data.pages` | `TOOL_LIST_FAILED`, `TOO_MANY_TOOLS` (warn: over the 500 kept) |
+| `tool_changes` | The listing against the stored hashes, **storing nothing**: `data.changed`, `data.new`, `data.removed` | `TOOLS_CHANGED` (warn: Refresh tools and review) |
+| `enabled_tools` | How many tools the owner switched on: `data.read`, `data.write` | `NO_TOOL_ENABLED` (warn: the agent is offered nothing from this server) |
+| `offered_cap` | The owner's enabled tools on every active server against one run's cap: `data.enabled`, `data.cap` (40), `data.toolbox` (over the cap: they open on demand with `open_toolbox`), `data.not_offered` | `TOOLS_NOT_OFFERED` (warn) |
+
+- **One mapping.** Every `McpClientError` kind, address refusal and sign-in failure maps to a stage and a code in `mcpFailure` (a table test, `test/mcp-diagnostics.spec.ts`). A sign-in the console cannot produce (no secret, a refused grant) is still followed by an `initialize` without credentials, so the report shows that the address, the network and the protocol are good and points at the sign-in alone; nothing secret is sent. The daily health job, which already knows the sign-in failed, does not contact the server.
+- **Read-only for the catalogue.** A diagnostic never changes a tool's mode, hash or review flag, nor the stored server details: only **Refresh tools** does (`test/mcp-diagnostics.db.spec.ts` compares the rows before and after).
+- **`OVER_RUN_CAP` is not a code (decision).** E50.17 offers every enabled tool, behind `open_toolbox` over the cap, so no enabled tool is dropped for being one too many and `offered_cap` passes with `data.toolbox`. What can still keep an enabled tool from a run is a schema the runner cannot offer (it cannot be expressed to the model, or checked with `ajv`): `offered_cap` counts those (`data.not_offered`, `TOOLS_NOT_OFFERED`) with the same function the runner uses (`offeredParameters`, `mcp-validate.ts`), so none drops silently.
+- **What the report holds:** the counts above, the revision, the host name and the cleaned server name. Never a tool name, a description, a server's message, a path or a token.
+- **For the Doctor (E50.13):** `McpDiagnostics.diagnose` is exported from the connections module's providers; `MCP_DIAGNOSTIC_CODES` lists its codes, and `mcpFailure` maps an exchange error to a stage and a code.
+
+**Protocol revisions.** The client speaks 2025-11-25, 2025-06-18 and 2025-03-26 (`MCP_CLIENT_VERSIONS`, the Streamable HTTP transport). It asks for the newest and accepts any of the three; a server that refuses with its own list is asked once more for the newest common one. `REVISION_NOT_SPOKEN` means the server answered `initialize` (or listed what it supports) only with a revision outside these three: typically 2024-11-05, the older HTTP+SSE transport, which this console does not speak. `data.offered` is the revision the server named. Adding a revision is a change of its own (none of the presets needs one).
+
+### Try a tool (E50.12)
+
+`POST /api/connections/{id}/tools/{toolId}/try` (`connections:write`, body `{ "arguments": {...} }`) calls ONE tool the owner set to `read`, from the tools screen, and answers `{ ok, code, ms, text, truncated }`. It is the call a run makes (`McpRunService.call`): the switch, the connection is the owner's and active, the stored tool unchanged since the owner decided (`approvedHash`), the arguments validated with `ajv` against the tool's own schema (`TRY_INVALID_ARGUMENTS` with the first problems, never values; nothing is sent), every credential redacted out and back (`redactTokens`, the provider token shapes and the owner's exact secrets), the result cleaned and capped (here at 4,000 characters), shown as plain text. A `write` tool is refused (`TRY_READ_ONLY`: trying it would change something with no approval card), and an `off` tool or one waiting for review too (`TRY_TOOL_OFF`). At most 6 a minute per connection (`TRY_RATE_LIMITED`). Audited as `connection.mcp_tool_tried` (the connection, the tool, `ok`, `code`, `ms`; never an argument's value or the result). The result is content: it is not stored, also not in the diagnostics history. A try grants nothing and is not a run.
+
+### Presets (E50.12)
+
+`GET /api/connections/mcp/presets` (`connections:read`) lists well-known public servers the Add dialog offers: `{ id, name, url, auth, headerName?, docsUrl, notes, verified }`. The list is `packages/shared/mcp-presets.json`, reviewed like code; each address was checked against the vendor's own documentation on its `verified` date (2026-11-26: GitHub `https://api.githubcopilot.com/mcp/`, bearer token; Sentry `https://mcp.sentry.dev/mcp`, OAuth; Cloudflare documentation `https://docs.mcp.cloudflare.com/mcp`, no sign-in named). A preset only fills the form: the server is still tested before anything is kept, and every tool starts `off`. It never carries a secret, never enables a tool and never marks one `read`. A preset on a host the administrator blocks (or does not allow) is left out, and the list is empty while MCP servers are off. None was verified against the live server: no real MCP server was reachable when they were added.
+
+### Idle OAuth sign-ins (E50.12, #664)
+
+The daily `connections.health` job also refreshes MCP connections signed in with OAuth that were neither used nor refreshed in the last 20 hours, through the refresher the MCP module registered (`ConnectionTokensService.registerRefresher`), with the same single flight and database lease as Google and Microsoft. A refused grant marks the connection `needs reconnect` (`GRANT_REVOKED`), notifies the owner once and stores a diagnostic report; a server that cannot be reached changes nothing and is tried again the next day. A connection with no sign-in, a bearer token or a header has nothing to refresh and is not touched.
+
 ### What this does not do
 
-Stdio servers or any local command; MCP resources, prompts, sampling, elicitation and roots; exposing a connected server's tools through Hexactra's own MCP server; a directory of servers; images and other binary results; following resource links. The daily health job does not refresh idle MCP OAuth tokens (a token that dies of inactivity needs the owner's new sign-in); it keeps only Google and Microsoft grants alive.
+Stdio servers or any local command; MCP resources, prompts, sampling, elicitation and roots; exposing a connected server's tools through Hexactra's own MCP server; images and other binary results; following resource links; trying a `write` tool.
 
 ## Deliveries after a run
 
@@ -630,6 +697,10 @@ Every test in this chapter ran against fakes. The owner's acceptance run on the 
 
 Everything about Google in this chapter was tested against the fakes: **no real Google account was used.** The shapes of Google's responses and errors are from the documentation as the author knew it and may differ in detail. With the owner, on the deployed stack, for each supported account type of the decision record (a personal Gmail account, a Google Workspace account): connect, press **Test**, then run a manual script or admin action that sends a mail to the same account, creates and deletes a calendar event, creates a spreadsheet and appends a row. Record pass or fail per capability and account type, with no mailbox content. Also to check by hand: that Google accepts base64 content in the Drive multipart upload, that an unverified In-production app keeps its refresh token for more than a week with the restricted Gmail permissions (decision record, G4a), and that `drive.file` shows a picked file in a search.
 
+### Diagnostics of Google and Microsoft (E50.11)
+
+Tested against `FakeGoogle` and the fake Graph only (#661's stack was not available). Not verified on a real account: the exact 403 body of a disabled Google API (the `SERVICE_DISABLED` ErrorInfo and its `metadata.service`; without it the API the console called is named), that both token endpoints answer a deliberately invalid code with `invalid_grant` for a good client and `invalid_client` for a bad one (else `client_check` says `NEEDS_A_SIGN_IN`), Microsoft's discovery answer for an unknown tenant (`AADSTS90002`), and the Graph error codes taken to mean no mailbox (`MailboxNotEnabledForRESTAPI`, ...), no licence and a missing permission (`microsoft-diagnostics.ts`).
+
 ### Microsoft: not confirmed yet (needs a real account)
 
 None of this was observed on a real account, and the pages that would settle it were not reachable. Each is a behaviour the code assumes:
@@ -657,7 +728,7 @@ With the owner, on the deployed stack: a trigger on mail from the owner's own se
 
 ### MCP servers
 
-Tested against an in-process fake MCP server (initialise and revision negotiation, paged lists, calls, deadline, size cap, abort, refused server requests, redirects, private addresses and rebinding, bearer, header and OAuth with a fake authorization server, the rug-pull review, injection through a result and through a description, redaction of seeded credentials). **A real server has not been tried.** On the deployed stack: switch MCP on in Administration, add a public test MCP server (or one you run) with the sign-in it needs, switch on one read tool and one write tool, start a task that lists the connection, and check the run calls both, the approval card for the write, and the step list; then change a tool's description on the server and press **Refresh tools** to see it come back off. Idle MCP OAuth tokens are not refreshed by the health job: an idle token needs a new sign-in.
+Tested against an in-process fake MCP server (initialise and revision negotiation, paged lists, calls, deadline, size cap, abort, refused server requests, redirects, private addresses and rebinding, bearer, header and OAuth with a fake authorization server, the rug-pull review, injection through a result and through a description, redaction of seeded credentials). **A real server has not been tried.** On the deployed stack: switch MCP on in Administration, add a public test MCP server (or one you run) with the sign-in it needs, switch on one read tool and one write tool, start a task that lists the connection, and check the run calls both, the approval card for the write, and the step list; then change a tool's description on the server and press **Refresh tools** to see it come back off. Since E50.12 the health job also refreshes an idle MCP OAuth token (tested against the fake only); Diagnose, Try a tool and the presets were tested against the fake only too.
 
 ### The picker, the browser node and the phone
 

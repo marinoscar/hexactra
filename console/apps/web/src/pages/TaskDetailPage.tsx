@@ -5,6 +5,9 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { RunForSeveralDialog } from '../batches/RunForSeveralDialog';
+import { TaskBatchesSection } from '../batches/TaskBatchesSection';
+import { batchUnavailableReason } from '../batches/model';
 import { useFleetHosts } from '../components/MachinePicker';
 import { ProfileSigninWarning } from '../components/ProfileSigninWarning';
 import { describeActivity } from '../components/RunActivity';
@@ -143,6 +146,29 @@ function Section({ id, title, action, collapsible = false, startCollapsed = fals
   );
 }
 
+/**
+ * "Run for several" (E51.1): opens the batch form. A task without parameters has nothing to vary and shows no button; one with a
+ * value asked for securely shows it disabled, with the reason under it (a tooltip alone is not seen on a phone).
+ */
+function RunForSeveralButton({ task, onClick, disabled }: { task: TaskWithSummary; onClick: () => void; disabled: boolean }) {
+  if (!task.parameters?.length) return null;
+  const reason = batchUnavailableReason(task.parameters);
+  const button = (
+    <Button variant="outlined" onClick={onClick} disabled={disabled || reason !== null} aria-describedby={reason ? 'run-several-reason' : undefined} sx={touch}>
+      Run for several
+    </Button>
+  );
+  if (!reason) return button;
+  return (
+    <Stack sx={{ minWidth: 0, maxWidth: 320 }}>
+      {button}
+      <Typography id="run-several-reason" variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+        {reason}
+      </Typography>
+    </Stack>
+  );
+}
+
 /** One line of the configuration: a term and its value. */
 function Row({ term, children }: { term: string; children: ReactNode }) {
   return (
@@ -246,6 +272,9 @@ export function TaskDetailPage() {
   const [lastRun, setLastRun] = useState<RunListItem | null>(null);
   const lastRunRef = useRef<RunListItem | null>(null);
   lastRunRef.current = lastRun;
+  /** "Run for several" (E51.1): the form is open; the batch it started, unfolded in the list. */
+  const [several, setSeveral] = useState(false);
+  const [startedBatch, setStartedBatch] = useState<string | null>(null);
   /** Bumped by every local change, so an older refresh cannot overwrite it. */
   const epoch = useRef(0);
 
@@ -397,6 +426,7 @@ export function TaskDetailPage() {
         <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.5 }}>
           {/* Without a readable catalog the run control is a plain button. */}
           {canRun && <TaskRunButton task={task} catalog={policyCatalog ?? { policies: [], defaultId: null }} onRun={(policyId) => void run(policyId)} disabled={busy} size="medium" />}
+          {canRun && <RunForSeveralButton task={task} onClick={() => setSeveral(true)} disabled={busy} />}
           {summary.scheduleState !== 'none' && <ScheduledControl task={task} canWrite={canWrite} onChange={(on) => void setScheduled(on)} disabled={busy} showLabel />}
           {canWrite && (
             <Button variant="outlined" component={RouterLink} to={taskPaths.edit(task.id)} sx={touch}>
@@ -423,6 +453,7 @@ export function TaskDetailPage() {
                 <TaskOutputsTable taskId={task.id} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />
               </Section>
             )}
+            <TaskBatchesSection taskId={task.id} refreshKey={`${startedBatch ?? ''}:${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} openBatchId={startedBatch} />
             <Section
               id="runs"
               title="Runs"
@@ -520,6 +551,20 @@ export function TaskDetailPage() {
         </Stack>
       </Box>
       {runInputs.dialog}
+      {canRun && (
+        <RunForSeveralDialog
+          open={several}
+          task={task}
+          onClose={() => setSeveral(false)}
+          onStarted={(batch) => {
+            setSeveral(false);
+            setStartedBatch(batch.id);
+            toast(`Started ${batch.total} runs, one after another`);
+            void refresh();
+            setTimeout(() => document.getElementById('batches')?.scrollIntoView?.({ block: 'start' }), 300);
+          }}
+        />
+      )}
     </PageContainer>
   );
 }

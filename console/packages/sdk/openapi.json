@@ -32895,7 +32895,7 @@
     },
     "/api/secrets/vault/connect": {
       "post": {
-        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` and `allowCards` adds `vault:cards_read vault:cards_fill` and `allowServiceKeys` adds `vault:service_keys_read` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
         "operationId": "secrets_connect",
         "parameters": [],
         "requestBody": {
@@ -35155,6 +35155,202 @@
         }
       }
     },
+    "/api/connections/admin/apps/{provider}/diagnose": {
+      "post": {
+        "description": "Checks the app before anyone connects, with no user: `app_config` (installed, a client id and a secret set; the switch off only warns), `redirect_uri` (the address the console sends is https and on the address you reached the console on; host names only), `discovery` (the provider's sign-in endpoints answer; Microsoft: the configured tenant exists), `client_check` (a token request with a deliberately invalid code tells a refused client id or secret from a good one; `skipped` with `NEEDS_A_SIGN_IN` when the answer cannot tell) and, for Google, `picker_key`. Stores the report (target kind `provider_app`, no user; the last 20 are kept) and returns it. Read calls only; nothing is issued. The report holds the client id's last four characters at most, never the secret.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "connectionsAdmin_diagnose",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "google",
+                "microsoft"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Test the deployment's app at a provider",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/admin/apps/{provider}/diagnostics": {
+      "get": {
+        "description": "Newest first: `limit` (default 5, at most 20). Codes, remedy keys, counts, host names and timings only.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "connectionsAdmin_history",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "google",
+                "microsoft"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many of the last reports (default 5, at most 20).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 5,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The last tests of the deployment's app at a provider",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
     "/api/connections/{id}/activity": {
       "get": {
         "description": "The agent's tool calls through the account and the deliveries sent through it, newest first (at most 15): the operation, when, whether it worked and the run. Never a subject, an address, a body, a cell or a file name.\n\n**Requires:** authentication, plus permission `connections:read`.",
@@ -35842,7 +36038,7 @@
     },
     "/api/connections/{id}/diagnose": {
       "post": {
-        "description": "Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, or `server` for an MCP server, with its tool count), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "description": "Runs an ordered list of checks and stores the report (the last 20 are kept): `status` (paused warns; needs a reconnect fails, with its reason as the remedy), `provider_installed` (installed here and switched on by the administrator), the provider's own checks (until a provider has its own: `sign_in` and one `capability:<name>` read per capability that is on, Google and Microsoft; an MCP server has its own: `switch`, `address`, `network`, `initialize`, `sign_in`, `tool_list`, `tool_changes`, `enabled_tools`, `offered_cap`), and `latency` (a warning over 5 s). After the first failure the dependent checks are `skipped`. Each check has a closed `code` and a `remedy` key whose words are in the remedy table the web app and the CLI share. Read calls only: nothing is sent, created or deleted at the provider. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `connections:write`.",
         "operationId": "connectionDiagnostics_diagnose",
         "parameters": [
           {
@@ -38309,6 +38505,17 @@
             }
           },
           {
+            "name": "batchId",
+            "required": false,
+            "in": "query",
+            "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
             "name": "envelope",
             "required": false,
             "in": "query",
@@ -38643,6 +38850,17 @@
             "required": false,
             "in": "query",
             "description": "Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchId",
+            "required": false,
+            "in": "query",
+            "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
             "schema": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -40159,9 +40377,116 @@
         }
       }
     },
+    "/api/service-credentials/{service}/{name}/move": {
+      "post": {
+        "description": "Moves your own key (E50.3) to `credential_store` (the console) or `secrets_provider` (your Vault or the built-in store, `secrets.provider`). It is read, written to the other side, and the old copy is removed only after the write is confirmed: a failed write leaves the key where it was. Into a remote Vault the console cannot write: add the key there as a \"Service key\" opened to the agent, then Move checks that the Vault answers with it and removes the console's copy. Out of a remote Vault the copy there stays (remove it in Vault). The value is never returned. Audited (`service_credential.moved`). Errors: `SERVICE_CREDENTIAL_NOT_SET`, `SERVICE_CREDENTIAL_NOT_IN_PROVIDER`, `SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE`.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "serviceCredentials_move",
+        "parameters": [
+          {
+            "name": "service",
+            "required": true,
+            "in": "path",
+            "description": "The service (`web_search`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": true,
+            "in": "path",
+            "description": "The key within it (`brave`).",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveServiceCredentialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MoveServiceCredentialResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Move your own key between the console and your secrets provider",
+        "tags": [
+          "Service credentials"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
     "/api/service-credentials/{service}/{name}": {
       "put": {
-        "description": "Stores your own key for this service, encrypted. Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "description": "Stores your own key for this service, encrypted, where your keys are kept (`serviceCredentials`: the console by default, or the built-in store; a key kept in your remote Vault is changed in Vault: `SERVICE_CREDENTIAL_PROVIDER_READ_ONLY`). Your requests use it before your organization's or the deployment's. Write-only: it is never returned. Audited (`service_credential.set`, tier `user`).\n\n**Requires:** authentication, plus permission `connections:write`.",
         "operationId": "serviceCredentials_setOwn",
         "parameters": [
           {
@@ -40812,6 +41137,382 @@
           }
         ],
         "summary": "Web search usage of the deployment",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
+    "/api/web-search/diagnose": {
+      "post": {
+        "description": "The report of the provider that answers for you (or `?provider=<id>`), with your effective key tier, stored with you as its owner (the last 20 are kept). Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `web_search:write`.",
+        "operationId": "webSearchDiagnostics_diagnose",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": false,
+            "in": "query",
+            "description": "A provider id; default: the one that answers for you.",
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_]{0,31}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed."
+          },
+          "429": {
+            "description": "`DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Diagnose web search for you",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "web_search:write"
+          ]
+        }
+      }
+    },
+    "/api/web-search/diagnostics": {
+      "get": {
+        "description": "Newest first, every provider: `limit` (default 5, at most 20). Codes, remedy keys, counts, timings and host names only.\n\n**Requires:** authentication, plus permission `web_search:read`.",
+        "operationId": "webSearchDiagnostics_history",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many of the last reports (default 5, at most 20).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 5,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Your last web search diagnostic reports",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "web_search:read"
+          ]
+        }
+      }
+    },
+    "/api/web-search/admin/providers/{id}/diagnose": {
+      "post": {
+        "description": "The report with the deployment tier ONLY (never a user's key), stored with no owner; the switches only warn here, so a key can be tested before search is switched on. The live query counts as one call of yours. Stages: `switches` (the deployment's and your switch, the provider's, its place in the order), `credential` (which tier answers and where it is kept; an address; an AI key and model), `network` (its host resolves and connects), `live_query` (ONE real search of a fixed common word, `count: 1`: it counts as one call in the usage table and costs what a search costs), `limits` (today's count against the per-day limit) and `fetch` (`web_fetch` is on and reads a fixed public page). After a failure the dependent stages are `skipped`. Each stage has a closed `code` and a `remedy` key of the shared remedy table. Nothing you typed is sent. At most 20 s; closing the request stops it.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "webSearchDiagnostics_diagnoseDeployment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`WEB_SEARCH_PROVIDER_UNKNOWN`: no such provider is installed."
+          },
+          "429": {
+            "description": "`DIAGNOSTICS_RATE_LIMITED`: at most 6 a minute for one provider."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Diagnose a search provider with the deployment's key",
+        "tags": [
+          "Web search"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
+    },
+    "/api/web-search/admin/providers/{id}/diagnostics": {
+      "get": {
+        "description": "Newest first: `limit` (default 5, at most 20). The deployment tier only; no user.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "webSearchDiagnostics_historyDeployment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many of the last reports (default 5, at most 20).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 20,
+              "default": 5,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DiagnosticReportResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A search provider's last deployment reports",
         "tags": [
           "Web search"
         ],
@@ -43732,6 +44433,467 @@
           ]
         },
         "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/tasks/{id}/batches": {
+      "post": {
+        "operationId": "runBatches_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      },
+      "get": {
+        "operationId": "runBatches_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Batches to return, 1 to 100. Default 20.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's `nextCursor`.",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/batches/{id}": {
+      "get": {
+        "operationId": "runBatches_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/batches/{id}/start": {
+      "post": {
+        "operationId": "runBatches_start",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
+    "/api/batches/{id}/cancel": {
+      "post": {
+        "operationId": "runBatches_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
       }
     },
     "/api/schedules": {
@@ -50621,6 +51783,85 @@
         }
       }
     },
+    "/api/connections/mcp/presets": {
+      "get": {
+        "description": "A short, reviewed list the Add dialog offers so you pick a name instead of typing an address: each with its address, the kind of sign-in, the vendor's documentation and the date the address was checked against it. A preset only fills the form: the server is still tested before anything is kept, and every tool starts off. It never carries a secret. A preset on a host the administrator blocks (or does not allow) is left out; while MCP servers are switched off the list is empty.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "mcpConnections_presets",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/McpPresetResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Well-known MCP servers to add",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
     "/api/connections/mcp": {
       "post": {
         "description": "Streamable HTTP only: Hexactra never starts a process or runs a command for a connection. For nothing, a bearer token or a header the server is tested first (initialise, then list its tools) and nothing is stored unless it answered; the connection and its tools are returned, every tool `off`. For OAuth the answer is a `consent` to send the browser to; the connection exists once the consent returns. The address is checked against private and internal networks now and again at every call.\n\n**Requires:** authentication, plus permission `connections:write`.",
@@ -50984,6 +52225,122 @@
           }
         ],
         "summary": "Decide what a tool may do",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/tools/{toolId}/try": {
+      "post": {
+        "description": "Calls one tool you set to `read`, with the arguments given, exactly as a run would: the same checks (the switch, the connection active, the tool unchanged since you decided), the same redaction of every credential out and back, the same cleaning and cap of the result (here 4,000 characters). The answer is the server's words, to show as plain text. A `write` tool is refused. It grants nothing and is not a run; the audit names the connection and the tool, never the arguments or the result, and the result is not stored.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "mcpConnections_try",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toolId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TryToolDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TryResultResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`TRY_READ_ONLY` (a `write` tool: trying it would change something with no approval card), `TRY_TOOL_OFF` (switch it to `read` first) or `CONNECTION_PROVIDER_UNAVAILABLE` (disabled)."
+          },
+          "422": {
+            "description": "`TRY_INVALID_ARGUMENTS`: the arguments do not satisfy the tool's own schema (`details.issues`, never values). Nothing was sent."
+          },
+          "429": {
+            "description": "`TRY_RATE_LIMITED`: at most 6 a minute for one connection."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Try a read tool of an MCP server",
         "tags": [
           "Connections"
         ],
@@ -53403,6 +54760,16 @@
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
               "REPORT_LINK_INVALID",
+              "BATCH_TOO_SMALL",
+              "BATCH_TOO_LARGE",
+              "BATCH_INPUTS_MISSING",
+              "BATCH_SENSITIVE_PARAMETER",
+              "BATCH_DUPLICATE_ROW",
+              "BATCH_NO_ROWS",
+              "BATCH_UNKNOWN_ROW",
+              "BATCH_NOT_FOUND",
+              "BATCH_LIVE",
+              "BATCH_NOT_IN_REVIEW",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -53453,13 +54820,13 @@
               "CONNECTION_MCP_AUTH_REQUIRED",
               "CONNECTION_MCP_PROTOCOL",
               "DIAGNOSTICS_RATE_LIMITED",
+              "TRY_READ_ONLY",
+              "TRY_TOOL_OFF",
+              "TRY_INVALID_ARGUMENTS",
+              "TRY_RATE_LIMITED",
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
-              "TASK_BUILDER_NOT_FOUND",
-              "TASK_BUILDER_ARCHIVED",
-              "INVALID_TASK_SPEC",
-              "TASK_SPEC_INCOMPLETE",
               "SECRETS_VAULT_NOT_CONFIGURED",
               "SECRETS_VAULT_URL_REFUSED",
               "SECRETS_VAULT_DISCONNECT_FIRST",
@@ -53467,18 +54834,15 @@
               "SECRETS_VAULT_NEEDS_RECONNECT",
               "SECRETS_VAULT_UNAVAILABLE",
               "SECRETS_VAULT_CONNECT_FAILED",
-              "INVALID_DELIVERY",
-              "DELIVERY_NOT_FOUND",
-              "TOO_MANY_DELIVERIES",
-              "RUN_DELIVERY_NOT_FOUND",
-              "DELIVERY_NOT_RETRYABLE",
-              "DELIVERY_TEST_RATE_LIMITED",
-              "RECIPIENT_NOT_CONFIRMED",
-              "RECIPIENT_LIMIT",
               "SERVICE_CREDENTIAL_UNKNOWN",
               "SERVICE_CREDENTIAL_TIER_NOT_ALLOWED",
               "SERVICE_CREDENTIAL_NO_ORGANIZATION",
               "SERVICE_CREDENTIAL_INVALID",
+              "SERVICE_CREDENTIAL_NOT_SET",
+              "SERVICE_CREDENTIAL_NOT_IN_PROVIDER",
+              "SERVICE_CREDENTIAL_PROVIDER_READ_ONLY",
+              "SERVICE_CREDENTIAL_PROVIDER_UNAVAILABLE",
+              "WEB_SEARCH_ADDRESS_REFUSED",
               "WEB_SEARCH_NOT_CONFIGURED",
               "WEB_SEARCH_AUTH_REFUSED",
               "WEB_SEARCH_RATE_LIMITED",
@@ -53487,6 +54851,19 @@
               "WEB_SEARCH_LIMIT_REACHED",
               "WEB_SEARCH_ABORTED",
               "WEB_SEARCH_TEST_RATE_LIMITED",
+              "WEB_SEARCH_PROVIDER_UNKNOWN",
+              "TASK_BUILDER_NOT_FOUND",
+              "TASK_BUILDER_ARCHIVED",
+              "INVALID_TASK_SPEC",
+              "TASK_SPEC_INCOMPLETE",
+              "INVALID_DELIVERY",
+              "DELIVERY_NOT_FOUND",
+              "TOO_MANY_DELIVERIES",
+              "RUN_DELIVERY_NOT_FOUND",
+              "DELIVERY_NOT_RETRYABLE",
+              "DELIVERY_TEST_RATE_LIMITED",
+              "RECIPIENT_NOT_CONFIRMED",
+              "RECIPIENT_LIMIT",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -56580,6 +57957,18 @@
               "paused"
             ]
           },
+          "chat": {
+            "type": "object",
+            "properties": {
+              "useSavedTasks": {
+                "type": "boolean",
+                "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+              }
+            },
+            "required": [
+              "useSavedTasks"
+            ]
+          },
           "skills": {
             "type": "object",
             "properties": {
@@ -56632,6 +58021,37 @@
             "required": [
               "enabled",
               "provider"
+            ]
+          },
+          "serviceCredentials": {
+            "type": "object",
+            "properties": {
+              "binding": {
+                "type": "string",
+                "enum": [
+                  "credential_store",
+                  "secrets_provider"
+                ],
+                "description": "Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store)."
+              },
+              "keys": {
+                "description": "Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "credential_store",
+                    "secrets_provider"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "binding"
             ]
           },
           "notifications": {
@@ -57151,6 +58571,18 @@
               "paused"
             ]
           },
+          "chat": {
+            "type": "object",
+            "properties": {
+              "useSavedTasks": {
+                "type": "boolean",
+                "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+              }
+            },
+            "required": [
+              "useSavedTasks"
+            ]
+          },
           "skills": {
             "type": "object",
             "properties": {
@@ -57203,6 +58635,37 @@
             "required": [
               "enabled",
               "provider"
+            ]
+          },
+          "serviceCredentials": {
+            "type": "object",
+            "properties": {
+              "binding": {
+                "type": "string",
+                "enum": [
+                  "credential_store",
+                  "secrets_provider"
+                ],
+                "description": "Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store)."
+              },
+              "keys": {
+                "description": "Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "credential_store",
+                    "secrets_provider"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "binding"
             ]
           },
           "notifications": {
@@ -57776,6 +59239,22 @@
               }
             ]
           },
+          "chat": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "useSavedTasks": {
+                    "type": "boolean",
+                    "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "skills": {
             "anyOf": [
               {
@@ -57833,6 +59312,39 @@
                       }
                     ],
                     "description": "The search provider you prefer among the usable ones; `null` follows the deployment's order."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "serviceCredentials": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "binding": {
+                    "type": "string",
+                    "enum": [
+                      "credential_store",
+                      "secrets_provider"
+                    ]
+                  },
+                  "keys": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "credential_store",
+                        "secrets_provider"
+                      ]
+                    }
                   }
                 }
               },
@@ -58192,6 +59704,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "batchMaxRows": {
+                "description": "The most rows a batch of runs may have (E51.1). Absent: 25.",
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100
               }
             },
             "required": [
@@ -58783,6 +60301,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "allowPrivate": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -59755,6 +61276,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "batchMaxRows": {
+                "description": "The most rows a batch of runs may have (E51.1). Absent: 25.",
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100
               }
             },
             "required": [
@@ -60346,6 +61873,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "allowPrivate": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -61371,6 +62901,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "batchMaxRows": {
+                "description": "The most rows a batch of runs may have (E51.1). Absent: 25.",
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100
               }
             }
           },
@@ -61909,6 +63445,9 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "allowPrivate": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -64451,6 +65990,18 @@
                   "paused"
                 ]
               },
+              "chat": {
+                "type": "object",
+                "properties": {
+                  "useSavedTasks": {
+                    "type": "boolean",
+                    "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+                  }
+                },
+                "required": [
+                  "useSavedTasks"
+                ]
+              },
               "skills": {
                 "type": "object",
                 "properties": {
@@ -64503,6 +66054,37 @@
                 "required": [
                   "enabled",
                   "provider"
+                ]
+              },
+              "serviceCredentials": {
+                "type": "object",
+                "properties": {
+                  "binding": {
+                    "type": "string",
+                    "enum": [
+                      "credential_store",
+                      "secrets_provider"
+                    ],
+                    "description": "Where a new key of yours for an outside service is kept: the console (`credential_store`, the default) or your secrets provider (`secrets_provider`: your Vault or the built-in store)."
+                  },
+                  "keys": {
+                    "description": "Where each of your keys is kept, by reference (`web_search.brave`). Written when a key is set or moved.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,39}\\.[a-z][a-z0-9_]{0,39}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "credential_store",
+                        "secrets_provider"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "binding"
                 ]
               },
               "notifications": {
@@ -82457,6 +84039,20 @@
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
                   },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "warnAtPercent": {
                     "type": "integer",
                     "minimum": 10,
@@ -83518,6 +85114,20 @@
                           ],
                           "description": "Most a run may cost in US dollars. `null` means unlimited."
                         },
+                        "maxWebCalls": {
+                          "default": null,
+                          "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 10000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "warnAtPercent": {
                           "type": "integer",
                           "minimum": 10,
@@ -84045,6 +85655,20 @@
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
                   },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "warnAtPercent": {
                     "type": "integer",
                     "minimum": 10,
@@ -84358,6 +85982,20 @@
                       }
                     ],
                     "description": "Most a run may cost in US dollars. `null` means unlimited."
+                  },
+                  "maxWebCalls": {
+                    "default": null,
+                    "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "warnAtPercent": {
                     "type": "integer",
@@ -88867,6 +90505,10 @@
             "description": "Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default.",
             "type": "boolean"
           },
+          "allowServiceKeys": {
+            "description": "Also ask for `vault:service_keys_read` (contract 1.4): the console's own server may read the keys of outside services (a web search provider's) you keep in your Vault as a \"Service key\" opened to the agent, for its calls to that service. Never a login, never a page. A new consent. Off by default.",
+            "type": "boolean"
+          },
           "returnTo": {
             "description": "A path on this console to return to after the consent (default `/settings/secrets`).",
             "type": "string",
@@ -89400,9 +91042,17 @@
                   "type": "string",
                   "enum": [
                     "lookup",
-                    "release"
+                    "release",
+                    "service_key"
                   ],
-                  "description": "`lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed."
+                  "description": "`lookup`: the agent asked your provider for the logins of the page. `release`: a field was handed over to be typed. `service_key`: the console's own server read one of your keys of outside services (E50.3), for a call to that service."
+                },
+                "serviceKey": {
+                  "description": "For `service_key`: which key (`web_search.brave`). Never its value.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "runId": {
                   "anyOf": [
@@ -89477,14 +91127,15 @@
                         "mfa",
                         "form",
                         "purchase",
-                        "save_login"
+                        "save_login",
+                        "service_call"
                       ]
                     },
                     {
                       "type": "null"
                     }
                   ],
-                  "description": "Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup."
+                  "description": "Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved), or `service_call` (a key read for a call to its service). Null for a lookup."
                 },
                 "outcome": {
                   "type": "string",
@@ -89533,6 +91184,7 @@
                 "id",
                 "at",
                 "event",
+                "serviceKey",
                 "runId",
                 "site",
                 "loginName",
@@ -90670,6 +92322,10 @@
                     "string",
                     "null"
                   ]
+                },
+                "api": {
+                  "description": "With `API_DISABLED`: the API to enable at the provider (`gmail.googleapis.com`, `drive.googleapis.com`, ...), from a closed list.",
+                  "type": "string"
                 }
               },
               "required": [
@@ -90824,6 +92480,159 @@
           }
         },
         "additionalProperties": false
+      },
+      "DiagnosticReportResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "connection",
+                  "provider_app",
+                  "search_provider"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "cli",
+              "health_job"
+            ],
+            "description": "Who ran it: `owner`, `admin`, `cli` or the daily `health_job`."
+          },
+          "overall": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "skipped"
+            ],
+            "description": "`fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran."
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "finishedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,39}(:[a-z0-9_]{1,40})?$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "warn",
+                    "fail",
+                    "skipped"
+                  ]
+                },
+                "code": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z_]{0,39}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "remedy": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z_]{0,39}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ms": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "data": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "code",
+                "remedy",
+                "ms"
+              ],
+              "additionalProperties": false,
+              "description": "One stage, in order: `id` (`status`, `provider_installed`, `sign_in`, `capability:<name>`, `server`, `latency`, or a provider's own), `status` (`pass`, `warn`, `fail`, `skipped`), `code` (closed list, never provider text), `remedy` (a key of the remedy table, rendered by the client), `ms`, and `data` (counts, booleans, a host name or an id; never content, an address or a token)."
+            }
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "trigger",
+          "overall",
+          "startedAt",
+          "finishedAt",
+          "stages"
+        ]
       },
       "ConnectionActivityResponseDto": {
         "type": "object",
@@ -91134,159 +92943,6 @@
           "targetId",
           "overall",
           "at"
-        ]
-      },
-      "DiagnosticReportResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "target": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "connection",
-                  "provider_app",
-                  "search_provider"
-                ]
-              },
-              "id": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "id"
-            ]
-          },
-          "trigger": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "admin",
-              "cli",
-              "health_job"
-            ],
-            "description": "Who ran it: `owner`, `admin`, `cli` or the daily `health_job`."
-          },
-          "overall": {
-            "type": "string",
-            "enum": [
-              "pass",
-              "warn",
-              "fail",
-              "skipped"
-            ],
-            "description": "`fail` if a stage failed, else `warn` if one warned, else `pass`; `skipped` when nothing ran."
-          },
-          "startedAt": {
-            "type": "string",
-            "description": "ISO 8601 timestamp"
-          },
-          "finishedAt": {
-            "type": "string",
-            "description": "ISO 8601 timestamp"
-          },
-          "stages": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,39}(:[a-z0-9_]{1,40})?$"
-                },
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "pass",
-                    "warn",
-                    "fail",
-                    "skipped"
-                  ]
-                },
-                "code": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "pattern": "^[A-Z][A-Z_]{0,39}$"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "remedy": {
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "pattern": "^[A-Z][A-Z_]{0,39}$"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "ms": {
-                  "anyOf": [
-                    {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "data": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
-                  },
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 200,
-                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      }
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "id",
-                "status",
-                "code",
-                "remedy",
-                "ms"
-              ],
-              "additionalProperties": false,
-              "description": "One stage, in order: `id` (`status`, `provider_installed`, `sign_in`, `capability:<name>`, `server`, `latency`, or a provider's own), `status` (`pass`, `warn`, `fail`, `skipped`), `code` (closed list, never provider text), `remedy` (a key of the remedy table, rendered by the client), `ms`, and `data` (counts, booleans, a host name or an id; never content, an address or a token)."
-            }
-          }
-        },
-        "required": [
-          "id",
-          "target",
-          "trigger",
-          "overall",
-          "startedAt",
-          "finishedAt",
-          "stages"
         ]
       },
       "MailTriggerResponseDto": {
@@ -96882,6 +98538,12 @@
                 "type": "string",
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "batchId": {
+                "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               }
             },
             "additionalProperties": false
@@ -98039,6 +99701,32 @@
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
           },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -99113,6 +100801,32 @@
                   },
                   "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
                 },
+                "batchId": {
+                  "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "batchSeq": {
+                  "description": "The row of the batch (1..n); null outside a batch.",
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "createdAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -99655,6 +101369,35 @@
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
                     "description": "Time spent working, waits for a person excluded"
+                  },
+                  "web": {
+                    "description": "What the run did on the web (E50.7); absent when it made no web call",
+                    "type": "object",
+                    "properties": {
+                      "searches": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "reads": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Pages read with web_fetch"
+                      },
+                      "estimatedSearchCostUsd": {
+                        "description": "An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost",
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "searches",
+                      "reads",
+                      "estimatedSearchCostUsd"
+                    ]
                   }
                 },
                 "required": [
@@ -100001,6 +101744,20 @@
                               }
                             ],
                             "description": "Most a run may cost in US dollars. `null` means unlimited."
+                          },
+                          "maxWebCalls": {
+                            "default": null,
+                            "description": "Most web searches and page reads (web_search, web_fetch) a run may make. Reaching it does not stop the run: the next web call is refused and the agent uses the browser. `null` means unlimited.",
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10000
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "warnAtPercent": {
                             "type": "integer",
@@ -101762,6 +103519,32 @@
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
           },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -103269,6 +105052,32 @@
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -104806,6 +106615,54 @@
               "organization",
               "system"
             ]
+          },
+          "userBinding": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "vault",
+              "builtin"
+            ],
+            "description": "Where your own key is kept (E50.3): the console, your Vault or the built-in store."
+          },
+          "secretsProvider": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "enum": [
+                      "vault",
+                      "builtin"
+                    ],
+                    "description": "Your active secrets provider (`secrets.provider`)."
+                  },
+                  "writable": {
+                    "type": "boolean",
+                    "description": "The console can write a key there (the built-in store). Into a remote Vault you add the key yourself, then Move checks it."
+                  },
+                  "releasesEnabled": {
+                    "type": "boolean",
+                    "description": "The deployment's `secrets.agentUse` switch: off, no key is read from a secrets provider (the next tier answers)."
+                  },
+                  "ready": {
+                    "type": "boolean",
+                    "description": "The provider can answer now: the built-in store is offered, or your Vault is connected with `vault:service_keys_read`."
+                  }
+                },
+                "required": [
+                  "id",
+                  "writable",
+                  "releasesEnabled",
+                  "ready"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your secrets provider, for Move here; null when this deployment has none."
           }
         },
         "required": [
@@ -104814,7 +106671,9 @@
           "label",
           "binding",
           "tier",
-          "tiers"
+          "tiers",
+          "userBinding",
+          "secretsProvider"
         ]
       },
       "SetServiceCredentialDto": {
@@ -104829,6 +106688,45 @@
         },
         "required": [
           "value"
+        ],
+        "additionalProperties": false
+      },
+      "MoveServiceCredentialResponseDto": {
+        "type": "object",
+        "properties": {
+          "binding": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "vault",
+              "builtin"
+            ],
+            "description": "Where your key is kept now."
+          },
+          "sourceRemoved": {
+            "type": "boolean",
+            "description": "The old copy was removed. False when there was none, or it is in your remote Vault (remove it there)."
+          }
+        },
+        "required": [
+          "binding",
+          "sourceRemoved"
+        ]
+      },
+      "MoveServiceCredentialDto": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "enum": [
+              "credential_store",
+              "secrets_provider"
+            ],
+            "description": "`credential_store`: the console. `secrets_provider`: your Vault or the built-in store."
+          }
+        },
+        "required": [
+          "to"
         ],
         "additionalProperties": false
       },
@@ -105196,16 +107094,22 @@
                   ]
                 },
                 "baseUrl": {
+                  "description": "A self-hosted provider's address (SearXNG).",
                   "type": [
                     "string",
                     "null"
                   ]
+                },
+                "allowPrivate": {
+                  "type": "boolean",
+                  "description": "\"This instance is on my private network\": http and a private address are accepted for the configured host only."
                 }
               },
               "required": [
                 "enabled",
                 "costPerCallUsd",
-                "baseUrl"
+                "baseUrl",
+                "allowPrivate"
               ]
             },
             "description": "Saved per-provider settings; a provider not listed has the defaults (on, the default estimate)."
@@ -105384,6 +107288,9 @@
                       "type": "null"
                     }
                   ]
+                },
+                "allowPrivate": {
+                  "type": "boolean"
                 }
               }
             }
@@ -105660,6 +107567,10 @@
                   "type": "boolean",
                   "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
                 },
+                "allowWebSearch": {
+                  "type": "boolean",
+                  "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -105678,6 +107589,7 @@
                 "allowSavedIdentity",
                 "allowSavedCards",
                 "allowConnections",
+                "allowWebSearch",
                 "paused"
               ]
             },
@@ -106042,6 +107954,10 @@
                 "type": "boolean",
                 "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
               },
+              "allowWebSearch": {
+                "type": "boolean",
+                "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -106060,6 +107976,7 @@
               "allowSavedIdentity",
               "allowSavedCards",
               "allowConnections",
+              "allowWebSearch",
               "paused"
             ]
           },
@@ -106192,6 +108109,10 @@
             "type": "boolean",
             "description": "Let this app's runs use the owner's connections (mail, calendar, documents, added MCP tools: E39.7) that the owner switched on. On by default for a new app (E50.17); an app saved before keeps the value it had. Turn it off to keep this app's runs away from them. Reads are free; anything that sends, creates or changes still asks the owner. The app itself can never list or call the connections."
           },
+          "allowWebSearch": {
+            "type": "boolean",
+            "description": "Let this app's runs search the web and read public pages without the browser (web_search, web_fetch: E50.7) when the owner set up web search and switched it on. On by default. Turn it off to keep this app's runs to the browser. The app itself never calls the search provider."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -106210,6 +108131,7 @@
           "allowSavedIdentity",
           "allowSavedCards",
           "allowConnections",
+          "allowWebSearch",
           "paused"
         ]
       },
@@ -106284,6 +108206,9 @@
             "type": "boolean"
           },
           "allowConnections": {
+            "type": "boolean"
+          },
+          "allowWebSearch": {
             "type": "boolean"
           },
           "paused": {
@@ -110060,6 +111985,32 @@
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
           },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -110248,6 +112199,663 @@
         "required": [
           "goal"
         ]
+      },
+      "BatchResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that made it (`run_task_batch`); null for every other caller"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "policyRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "review",
+              "running",
+              "done",
+              "cancelled"
+            ],
+            "description": "`review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "onFailure": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "stop"
+            ]
+          },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner_stopped",
+                  "unknown_outcome",
+                  "row_failed",
+                  "task_deleted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted"
+          },
+          "stoppedAtSeq": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The row whose run stopped it"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cancelled": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "pending": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "running": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "total",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "skipped",
+              "pending",
+              "running"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "\"3 of 3 done\", \"2 done, 1 failed, 2 not started\""
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The row, 1..n"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "running",
+                    "succeeded",
+                    "failed",
+                    "cancelled",
+                    "skipped"
+                  ],
+                  "description": "`skipped`: never started (the batch was stopped, or the row was unticked at review)"
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run of this row; null until it starts"
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Masked with the same rules as a run's inputs"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "value"
+                    ]
+                  },
+                  "description": "The row's values, by parameter"
+                },
+                "runStatus": {
+                  "description": "The run's status; null until it starts",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "result": {
+                  "description": "The first 300 characters of the run's result (or error), masked; null until it ends",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "seq",
+                "status",
+                "runId",
+                "values",
+                "runStatus",
+                "result"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "taskName",
+          "conversationId",
+          "trigger",
+          "origin",
+          "policyRef",
+          "status",
+          "total",
+          "onFailure",
+          "stopReason",
+          "stoppedAtSeq",
+          "createdAt",
+          "startedAt",
+          "finishedAt",
+          "counts",
+          "summary",
+          "items"
+        ]
+      },
+      "CreateBatchDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inputs": {
+                  "description": "This row's values for the task's `{{Name}}` parameters, by key or display name.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "description": "One object per run, in order. 2 to 25 rows (the deployment setting `runs.batchMaxRows`). Every row is checked before anything is written."
+          },
+          "policyId": {
+            "description": "Run every row under this agent policy instead of the task's or the user's default.",
+            "type": "string",
+            "maxLength": 64
+          },
+          "onFailure": {
+            "default": "continue",
+            "description": "`continue` (the default): a failed row does not stop the batch. `stop`: it does, and the rows not started are skipped.",
+            "type": "string",
+            "enum": [
+              "continue",
+              "stop"
+            ]
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "BatchPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conversationId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The chat that made it (`run_task_batch`); null for every other caller"
+                },
+                "trigger": {
+                  "type": "string"
+                },
+                "origin": {
+                  "type": "string"
+                },
+                "policyRef": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "review",
+                    "running",
+                    "done",
+                    "cancelled"
+                  ],
+                  "description": "`review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)"
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "onFailure": {
+                  "type": "string",
+                  "enum": [
+                    "continue",
+                    "stop"
+                  ]
+                },
+                "stopReason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "owner_stopped",
+                        "unknown_outcome",
+                        "row_failed",
+                        "task_deleted"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted"
+                },
+                "stoppedAtSeq": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The row whose run stopped it"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "startedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "finishedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "counts": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "succeeded": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "cancelled": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "skipped": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "pending": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "running": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "succeeded",
+                    "failed",
+                    "cancelled",
+                    "skipped",
+                    "pending",
+                    "running"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "\"3 of 3 done\", \"2 done, 1 failed, 2 not started\""
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "seq": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "The row, 1..n"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "running",
+                          "succeeded",
+                          "failed",
+                          "cancelled",
+                          "skipped"
+                        ],
+                        "description": "`skipped`: never started (the batch was stopped, or the row was unticked at review)"
+                      },
+                      "runId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "The run of this row; null until it starts"
+                      },
+                      "values": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string",
+                              "description": "Masked with the same rules as a run's inputs"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "value"
+                          ]
+                        },
+                        "description": "The row's values, by parameter"
+                      },
+                      "runStatus": {
+                        "description": "The run's status; null until it starts",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "result": {
+                        "description": "The first 300 characters of the run's result (or error), masked; null until it ends",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "seq",
+                      "status",
+                      "runId",
+                      "values",
+                      "runStatus",
+                      "result"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "taskId",
+                "taskName",
+                "conversationId",
+                "trigger",
+                "origin",
+                "policyRef",
+                "status",
+                "total",
+                "onFailure",
+                "stopReason",
+                "stoppedAtSeq",
+                "createdAt",
+                "startedAt",
+                "finishedAt",
+                "counts",
+                "summary",
+                "items"
+              ]
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "StartBatchDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "description": "The rows to keep (their `seq`), default all; the others are skipped. At least one.",
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        }
       },
       "ScheduleResponseDto": {
         "type": "object",
@@ -110833,9 +113441,10 @@
                             "result",
                             "task_draft",
                             "memory",
-                            "request"
+                            "request",
+                            "batch"
                           ],
-                          "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                          "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                         },
                         "text": {
                           "type": "string",
@@ -111370,9 +113979,10 @@
                     "result",
                     "task_draft",
                     "memory",
-                    "request"
+                    "request",
+                    "batch"
                   ],
-                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                  "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                 },
                 "text": {
                   "type": "string",
@@ -111633,9 +114243,10 @@
               "result",
               "task_draft",
               "memory",
-              "request"
+              "request",
+              "batch"
             ],
-            "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+            "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
           },
           "text": {
             "type": "string",
@@ -112676,9 +115287,10 @@
                     "result",
                     "task_draft",
                     "memory",
-                    "request"
+                    "request",
+                    "batch"
                   ],
-                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                  "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                 },
                 "text": {
                   "type": "string",
@@ -115699,6 +118311,55 @@
           "restricted"
         ]
       },
+      "McpPresetResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "The server's address, as its vendor documents it."
+          },
+          "auth": {
+            "type": "string",
+            "enum": [
+              "none",
+              "bearer",
+              "header",
+              "oauth"
+            ],
+            "description": "How it signs you in. A preset never carries a secret: you give the token, or sign in at the server."
+          },
+          "headerName": {
+            "description": "For `header`: the header the server reads its key from.",
+            "type": "string"
+          },
+          "docsUrl": {
+            "type": "string",
+            "description": "The vendor's own documentation of the server."
+          },
+          "notes": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "string",
+            "description": "The date (`YYYY-MM-DD`) the address was checked against that documentation."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url",
+          "auth",
+          "docsUrl",
+          "notes",
+          "verified"
+        ]
+      },
       "AddMcpResponseDto": {
         "type": "object",
         "properties": {
@@ -116544,6 +119205,56 @@
         "required": [
           "mode"
         ],
+        "additionalProperties": false
+      },
+      "TryResultResponseDto": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "The server answered and reported no error."
+          },
+          "code": {
+            "description": "Null when ok; `TOOL_ERROR` (the server reported an error), `REFUSED` (nothing was sent: the tool or connection changed), or the failure (`TIMEOUT`, `UNAVAILABLE`, `AUTH`, ...).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ms": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "text": {
+            "type": "string",
+            "description": "What a run would read: cleaned, redacted of every credential and capped at 4,000 characters. The server's words: show it as plain text."
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "code",
+          "ms",
+          "text",
+          "truncated"
+        ]
+      },
+      "TryToolDto": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "default": {},
+            "description": "The tool's arguments, checked against its own JSON schema before anything is sent.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
         "additionalProperties": false
       },
       "McpAuthResponseDto": {

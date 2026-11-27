@@ -4,7 +4,8 @@ import { WebToolError, type WebSearchHit, type WebSearchResult, type WebToolErro
 
 import type { SecretBytes } from '../../secrets/secrets-provider.port';
 import type { DiagnosticStage } from '../diagnostic-stage';
-import type { ProviderAuth, SearchProvider, SearchRequest } from '../search-provider';
+import type { ProviderAuth, ProviderDiagnoseOptions, SearchProvider, SearchRequest } from '../search-provider';
+import { DIAGNOSTIC_QUERY, providerStages } from '../web-search-diagnostics';
 
 export interface FakeSearchLogEntry {
   query: string;
@@ -54,7 +55,38 @@ export class FakeSearchProvider implements SearchProvider {
     return { provider: this.id, hits: this.hits.slice(0, req.count), answer: null };
   }
 
-  async diagnose(auth: ProviderAuth | null): Promise<DiagnosticStage[]> {
-    return [{ id: 'config', status: auth ? 'pass' : 'fail', code: auth ? null : 'NO_KEY', remedy: auth ? null : 'web_search.set_key', ms: null }];
+  /** The next `network` stage answers with this (a code of `SEARCH_DIAGNOSTIC_CODES`), once. */
+  failNetworkNext(code: 'UNRESOLVABLE' | 'PRIVATE_TARGET' | 'TLS_FAILED' | 'TIMEOUT' | 'NETWORK'): this {
+    this.networkFailures.push(code);
+    return this;
+  }
+
+  /** The next live query answers with a provider code of its own (SearXNG's `FORMAT_DISABLED`), once. */
+  liveCodeNext(code: string): this {
+    this.liveCodes.push(code);
+    return this;
+  }
+
+  private networkFailures: string[] = [];
+  private liveCodes: string[] = [];
+  readonly diagnosticCodes = ['FORMAT_DISABLED'] as const;
+  /** How many network probes and live queries the diagnostics made. */
+  probes = 0;
+
+  async diagnose(auth: ProviderAuth, signal: AbortSignal, opts: ProviderDiagnoseOptions = {}): Promise<DiagnosticStage[]> {
+    const stages = await providerStages({
+      network: async () => {
+        this.probes += 1;
+        const code = this.networkFailures.shift();
+        return code ? { status: 'fail', code, data: { host: this.hosts[0]! } } : { status: 'pass', data: { host: this.hosts[0]! } };
+      },
+      query: (s) => this.search({ query: DIAGNOSTIC_QUERY, count: 1, freshness: null, site: null, signal: s }, auth),
+      signal,
+      liveQuery: opts.liveQuery ?? true,
+    });
+    const own = this.liveCodes.shift();
+    const live = stages.find((st) => st.id === 'live_query');
+    if (own && live && live.status !== 'skipped') Object.assign(live, { status: 'fail', code: own, remedy: own });
+    return stages;
   }
 }

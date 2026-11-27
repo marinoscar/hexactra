@@ -130,6 +130,14 @@ The `browser.runs.delete` job ("Delete runs by filter" under **Administration �
 - Each call writes one line to the API log (`runs.delete user=… mode=single|ids|filter matched=… deleted=… skippedLive=… job=… ms=…`), adds to the `app.runs.deleted` counter (label `mode`) and writes an audit event (`runs.deleted`, or `runs.delete_queued` for a `202`) with the counts and the names of the filter keys. None of them holds goal text, results or step content.
 - If a screenshot cannot be removed from object storage, the run is deleted all the same and the API logs how many objects were left.
 
+## Batches (E51.1)
+
+A run can be one row of a **batch**: a saved task run once per row of values, one run after another ([api-tasks-runs.md, "Batches"](api-tasks-runs.md#batches)). Such a run is an ordinary run in every way (`executeTool`, Stop and Pause, the gates, intent recording, the audit trail, masking) and carries `batchId` and `batchSeq`; `GET /api/runs?batchId=<id>` lists a batch's runs, and the runs list shows a small "2 of 5" chip on each.
+
+- **Stop on a batch run stops the batch**: the rows not started are skipped and never get a run.
+- **A row whose run ended with a step left `unknown` (or `intent`) stops the batch** ([Crash safety](#crash-safety-e383)): a batch never repeats or carries on past a step that may or may not have happened. The batch's `stopReason` is `unknown_outcome` and `stoppedAtSeq` names the row.
+- **A row is never started twice**: it is claimed under a lock on the batch before its run is created, and the reconcile sweep restarts a claimed row only when no run exists for it.
+
 ## Stop (E38.1)
 
 `POST /api/runs/{id}/cancel` is the brake. The agent stops acting within about two seconds, and nothing it had decided but not yet done is carried out.
@@ -218,6 +226,8 @@ Every run keeps a trace a person can follow afterwards (#541): its steps (`run_s
 - **Where.** Object storage, key `runs/<userId>/<runId>/<seq>-<moment>.jpg` (prefix `run-traces`), about 150 kB each. Steps return `hasScreenshot` and `screenshotMoment`, never the key. The picture: `GET /api/runs/{id}/steps/{seq}/screenshot` (`runs:read`, the owner only: `404` for another user's run, a missing step or a step without a picture; `Cache-Control: private, max-age=3600`).
 - **Removed with the run** by a delete and by the nightly retention; a storage failure never keeps a run.
 - **Metrics.** `app.runs.trace_screenshots` (labels `moment`, `result`: `stored`, `skipped`, `failed`) and `app.runs.trace_screenshot_bytes`. The Doctor's `runs.trace_storage` warns when storage is off. No image, key or prompt text is ever logged.
+
+**Web search (E50.7).** A run with web search on records `web_search` and `web_fetch` as `action` steps: the query (masked), the count, the freshness and the site of a search, the host and path of a page read; never the text of a result or a page. The run trace file's `usage.web` (`{ searches, reads, estimatedSearchCostUsd }`, absent when the run made no web call) counts the searches and reads that were sent; the search cost is an **estimate** (searches times the provider's cost per call, as the run started) and is never added to `costUsd`, which is the AI cost.
 
 ## Crash safety (E38.3)
 

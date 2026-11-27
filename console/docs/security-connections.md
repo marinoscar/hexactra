@@ -150,7 +150,7 @@ The owner adds an MCP server (a notes app, a task tracker, a company tool) as a 
 - **An honest server compromised later**, or one that logs the arguments it receives: the server is the owner's choice and is trusted with what the model sends it.
 - **Allow-lists are optional.** An empty allow-list admits any public host. A public address can still hold a hostile server; the lists reduce which.
 - **The model following a result inside what it is allowed to do** (calling another enabled read tool, reading mail). Writes still ask.
-- **Not verified on a real server.** Every test above ran against an in-process fake MCP server and a fake authorization server. The spec's discovery and registration behaviour at real servers, and what real tools describe and return, are unknown until the owner adds one ([acceptance-connections.md](acceptance-connections.md)). The daily health job does not refresh an idle MCP OAuth token: it needs a new sign-in.
+- **Not verified on a real server.** Every test above ran against an in-process fake MCP server and a fake authorization server. The spec's discovery and registration behaviour at real servers, and what real tools describe and return, are unknown until the owner adds one ([acceptance-connections.md](acceptance-connections.md)). The daily health job refreshes an idle MCP OAuth token (E50.12), tested against the fake authorization server only.
 
 ### 6. A stolen database backup
 

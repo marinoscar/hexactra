@@ -30,6 +30,8 @@ export interface AppLimits {
   allowSavedCards?: boolean;
   /** Let this app's runs use the connections the owner switched on (E39.7); on for a new app since E50.17; absent from an older console: off. */
   allowConnections?: boolean;
+  /** Let this app's runs search the web (E50.7); on by default; absent from an older console: on. */
+  allowWebSearch?: boolean;
   paused: boolean;
 }
 
@@ -112,6 +114,7 @@ export interface LimitsDraft {
   allowSavedIdentity: boolean;
   allowSavedCards: boolean;
   allowConnections: boolean;
+  allowWebSearch: boolean;
 }
 
 /** The highest values the API accepts (it may refuse more, above the deployment's ceilings). */
@@ -131,6 +134,7 @@ export function toDraft(l: AppLimits): LimitsDraft {
     allowSavedIdentity: l.allowSavedIdentity ?? false,
     allowSavedCards: l.allowSavedCards ?? false,
     allowConnections: l.allowConnections ?? false,
+    allowWebSearch: l.allowWebSearch ?? true,
   };
 }
 
@@ -171,10 +175,11 @@ export function draftPatch(d: LimitsDraft, saved: AppLimits): Partial<AppLimits>
     allowSavedIdentity: d.allowSavedIdentity,
     allowSavedCards: d.allowSavedCards,
     allowConnections: d.allowConnections,
+    allowWebSearch: d.allowWebSearch,
   };
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(next)) {
-    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : k === 'allowSavedLogins' ? (saved.allowSavedLogins ?? false) : k === 'allowSavedIdentity' ? (saved.allowSavedIdentity ?? false) : k === 'allowSavedCards' ? (saved.allowSavedCards ?? false) : k === 'allowConnections' ? (saved.allowConnections ?? false) : saved[k as keyof AppLimits];
+    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : k === 'allowSavedLogins' ? (saved.allowSavedLogins ?? false) : k === 'allowSavedIdentity' ? (saved.allowSavedIdentity ?? false) : k === 'allowSavedCards' ? (saved.allowSavedCards ?? false) : k === 'allowConnections' ? (saved.allowConnections ?? false) : k === 'allowWebSearch' ? (saved.allowWebSearch ?? true) : saved[k as keyof AppLimits];
     if (JSON.stringify(v) !== JSON.stringify(before)) patch[k] = v;
   }
   return patch as Partial<AppLimits>;

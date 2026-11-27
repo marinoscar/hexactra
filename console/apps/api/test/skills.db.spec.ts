@@ -416,7 +416,7 @@ describe('grants nothing, in scenarios (scripted model, in-memory site)', () => 
 // ---- chat ----
 
 const chatEngine = (ai: AiService, skills: SkillContext | undefined = app.get(SkillContext, { strict: false })) =>
-  new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), ai, undefined, app.get(MemoryContext, { strict: false }), undefined, undefined, undefined, undefined, skills);
+  new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), ai, undefined, app.get(MemoryContext, { strict: false }), undefined, undefined, undefined, undefined, undefined, undefined, undefined, skills);
 
 describe('the chat is shown the skills (#1008)', () => {
   it('the block (names and descriptions) after the memories and one instruction line; no skill tool; nothing for an owner without skills', async () => {

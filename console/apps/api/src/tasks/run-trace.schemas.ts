@@ -112,6 +112,14 @@ export const runTraceSchema = z
           costUsd: z.number().describe('A lower bound while costKnown is false'),
           costKnown: z.boolean(),
           activeMs: z.number().int().describe('Time spent working, waits for a person excluded'),
+          web: z
+            .object({
+              searches: z.number().int(),
+              reads: z.number().int().describe('Pages read with web_fetch'),
+              estimatedSearchCostUsd: z.number().nullable().describe("An ESTIMATE (searches times the provider's cost per call); not part of costUsd, which is the AI cost"),
+            })
+            .optional()
+            .describe('What the run did on the web (E50.7); absent when it made no web call'),
         })
         .describe('What the run used'),
     }),

@@ -20,6 +20,8 @@ export const VAULT_SCOPES = {
   identityFill: 'vault:identity_fill',
   cardsRead: 'vault:cards_read',
   cardsFill: 'vault:cards_fill',
+  /** Contract 1.4 (marinoscar/vault#241): the console's own server process reads a key of an outside service (E50.3). */
+  serviceKeysRead: 'vault:service_keys_read',
   offline: 'offline_access',
 } as const;
 
@@ -28,15 +30,21 @@ export const VAULT_SCOPES = {
  * logins" (E37.4), the two identity scopes only when they switched on "let the agent fill identity details" (E37.6), and the two card scopes only
  * when they switched on "let the agent pay with a saved card" (E37.7): adding any of them later is a new consent.
  */
-export function vaultConnectScopes(allowWrite: boolean, allowIdentity = false, allowCards = false): string[] {
+export function vaultConnectScopes(allowWrite: boolean, allowIdentity = false, allowCards = false, allowServiceKeys = false): string[] {
   return [
     VAULT_SCOPES.read,
     VAULT_SCOPES.fill,
     ...(allowWrite ? [VAULT_SCOPES.write] : []),
     ...(allowIdentity ? [VAULT_SCOPES.identityRead, VAULT_SCOPES.identityFill] : []),
     ...(allowCards ? [VAULT_SCOPES.cardsRead, VAULT_SCOPES.cardsFill] : []),
+    ...(allowServiceKeys ? [VAULT_SCOPES.serviceKeysRead] : []),
     VAULT_SCOPES.offline,
   ];
+}
+
+/** Whether a grant's scopes let the console read the owner's keys of outside services (E50.3, contract 1.4). */
+export function hasServiceKeyScope(scopes: readonly string[]): boolean {
+  return scopes.includes(VAULT_SCOPES.serviceKeysRead);
 }
 
 /** Whether a grant's scopes let the fabric look up and fill payment cards (E37.7). */
@@ -68,7 +76,19 @@ export const VAULT_ERROR_CODES = {
   originMismatch: 'ORIGIN_MISMATCH',
   credentialRequired: 'AGENT_CREDENTIAL_REQUIRED',
   rateLimited: 'RATE_LIMITED',
+  /** Contract 1.4: two keys opened to agents share the service and the name (`409`). */
+  serviceKeyAmbiguous: 'SERVICE_KEY_AMBIGUOUS',
 } as const;
+
+/**
+ * `GET /service-keys/{service}/{name}` (contract 1.4, marinoscar/vault#241, `agentServiceKeyResponseSchema`): `{ data: { value } }`,
+ * the value of the owner's one `Service Key` opened to agents with this service and key name. The ONE route by which a value reaches
+ * the console's own process from a remote Vault: read for a call to that service, held as bytes and wiped (E50.3).
+ */
+export const vaultServiceKeyResponseSchema = z.object({ data: z.object({ value: z.string().min(1).max(8192) }) });
+
+/** The path of one service key under the agent API. `service` and `name` are already lower-case ids (`SERVICE_CREDENTIAL_ID_PATTERN`). */
+export const vaultServiceKeyPath = (service: string, name: string): string => `/service-keys/${encodeURIComponent(service)}/${encodeURIComponent(name)}`;
 
 /** The error code of the identity routes when the deployment's identity switch is off (contract 1.1). */
 export const VAULT_IDENTITY_DISABLED = 'IDENTITY_ACCESS_DISABLED';

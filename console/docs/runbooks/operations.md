@@ -341,6 +341,19 @@ What the owner sees: a bell and push notification **"Reconnect an account"**, th
 
 The daily job `connections.health` (Administration → Jobs; 04:17 UTC, server-only) refreshes connections that were neither used nor refreshed in the last 20 hours and flags the ones that fail, so a token does not die of inactivity.
 
+### A connection does not work: read its diagnostics
+
+1. **The owner** opens the connection's diagnostics (`POST /api/connections/{id}/diagnose`; the last reports at `GET /api/connections/{id}/diagnostics`). Each stage has a code and a remedy key whose words are in `packages/shared/diagnostics.json`. An administrator cannot read a user's report: ask the owner for the codes (they hold no content, address or token).
+2. **Read the first stage that is not `pass`** ([connections.md, the stages](../connections.md#what-needs-reconnect-means)):
+   - `sign_in` `GRANT_REVOKED` / `NO_REFRESH_TOKEN` / `TOKEN_STORE_FAILED`: [the owner reconnects](#a-connection-needs-reconnecting).
+   - `sign_in` `APP_CREDENTIALS_REFUSED`: the deployment's client id or secret is refused, for every owner. Test the app (below) and [rotate the secret](#rotate-the-providers-app-secret).
+   - `permissions` `PERMISSION_MISSING` (`data.capability` names it): the owner uses **Change what it can do** and ticks that permission.
+   - `capability:<name>` `API_DISABLED` (`data.api` names it, Google): enable that API in the Google Cloud project of the sign-in client (APIs & Services, Library, the API, Enable). Nothing to reconnect.
+   - `MAILBOX_NOT_FOUND`, `LICENSE_MISSING`, `ADMIN_CONSENT_REQUIRED` (Microsoft): the account's organization has to give it a mailbox or a licence, or approve the app; or the owner switches that capability off.
+   - `clock` `CLOCK_SKEW`: set the server to synchronise its clock (NTP).
+   - `token_lifetime` `REFRESH_STALE`: check that the `connections.health` job runs (Administration, Jobs).
+3. **Test the deployment's app** with no user: Administration, Connections, or `POST /api/connections/admin/apps/{google|microsoft}/diagnose` (`system_settings:write`). `client_check` `APP_CREDENTIALS_REFUSED` is a wrong or expired secret; `redirect_uri` `APP_URL_MISMATCH` means `APP_URL` is not the address the console is served on (the redirect URI registered at the provider must match it); `discovery` `TENANT_NOT_FOUND` is a Microsoft tenant setting that does not exist ([connections.md, the app's test](../connections.md#test-the-app-before-anyone-connects-e5011)).
+
 ### A connection will not complete (the owner approved everything and came back to an error)
 
 The owner passes the provider's consent screens, is returned to the console, and the Connections page shows a red banner. The banner names which way it failed (#670); the audit log says why. The callback is deliberately **not** in the nginx access log or the API request log, so the audit is the place to look.
@@ -454,3 +467,17 @@ The client id and secret of the Google and Microsoft apps are the **deployment's
 6. **A changed client id, or a deleted app**, orphans every grant: every connection of that provider must be connected again by its owner. **Removing the app in the console** (`DELETE /api/connections/admin/apps/{provider}`) deletes the id and secret and switches the provider off; connected accounts stay but cannot refresh until an app is set again.
 
 Disconnecting an account revokes the grant at Google (best effort) and cannot revoke it at Microsoft: the owner removes the app at the account's own page (`account.live.com/consent/Manage`, or My Apps for a work or school account), or an administrator deletes the grant.
+
+### Reading the Connections and Web search lines in Doctor
+
+Administration → Doctor groups six lines under **Connections** and **Web search** (E50.13). Each reads **stored state only**: the settings, counts, the last deployment report in `connection_diagnostics` and the usage table. Doctor never calls Google, Microsoft, an MCP server or a search provider, writes nothing and names no user, account address, server label or query. To get a fresh answer, press **Test** on the settings page (`/admin/settings/connections`, `/admin/settings/web-search`), which runs a staged report and stores it; Doctor reads it on its next run.
+
+| Line | Pass | Warn | Fail |
+|---|---|---|---|
+| `connections.google_app`, `connections.microsoft_app` | The provider is switched on and its app has a client id and secret (and its last app test passed); or it is off or not installed, and says so | The last app test warned or is older than 30 days; or, once app tests are installed (E50.11), the app was never tested | On and not configured, or the last app test failed: open the provider's card and read the failed stage |
+| `connections.accounts` | Active accounts, by provider | Accounts that need reconnecting, by provider. Each owner was notified once and reconnects on their Connections page | The check could not run (the API log says why) |
+| `connections.health_job` | `connections.health` succeeded in the last 26 hours, or no connection was idle (the daily task enqueues it only when one is) | It has not run in 26 hours while idle connections wait: check the scheduler and Administration → Jobs; idle tokens may expire | Its last run failed: open it under Administration → Jobs |
+| `connections.mcp` | The deployment switch and the number of active servers | Servers whose status reason is `UNAVAILABLE` or `AUTH_REFUSED` or whose last stored diagnosis failed, and tools that changed and wait for the owner's review (switched off until then): each owner tests the server or reviews its tools | The check could not run |
+| `web_search.provider` | A provider answers with the deployment's key (or address, or AI) and its last deployment test passed; or search is off | No deployment key (users need their own; if user keys are not allowed, nobody can search), the last deployment test warned, is older than 30 days or missing, or more than 20% of yesterday's searches failed | A deployment key is set and its last deployment test failed |
+
+The web search **Test** (`POST /api/web-search/admin/providers/{id}/diagnose`) uses the deployment's key only, never a user's, and sends **one real search** of a fixed common word, counted as one call of yours in the usage table (it costs what a search costs). Its stages are `switches`, `credential`, `network`, `live_query`, `limits` and `fetch`; the `fetch` stage reads `https://example.com/` once when `web_fetch` is installed and on. A user's own report (`POST /api/web-search/diagnose`) uses their effective key and never says whether the deployment holds a key it does not share. The egress list (Administration → Doctor, Network) shows the hosts each line depends on: `connections.google` and `connections.microsoft` (the providers' API hosts), `connections.mcp` (the distinct hosts of the users' servers, at most 20) and `web_search.<id>` (the provider's hosts plus `example.com`).

@@ -55,7 +55,12 @@ export const providerViewSchema = z.object({
 });
 export class WebSearchProviderDto extends createZodDto(providerViewSchema) {}
 
-const resolvedProviderSchema = z.object({ enabled: z.boolean(), costPerCallUsd: z.number().nullable(), baseUrl: z.string().nullable() });
+const resolvedProviderSchema = z.object({
+  enabled: z.boolean(),
+  costPerCallUsd: z.number().nullable(),
+  baseUrl: z.string().nullable().describe("A self-hosted provider's address (SearXNG)."),
+  allowPrivate: z.boolean().describe('"This instance is on my private network": http and a private address are accepted for the configured host only.'),
+});
 
 export const adminSettingsSchema = z.object({
   enabled: z.boolean(),
@@ -85,3 +90,9 @@ export const usageRowSchema = z.object({
   estimatedCostUsd: z.number().describe('An ESTIMATE, from the cost per call in force when each call was made.'),
 });
 export class WebSearchUsageRowDto extends createZodDto(usageRowSchema) {}
+
+/** `?provider=` of `POST /api/web-search/diagnose` (E50.13). */
+export const searchDiagnoseQuerySchema = z
+  .object({ provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).optional().describe('A provider id; default: the one that answers for you.') })
+  .strict();
+export class SearchDiagnoseQueryDto extends createZodDto(searchDiagnoseQuerySchema) {}

@@ -13,9 +13,11 @@ import { TasksModule } from '../tasks/tasks.module';
 import { GoalRunHandler, HandoffCheckHandler, HandoffCheckTask } from './goal-runner.jobs';
 import { GoalRunnerService } from './goal-runner.service';
 import { RunLiveController, RunOwnerGuard } from './run-live.controller';
+import { RunBatchesController } from './run-batches.controller';
 import { RunsStartController } from './runs-start.controller';
 import { KgraphModule } from '../kgraph/kgraph.module';
 import { ProfileSigninWarnings } from '../fleet/signin-warnings';
+import { WebSearchModule } from '../web-search/web-search.module';
 
 /**
  * The goal runner: an AI tool loop that drives a fabric browser toward a
@@ -23,9 +25,10 @@ import { ProfileSigninWarnings } from '../fleet/signin-warnings';
  * (its configured AiModule); the job queue is global.
  */
 @Module({
+  // Web search (E50.7) is mounted with the credentials slice, like its keys (app.module.ts): without it no run is offered web search.
   // The secrets module is mounted only with the credentials and notifications slices (app.module.ts): without it a run never signs in from a saved login.
-  imports: [AiModule, FabricModule, TasksModule, QuestionsModule, PoliciesModule, MemoriesModule, ApprovalsModule, KgraphModule, ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule, ConnectionsModule] : [])],
-  controllers: [RunsStartController, RunLiveController],
+  imports: [AiModule, FabricModule, TasksModule, QuestionsModule, PoliciesModule, MemoriesModule, ApprovalsModule, KgraphModule, ...(isSliceEnabled('credentials') ? [WebSearchModule] : []), ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule, ConnectionsModule] : [])],
+  controllers: [RunsStartController, RunLiveController, RunBatchesController],
   providers: [RunOwnerGuard, ProfileSigninWarnings, GoalRunnerService, GoalRunHandler, HandoffCheckHandler, HandoffCheckTask],
   exports: [GoalRunnerService],
 })

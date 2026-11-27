@@ -14,11 +14,12 @@
 //
 // What is mounted: `/api/secrets` and `/api/secret-types` (Vault's controllers, restricted by the interceptor to the
 // Credential type and without export, renewal or attachments), the console's `/api/secrets/store/status` and
-// `/api/admin/secrets-store/rewrap`, and the internal release route the fabric calls. NOT mounted: media, backups,
+// `/api/admin/secrets-store/rewrap`, and the internal release route the fabric calls. The in-process service key release (E50.3)
+// is provided, not mounted: only the console's service credentials port calls it. NOT mounted: media, backups,
 // card scanning, card expiry, MCP, the agent HTTP API, the owner's card grant routes.
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { AgentCallPipeline, AgentCardsService, AgentCredentialsService, AgentIdentityService, AgentNotifier, AgentRateLimiter, AgentReleaseService, AGENT_RELEASE_PORT, CardGrantStore, InMemoryAgentRateLimiter, PrismaCardGrantStore } from '@marinoscar/vault-api/agent';
+import { AgentCallPipeline, AgentCardsService, AgentCredentialsService, AgentIdentityService, AgentNotifier, AgentRateLimiter, AgentReleaseService, AgentServiceKeysService, AGENT_RELEASE_PORT, CardGrantStore, SERVICE_KEY_RELEASE_PORT, InMemoryAgentRateLimiter, PrismaCardGrantStore } from '@marinoscar/vault-api/agent';
 import { SecretTypesController, SecretTypesService } from '@marinoscar/vault-api/secret-types';
 import { CardSummaryService, DocumentSummaryService, SecretsController, SecretsExportService, SecretsService } from '@marinoscar/vault-api/secrets';
 import { VAULT_AUDIT, VAULT_CRYPTO, VAULT_NOTIFY, VAULT_OBJECT_STORE, VAULT_PRISMA, VAULT_SETTINGS } from '@marinoscar/vault-api/ports';
@@ -71,6 +72,9 @@ import { SecretsStoreBootstrap } from './store.bootstrap';
     AgentNotifier,
     AgentReleaseService,
     { provide: AGENT_RELEASE_PORT, useExisting: AgentReleaseService },
+    // Keys of outside services (E50.3): Vault's in-process release, with its own kill switch, opt-in, limit and audit row.
+    AgentServiceKeysService,
+    { provide: SERVICE_KEY_RELEASE_PORT, useExisting: AgentServiceKeysService },
     { provide: CardGrantStore, useClass: PrismaCardGrantStore },
     // Single API instance today: in-process counters (the same default as Vault).
     { provide: AgentRateLimiter, useClass: InMemoryAgentRateLimiter },
