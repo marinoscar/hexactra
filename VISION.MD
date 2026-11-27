@@ -1699,6 +1699,15 @@ An owner can watch a run as a video. Decision record: `docs/decisions/run-record
 
 Detail: `console/docs/recordings.md`.
 
+### 26.11 Consistent runs and "Improve this task" (epic #1015)
+
+**Status: implemented in the console (E52); measured on a real node by the owner (E52.11).** Two runs of one task, on the same node and model, differed sixfold in cost. The causes were in the harness, not only in the prompt, so both are addressed:
+
+- **The agent.** A click by selector and a key press are real, trusted input; a form is submitted with its own `requestSubmit()`. Stall detection sees a cycle of any length, from a stable page digest. A click or key that changes nothing says so. The instructions say to send once, to check a different name once and ask instead of choosing again, and to report only what was checked.
+- **The owner's view.** Each run has deterministic findings (loops, selector misses, repeated clicks, reads per action, a slow start, waiting, budget pressure, failures). Each task shows how consistent its runs are. **Improve this task** has an AI read the task's runs and propose a better goal, each change cited to steps. It is checked by the server and applied only by the owner's Save in the task form.
+
+Neither part widens what an agent may do: the proposal path cannot add a site, a parameter, a recipient or a credential, and site facts it suggests become facts only by the owner's act.
+
 ## 27. Human emulator: full powers (epic #366)
 
 **Decision (owner, November 2026).** Hexactra is a personal human emulator: the owner's own hands and eyes on the owner's own computer. The agent must work at the same level as a person sitting at the machine, so it gets **full powers**.
