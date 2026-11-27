@@ -21,6 +21,10 @@ export const FINGERPRINT_WINDOW = 10;
 export const DE_ESCALATE_AFTER = 5;
 /** Recent returned-content digests kept (new content is progress). */
 const SEEN_CAP = 40;
+/** Actions that change the page counted over the whole run (E52.2): the least recently used beyond this are dropped. */
+export const COUNTS_CAP = 64;
+/** Stable page digests remembered (E52.2): a page seen again is no progress. */
+const STABLE_SEEN_CAP = 40;
 /** Rounds in a row that record not one action before the run counts as stalled. */
 export const MAX_IDLE_CHUNKS = 3;
 /** Most times one run asks a person because of a stall; after that it fails. */
@@ -42,6 +46,19 @@ export interface PageState {
   title: string | null;
   /** Digest of the page's visible structure (its numbered elements); the screenshot's own digest when it has none. */
   view: string | null;
+  /**
+   * The page without what moves on its own (E52.2): the marks' selectors and text, without positions, with clock and relative times
+   * blanked ({@link stableText}). Null when the page has no marks: the rules then fall back to `view`.
+   */
+  stable?: string | null;
+}
+
+/** One action that changes the page, counted over the whole run (E52.2). `told` is the count the last signal was given at. */
+export interface ActionCount {
+  fp: string;
+  label: string;
+  n: number;
+  told: number;
 }
 
 interface RecentAction {
@@ -61,10 +78,14 @@ export interface StallState {
   observable: boolean;
   /** Digests of recently returned content. */
   seen: string[];
+  /** Successful actions that change the page, by fingerprint, over the whole run (E52.2): a cycle of any length repeats here. */
+  counts: ActionCount[];
+  /** Stable digests of the pages seen (E52.2): coming back to one is no progress. */
+  stableSeen: string[];
 }
 
 export function newStallState(): StallState {
-  return { recent: [], failures: 0, sinceProgress: 0, page: null, observable: false, seen: [] };
+  return { recent: [], failures: 0, sinceProgress: 0, page: null, observable: false, seen: [], counts: [], stableSeen: [] };
 }
 
 /** A state parsed from the run memory; a fresh one when absent or malformed. */
@@ -75,9 +96,14 @@ export function readStallState(value: unknown): StallState {
     recent: v.recent.filter((r): r is RecentAction => !!r && typeof r.fp === 'string' && typeof r.label === 'string').slice(-FINGERPRINT_WINDOW),
     failures: Number.isInteger(v.failures) ? Math.max(0, v.failures as number) : 0,
     sinceProgress: Number.isInteger(v.sinceProgress) ? Math.max(0, v.sinceProgress as number) : 0,
-    page: v.page && typeof v.page === 'object' ? { url: v.page.url ?? null, title: v.page.title ?? null, view: v.page.view ?? null } : null,
+    page: v.page && typeof v.page === 'object' ? { url: v.page.url ?? null, title: v.page.title ?? null, view: v.page.view ?? null, stable: v.page.stable ?? null } : null,
     observable: v.observable === true,
     seen: v.seen.filter((s): s is string => typeof s === 'string').slice(-SEEN_CAP),
+    // A run memory written before E52.2 has neither: empty.
+    counts: (Array.isArray(v.counts) ? v.counts : [])
+      .filter((c): c is ActionCount => !!c && typeof c.fp === 'string' && typeof c.label === 'string' && Number.isInteger(c.n) && Number.isInteger(c.told))
+      .slice(-COUNTS_CAP),
+    stableSeen: (Array.isArray(v.stableSeen) ? v.stableSeen : []).filter((s): s is string => typeof s === 'string').slice(-STABLE_SEEN_CAP),
   };
 }
 
@@ -91,9 +117,14 @@ export function resetStall(state: StallState): void {
   state.sinceProgress = 0;
   state.page = null;
   state.seen = [];
+  state.counts = [];
+  state.stableSeen = [];
 }
 
-/** After a stall was answered (nudge, escalation): the evidence is spent, the page baseline stays. */
+/**
+ * After a stall was answered (nudge, escalation): the evidence is spent, the page baseline stays. The run-wide counts and the pages seen
+ * stay too (E52.2): one more repeat after a nudge signals again, so the policy moves on to escalate, then to ask.
+ */
 export function clearStallEvidence(state: StallState): void {
   state.recent = [];
   state.failures = 0;
@@ -127,13 +158,35 @@ export interface ActionObservation {
 }
 
 /** Action types that read the page and change nothing. */
-const OBSERVATION_TYPES = new Set(['text', 'elements', 'evaluate', 'tabs', 'screenshot', 'look', 'wait_for', 'scroll', 'scroll_at', 'desktop_scroll', 'mouse']);
+export const OBSERVATION_TYPES: ReadonlySet<string> = new Set(['text', 'elements', 'evaluate', 'tabs', 'screenshot', 'look', 'wait_for', 'scroll', 'scroll_at', 'desktop_scroll', 'mouse']);
 
 export function digest(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 12);
 }
 
 const round10 = (n: number) => Math.round(n / 10) * 10;
+
+const CLOCK = /\b\d{1,2}:\d{2}(:\d{2})?(\s?[ap]\.?m\.?)?(?![\w])/gi;
+const RELATIVE = /\b\d+\s?(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?|w|wk|wks|weeks?)\b(\s+ago)?/gi;
+const WHOLE_TIME_WORD = /^(now|just now|today|yesterday)$/;
+
+/**
+ * Text as the stable page digest keeps it (E52.2): lower case, whitespace collapsed, clock times ("9:41", "11:02 PM") and relative
+ * times ("2 min", "3 hours ago") blanked to "#", and a whole text of "now", "just now", "today" or "yesterday" too. Other digits stay:
+ * a quantity, a page number or a price must keep two pages different.
+ */
+export function stableText(text: string | null | undefined): string {
+  const t = String(text ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (WHOLE_TIME_WORD.test(t)) return '#';
+  return t.replace(CLOCK, '#').replace(RELATIVE, '#');
+}
+
+/** The stable digest of a page's marks (E52.2): selectors and stable text, sorted and unique, no position. Null without marks. */
+export function stableDigest(marks: ReadonlyArray<{ selector?: string | null; text?: string | null }>): string | null {
+  if (marks.length === 0) return null;
+  const items = [...new Set(marks.map((m) => JSON.stringify([m.selector ?? '', stableText(m.text)])))].sort();
+  return digest(items.join('\n'));
+}
 const POSITION_KEYS = new Set(['x', 'y', 'from_x', 'from_y', 'to_x', 'to_y']);
 
 /** The URL without its query and fragment. */
@@ -175,7 +228,7 @@ function resultOf(obs: ActionObservation): string {
 /** The fingerprint of an action: `hash(type, normalised args, ok, resulting URL, result (key or read content), page view)`. */
 export function fingerprint(obs: ActionObservation, page: PageState | null): string {
   const resultingUrl = obs.url ?? page?.url ?? '';
-  return digest(JSON.stringify([obs.type, normalizeArgs(obs.type, obs.args), obs.ok, resultingUrl ? urlNoQuery(resultingUrl) : '', resultOf(obs), page?.view ?? '']));
+  return digest(JSON.stringify([obs.type, normalizeArgs(obs.type, obs.args), obs.ok, resultingUrl ? urlNoQuery(resultingUrl) : '', resultOf(obs), page?.stable ?? page?.view ?? '']));
 }
 
 /** A few words for an action: "click on #submit", "click at 120,300", "navigate to https://shop.example.test/cart". */
@@ -227,6 +280,10 @@ export function observeAction(state: StallState, th: StallThresholds, obs: Actio
     if (!state.observable && !OBSERVATION_TYPES.has(obs.type) && novel) moved = true;
   }
 
+  // A successful action that changes the page counts over the whole run (E52.2); reading a page a few times is normal and is judged
+  // in the window only.
+  if (obs.ok && !OBSERVATION_TYPES.has(obs.type)) countAction(state, fp, label);
+
   state.recent.push({ fp, label, ok: obs.ok });
   if (state.recent.length > FINGERPRINT_WINDOW) state.recent.shift();
   state.failures = obs.ok ? 0 : state.failures + 1;
@@ -236,12 +293,31 @@ export function observeAction(state: StallState, th: StallThresholds, obs: Actio
   return { progressing, signal: judge(state, th, label) };
 }
 
+/** Count one action that changes the page (E52.2), most recently used last. */
+function countAction(state: StallState, fp: string, label: string): void {
+  const i = state.counts.findIndex((c) => c.fp === fp);
+  const entry = i >= 0 ? state.counts.splice(i, 1)[0]! : { fp, label, n: 0, told: 0 };
+  entry.n += 1;
+  state.counts.push(entry);
+  if (state.counts.length > COUNTS_CAP) state.counts.shift();
+}
+
 function judge(state: StallState, th: StallThresholds, label: string): StallSignal | null {
   if (state.failures >= th.maxConsecutiveFailures) return { kind: 'failures', reason: `${state.failures} actions failed in a row` };
   const last = state.recent[state.recent.length - 1];
   if (last) {
     const same = state.recent.filter((r) => r.fp === last.fp).length;
-    if (same >= th.maxRepeatedAction) return { kind: 'repeat', reason: `repeated ${label} ${same} times` };
+    if (same >= th.maxRepeatedAction) {
+      const c = last.ok ? state.counts.find((x) => x.fp === last.fp) : undefined;
+      if (c) c.told = c.n;
+      return { kind: 'repeat', reason: `repeated ${label} ${same} times` };
+    }
+  }
+  // The same action from the same page, however far apart (E52.2): a cycle of any length. Signalled once per new repeat.
+  const counted = last?.ok ? state.counts.find((c) => c.fp === last.fp) : undefined;
+  if (counted && counted.n >= th.maxRepeatedAction && counted.n > counted.told) {
+    counted.told = counted.n;
+    return { kind: 'repeat', reason: `repeated ${counted.label} ${counted.n} times from the same page` };
   }
   if (!state.observable && state.sinceProgress >= th.noProgressActions) return { kind: 'no_progress', reason: `${state.sinceProgress} actions without progress` };
   return null;
@@ -256,7 +332,15 @@ export function observePage(state: StallState, th: StallThresholds, page: PageSt
   state.observable = page !== null;
   if (!page) return null;
   const before = state.page;
-  if (before && (before.url !== page.url || before.title !== page.title || before.view !== page.view)) state.sinceProgress = 0;
+  const stable = page.stable ?? null;
+  const changed = before !== null && (before.url !== page.url || before.title !== page.title || before.view !== page.view);
+  // A changed page is progress, unless it is a page the run has already been on (E52.2): going round in a circle shows a new
+  // page every round.
+  if (changed && (stable === null || !state.stableSeen.includes(stable))) state.sinceProgress = 0;
+  if (stable !== null && !state.stableSeen.includes(stable)) {
+    state.stableSeen.push(stable);
+    if (state.stableSeen.length > STABLE_SEEN_CAP) state.stableSeen.shift();
+  }
   state.page = page;
   if (state.sinceProgress >= th.noProgressActions) return { kind: 'no_progress', reason: `${state.sinceProgress} actions without visible progress` };
   return null;

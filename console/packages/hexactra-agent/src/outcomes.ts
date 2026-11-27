@@ -111,6 +111,13 @@ export async function wrapUp(ctx: Ctx, profile: Profile, cause: BudgetKey | Stal
   return 'failed';
 }
 
+/** What the trace says the run did about a stall (E52.2). */
+const STALL_NOTE = {
+  nudge: 'Nudged the agent to try another way.',
+  ask: 'Asked the owner to get it moving.',
+  fail: 'Ended the run.',
+} as const;
+
 /**
  * Answer a stall as the policy says (#405), at a chunk boundary. Null: the run goes on (nudged, or escalated); otherwise the run's
  * outcome (waiting for a person, or ended as `stalled`).
@@ -123,10 +130,14 @@ export async function respondToStall(ctx: Ctx, profile: Profile, signal: StallSi
   if (latest && !latest.screenshotKey) await ctx.attachShot(state.seq, 'failure', await ctx.shoot('failure'));
   memory.log.push(`Stalled: ${signal.reason}.`);
   memory.progressStreak = 0;
+  // Every answer to a stall is in the trace (E52.2): a nudge left none before. An escalation's routing step already says why. The
+  // words are the harness's own, from the signal, never the model's.
+  const noteStall = (did: keyof typeof STALL_NOTE) => ctx.note('note', null, `Stalled: ${signal.reason}. ${STALL_NOTE[did]}`, { ok: false });
   if (response === 'nudge') {
     memory.pendingNudge = nudgeText(signal.reason, lastActions(ctx.stall));
     memory.stallsHere = (memory.stallsHere ?? 0) + 1;
     clearStallEvidence(ctx.stall);
+    await noteStall('nudge');
     return null;
   }
   if (response === 'escalate') {
@@ -139,9 +150,11 @@ export async function respondToStall(ctx: Ctx, profile: Profile, signal: StallSi
     if (!parsed.ok) throw new Error(parsed.message);
     // Tagged here, after parsing (#909): the question is the harness's own, not the model's.
     if (await ctx.askPerson({ ...parsed.spec, source: 'stall' }, Date.now())) {
+      await noteStall('ask');
       await ctx.checkpoint();
       return pauseForPerson(ctx);
     }
   }
+  await noteStall('fail');
   return wrapUp(ctx, profile, signal);
 }
