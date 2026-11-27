@@ -36,6 +36,7 @@ import { DeliveriesModule } from './deliveries/deliveries.module';
 import { MicrosoftConnectionsModule } from './connections/microsoft/microsoft.module';
 import { MailTriggersModule } from './mail-triggers/mail-triggers.module';
 import { loadSecretsStoreModule, secretsStoreMountable } from './secrets/builtin/secrets-store.loader';
+import { RunInsightsModule } from './run-insights/run-insights.module';
 import { TasksModule } from './tasks/tasks.module';
 import { UsageModule } from './usage/usage.module';
 import { KgraphModule } from './kgraph/kgraph.module';
@@ -91,6 +92,7 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     // Connected AI apps (#464): the request's client context and the per-app limits (global).
     ConnectedAppsModule,
     TasksModule,
+    RunInsightsModule,
     UsageModule,
     QuestionsModule,
     RecordingsModule,

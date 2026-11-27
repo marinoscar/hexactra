@@ -629,6 +629,19 @@ export const RESPONSES = {
   [`GET /runs/${IDS.liveRun}`]: liveRun,
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
+  // Run findings (E52.6): a long loop, a selector that matched nothing, the repeated Send, a slow start.
+  [`GET /runs/${IDS.finishedRun}/diagnostics`]: {
+    runId: IDS.finishedRun,
+    computedAt: iso(0),
+    stepsRead: 124,
+    truncated: false,
+    findings: [
+      { code: 'loop', severity: 'warn', title: 'Repeated the same 2 actions (click at 90,100; click at 1160,540) 12 times', detail: '58 steps, 47% of the run.', seqFrom: 53, seqTo: 110, stepsSpent: 58, evidence: { laps: 12, blockLength: 2, percentOfRun: 47, progressing: false } },
+      { code: 'selector_miss', severity: 'warn', title: 'A selector matched nothing 4 times', detail: '`a[aria-label="Start chat"]` was not on the page at steps 4, 26, 35, 45.', seqFrom: 4, seqTo: 45, stepsSpent: 4, evidence: { selector: 'a[aria-label="Start chat"]', seqs: [4, 26, 35, 45] } },
+      { code: 'repeated_click', severity: 'warn', title: 'Clicked the same control 2 times', detail: 'click on button[aria-label="Send message"], at steps 114, 119, with only reads of the page between.', seqFrom: 114, seqTo: 119, stepsSpent: 6, evidence: { seqs: [114, 119], noChangeSeen: false } },
+      { code: 'slow_start', severity: 'info', title: '66 s before the first step', detail: 'The run started, then waited before it did anything (a browser starting, a page loading, or a model slow to answer).', seqFrom: 1, seqTo: 1, stepsSpent: 0, evidence: { seconds: 66 } },
+    ],
+  },
   [`GET /runs/${IDS.chatRun}`]: chatRun,
   [`GET /runs/${IDS.pausedRun}`]: pausedRun,
   [`GET /runs/${IDS.pausedRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },

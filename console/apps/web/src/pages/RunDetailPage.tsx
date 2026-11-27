@@ -1,6 +1,7 @@
 import { RunInputs } from '../taskParams/RunInputs';
 import { RunOutputs } from '../taskOutputs/RunOutputs';
 import { SuggestedConnections } from '../components/SuggestedConnections';
+import { RunFindings } from '../components/RunFindings';
 import { RunDeliveries } from '../deliveries/RunDeliveries';
 import { StartedByEmail } from '../mailTriggers/StartedByEmail';
 import { useCallback, useEffect, useId, useRef, useState, type ElementType, type MouseEvent } from 'react';
@@ -395,6 +396,8 @@ export function RunDetailPage() {
     );
   // What the run returned (E39.5): once it has ended; a live run has nothing to show yet.
   const outputs = !isLive && <RunOutputs outputs={run.outputs} complete={run.outputsComplete} />;
+  // Where the run spent effort it did not need (E52.6): findings from its steps, once it has ended. Information only.
+  const findings = viewer.hasPermission('runs:read') ? <RunFindings runId={run.id} ended={!isLive} /> : null;
   // What was sent when the run ended (E39.6): an email, a row, files, a webhook. Only a run of a task has any.
   const deliveries = !isLive && run.taskId && viewer.hasPermission('runs:read') ? <RunDeliveries runId={run.id} canRetryDelivery={viewer.hasPermission('runs:write')} taskId={run.taskId} canOpenLinks={viewer.hasPermission('connections:read')} /> : null;
   // The run's video, when its owner chose to record it (epic #755): not masked, owner-only. Nothing for a run without one.
@@ -541,6 +544,7 @@ export function RunDetailPage() {
               {activity}
               {meter}
               {outcome}
+              {findings}
               {outputs}
               {deliveries}
               {recording}
@@ -560,6 +564,7 @@ export function RunDetailPage() {
       {header}
       {chips}
       {outcome}
+      {findings}
       {outputs}
       {deliveries}
       {recording}

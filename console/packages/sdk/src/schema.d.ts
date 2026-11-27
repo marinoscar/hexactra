@@ -8366,6 +8366,28 @@ export interface paths {
         patch: operations["connectedApps_patch"];
         trace?: never;
     };
+    "/api/runs/{id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A run's findings
+         * @description Where the run spent effort it did not need, computed on read from its recorded steps (E52.6): loops, selectors that matched nothing, the same control clicked again, many reads per action, a slow start, time waiting for the owner, budget pressure, failures and steps whose outcome is unknown. Deterministic: no model reads anything. Texts are masked like the trace. Reads at most 2,000 steps (`truncated`). Permission `runs:read`; 404 `RUN_NOT_FOUND` for a run that is not yours.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runInsights_diagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage/report": {
         parameters: {
             query?: never;
@@ -23399,6 +23421,39 @@ export interface components {
             allowConnections?: boolean;
             allowWebSearch?: boolean;
             paused?: boolean;
+        };
+        RunDiagnosticsResponseDto: {
+            /** Format: uuid */
+            runId: string;
+            /** @description When the findings were computed (on read, ISO 8601) */
+            computedAt: string;
+            stepsRead: number;
+            /** @description True when the run has more than 2,000 steps: the findings cover the first 2,000 */
+            truncated: boolean;
+            /** @description Warnings first, then by steps spent */
+            findings: {
+                /**
+                 * @description What kind of finding it is
+                 * @enum {string}
+                 */
+                code: "loop" | "selector_miss" | "repeated_click" | "observation_heavy" | "slow_start" | "waited_for_owner" | "budget_pressure" | "failures" | "unknown_outcome";
+                /** @enum {string} */
+                severity: "info" | "warn";
+                /** @description One line for a person */
+                title: string;
+                /** @description One or two sentences, facts only */
+                detail: string;
+                /** @description The first step it is about, or null */
+                seqFrom: number | null;
+                /** @description The last step it is about, or null */
+                seqTo: number | null;
+                /** @description Steps attributable to it; 0 when not applicable */
+                stepsSpent: number;
+                /** @description The facts behind it */
+                evidence: {
+                    [key: string]: string | number | boolean | number[];
+                };
+            }[];
         };
         UsageReportResponseDto: {
             /** @enum {string} */
@@ -53797,6 +53852,56 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AppLimitsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runInsights_diagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDiagnosticsResponseDto"];
                     };
                 };
             };
