@@ -10,6 +10,9 @@ import {
   observePage,
   readStallState,
   resetStall,
+  clearStallEvidence,
+  stableDigest,
+  stableText,
   type ActionObservation,
   type StallThresholds,
 } from '../src/runner/stall';
@@ -37,12 +40,13 @@ describe('repeated action', () => {
     expect(observeAction(s, th, act('click', { selector: '#submit' })).signal).toMatchObject({ kind: 'repeat', reason: 'repeated click on #submit 3 times' });
   });
 
-  it('counts only the last 10 actions', () => {
+  it('counts the same action from the same page over the whole run, not only the last 10 (E52.2)', () => {
     const s = newStallState();
     observeAction(s, th, act('click', { selector: '#a' }));
     observeAction(s, th, act('click', { selector: '#a' }));
     for (let i = 0; i < 10; i += 1) observeAction(s, th, act('click', { selector: `#other${i}` }));
-    expect(observeAction(s, th, act('click', { selector: '#a' })).signal).toBeNull();
+    // Before E52.2 the window of 10 forgot the first two; a cycle longer than the window never stalled.
+    expect(observeAction(s, th, act('click', { selector: '#a' })).signal).toMatchObject({ kind: 'repeat', reason: 'repeated click on #a 3 times from the same page' });
   });
 
   it('rounds positions: clicks a few pixels apart are the same click', () => {
@@ -225,5 +229,119 @@ describe('texts and decisions', () => {
     expect(decideStall({ ...base, mode: 'ask_human' })).toBe('ask');
     expect(decideStall({ ...base, mode: 'ask_human', canAsk: false })).toBe('fail');
     expect(decideStall({ ...base, mode: 'fail' })).toBe('fail');
+  });
+});
+
+// E52.2: a cycle of any period. The run that started it went picker -> select contact -> thread -> back, about 16 times, with reads and
+// looks between, and never stalled: every lap was longer than the window of 10, and the page view changed every round.
+describe('cycles (E52.2)', () => {
+  const picker = (clock: string) => ({ url: 'https://chat.example.test/web/new', title: 'Messages', view: `picker-${clock}`, stable: stableDigest([{ selector: '#to', text: 'To' }, { selector: '#c1', text: 'Sam Example' }, { selector: '#clock', text: clock }]) });
+  const thread = (clock: string) => ({ url: 'https://chat.example.test/web/c/1', title: 'Messages', view: `thread-${clock}`, stable: stableDigest([{ selector: '#title', text: 'Samantha Example' }, { selector: '#clock', text: clock }]) });
+
+  /** One lap (5 actions): start a chat from the thread, then on the picker look, read, list the elements and pick the contact. */
+  function lap(s: ReturnType<typeof newStallState>, n: number) {
+    const signals = [];
+    signals.push(observePage(s, th, thread(`9:${10 + n} PM`)));
+    signals.push(observeAction(s, th, act('click_at', { x: 89, y: 104 })).signal);
+    signals.push(observePage(s, th, picker(`9:${10 + n} PM`)));
+    signals.push(observeAction(s, th, act('look', { screen: 'page' })).signal);
+    signals.push(observeAction(s, th, act('text', { selector: 'body' }, { contentHash: `picker${n}` })).signal);
+    signals.push(observeAction(s, th, act('elements', { max_elements: 80 }, { contentHash: `els${n}` })).signal);
+    signals.push(observeAction(s, th, act('click_at', { x: 1155, y: 541 })).signal);
+    return signals.filter(Boolean);
+  }
+
+  it('signals at the third lap of a 5-action cycle (longer than the window allows to see), although the clock on the page changes every lap', () => {
+    const s = newStallState();
+    expect(lap(s, 1)).toEqual([]);
+    expect(lap(s, 2)).toEqual([]);
+    expect(lap(s, 3)).toEqual([expect.objectContaining({ kind: 'repeat', reason: 'repeated click at 89,104 3 times from the same page' }), expect.objectContaining({ kind: 'repeat', reason: 'repeated click at 1155,541 3 times from the same page' })]);
+  });
+
+  it('after a nudge one more repeat signals again (the policy then escalates); after a handoff the count starts over', () => {
+    const s = newStallState();
+    lap(s, 1);
+    lap(s, 2);
+    lap(s, 3);
+    clearStallEvidence(s);
+    expect(lap(s, 4).length).toBeGreaterThan(0);
+    resetStall(s);
+    expect(lap(s, 5)).toEqual([]);
+    expect(lap(s, 6)).toEqual([]);
+  });
+
+  it('a page already seen is no progress; a new one is', () => {
+    const s = newStallState();
+    observePage(s, th, thread('9:10 PM'));
+    observePage(s, th, picker('9:10 PM'));
+    for (let i = 0; i < 4; i += 1) observeAction(s, th, act('click_at', { x: i * 50, y: 10 }));
+    observePage(s, th, thread('9:11 PM'));
+    expect(s.sinceProgress).toBe(4);
+    observePage(s, th, { url: 'https://chat.example.test/web/c/2', title: 'Messages', view: 'other', stable: stableDigest([{ selector: '#title', text: 'Samuel Example' }]) });
+    expect(s.sinceProgress).toBe(0);
+  });
+
+  it('does not misfire on pages that really change', () => {
+    // "Next page" 20 times: each page lists other items.
+    let s = newStallState();
+    for (let i = 0; i < 20; i += 1) {
+      observePage(s, th, { url: 'https://shop.example.test/list', title: 'List', view: `v${i}`, stable: stableDigest([{ selector: '#next', text: 'Next' }, { selector: '#item', text: `Item ${i * 10 + 1}` }]) });
+      expect(observeAction(s, th, act('click', { selector: '#next' })).signal).toBeNull();
+    }
+    // A quantity "+" 5 times: the number on the page changes, and digits are kept.
+    s = newStallState();
+    for (let q = 1; q <= 5; q += 1) {
+      observePage(s, th, { url: 'https://shop.example.test/cart', title: 'Cart', view: `q${q}`, stable: stableDigest([{ selector: '#plus', text: '+' }, { selector: '#qty', text: String(q) }]) });
+      expect(observeAction(s, th, act('click', { selector: '#plus' })).signal).toBeNull();
+    }
+    // A list and different details: each detail is opened once.
+    s = newStallState();
+    for (let i = 0; i < 6; i += 1) {
+      observePage(s, th, { url: 'https://shop.example.test/list', title: 'List', view: 'list', stable: 'list' });
+      expect(observeAction(s, th, act('click', { selector: `#item${i}` })).signal).toBeNull();
+      observePage(s, th, { url: `https://shop.example.test/item/${i}`, title: 'Item', view: `item${i}`, stable: `item${i}` });
+      expect(observeAction(s, th, act('click', { selector: '#back' })).signal).toBeNull();
+    }
+  });
+
+  it('the same item opened three times from the same list is a stall', () => {
+    const s = newStallState();
+    let signal = null;
+    for (let i = 0; i < 3; i += 1) {
+      observePage(s, th, { url: 'https://shop.example.test/list', title: 'List', view: `list${i}`, stable: 'list' });
+      signal = observeAction(s, th, act('click', { selector: '#item1' })).signal ?? signal;
+      observePage(s, th, { url: 'https://shop.example.test/item/1', title: 'Item', view: `item${i}`, stable: 'item1' });
+      for (let r = 0; r < 4; r += 1) observeAction(s, th, act('text', {}, { contentHash: `t${i}${r}` }));
+      observeAction(s, th, act('click', { selector: '#back' }));
+    }
+    expect(signal).toMatchObject({ kind: 'repeat' });
+  });
+
+  it('stableText blanks clock and relative times and keeps other digits', () => {
+    expect(stableText('  Sent 9:41 PM ')).toBe('sent #');
+    expect(stableText('11:02:33')).toBe('#');
+    expect(stableText('2 min')).toBe('#');
+    expect(stableText('3 hours ago')).toBe('#');
+    expect(stableText('Yesterday')).toBe('#');
+    expect(stableText('Now')).toBe('#');
+    expect(stableText('Page 2 of 9')).toBe('page 2 of 9');
+    expect(stableText('$12.50')).toBe('$12.50');
+    expect(stableText('Qty 3')).toBe('qty 3');
+    expect(stableDigest([])).toBeNull();
+    expect(stableDigest([{ selector: '#a', text: '9:10' }])).toBe(stableDigest([{ selector: '#a', text: '10:45' }]));
+  });
+
+  it('reads a run memory written before E52.2, and stores no typed text or secret', () => {
+    const old = readStallState({ recent: [], failures: 0, sinceProgress: 2, page: { url: 'https://x.example.test/', title: 'X', view: 'v' }, observable: true, seen: [] });
+    expect(old.counts).toEqual([]);
+    expect(old.stableSeen).toEqual([]);
+    expect(old.page).toMatchObject({ stable: null });
+    const s = newStallState();
+    for (let i = 0; i < 3; i += 1) observeAction(s, th, act('type', { selector: '#msg', text: 'Hello Sam, see you at 7' }));
+    observeAction(s, th, { ...act('type', { selector: '#pw', text: 'hunter2-secret' }), secret: true });
+    const stored = JSON.stringify(readStallState(JSON.parse(JSON.stringify(s))));
+    expect(stored).not.toContain('Hello Sam');
+    expect(stored).not.toContain('hunter2');
+    expect(s.counts.length).toBe(1);
   });
 });

@@ -1,0 +1,43 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a cycle longer than the window stalls (E52.2)",
+  "description": "The agent goes round in a circle: from the thread it starts a new chat, reads the picker, picks the contact, lands on the same thread titled with another name, and starts over. Each lap is longer than the stall window of 10, so before E52.2 it never stalled (the run that started E52 did this about 16 times). Now the third lap is a stall: the run is nudged, then escalated, and the stronger model sends once.",
+  "goal": "Send a text message to ⟦Sam Example⟧ saying exactly: \"⟦See you at 7⟧\".",
+  "policy": "builtin:balanced",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["chat.example.test"] },
+  "harness": { "stall": { "maxRepeatedAction": 3, "maxConsecutiveFailures": 4, "noProgressActions": 10, "maxEscalations": 2 } },
+  "site": {
+    "start": "https://chat.example.test/web/c/1",
+    "state": { "sent": "0" },
+    "pages": {
+      "https://chat.example.test/web/c/1": {
+        "title": "Messages",
+        "text": "Samantha Example. 555-0100. Sent: {{state.sent}}",
+        "elements": [
+          { "id": "start", "selector": "#start", "tag": "a", "role": "link", "label": "Start chat", "on": [{ "goto": "https://chat.example.test/web/new" }] },
+          { "id": "send", "selector": "#send", "tag": "button", "label": "Send", "on": [{ "set": { "sent": "1" } }] }
+        ]
+      },
+      "https://chat.example.test/web/new": {
+        "title": "Messages",
+        "text": "To: Sam Example 555-0100",
+        "elements": [{ "id": "c1", "selector": "#c1", "tag": "div", "role": "option", "label": "Sam Example", "on": [{ "goto": "https://chat.example.test/web/c/1" }] }]
+      }
+    }
+  },
+  "script": [
+    [
+      { "tool": "click", "args": { "selector": "#start" } }, { "tool": "read_text" }, { "tool": "observe_elements" }, { "tool": "click", "args": { "selector": "#c1" } }, { "tool": "read_text" },
+      { "tool": "click", "args": { "selector": "#start" } }, { "tool": "read_text" }, { "tool": "observe_elements" }, { "tool": "click", "args": { "selector": "#c1" } }, { "tool": "read_text" }
+    ],
+    [
+      { "tool": "click", "args": { "selector": "#start" } }, { "tool": "read_text" }, { "tool": "observe_elements" }, { "tool": "click", "args": { "selector": "#c1" } }, { "tool": "read_text" }
+    ],
+    [
+      { "tool": "click", "args": { "selector": "#start" } }, { "tool": "read_text" }, { "tool": "observe_elements" }, { "tool": "click", "args": { "selector": "#c1" } }, { "tool": "read_text" }
+    ],
+    [{ "tool": "click", "args": { "selector": "#send" } }, { "tool": "read_text" }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Sent once. The thread is titled Samantha Example (555-0100, the number the picker showed for Sam Example)." } }]
+  ],
+  "expect": { "status": "succeeded", "tierAtEnd": "frontier", "maxSteps": 40, "endState": { "sent": "1" }, "finishIncludes": "Samantha Example" }
+}
