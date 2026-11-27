@@ -8432,6 +8432,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/runs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run statistics across every user's runs
+         * @description The answer of `GET /api/runs/stats` over every user's runs, plus `groupBy=user` (labelled with the display name, or `User <first 8 of id>`; never an email). Aggregates only: another user's task is labelled `Task <first 8 of id>` and an own policy `Policy <first 8 of id>` (never their names), no goal, result or step is read, and `q` is refused (`400`). Each call writes the audit event `runs.stats_admin_read` (the grouping and the names of the filters used, never their values). Permission `run_stats:read_all` (organization administrators by default).
+         *
+         *     **Requires:** authentication, plus permission `run_stats:read_all`.
+         */
+        get: operations["adminRunStats_allStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage/report": {
         parameters: {
             query?: never;
@@ -23738,7 +23760,7 @@ export interface components {
         };
         RunStatsResponseDto: {
             /** @enum {string} */
-            groupBy: "none" | "task" | "policy" | "stopReason" | "status" | "trigger" | "origin" | "tier" | "day" | "week";
+            groupBy: "none" | "task" | "policy" | "stopReason" | "status" | "trigger" | "origin" | "tier" | "day" | "week" | "user";
             /** @description The time zone of the days and weeks */
             timeZone: string;
             /** @description Runs read: at most 100000, the newest */
@@ -54878,6 +54900,83 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["TaskConsistencyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    adminRunStats_allStats: {
+        parameters: {
+            query?: {
+                /** @description Run status. Any of: queued, running, waiting_human, paused, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                status?: string | string[];
+                /** @description Shorthand for a status group: `live` = queued, running, waiting_human, paused; `finished` = succeeded, failed, cancelled. Not together with `status`. */
+                state?: "live" | "finished";
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Without this parameter, the trial runs of a benchmark (`benchmark`) are left out; name `benchmark` to see them. Any of: manual, schedule, api, mcp, external, chat, email, benchmark. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
+                from?: string;
+                /** @description Runs created before this ISO 8601 date-time (exclusive). */
+                to?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+                /** @description Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas. */
+                origin?: string | string[];
+                /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
+                clientId?: string;
+                /** @description The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`. */
+                batchId?: string;
+                /** @description As `GET /runs/stats`, plus `user`. */
+                groupBy?: "none" | "task" | "policy" | "stopReason" | "status" | "trigger" | "origin" | "tier" | "day" | "week" | "user";
+                /** @description IANA time zone of the days and weeks; default the caller's time zone setting. */
+                tz?: string;
+                /** @description Refused: a goal is the person’s own text. */
+                q?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunStatsResponseDto"];
                     };
                 };
             };

@@ -61,12 +61,13 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
 
 /**
  * The same filter as `runWhere`, as SQL over `runs r` for one user, for an aggregate Prisma cannot express (run statistics, E53.1:
- * percentiles). It must select exactly the rows `runWhere` selects: `run-stats.db.spec.ts` compares the two for every parameter,
+ * percentiles), for one user, or (`null`) every user. It must select exactly the rows `runWhere` selects: `run-stats.db.spec.ts` compares the two for every parameter,
  * so a change to one is a change to both. The same 400s as `runWhere`. Every value is a bound parameter; only fixed text is SQL.
  */
-export function runWhereSql(userId: string, filter: RunFilter): Prisma.Sql {
+export function runWhereSql(userId: string | null, filter: RunFilter): Prisma.Sql {
   runWhere(filter); // the same validation, and the same INVALID_FILTER answers
-  const parts: Prisma.Sql[] = [Prisma.sql`r.user_id = ${userId}::uuid`];
+  // `null`: every user (admin statistics, E53.2), run only through the system client by a route behind `run_stats:read_all`.
+  const parts: Prisma.Sql[] = [userId === null ? Prisma.sql`TRUE` : Prisma.sql`r.user_id = ${userId}::uuid`];
   const statuses = filter.status ?? (filter.state ? [...RUN_STATES[filter.state]] : undefined);
   if (statuses) parts.push(Prisma.sql`r.status::text = ANY(${statuses}::text[])`);
   if (filter.taskId) parts.push(filter.taskId === 'none' ? Prisma.sql`r.task_id IS NULL` : Prisma.sql`r.task_id = ${filter.taskId}::uuid`);

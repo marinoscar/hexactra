@@ -1,13 +1,14 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
+import { Controller, Get, Logger, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { SettingsResolver } from '@marinoscar/platform-api/settings';
 
-import { RunDiagnosticsResponseDto, RunStatsQueryDto, RunStatsResponseDto, TaskConsistencyQueryDto, TaskConsistencyResponseDto } from '../openapi/run-insights.responses';
+import { AdminRunStatsQueryDto, RunDiagnosticsResponseDto, RunStatsQueryDto, RunStatsResponseDto, TaskConsistencyQueryDto, TaskConsistencyResponseDto } from '../openapi/run-insights.responses';
 import { RunInsightsService } from './run-insights.service';
 import { RunStatsService } from './run-stats.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /** What a run's steps say about how it went (E52.6, #1021). */
 @ApiTags('Runs')
@@ -63,5 +64,41 @@ export class TaskInsightsController {
   @Auth({ permissions: ['tasks:read', 'runs:read'] })
   consistency(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: TaskConsistencyQueryDto) {
     return this.insights.consistency(userId, id, q.last ?? 20, q.since ? new Date(q.since) : null);
+  }
+}
+
+/** Run statistics across the deployment (E53.2, #1070): aggregates only, for an administrator. */
+@ApiTags('Runs')
+@Controller('admin/runs')
+export class AdminRunStatsController {
+  private readonly log = new Logger(AdminRunStatsController.name);
+
+  constructor(
+    private readonly stats: RunStatsService,
+    private readonly settings: SettingsResolver,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Get('stats')
+  @ApiOperation({
+    summary: "Run statistics across every user's runs",
+    description:
+      "The answer of `GET /api/runs/stats` over every user's runs, plus `groupBy=user` (labelled with the display name, or `User <first 8 of id>`; never an email). Aggregates only: another user's task is labelled `Task <first 8 of id>` and an own policy `Policy <first 8 of id>` (never their names), no goal, result or step is read, and `q` is refused (`400`). Each call writes the audit event `runs.stats_admin_read` (the grouping and the names of the filters used, never their values). Permission `run_stats:read_all` (organization administrators by default).",
+  })
+  @ApiDataResponse(RunStatsResponseDto)
+  @Auth({ permissions: ['run_stats:read_all'] })
+  async allStats(@CurrentUser('id') userId: string, @Query() q: AdminRunStatsQueryDto, @Req() req: FastifyRequest) {
+    const { groupBy, tz, q: _q, ...filter } = q;
+    const timeZone = tz ?? (await this.settings.resolveRequestTimeZone(req, userId));
+    const result = await this.stats.statsAll(filter, groupBy, timeZone);
+    const filters = Object.entries(filter)
+      .filter(([, v]) => v !== undefined)
+      .map(([k]) => k);
+    try {
+      await this.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'runs.stats_admin_read', targetType: 'runs', targetId: 'all', meta: { groupBy, filters, scanned: result.scanned } } });
+    } catch (err) {
+      this.log.warn(`runs.stats_admin_read: the audit record could not be written: ${err instanceof Error ? err.name : 'error'}`);
+    }
+    return result;
   }
 }

@@ -3,6 +3,8 @@
 // agents read (docs/runs.md, "GET /api/runs/stats").
 
 export const STATS_GROUP_BY = ['none', 'task', 'policy', 'stopReason', 'status', 'trigger', 'origin', 'tier', 'day', 'week'] as const;
+/** `--all` (the admin route) also groups by user. */
+export const STATS_ADMIN_GROUP_BY = [...STATS_GROUP_BY, 'user'] as const;
 
 export interface Distribution {
   n: number;
@@ -66,9 +68,10 @@ export function timeArg(value: string, now = Date.now()): string {
 }
 
 /** The query parameters of a stats request. `taskId` is resolved by the command (a name, an id prefix or `none`). */
-export function statsQuery(flags: StatsFlags, taskId?: string, now = Date.now()): Record<string, string> {
+export function statsQuery(flags: StatsFlags, taskId?: string, now = Date.now(), all = false): Record<string, string> {
   const by = flags.by ?? 'none';
-  if (!(STATS_GROUP_BY as readonly string[]).includes(by)) throw new Error(`--by must be one of: ${STATS_GROUP_BY.join(', ')}`);
+  const allowed: readonly string[] = all ? STATS_ADMIN_GROUP_BY : STATS_GROUP_BY;
+  if (!allowed.includes(by)) throw new Error(`--by must be one of: ${allowed.join(', ')}`);
   const q: Record<string, string> = { groupBy: by };
   if (flags.from) q.from = timeArg(flags.from, now);
   if (flags.to) q.to = timeArg(flags.to, now);

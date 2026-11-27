@@ -69,10 +69,14 @@ export function insightsCommands(program: Command): void {
     .option('--origin <origin>', 'where the runs were started from, comma-separated (web, cli, api, mcp, ...)')
     .option('--q <text>', 'goal contains this text')
     .option('--tz <zone>', 'IANA time zone for --by day|week (default your time zone setting)')
+    .option('--all', "every user's runs, aggregates only (needs run_stats:read_all; --by user; no --q; --task takes an id)")
     .option('--json', 'print the API answer as JSON (stable: scripts and coding agents read it)')
-    .action(async (o: StatsFlags & { task?: string; json?: boolean }) => {
-      const task = o.task === undefined ? undefined : o.task === 'none' ? 'none' : await taskId(o.task);
-      const s = await consoleApi().get<RunStats>('/runs/stats', { query: statsQuery(o, task) });
+    .action(async (o: StatsFlags & { task?: string; json?: boolean; all?: boolean }) => {
+      if (o.all && o.q) throw new Error('--q is not offered with --all: a goal is the person’s own text');
+      if (!o.all && o.by === 'user') throw new Error('--by user needs --all');
+      // With --all another user's task is not in your list: --task is then an id (or none), never a name.
+      const task = o.task === undefined ? undefined : o.task === 'none' || o.all ? o.task : await taskId(o.task);
+      const s = await consoleApi().get<RunStats>(o.all ? '/admin/runs/stats' : '/runs/stats', { query: statsQuery(o, task, Date.now(), o.all) });
       if (o.json) return json(s);
       for (const line of statsLines(s)) out(line);
     });

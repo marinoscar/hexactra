@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { builtinPolicy } from '../policies/builtin-policies';
 import { PrismaService } from '../prisma/prisma.service';
+import { PrismaSystemService } from '../prisma/prisma-system.service';
 import { runWhereSql } from '../tasks/runs.query';
 import { RUN_STATUSES, type RunFilter } from '../tasks/runs.schemas';
 import type { RunStatus } from '../tasks/run-status';
@@ -44,6 +45,8 @@ function keySql(groupBy: RunStatsGroupBy, timeZone: string): Prisma.Sql {
       return Prisma.sql`r.origin::text`;
     case 'tier':
       return Prisma.sql`COALESCE(r.current_tier, 'none')`;
+    case 'user':
+      return Prisma.sql`r.user_id::text`;
     case 'day':
       return Prisma.sql`to_char((r.created_at AT TIME ZONE ${timeZone})::date, 'YYYY-MM-DD')`;
     case 'week':
@@ -76,18 +79,37 @@ type AggregateRow = Record<string, number | string | boolean | null> & { k: stri
 export class RunStatsService {
   private readonly log = new Logger(RunStatsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly system: PrismaSystemService,
+  ) {}
 
+  /** The caller's own runs. */
   async stats(userId: string, filter: RunFilter, groupBy: RunStatsGroupBy, timeZone: string, maxRuns = RUN_STATS_MAX_RUNS): Promise<RunStats> {
+    return this.compute({ userId }, filter, groupBy, timeZone, maxRuns);
+  }
+
+  /**
+   * Every user's runs (E53.2, #1070), for a route behind `run_stats:read_all`: through the system client (`admin-aggregate`), as
+   * the AI usage Doctor check reads deployment totals. Aggregates only: task and policy groups are labelled by id, users by
+   * display name; never a goal, a result or a step.
+   */
+  async statsAll(filter: Omit<RunFilter, 'q'>, groupBy: RunStatsGroupBy, timeZone: string, maxRuns = RUN_STATS_MAX_RUNS): Promise<RunStats> {
+    return this.compute({ userId: null }, filter, groupBy, timeZone, maxRuns);
+  }
+
+  private async compute(scope: { userId: string | null }, filter: RunFilter, groupBy: RunStatsGroupBy, timeZone: string, maxRuns: number): Promise<RunStats> {
     const started = Date.now();
-    const where = runWhereSql(userId, filter);
-    const [{ n: matched }] = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`SELECT count(*)::int AS n FROM (SELECT 1 FROM runs r WHERE ${where} LIMIT ${maxRuns + 1}) x`);
+    if (scope.userId !== null && groupBy === 'user') throw new BadRequestException({ code: 'BAD_REQUEST', message: 'groupBy=user is for the admin statistics (GET /admin/runs/stats)' });
+    const where = runWhereSql(scope.userId, filter);
+    const db = scope.userId === null ? this.system.asSystem('admin-aggregate') : this.prisma;
+    const [{ n: matched }] = await db.$queryRaw<{ n: number }[]>(Prisma.sql`SELECT count(*)::int AS n FROM (SELECT 1 FROM runs r WHERE ${where} LIMIT ${maxRuns + 1}) x`);
     const truncated = matched > maxRuns;
     // Past the limit, the newest `maxRuns` (the runs list's order); otherwise every match, with no sort.
     const source = truncated
       ? Prisma.sql`(SELECT * FROM runs r WHERE ${where} ORDER BY r.created_at DESC, r.id DESC LIMIT ${maxRuns})`
       : Prisma.sql`(SELECT * FROM runs r WHERE ${where})`;
-    const rows = await this.prisma.$queryRaw<AggregateRow[]>(Prisma.sql`
+    const rows = await db.$queryRaw<AggregateRow[]>(Prisma.sql`
       SELECT g.k AS k, GROUPING(g.k)::int AS is_total,
         ${Prisma.join(RUN_STATUSES.map((s) => Prisma.sql`count(*) FILTER (WHERE r.status = ${s}::run_status)::int AS ${Prisma.raw(`"s_${s}"`)}`))},
         COALESCE(bool_and(r.cost_known) FILTER (WHERE ${FINISHED_SQL}), true) AS cost_known,
@@ -99,14 +121,35 @@ export class RunStatsService {
     const totalRow = rows.findIndex((r) => r.is_total === 1);
     const total = totalRow >= 0 ? raw[totalRow]! : emptyRawGroup();
     const groups = raw.filter((_, i) => i !== totalRow);
-    const labels = await this.labels(userId, groups.map((g) => g.key), groupBy);
+    const labels = scope.userId === null ? await this.adminLabels(groups.map((g) => g.key), groupBy) : await this.labels(scope.userId, groups.map((g) => g.key), groupBy);
     const result = runStatsOf({ total, groups, groupBy, timeZone, scanned: Math.min(matched, maxRuns), truncated, label: (k) => labels.get(k) });
     // Which filters were used, never their values: a goal search is the user's text.
     const used = Object.entries(filter)
       .filter(([, v]) => v !== undefined)
       .map(([k]) => k);
-    this.log.debug(`runs stats user=${userId} groupBy=${groupBy} filters=[${used.join(',')}] scanned=${result.scanned} truncated=${truncated} groups=${result.groups.length} ms=${Date.now() - started}`);
+    this.log.debug(`runs stats user=${scope.userId ?? 'all'} groupBy=${groupBy} filters=[${used.join(',')}] scanned=${result.scanned} truncated=${truncated} groups=${result.groups.length} ms=${Date.now() - started}`);
     return result;
+  }
+
+  /**
+   * Labels across users: another person's task or own policy is their content, so only its id is shown; a built-in policy by name;
+   * a user by display name, never an email (`User <first 8 of id>` when there is no name, or it looks like an address).
+   */
+  private async adminLabels(keys: readonly string[], groupBy: RunStatsGroupBy): Promise<Map<string, string>> {
+    const out = new Map<string, string>([['none', groupBy === 'task' ? 'No task' : groupBy === 'policy' ? 'No policy yet' : 'None']]);
+    const ids = keys.filter((k) => UUID.test(k));
+    if (groupBy === 'task') for (const id of ids) out.set(id, `Task ${id.slice(0, 8)}`);
+    if (groupBy === 'policy') for (const k of keys) if (k !== 'none') out.set(k, builtinPolicy(k)?.name ?? `Policy ${k.slice(0, 8)}`);
+    if (groupBy === 'user' && ids.length) {
+      const users = (await this.system.asSystem('admin-aggregate').user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true, providerDisplayName: true } })) as { id: string; displayName: string | null; providerDisplayName: string | null }[];
+      const byId = new Map(users.map((u) => [u.id, u]));
+      for (const id of ids) {
+        const u = byId.get(id);
+        const name = (u?.displayName ?? u?.providerDisplayName ?? '').trim();
+        out.set(id, name && !name.includes('@') ? name.slice(0, 80) : `User ${id.slice(0, 8)}`);
+      }
+    }
+    return out;
   }
 
   /** Task and policy names for their groups: the owner's own rows only (through `forUser`). */

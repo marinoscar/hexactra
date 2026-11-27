@@ -162,6 +162,21 @@ describe('hexactra runs stats', () => {
     expect(calls[0]!.query.get('taskId')).toBe('none');
   });
 
+  it('reads every user with --all, by user, and keeps --task an id', async () => {
+    const calls = fake({ 'GET /admin/runs/stats': stats({ groupBy: 'user', groups: [{ ...group(), key: TASK, label: 'Ana' }] }) });
+    const out = await run('runs', 'stats', '--all', '--by', 'user', '--task', TASK);
+    expect(calls.map((c) => c.path)).toEqual(['/admin/runs/stats']);
+    expect(calls[0]!.query.get('groupBy')).toBe('user');
+    expect(calls[0]!.query.get('taskId')).toBe(TASK);
+    expect(out).toMatch(/^USER\s+RUNS/);
+  });
+
+  it('refuses --by user without --all, and --q with --all', async () => {
+    fake({});
+    await expect(run('runs', 'stats', '--by', 'user')).rejects.toThrow('--by user needs --all');
+    await expect(run('runs', 'stats', '--all', '--q', 'money')).rejects.toThrow(/--q is not offered with --all/);
+  });
+
   it('prints the API answer unchanged with --json', async () => {
     const answer = stats();
     fake({ 'GET /runs/stats': answer });

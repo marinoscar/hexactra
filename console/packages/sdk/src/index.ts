@@ -182,6 +182,11 @@ export interface RunsClient {
    */
   stats(query?: RunStatsQuery): Promise<Schema<'RunStatsResponseDto'>>;
   /**
+   * The same statistics over every user's runs (E53.2), aggregates only, plus `groupBy: 'user'`; no goal search. Needs
+   * `run_stats:read_all` (organization administrators by default).
+   */
+  statsAll(query?: AdminRunStatsQuery): Promise<Schema<'RunStatsResponseDto'>>;
+  /**
    * Start the run dataset (E53.3): your runs as one masked file for analysis (tables `runs`, `findings` and, with
    * `includeSteps`, `steps`), made by a queue job of the exports slice. Poll `datasetStatus(id)` until `ready`, then fetch
    * `download.url` (a short-lived signed link; send no token to it). Needs `runs:read`. Example: `src/examples/run-dataset.ts`.
@@ -201,6 +206,9 @@ export interface RunDatasetRequest {
   trigger?: string;
   includeSteps?: boolean;
 }
+
+/** The query of `runs.statsAll`. */
+export type AdminRunStatsQuery = NonNullable<paths['/api/admin/runs/stats']['get']['parameters']['query']>;
 
 /** The query of `runs.stats`: the runs list's filters, `groupBy` and `tz`. */
 export type RunStatsQuery = NonNullable<paths['/api/runs/stats']['get']['parameters']['query']>;
@@ -274,6 +282,7 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     retryDelivery: (id, runDeliveryId) => data(api.POST('/api/runs/{id}/deliveries/{runDeliveryId}/retry', { params: { path: { id, runDeliveryId } } })) as never,
     diagnostics: (id) => data(api.GET('/api/runs/{id}/diagnostics', { params: { path: { id } } })) as never,
     stats: (query) => data(api.GET('/api/runs/stats', { params: { query: { ...query } } } as never)) as never,
+    statsAll: (query) => data(api.GET('/api/admin/runs/stats', { params: { query: { ...query } } } as never)) as never,
     dataset: (request, o) => data(api.POST('/api/exports', { body: { source: 'run-dataset', format: o?.format ?? 'json', request: { ...request } } } as never)) as never,
     datasetStatus: (id) => data(api.GET('/api/exports/{id}', { params: { path: { id } } } as never)) as never,
   };

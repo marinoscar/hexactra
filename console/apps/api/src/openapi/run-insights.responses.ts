@@ -2,7 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { timeZoneIdSchema } from '@marinoscar/platform-contract/settings';
 
-import { RUN_STATS_GROUP_BY, RUN_STATS_MAX_GROUPS, RUN_STATS_MAX_RUNS } from '../run-insights/run-stats';
+import { RUN_STATS_ADMIN_GROUP_BY, RUN_STATS_GROUP_BY, RUN_STATS_MAX_GROUPS, RUN_STATS_MAX_RUNS } from '../run-insights/run-stats';
 import { runFilterSchema } from '../tasks/runs.schemas';
 
 // The responses of the run and task insights (E52.6, E52.7).
@@ -71,6 +71,19 @@ export const runStatsQuerySchema = runFilterSchema.extend({
 });
 export class RunStatsQueryDto extends createZodDto(runStatsQuerySchema) {}
 
+/**
+ * `GET /admin/runs/stats` (E53.2): the same, over every user, plus `groupBy=user`. No goal search: a goal is a person's own text, and
+ * an aggregate over a search would let an administrator probe what others asked for.
+ */
+export const adminRunStatsQuerySchema = runFilterSchema
+  .omit({ q: true })
+  .extend({
+    groupBy: z.enum(RUN_STATS_ADMIN_GROUP_BY).default('none').describe('As `GET /runs/stats`, plus `user`.'),
+    tz: timeZoneIdSchema.optional().describe("IANA time zone of the days and weeks; default the caller's time zone setting."),
+    q: z.never({ error: 'A goal search is not offered across users' }).optional().describe('Refused: a goal is the person’s own text.'),
+  });
+export class AdminRunStatsQueryDto extends createZodDto(adminRunStatsQuerySchema) {}
+
 const distributionSchema = z
   .object({
     n: z.number().int().describe('Finished runs with a value'),
@@ -114,7 +127,7 @@ const runStatsGroupSchema = z.object({
 });
 
 export const runStatsResponseSchema = z.object({
-  groupBy: z.enum(RUN_STATS_GROUP_BY),
+  groupBy: z.enum(RUN_STATS_ADMIN_GROUP_BY),
   timeZone: z.string().describe('The time zone of the days and weeks'),
   scanned: z.number().int().describe(`Runs read: at most ${RUN_STATS_MAX_RUNS}, the newest`),
   truncated: z.boolean().describe(`True when more than ${RUN_STATS_MAX_RUNS} runs matched: narrow the filter (from, to) for exact numbers`),
