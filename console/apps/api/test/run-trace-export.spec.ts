@@ -69,11 +69,16 @@ describe('the JSON Schema of the file', () => {
     expect(readFileSync(RUN_TRACE_JSON_SCHEMA, 'utf8')).toBe(generated);
   });
 
-  it('accepts a file of format version 1 and refuses another type or version', () => {
+  it('writes version 2 (findings), still reads a version 1 file, and refuses another type or version', () => {
     const validate = runTraceValidator();
-    expect(RUN_TRACE_FORMAT_VERSION).toBe(1);
+    expect(RUN_TRACE_FORMAT_VERSION).toBe(2);
+    // A version 1 file: no findings.
     expect(validate(trace(3))).toBe(true);
-    expect(validate({ ...trace(1), formatVersion: 2 })).toBe(false);
+    const finding = { code: 'loop', severity: 'warn', title: 'The run went round in a loop', detail: 'Steps 3 to 9 repeated', seqFrom: 3, seqTo: 9, stepsSpent: 6, evidence: { cycle: 2 } };
+    expect(validate({ ...trace(3), formatVersion: 2, findings: [finding] })).toBe(true);
+    expect(validate({ ...trace(3), formatVersion: 2, findings: [] })).toBe(true);
+    expect(validate({ ...trace(3), formatVersion: 2, findings: [{ ...finding, code: 'made_up' }] })).toBe(false);
+    expect(validate({ ...trace(1), formatVersion: 3 })).toBe(false);
     expect(validate({ ...trace(1), type: 'hexactra.agent-policies' })).toBe(false);
   });
 });

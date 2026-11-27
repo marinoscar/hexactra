@@ -23,6 +23,8 @@ import { MCP_RATE_LIMITER, type McpRateLimiter } from '../mcp/mcp.rate-limit';
 import { TIERS, type Tier } from '../policies/agent-policy.schema';
 import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import { runWebUsage } from './run-web-usage';
+import { diagnoseRun } from '../run-insights/run-diagnostics';
+import { maskFinding } from '../run-insights/run-insights.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskValue, SENSITIVE_PATTERNS_VERSION } from './mask';
@@ -169,6 +171,7 @@ export class RunTraceService {
             summary: true,
             reasoning: true,
             durationMs: true,
+            phase: true,
             screenshotKey: true,
             screenshotMoment: true,
             screenshotMasked: true,
@@ -261,6 +264,7 @@ export class RunTraceService {
       budget: snapshotBudgetView(snapshot, run, now.getTime()),
       models: used.map((tier) => ({ tier, model: modelOf(tier), calls: used.length === 1 ? run.modelCalls : null })),
       steps,
+      findings: this.findings(run, snapshot, now),
       chat: (run.conversation?.messages ?? [])
         .slice()
         .reverse()
@@ -294,6 +298,19 @@ export class RunTraceService {
    * user), the 50 MB guard, then the audit record, the counter and one log
    * line. None of them carries goal, result or step content.
    */
+  /**
+   * The run's findings (E52.6) for the file (formatVersion 2): the same pure rules, first 2,000 steps and masking as
+   * `GET /runs/{id}/diagnostics`. A diagnosis that throws gives none, as on the run page: the export goes on.
+   */
+  private findings(run: Parameters<typeof snapshotBudgetView>[1] & { id: string; startedAt: Date | null; steps: { seq: number; kind: string; action: string | null; args: unknown; ok: boolean; summary: string; phase: string; createdAt: Date }[] }, snapshot: ReturnType<typeof readSnapshot>, now: Date): RunTrace['findings'] {
+    try {
+      return diagnoseRun({ startedAt: run.startedAt, budget: snapshotBudgetView(snapshot, run, now.getTime()) }, run.steps.slice(0, 2_000) as never).map(maskFinding);
+    } catch (e) {
+      this.log.warn(`run ${run.id}: the diagnosis for the export failed: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
+  }
+
   async exportJson(userId: string, runId: string, opts: RunTraceOptions & { orgId?: string | null }): Promise<RunExportFile> {
     const started = Date.now();
     await this.rateLimit(userId);

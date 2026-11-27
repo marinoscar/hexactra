@@ -38941,7 +38941,7 @@
     },
     "/api/runs/{id}/export": {
       "get": {
-        "description": "A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "description": "A `hexactra.run-trace` file (`formatVersion` 2; version 1 files still validate): the run, its policy, budget and models, every step with its question and answer, its findings (as `GET /runs/{id}/diagnostics`), the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).\n\n**Requires:** authentication, plus permission `runs:read`.",
         "operationId": "runs_export",
         "parameters": [
           {
@@ -102004,9 +102004,17 @@
             "const": "hexactra.run-trace"
           },
           "formatVersion": {
-            "type": "number",
-            "const": 1,
-            "description": "Version of this file format"
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 1
+              },
+              {
+                "type": "number",
+                "const": 2
+              }
+            ],
+            "description": "Version of this file format: 2 since findings were added (a version 1 file has no `findings`)"
           },
           "exportedAt": {
             "type": "string",
@@ -103436,6 +103444,113 @@
                 "durationMs",
                 "question",
                 "screenshot"
+              ]
+            }
+          },
+          "findings": {
+            "description": "Version 2: the run's findings (E52.6), computed from its steps with no model and masked, as `GET /runs/{id}/diagnostics` answers them; absent in a version 1 file",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "loop",
+                    "selector_miss",
+                    "repeated_click",
+                    "observation_heavy",
+                    "slow_start",
+                    "waited_for_owner",
+                    "budget_pressure",
+                    "failures",
+                    "unknown_outcome"
+                  ],
+                  "description": "What kind of finding it is"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "description": "One line for a person"
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "One or two sentences, facts only"
+                },
+                "seqFrom": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The first step it is about, or null"
+                },
+                "seqTo": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The last step it is about, or null"
+                },
+                "stepsSpent": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Steps attributable to it; 0 when not applicable"
+                },
+                "evidence": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    ]
+                  },
+                  "description": "The facts behind it"
+                }
+              },
+              "required": [
+                "code",
+                "severity",
+                "title",
+                "detail",
+                "seqFrom",
+                "seqTo",
+                "stepsSpent",
+                "evidence"
               ]
             }
           },

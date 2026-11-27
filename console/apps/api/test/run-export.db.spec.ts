@@ -131,14 +131,17 @@ async function seed(userId: string, status: 'failed' | 'running' = 'failed'): Pr
   const key = (seq: number, moment: string) => `runs/${userId}/${run.id}/${seq}-${moment}.jpg`;
   IMAGES[key(2, 'before_confirmed')] = Buffer.from(`jpeg-before-${run.id}`);
   IMAGES[key(6, 'final')] = Buffer.from(`jpeg-final-${run.id}`);
+  // Step times a few seconds after the run's start, so the findings of the file (formatVersion 2: a slow start, the wait for the
+  // owner) are the same on every run of the spec: with the default (now) they grew with the clock and broke the snapshot.
+  const at = (seq: number) => new Date(Date.parse('2026-11-18T18:00:01Z') + seq * 2_000);
   await prisma.runStep.createMany({
     data: [
-      { runId: run.id, seq: 1, kind: 'action', action: 'navigate', args: { url: 'https://shop.example.test/pay', auth: TOKEN }, summary: `Typed card ${CARD}`, reasoning: `The card ${CARD} is on file`, durationMs: 800 },
-      { runId: run.id, seq: 2, kind: 'handoff', action: null, args: { kind: 'confirmation', input: 'confirm' }, summary: 'Asked to pay', questionId: confirm.id, screenshotKey: key(2, 'before_confirmed'), screenshotMoment: 'before_confirmed', screenshotMasked: 2, durationMs: 0 },
-      { runId: run.id, seq: 3, kind: 'handoff', action: 'answered', summary: 'The owner provided it', questionId: code.id, durationMs: 0 },
-      { runId: run.id, seq: 4, kind: 'routing', args: { from: 'standard', to: 'frontier', reason: 'stalled' }, summary: 'standard → frontier: stalled', durationMs: 0 },
-      { runId: run.id, seq: 5, kind: 'error', ok: false, summary: 'The page did not load', screenshotMoment: 'failure', screenshotNote: 'unavailable' },
-      { runId: run.id, seq: 6, kind: 'end', summary: 'Final screen', screenshotKey: key(6, 'final'), screenshotMoment: 'final', screenshotMasked: 0 },
+      { runId: run.id, seq: 1, createdAt: at(1), kind: 'action', action: 'navigate', args: { url: 'https://shop.example.test/pay', auth: TOKEN }, summary: `Typed card ${CARD}`, reasoning: `The card ${CARD} is on file`, durationMs: 800 },
+      { runId: run.id, seq: 2, createdAt: at(2), kind: 'handoff', action: null, args: { kind: 'confirmation', input: 'confirm' }, summary: 'Asked to pay', questionId: confirm.id, screenshotKey: key(2, 'before_confirmed'), screenshotMoment: 'before_confirmed', screenshotMasked: 2, durationMs: 0 },
+      { runId: run.id, seq: 3, createdAt: at(3), kind: 'handoff', action: 'answered', summary: 'The owner provided it', questionId: code.id, durationMs: 0 },
+      { runId: run.id, seq: 4, createdAt: at(4), kind: 'routing', args: { from: 'standard', to: 'frontier', reason: 'stalled' }, summary: 'standard → frontier: stalled', durationMs: 0 },
+      { runId: run.id, seq: 5, createdAt: at(5), kind: 'error', ok: false, summary: 'The page did not load', screenshotMoment: 'failure', screenshotNote: 'unavailable' },
+      { runId: run.id, seq: 6, createdAt: at(6), kind: 'end', summary: 'Final screen', screenshotKey: key(6, 'final'), screenshotMoment: 'final', screenshotMasked: 0 },
     ],
   });
   return run.id;
@@ -165,11 +168,14 @@ describe('GET /runs/{id}/export', () => {
     expect(res.headers['cache-control']).toBe('no-store');
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     expect(res.headers['content-disposition']).toBe(`attachment; filename="hexactra-run-${id.slice(0, 8)}-${day}.json"`);
-    const file = res.json<Record<string, unknown> & { formatVersion: number; partial: boolean; steps: { screenshot: Record<string, unknown> | null }[] }>();
+    const file = res.json<Record<string, unknown> & { formatVersion: number; partial: boolean; findings: unknown[]; steps: { screenshot: Record<string, unknown> | null }[] }>();
     expect(file).not.toHaveProperty('data');
     const validate = runTraceValidator();
     expect(validate(file) ? [] : validate.errors).toEqual([]);
-    expect(file.formatVersion).toBe(1);
+    expect(file.formatVersion).toBe(2);
+    // Version 2 (#1047, #1071): the run's findings, as GET /runs/{id}/diagnostics answers them.
+    const diagnostics = (await get(user, `/runs/${id}/diagnostics`)).json<{ data: { findings: unknown[] } }>().data.findings;
+    expect(file.findings).toEqual(diagnostics);
     expect(file.partial).toBe(false);
     expect(normalized(file)).toMatchSnapshot();
   });

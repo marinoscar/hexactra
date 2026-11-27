@@ -447,6 +447,19 @@ function outcome(trace: RunTrace): Content[] {
   return out;
 }
 
+/**
+ * What happened (#1047, E53.3): the run's findings, warnings first, as the run page shows them. Nothing for a file without
+ * `findings` (version 1) or a live run; a short line when the steps point to no wasted effort.
+ */
+function whatHappened(trace: RunTrace): Content[] {
+  if (!trace.findings || trace.partial) return [];
+  const out: Content[] = [heading('What happened', 'what-happened')];
+  if (!trace.findings.length) return [...out, { text: 'Nothing in the steps points to wasted effort.', style: 'muted' }];
+  const steps = (f: (typeof trace.findings)[number]) => (f.seqFrom === null ? '' : f.seqTo !== null && f.seqTo !== f.seqFrom ? ` (steps ${f.seqFrom} to ${f.seqTo})` : ` (step ${f.seqFrom})`);
+  out.push({ ul: trace.findings.map((f) => ({ text: [{ text: `${f.severity === 'warn' ? 'Warning' : 'Note'}: ${f.title}${steps(f)}. `, style: 'strong' }, f.detail] })), style: 'body' } as Content);
+  return out;
+}
+
 /** What the run returned (E39.5): one row per output, "not found" for a missing one; a sensitive value is already `[hidden]` in the trace. Nothing for a run without outputs. */
 function outputsSection(trace: RunTrace): Content[] {
   const list = trace.outputs;
@@ -595,6 +608,7 @@ export function buildReportDefinition(trace: RunTrace, options: ReportOptions = 
   const content: Content[] = [
     ...cover(trace, images),
     ...outcome(trace),
+    ...whatHappened(trace),
     ...outputsSection(trace),
     ...questions(trace),
     // The budget is short: heading and table stay on one page.
