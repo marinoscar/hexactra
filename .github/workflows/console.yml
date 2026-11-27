@@ -112,8 +112,8 @@ jobs:
       # The db tier (the whole app against a migrated, seeded database) is the job below.
 
   # The unit tiers that `npm test` runs, as parallel jobs (#1055): the api unit tier with cli and mcp-ui, and the web suite in two Vitest
-  # shards. `test:packages` runs in the job above. A shard that finds no test file fails (Vitest's default), and the job
-  # "Console unit tests" is green only when every entry passed.
+  # shards. `test:packages` runs in the job above. A shard that finds no test file fails (Vitest's default). Each entry is
+  # its own check: there is no gate job (#1066), so require every entry's check on `main`.
   unit:
     name: Console unit tests (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -160,22 +160,10 @@ jobs:
       - name: Test
         run: ${{ matrix.run }}
 
-  unit-tests:
-    name: Console unit tests
-    needs: unit
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Every entry passed
-        env:
-          RESULT: ${{ needs.unit.result }}
-        run: |
-          echo "unit entries: $RESULT"
-          test "$RESULT" = "success"
-
   # The db tier: the whole app against a migrated, seeded database, as parallel shards (#1043). Each shard is its own job with its own
   # PostgreSQL, so two shards never share a database; inside a shard the files still run one after another (`--runInBand`). Jest
-  # splits the files (`--shard`), every file lands in exactly one shard, and a shard that finds no test fails.
+  # splits the files (`--shard`), every file lands in exactly one shard, and a shard that finds no test fails. Each shard is its own
+  # check: there is no gate job (#1066), so require every shard's check on `main`.
   db:
     name: Console db tier (shard ${{ matrix.shard }} of 4)
     runs-on: ubuntu-latest
@@ -259,20 +247,6 @@ jobs:
         env:
           AGENT_CLIENTS_SMOKE: '1'
 
-  # One check for the whole db tier: green only when every shard passed (a cancelled or skipped shard is not a pass).
-  db-tier:
-    name: Console db tier
-    needs: db
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Every shard passed
-        env:
-          RESULT: ${{ needs.db.result }}
-        run: |
-          echo "db shards: $RESULT"
-          test "$RESULT" = "success"
-
   stack:
     name: Console VPS stack (console + fabric + browser host)
     runs-on: ubuntu-latest
@@ -289,9 +263,15 @@ jobs:
           cache-dependency-path: console/package-lock.json
       - run: npm ci
       - run: npm run build --workspace=cli
+      # A layer cache for the stack's images in the GitHub Actions cache (#1066): a builder that can export one, and the cache
+      # service's variables for it. stack-smoke.sh adds scripts/stack-smoke.cache.compose.yml with STACK_SMOKE_BUILD_CACHE=1.
+      - uses: docker/setup-buildx-action@v3
+      - uses: crazy-max/ghaction-github-runtime@v3
       # Builds every image, brings the stack up, and checks health, the private
       # fabric, the bundled host and the /viewer/local/ ticket gate.
       - run: bash scripts/stack-smoke.sh
+        env:
+          STACK_SMOKE_BUILD_CACHE: '1'
 
   node-e2e:
     name: Unattended node end to end (real sudo and systemd)

@@ -1,0 +1,33 @@
+# CI only (#1066): a layer cache for the images stack-smoke.sh builds, kept in the GitHub Actions cache between runs.
+# stack-smoke.sh adds this file when STACK_SMOKE_BUILD_CACHE=1 (.github/workflows/console.yml, job "stack"); locally the
+# script builds without it. One scope per image, so one image's cache never replaces another's; mode=max keeps the
+# intermediate stages too (the Rust and npm builder stages are most of the build). The cache only reuses layers whose
+# inputs are unchanged: a changed Dockerfile or source file rebuilds from that layer on.
+#
+# Needs a buildx builder that can export a cache (docker-container driver: docker/setup-buildx-action) and the Actions
+# cache variables in the environment (crazy-max/ghaction-github-runtime).
+services:
+  api:
+    build:
+      cache_from:
+        - "type=gha,scope=console-stack-api"
+      cache_to:
+        - "type=gha,scope=console-stack-api,mode=max"
+  web:
+    build:
+      cache_from:
+        - "type=gha,scope=console-stack-web"
+      cache_to:
+        - "type=gha,scope=console-stack-web,mode=max"
+  fabric-control:
+    build:
+      cache_from:
+        - "type=gha,scope=console-stack-fabric-control"
+      cache_to:
+        - "type=gha,scope=console-stack-fabric-control,mode=max"
+  fabric-host:
+    build:
+      cache_from:
+        - "type=gha,scope=console-stack-fabric-host"
+      cache_to:
+        - "type=gha,scope=console-stack-fabric-host,mode=max"

@@ -13,6 +13,9 @@ console=$PWD
 # The api's memory limit as a deploy applies it (`app.prod.api-memory.compose.yml`, #668): the fabric-connect step below boots a
 # second copy of the application inside the api container, and under the platform's 512M the pair is killed (exit 137, no output).
 files=(-f base.compose.yml -f prod.compose.yml -f devdb.compose.yml -f app.fabric.compose.yml -f app.prod.api-memory.compose.yml)
+# CI (#1066): the image builds read and write a layer cache in the GitHub Actions cache (scripts/stack-smoke.cache.compose.yml).
+# It only changes how the images are built, never what is checked. Locally the script builds without it.
+if [ "${STACK_SMOKE_BUILD_CACHE:-0}" = 1 ]; then files+=(-f ../../scripts/stack-smoke.cache.compose.yml); fi
 fail() { echo "FAIL: $*" >&2; (cd "$console/infra/compose" && docker compose "${files[@]}" logs --tail 80) >&2 || true; exit 1; }
 pass() { echo "ok   $*"; }
 
@@ -41,7 +44,15 @@ trap cleanup EXIT
 
 # The platform stack joins the shared external network (README: once per host).
 docker network create devnet >/dev/null 2>&1 || true
-dc build >/dev/null
+if [ "${STACK_SMOKE_BUILD_CACHE:-0}" = 1 ]; then
+  # The build log is summarised in CI, so a run shows how much came from the cache.
+  build_log=$(mktemp)
+  SECONDS=0
+  dc build --progress plain >"$build_log" 2>&1 || { tail -n 80 "$build_log" >&2; fail "image build"; }
+  echo "info images built in ${SECONDS}s; steps from the cache: $(grep -c ' CACHED$' "$build_log" || true)"
+else
+  dc build >/dev/null
+fi
 dc up -d --wait --wait-timeout 300 db fabric-control fabric-host || fail "fabric or database did not become healthy"
 pass "database, fabric control plane and browser host are healthy"
 mig=$(mktemp)
