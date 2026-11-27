@@ -23,6 +23,13 @@ export class FakeBrowser implements BrowserPort {
   surface: Record<string, unknown>[] = [];
   /** What the snapshot query answers (E46.15): title, visible text, frames. */
   snapshot: { title?: string; text?: string; frames?: string[] } = {};
+  /**
+   * What the page digest (E52.3) answers, read by read: the next value is taken each time, the last one repeats; empty answers
+   * `null` (the page cannot be asked), which leaves every click's text as it was.
+   */
+  digests: Array<string | null> = [];
+  /** How many times the page digest was read. */
+  digestReads = 0;
   /** The next `act` fails with this state instead of succeeding. */
   failNext: { state: ActionOp['state']; error: string } | null = null;
 
@@ -30,6 +37,11 @@ export class FakeBrowser implements BrowserPort {
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:describe-target */')) {
       const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
       return { id: 'op', state: 'succeeded', result: { type: 'object', value: this.targets.get(where.selector ?? `${where.x},${where.y}`) ?? null } };
+    }
+    if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:page-digest */')) {
+      this.digestReads += 1;
+      const h = this.digests.length > 1 ? this.digests.shift()! : (this.digests[0] ?? null);
+      return { id: 'op', state: 'succeeded', result: { type: 'object', value: h === null ? null : { h } } };
     }
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-elements */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: this.surface } };
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-snapshot */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: { url: this.url, title: this.snapshot.title ?? '', text: this.snapshot.text ?? '', frames: this.snapshot.frames ?? [] } } };
@@ -76,6 +88,7 @@ export function fakeBrowserRun(options: FakeBrowserRunOptions = {}): FakeRun<Bro
     state: { labels: new Map(), marks: new Map(), view: null },
     shotWindow: new ScreenshotWindow(2, 5),
     observationChars: 4_000,
+    settleDelaysMs: [0, 0, 0, 0],
     confirmRisky: () => options.confirmRisky ?? false,
     sensitiveParams: () => [],
     masking: NO_MASKING,

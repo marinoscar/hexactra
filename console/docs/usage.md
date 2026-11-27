@@ -47,6 +47,16 @@ The rule **Monthly AI spend** (`hexactra.ai_spend_monthly`, Administration → A
 - Leave either amount `null` to skip that check.
 - An incident names a user by id only.
 
+## Web search calls and their estimated cost
+
+A search provider's fee is **not** an AI call and is not in these reports' cost ([web-search.md, Cost](web-search.md#cost)):
+
+- **Each search** (and each search an answer-type provider reports) is a row of `web_search_usage`: day, user, provider, outcome. Administration → **Web search → Usage** (and `hexactra search admin usage`) shows searches, failures and the **estimated** cost by day and provider, with no user and no query.
+- **The estimate** is the provider's `estimatedCostPerCallUsd` (a published price as of its date, in a comment of its adapter), or the administrator's override (`webSearch.providers.<id>.costPerCallUsd`). It is never shown as a price: check the provider's own dashboard.
+- **A run's summary** counts its searches and page reads and shows the estimated search cost **apart from** the AI cost; the run's cost budget counts the AI cost only, and its `maxWebCalls` budget counts the calls.
+- **The tokens** of the agent reading results are ordinary AI calls (feature browser agent or chat) and are in these reports. **OpenAI web search** adds the tokens of the pages its model read and of its answer under the feature **Web search** (`web_search`), priced like every other model; its fee is in `web_search_usage`, once per search.
+- Page reads (`web_fetch`) cost nothing but the console's bandwidth and are counted per run only.
+
 ## When the numbers look wrong
 
 - **Requests but 0 tokens.** The Doctor check `ai.usage_ledger` (Administration → Doctor) compares the runs' own token counters with the ledger, and fails when model calls are not being recorded (#731). Look for `Could not record AI usage` in the API log.

@@ -276,6 +276,8 @@ export const runResponseSchema = z.object({
     .optional()
     .describe("What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs."),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
+  batchId: z.uuid().nullable().optional().describe('The batch this run is one row of (E51.1, #1006); null for a run outside a batch.'),
+  batchSeq: z.number().int().nullable().optional().describe('The row of the batch (1..n); null outside a batch.'),
   createdAt: iso,
   startedAt: iso.nullable(),
   finishedAt: iso.nullable(),
@@ -386,6 +388,10 @@ export class RunDetailResponseDto extends createZodDto(
     memories: z
       .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
       .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),
+    skills: z
+      .array(z.object({ id: z.uuid(), name: z.string(), archived: z.boolean() }))
+      .optional()
+      .describe('The skills this run read with skill_read that still exist, by name (#1008; `runs.skill_ids`): the run page says "Skills read: …". Never their text.'),
     suggestedConnections: z
       .array(z.object({ connectionId: z.uuid(), label: z.string(), provider: z.string(), site: z.string(), scope: z.enum(['task', 'chat']), fix: z.enum(['resume', 'capability']), text: z.string() }))
       .optional()
@@ -643,3 +649,38 @@ export const fleetHostWithSigninResponseSchema = fleetHostResponseSchema.extend(
 export class FleetHostResponseDto extends createZodDto(fleetHostWithSigninResponseSchema) {}
 
 export class OkResponseDto extends createZodDto(z.object({ ok: z.literal(true) })) {}
+
+/** One row of a batch (E51.1, #1006): its values masked, its run, how it ended. */
+export const batchItemResponseSchema = z.object({
+  seq: z.number().int().describe('The row, 1..n'),
+  status: z.enum(['pending', 'running', 'succeeded', 'failed', 'cancelled', 'skipped']).describe('`skipped`: never started (the batch was stopped, or the row was unticked at review)'),
+  runId: z.uuid().nullable().describe('The run of this row; null until it starts'),
+  values: z.array(z.object({ key: z.string(), label: z.string(), value: z.string().describe('Masked with the same rules as a run\'s inputs') })).describe("The row's values, by parameter"),
+  runStatus: z.string().nullable().describe("The run's status; null until it starts"),
+  result: z.string().nullable().describe("The first 300 characters of the run's result (or error), masked; null until it ends"),
+});
+
+/** A batch of runs of one task (E51.1, #1006). */
+export const batchResponseSchema = z.object({
+  id: z.uuid(),
+  taskId: z.uuid(),
+  taskName: z.string().nullable(),
+  conversationId: z.uuid().nullable().describe('The chat that made it (`run_task_batch`); null for every other caller'),
+  trigger: z.string(),
+  origin: z.string(),
+  policyRef: z.string().nullable(),
+  status: z.enum(['review', 'running', 'done', 'cancelled']).describe('`review`: a chat\'s batch waits for the owner\'s Start; `cancelled`: stopped before its last row (see `stopReason`)'),
+  total: z.number().int(),
+  onFailure: z.enum(['continue', 'stop']),
+  stopReason: z.enum(['owner_stopped', 'unknown_outcome', 'row_failed', 'task_deleted']).nullable().describe('Why it stopped early: the owner\'s Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted'),
+  stoppedAtSeq: z.number().int().nullable().describe('The row whose run stopped it'),
+  createdAt: iso,
+  startedAt: iso.nullable(),
+  finishedAt: iso.nullable(),
+  counts: z.object({ total: z.number().int(), succeeded: z.number().int(), failed: z.number().int(), cancelled: z.number().int(), skipped: z.number().int(), pending: z.number().int(), running: z.number().int() }),
+  summary: z.string().describe('"3 of 3 done", "2 done, 1 failed, 2 not started"'),
+  items: z.array(batchItemResponseSchema),
+});
+export class BatchResponseDto extends createZodDto(batchResponseSchema) {}
+export const batchPageResponseSchema = z.object({ items: z.array(batchResponseSchema), nextCursor: z.uuid().nullable() });
+export class BatchPageResponseDto extends createZodDto(batchPageResponseSchema) {}

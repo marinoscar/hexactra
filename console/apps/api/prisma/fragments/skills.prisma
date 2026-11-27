@@ -1,0 +1,37 @@
+// Skills (#1008, E51.3, epic #1005): short playbooks the owner writes to say
+// how they want a kind of job done. A run or chat whose job fits is offered
+// the skill by name and description; the agent reads its text with one tool
+// (`skill_read`). A skill is guidance, never a permission: no gate reads it.
+// Written only by the owner's own act (the signed-in console or the owner's
+// CLI); no MCP tool, agent tool, chat tool or webhook reads or writes one. No
+// Secret Material: the service refuses passwords, tokens, full card, account,
+// IBAN and Social Security numbers (src/skills/skill-secrets.ts).
+// Registered in the user-owned data registry (src/skills/skills.ownership.ts).
+
+model Skill {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  /// What the owner calls it: "Google Messages". 1 to 60 characters, unique per owner ignoring case.
+  name        String    @db.VarChar(60)
+  /// When to use it: "How I send text messages from Google Messages on the web". 1 to 200 characters.
+  description String    @db.VarChar(200)
+  /// The guidance itself, plain text or Markdown. 1 to 4,000 characters. Never in a step, the trace, a span, a log or an export of a run.
+  body        String    @db.VarChar(4000)
+  /// Registrable domains (0 to 10), normalised with the Knowledge Graph's `siteOf`.
+  sites       String[]  @default([])
+  enabled     Boolean   @default(true)
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  useCount    Int       @default(0) @map("use_count")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, archivedAt])
+  @@map("skills")
+}
+
+extend model User {
+  skills Skill[]
+}

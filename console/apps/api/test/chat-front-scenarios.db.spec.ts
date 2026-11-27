@@ -25,8 +25,8 @@ afterAll(async () => {
 });
 
 describe('the chat-front scenarios', () => {
-  it('finds the eleven chat scenarios (a suite that found none must fail)', () => {
-    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'public-fact-web.chat.json', 'task-named-like-an-instruction.chat.json', 'task-none-fits.chat.json', 'task-send-a-text.chat.json', 'task-two-fit.chat.json', 'two-accounts-send-report.chat.json']);
+  it('finds the twelve chat scenarios (a suite that found none must fail)', () => {
+    expect(loaded.map((l) => l.file.split('/').pop()).sort()).toEqual(['add-found-event-to-calendar.chat.json', 'add-lunch-to-calendar.chat.json', 'book-a-table.chat.json', 'email-found-balance-with-screenshot.chat.json', 'last-email.chat.json', 'public-fact-web.chat.json', 'task-named-like-an-instruction.chat.json', 'task-none-fits.chat.json', 'task-send-a-text.chat.json', 'task-two-fit.chat.json', 'text-three-people.chat.json', 'two-accounts-send-report.chat.json']);
   });
 
   it.each(loaded.map((l) => [l.scenario.name, l.scenario] as const))('%s passes scripted', async (_name, scenario) => {

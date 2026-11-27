@@ -87,6 +87,19 @@ export class TaskRunStarter {
     return checkValues(params, keyed, { timeZone: await this.zone(userId, timeZone) });
   }
 
+  /**
+   * One row of a batch (E51.1), checked and resolved exactly as `start` would (defaults, memories), without writing anything:
+   * the checked values by key, the labels still missing, and a fingerprint of the resolved values (two equal rows are a duplicate).
+   */
+  async resolveRow(userId: string, task: Pick<Task, 'parameters'>, inputs: Record<string, string | number> | null | undefined, timeZone?: string | null): Promise<{ given: Record<string, string>; missing: string[]; fingerprint: string }> {
+    const params = readParameters(task.parameters);
+    const tz = await this.zone(userId, timeZone);
+    const given = checkValues(params, keyInputs(params, inputs), { timeZone: tz });
+    const resolved = await resolveInputs(userId, params, given, { resolver: this.memories ?? null, timeZone: tz });
+    const fingerprint = JSON.stringify(Object.keys(resolved.values).sort().map((k) => [k, resolved.values[k]!.value.trim().toLowerCase()]));
+    return { given, missing: resolved.missing.map((p) => p.label), fingerprint };
+  }
+
   /** Start a run of `task`. Inputs are checked before anything is written. */
   async start(actor: StartActor, task: Task, opts: StartTaskRunOptions) {
     const userId = actor.id;

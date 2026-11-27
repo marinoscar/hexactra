@@ -126,6 +126,13 @@ describe('every tool stays within the limits with the largest plausible answer',
         },
       };
     }
+    // Findings (E52.6): at most 3 loops plus one per selector: say 500 findings with the longest texts.
+    if (path.endsWith('/diagnostics')) return { runId: RID, computedAt: 'now', stepsRead: 2000, truncated: true, findings: Array.from({ length: 500 }, (_, i) => ({ code: 'selector_miss', severity: 'warn', title: big, detail: big, seqFrom: i, seqTo: i, stepsSpent: 1, evidence: { selector: big, seqs: Array.from({ length: 50 }, (_, j) => j) } })) };
+    // Consistency (E52.7): 50 runs, each with findings.
+    if (path.includes('/consistency')) return { taskId: RID, runs: 50, succeeded: 50, successRate: 1, steps: null, modelCalls: null, activeMs: null, costUsd: null, label: 'erratic', since: null, perRun: Array.from({ length: 50 }, () => ({ runId: RID, status: 'succeeded', createdAt: 'now', stepCount: 1, costUsd: 1, activeMs: 1, findings: Array.from({ length: 20 }, () => ({ code: 'loop', severity: 'warn' })) })) };
+    // A proposal (E52.8): the longest goal, 12 changes and 5 facts, each with 10 pieces of evidence.
+    if (path.startsWith('/task-improvements/')) return { id: RID, taskId: RID, status: 'ready', runIds: Array.from({ length: 10 }, () => RID), goalBefore: 'g'.repeat(4000), proposedGoal: 'p'.repeat(4000), summary: big.slice(0, 1000), changes: Array.from({ length: 12 }, () => ({ kind: 'add', text: big.slice(0, 500), why: big.slice(0, 500), evidence: Array.from({ length: 10 }, () => ({ runId: RID, seqFrom: 1, seqTo: 2 })) })), siteFacts: Array.from({ length: 5 }, () => ({ site: 'example.com', kind: 'quirk', text: big.slice(0, 300), evidence: [] })), confidence: 'high', model: 'm', usedImages: true, error: null, appliedGoal: null, createdAt: 'now', finishedAt: 'now', decidedAt: null };
+    if (method === 'POST' && path.endsWith('/improvements')) return { id: RID, status: 'queued' };
     // The trace file (#542): the run and 2,000 steps with big summaries, arguments and reasoning.
     if (path.startsWith('/runs/') && path.includes('/export')) return { type: 'hexactra.run-trace', formatVersion: 1, partial: false, masking: { applied: true, patternsVersion: 1, hits: {} }, run: { id: RID, status: 'failed', goal: big, result: big, error: big }, policy: null, budget: null, models: [], steps: Array.from({ length: 2000 }, (_, i) => ({ ...step(i), question: { prompt: big }, screenshot: null })), chat: Array.from({ length: 200 }, (_, i) => ({ seq: i, role: 'user', kind: 'text', text: big, at: 'now' })) };
     if (path.startsWith('/runs/') && method === 'GET') return { ...run(0), steps: Array.from({ length: 2000 }, (_, i) => step(i)) };
@@ -138,12 +145,13 @@ describe('every tool stays within the limits with the largest plausible answer',
     return { id: RID, name: big, goal: big, spec: { x: 'q'.repeat(400_000) }, valid: true, description: big, policyId: 'p', status: 'pending', created: [], replaced: [], skipped: [] };
   }
   const ARGS: Record<string, Record<string, unknown>> = {
-    run_goal: { goal: 'g' }, run_status: { run_id: RID, steps: 50 }, run_wait: { run_id: RID, screenshot: true }, run_card_poll: { run_id: RID, screenshot: true }, runs_list: {}, run_cancel: { run_id: RID }, run_pause: { run_id: RID }, run_resume: { run_id: RID }, run_export: { run_id: RID }, tasks_list: {}, task_create: { name: 'n', goal: 'g' }, task_update: { task_id: RID }, task_run: { task_id: RID },
+    run_goal: { goal: 'g' }, run_status: { run_id: RID, steps: 50 }, run_wait: { run_id: RID, screenshot: true }, run_card_poll: { run_id: RID, screenshot: true }, runs_list: {}, run_cancel: { run_id: RID }, run_pause: { run_id: RID }, run_resume: { run_id: RID }, run_export: { run_id: RID }, tasks_list: {}, task_create: { name: 'n', goal: 'g' }, task_update: { task_id: RID }, task_run: { task_id: RID }, task_run_batch: { task_id: RID, rows: [{ inputs: { a: '1' } }, { inputs: { a: '2' } }] }, batch_status: { batch_id: RID },
     schedule_create: { task_id: RID, cron: '0 9 * * 1-5' }, schedule_preview: { cron: '0 9 * * 1-5' }, task_pause: { task_id: RID }, task_resume: { task_id: RID }, schedules_list: {}, inbox_list: {},
     inbox_answer: { question_id: RID, outcome: 'completed', value: 'x' }, question_card_answer: { question_id: RID, outcome: 'completed', value: 'x' }, ask_human: { prompt: 'p', input: 'text' }, question_status: { question_id: RID }, policies_list: {}, policy_get: { policy_id: 'builtin:balanced' },
     policy_create: { name: 'n', spec: {} }, policy_update: { policy_id: 'builtin:balanced' }, policy_set_default: { policy_id: null }, policies_export: {}, policies_import: { file: {} }, hosts_list: {}, browser_open: { goal: 'g' },
     procedures_list: { limit: 50 }, procedure_get: { procedure_id: 'kgp-1' }, procedure_run: { procedure_id: 'kgp-1', inputs: { Customer: 'ACME' } },
     site_facts_list: {}, site_fact_propose: { site: 'example.com', kind: 'navigation', text: 'Invoices are under Billing' },
+    run_diagnostics: { run_id: RID }, task_consistency: { task_id: RID, last: 50 }, task_improvement_request: { task_id: RID }, task_improvement_get: { improvement_id: RID },
     browser_request_human: { session_id: SID, kind: 'other', prompt: 'p' }, browser_handoff_status: { session_id: SID, handoff_id: RID }, browser_close: { session_id: SID },
   };
   const args = (t: McpTool): Record<string, unknown> => {

@@ -75,6 +75,8 @@ const epicChildren = new Map([
   [957, [958, 959, 960, 961, 963]],
   // E50 web search, extensible tools and diagnostics (E50.1 to E50.17; order in the epic body).
   [970, [971, 972, 973, 974, 975, 976, 977, 978, 979, 980, 981, 982, 983, 984, 985, 986, 987]],
+  // E52 consistent runs (epic #1015): E52.1 to E52.11, then E52.12 (a real key press) and E52.13 (its form fix), then the follow-ups.
+  [1015, [1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1030, 1046, 1047, 1048, 1049, 1050, 1051]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

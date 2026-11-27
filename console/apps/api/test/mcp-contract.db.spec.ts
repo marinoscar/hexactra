@@ -102,7 +102,19 @@ describe('structured results validate against the output schemas (real REST answ
       await call(t, 'task_update', { task_id: task.id, goal: 'g2' });
       await call(t, 'task_pause', { task_id: task.id });
       await call(t, 'task_resume', { task_id: task.id });
-      await call(t, 'task_run', { task_id: task.id });
+      const taskRun = await call(t, 'task_run', { task_id: task.id });
+      // Batch runs (E51.1): a task with a parameter, run for two rows, then read back.
+      const textTask = await call(t, 'task_create', { name: `Contract text ${stamp}`, goal: 'Text {{Who}} hello' });
+      const batch = await call(t, 'task_run_batch', { task_id: textTask.id, rows: [{ inputs: { Who: 'Ana' } }, { inputs: { Who: 'Luis' } }] });
+      expect(batch).toMatchObject({ status: 'running', total: 2 });
+      expect(await call(t, 'batch_status', { batch_id: batch.id })).toMatchObject({ id: batch.id, items: [expect.objectContaining({ seq: 1 }), expect.objectContaining({ seq: 2 })] });
+      // Findings, consistency and a proposal (E52.10): the run is finished first, as a proposal learns from finished runs.
+      await app.get(PrismaService).run.update({ where: { id: String((taskRun as { id?: string; run?: { id: string } }).id ?? (taskRun as { run?: { id: string } }).run?.id) }, data: { status: 'succeeded', stepCount: 3 } });
+      expect(await call(t, 'run_diagnostics', { run_id: run.id })).toMatchObject({ runId: run.id, truncated: false });
+      expect(await call(t, 'task_consistency', { task_id: task.id })).toMatchObject({ taskId: task.id, runs: 1, label: 'not_enough_runs' });
+      const proposal = await call(t, 'task_improvement_request', { task_id: task.id });
+      expect(proposal).toMatchObject({ status: 'queued' });
+      expect(await call(t, 'task_improvement_get', { improvement_id: proposal.id })).toMatchObject({ id: proposal.id });
       await call(t, 'schedule_create', { task_id: task.id, cron: '0 18 * * *' });
       expect((await call(t, 'schedules_list', {})).items!.length).toBe(2);
       expect(await call(t, 'schedule_preview', { cron: '0 9 * * 1-5' })).toMatchObject({ valid: true });

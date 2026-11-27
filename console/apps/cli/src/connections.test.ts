@@ -151,6 +151,6 @@ describe('hexactra connections', () => {
     const program = new Command();
     connectionsCommand(program);
     const names = program.commands.find((c) => c.name() === 'connections')!.commands.map((c) => c.name());
-    expect(names.sort()).toEqual(['list', 'pause', 'resume', 'rm', 'test', 'tools']);
+    expect(names.sort()).toEqual(['app-test', 'diagnose', 'diagnostics', 'list', 'pause', 'resume', 'rm', 'test', 'tools', 'try']);
   });
 });

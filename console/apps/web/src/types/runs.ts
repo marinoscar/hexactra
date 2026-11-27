@@ -93,6 +93,10 @@ export interface Run {
   /** The AI app that started it (#464); null when no app did. */
   client?: RunClient | null;
   actor?: string | null;
+  /** The batch the run is a row of (E51.1, #1006); null outside a batch, absent from an older console. */
+  batchId?: string | null;
+  /** The run's row in its batch, 1..n; null outside a batch. */
+  batchSeq?: number | null;
   goal: string;
   profile: string;
   result: string | null;
@@ -153,6 +157,8 @@ export interface Run {
   memoryIds?: string[];
   /** `GET /runs/:id`: the used memories that still exist, with their labels (#553). */
   memories?: { id: string; label: string; status: 'active' | 'superseded' | 'archived' }[];
+  /** `GET /runs/:id`: the skills the run read with skill_read that still exist, by name (#1008). */
+  skills?: { id: string; name: string; archived: boolean }[];
   /** `GET /runs/:id` (E41.5): the owner's unlisted accounts that could have done what this finished run did in the browser. */
   suggestedConnections?: { connectionId: string; label: string; provider: string; site: string; scope: 'task' | 'chat'; text: string }[];
 }

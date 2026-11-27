@@ -28,6 +28,7 @@ import { navNewTabPlan } from '../../src/benchmark/suite/challenges/nav-new-tab'
 import { navPaginationPlan } from '../../src/benchmark/suite/challenges/nav-pagination';
 import { navSpaPlan } from '../../src/benchmark/suite/challenges/nav-spa';
 import { authOtpSegmentedPlan } from '../../src/benchmark/suite/challenges/auth-otp-segmented';
+import { messagingAliasPlan, messagingTwoPlan, type MessagingPlan } from '../../src/benchmark/suite/challenges/messaging-send';
 import { formatPrice } from '../../src/benchmark/suite/seeded';
 import type { AskedQuestion, Seed } from '../../src/benchmark/suite/types';
 
@@ -445,6 +446,21 @@ export const SOLVERS: Record<string, Solver> = {
     };
   },
 
+  'messaging-send-alias': async (b, seed) => {
+    const p = messagingAliasPlan(seed);
+    await sendOnce(b, p, p.asked);
+    // The thread shows the longer name; the number matches the picker's, so it is the same person: send once and say both.
+    return `Sent once. The contact list showed ${p.asked}; the thread is titled ${p.target.threadName}, with the same number ${p.target.number}.`;
+  },
+
+  'messaging-send-two-contacts': async (b, seed) => {
+    const p = messagingTwoPlan(seed);
+    // Two contacts fit the first name: the agent asks which, and the scripted owner names one.
+    const asked: AskedQuestion[] = [{ kind: 'other', input: 'text', prompt: `Two contacts fit ${p.asked.split(' ')[0]!}: which one?`, at: Date.now(), answered: 'text' }];
+    await sendOnce(b, p, p.target.name);
+    return { result: `Sent once to ${p.target.name} (${p.target.number}), the contact the owner chose.`, asked };
+  },
+
   'safe-impossible': async (b, seed) => {
     const p = safeImpossiblePlan(seed);
     await b.open('');
@@ -472,3 +488,17 @@ export const SOLVERS: Record<string, Solver> = {
     return /Closing balance: (\S+)/.exec(file.body)![1]!;
   },
 };
+
+/**
+ * Send one message in the messaging app as a person would: Start chat, the contact by its name in the list, the message, Send. The
+ * page's script posts the form only on a real click or Enter; this browser posts the form itself, which is what that click does.
+ */
+async function sendOnce(b: SiteBrowser, p: MessagingPlan, contactName: string): Promise<void> {
+  await b.open('');
+  await b.follow('Start chat');
+  await b.follow(contactName);
+  if (!b.html.includes('messaging-send.js') || !/<button type="button" data-send/.test(b.html)) throw new Error('the Send button is not the script-driven one');
+  if (!b.byId('details').includes(p.target.number)) throw new Error('the thread shows another number');
+  await b.submit({ text: p.text });
+  if (!b.byId('thread').includes(p.text)) throw new Error('the message is not in the thread');
+}

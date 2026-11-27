@@ -64,10 +64,12 @@ import { TaskBuilderPage } from './pages/TaskBuilderPage';
 import { TASK_BUILDER_ENABLED } from './components/useStartTaskBuilder';
 import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskEditPage } from './pages/TaskEditPage';
+import { TaskImprovementPage } from './pages/TaskImprovementPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
 import { AgentPoliciesPage } from './pages/AgentPoliciesPage';
 import { MemoriesPage } from './pages/MemoriesPage';
+import { SkillsAdminPage, SkillsPage } from './pages/SkillsPage';
 import { MemoriesMenuItem } from './memories/MemoriesMenuItem';
 import { AgentPolicyEditorPage } from './pages/AgentPolicyEditorPage';
 import { ModelTiersPage } from './pages/ModelTiersPage';
@@ -270,6 +272,7 @@ export function AppRoutes() {
           <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />
           {TASK_BUILDER_ENABLED && <Route path="tasks/builder/:id" element={<Gate permission="tasks:write"><TaskBuilderPage /></Gate>} />}
           <Route path="tasks/:id/edit" element={<Gate permission="tasks:write"><TaskEditPage /></Gate>} />
+          <Route path="tasks/:taskId/improvements/:id" element={<Gate permission="tasks:read"><TaskImprovementPage /></Gate>} />
           <Route path="tasks/:id" element={<Gate permission="tasks:read"><TaskDetailPage /></Gate>} />
           {/* Chat (#486): the list, the new-chat screen and one thread are one page. */}
           <Route path="chat" element={<Gate permission="chat:read"><ChatPage /></Gate>} />
@@ -327,6 +330,8 @@ export function AppRoutes() {
           <Route path="admin/settings/benchmarks/:id/compare/:baseline" element={<Gate permission="benchmarks:read"><BenchmarkComparePage /></Gate>} />
           {/* Memories (#551): `memories:read` is what /api/memories enforces; writes are gated in the page. */}
           <Route path="settings/memories" element={<Gate permission="memories:read"><MemoriesPage /></Gate>} />
+          {/* Skills (#1008): `skills:read` is what /api/skills enforces; writes are gated in the page. */}
+          <Route path="settings/skills" element={<Gate permission="skills:read"><SkillsPage /></Gate>} />
           <Route path="settings/run-history" element={<Gate permission="runs:delete"><RunHistorySettingsPage /></Gate>} />
           {/* Connected AI apps (#464): `connected_apps:read` is what /api/connected-apps enforces. */}
           <Route path="settings/ai-apps" element={<Gate permission="connected_apps:read"><AiAppsPage /></Gate>} />
@@ -347,6 +352,7 @@ export function AppRoutes() {
           <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />
           <Route path="admin/settings/run-history" element={<Gate permission="system_settings:read"><RunRetentionCeilingPage /></Gate>} />
           <Route path="admin/settings/run-recordings" element={<Gate permission="system_settings:read"><RecordingRetentionPage /></Gate>} />
+          <Route path="admin/settings/skills" element={<Gate permission="system_settings:read"><SkillsAdminPage /></Gate>} />
           <Route path="admin/settings/request-history" element={<Gate permission="system_settings:read"><RequestHistorySettingsPage /></Gate>} />
           {/* The Knowledge Graph (E46.20): `kgraph:read` is what /api/kgraph/* enforces (writes are gated in the pages); `kgraph:admin` what /api/admin/kgraph/settings enforces. */}
           <Route path="kgraph" element={<Gate permission="kgraph:read"><KgraphPage /></Gate>} />

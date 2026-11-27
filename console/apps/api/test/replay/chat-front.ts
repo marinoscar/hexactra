@@ -22,6 +22,7 @@ import type { Capability } from '../../src/connections/connections.constants';
 import { FakeCapabilityProvider } from '../../src/connections/testing';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { TaskRunStarter } from '../../src/questions/task-run-starter';
+import { RunBatchService } from '../../src/tasks/run-batch.service';
 import { TasksService } from '../../src/tasks/tasks.service';
 import { FakeWebFetch, FakeWebSearch } from '@marinoscar/hexactra-web-agent/testing';
 
@@ -38,6 +39,7 @@ const chatExpectSchema = z.strictObject({
   tool: z.string().min(1).describe('start_run, ask_user, read (any read tool of the chat), none (a plain reply), or another tool name'),
   goalIncludes: z.array(z.string()).default([]).describe('start_run: texts the goal contains'),
   goalMustNotInclude: z.array(z.string()).default([]).describe('start_run: regexes (case-insensitive) the goal must not match'),
+  batchRows: z.number().int().min(2).optional().describe('run_task_batch (E51.1): the rows the batch waits in review with; no run has started'),
   noRun: z.boolean().optional().describe('The turn started no run (E50.7)'),
   task: z.string().optional().describe('run_task: the task it names (#1007)'),
   inputs: z.record(z.string(), z.string()).optional().describe('run_task: values it passes, by parameter name (#1007)'),
@@ -62,7 +64,7 @@ export const chatScenarioSchema = z.strictObject({
   connections: z
     .array(z.strictObject({ label: z.string().min(1), provider: z.enum(['google', 'microsoft']).default('google'), access: z.enum(['read', 'read_write']).default('read_write'), capabilities: z.array(z.string()).min(1), mail: z.array(z.strictObject({ from: z.string(), subject: z.string(), body: z.string(), date: z.string() })).default([]) }))
     .default([]),
-  tasks: z.array(z.strictObject({ name: z.string().min(1), goal: z.string().min(1), parameters: z.array(taskParamSchema).default([]) })).default([]).describe("The owner's saved tasks (#1007)"),
+  tasks: z.array(z.strictObject({ name: z.string().min(1), goal: z.string().min(1), parameters: z.array(taskParamSchema).default([]) })).default([]).describe("The owner's saved tasks (#1007; run_task_batch, E51.1)"),
   conversation: z.array(turnSchema).default([]),
   web: z
     .strictObject({ results: z.record(z.string(), z.array(z.strictObject({ title: z.string(), url: z.string(), snippet: z.string() }))).default({}) })
@@ -250,14 +252,25 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
   const seen: { input?: string; offered?: string[] } = {};
   const model = recordingAi(ai ?? scriptedAi(scenario.script), calls, ai ? opts.aiUserId : undefined, seen);
   const web = scenario.web ? fakeWebDeps(scenario.web) : null;
-  // With the task starter (#1007), so run_task and the task block are what the app offers.
+  // With the task starter (#1007), so run_task and the task block are what the app offers; with the batch service (E51.1), run_task_batch.
   const starter = app.get(TaskRunStarter, { strict: false });
-  const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), model, undefined, undefined, undefined, starter, undefined, app.get(ConnectionCapabilities), web?.webSearch as never, web?.webFetch as never);
+  const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), model, undefined, undefined, undefined, starter, undefined, app.get(ConnectionCapabilities), web?.webSearch as never, web?.webFetch as never, app.get(RunBatchService, { strict: false }));
   let error: string | null = null;
   try {
     await turns.run(chat.id, user.id, null);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
+  }
+  // A batch (E51.1) waits in review: its rows, and no run started before the owner's Start.
+  const batch = await prisma.runBatch.findFirst({ where: { conversationId: chat.id }, include: { items: true } });
+  const batchFailures: string[] = [];
+  if (scenario.expect.batchRows !== undefined) {
+    if (!batch) batchFailures.push('batchRows: no batch was created');
+    else {
+      if (batch.status !== 'review') batchFailures.push(`batchRows: the batch is ${batch.status}, not waiting for review`);
+      if (batch.items.length !== scenario.expect.batchRows) batchFailures.push(`batchRows: expected ${scenario.expect.batchRows} rows, the batch has ${batch.items.length}`);
+      if ((await prisma.run.count({ where: { conversationId: chat.id } })) > 0) batchFailures.push('batchRows: a run started before the owner reviewed the batch');
+    }
   }
   const runs = (await prisma.run.findMany({ where: { conversationId: chat.id, status: { in: ['queued', 'waiting_human'] } }, select: { taskId: true } }));
   const runCount = await prisma.run.count({ where: { conversationId: chat.id } });
@@ -265,7 +278,7 @@ export async function runChatScenario(app: NestFastifyApplication, scenario: Cha
   await prisma.run.deleteMany({ where: { conversationId: chat.id, status: { in: ['queued', 'waiting_human'] } } });
   const first = calls[0] ?? null;
   const result: ChatFrontResult = { scenario, tool: first?.tool ?? 'none', args: first?.args ?? null, calls, runs, input: seen.input ?? '', offered: seen.offered ?? [], failures: [], pendingFailures: [], pass: false };
-  result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect), ...(scenario.expect.noRun && runCount > 0 ? [`noRun: the turn started ${runCount} run(s)`] : [])];
+  result.failures = [...(error ? [`the turn failed: ${error}`] : []), ...evaluateChat(result, scenario.expect), ...batchFailures, ...(scenario.expect.noRun && runCount > 0 ? [`noRun: the turn started ${runCount} run(s)`] : [])];
   result.pendingFailures = scenario.pending ? evaluateChat(result, scenario.pending.expect).map((f) => `[pending ${scenario.pending!.issue}] ${f}`) : [];
   result.pass = result.failures.length === 0;
   return result;

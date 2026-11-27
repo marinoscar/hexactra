@@ -150,6 +150,10 @@ runPlatformConformance({
           why: 'Memories (#551) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'memories:<user id>\'))`) before checking the 500-memory limit and the case-insensitive label rule, so two concurrent writes of one user cannot both pass; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
         },
         {
+          file: 'skills/skills.service.ts',
+          why: 'Skills (#1008) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'skills:<user id>\'))`) before checking the 100-skill limit and the case-insensitive name rule, so two concurrent writes of one user cannot both pass; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
+        },
+        {
           file: 'connections/connections.service.ts',
           why: 'Connections (E39.2) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'connections:<user id>\'))`) before moving a default account (at most one per provider and capability group) so two concurrent writers of one user cannot both claim it; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
         },

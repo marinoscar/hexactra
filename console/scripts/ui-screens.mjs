@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b), `{scanQuestion}` (mock only, #924) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5), `{signinWaiting}` and `{signinDone}` (mock only, E48.4; also the queue summary of E48.6) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10), `{builder}` (mock only, E42.4), `{saveLoginQuestion}` (mock only, E37.4b), `{scanQuestion}` (mock only, #924) and `{benchmark}`, `{liveBenchmark}`, `{baselineBenchmark}` (E44.5), `{signinWaiting}` and `{signinDone}` (mock only, E48.4; also the queue summary of E48.6), `{improvement}` (mock only, E52.9) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -89,6 +89,8 @@ export const ROUTES = [
   ['task-builder', '/tasks/builder/{builder}'],
   ['task-detail', '/tasks/{task}'],
   ['task-edit', '/tasks/{task}/edit'],
+  ['task-improvement', '/tasks/{task}/improvements/{improvement}'],
+  ['task-edit-improvement', '/tasks/{task}/edit?improvement={improvement}&facts=0'],
   ['runs', '/runs'],
   ['run-live', '/runs/{liveRun}'],
   ['run-finished', '/runs/{finishedRun}'],
@@ -149,6 +151,10 @@ export const ROUTES = [
   // Memories (#551): the page, and its add dialog (opened by clicking "Add").
   ['settings-memories', '/settings/memories'],
   ['settings-memories-dialog', '/settings/memories', { click: 'Add' }],
+  // Skills (#1008): the list, the form, and the deployment switch.
+  ['settings-skills', '/settings/skills'],
+  ['settings-skills-dialog', '/settings/skills', { click: 'Add' }],
+  ['admin-skills', '/admin/settings/skills'],
   // "Don't ask again" (#555): the approval card with the box ticked and the limits open.
   ['inbox-dont-ask-again', '/inbox', {
     action: async (page) => {

@@ -8,6 +8,8 @@ import { getAdminApps, getAdminMcp, removeAdminApp, saveAdminApp, saveAdminMcp, 
 import { DiagnosticsPanel } from '../diagnostics/DiagnosticsPanel';
 import type { DiagnosticTarget } from '../diagnostics/api';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiAction, useConfirm } from '../ui';
+// From its own file, not '../ui': a module added to the shared ui chunk changes a chunk the Knowledge Graph Map loads (bundle:compare).
+import { useOnNewValue } from '../ui/useOnNewValue';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
 
@@ -30,12 +32,13 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
   const [clientSecret, setClientSecret] = useState('');
   const [tenant, setTenant] = useState(provider.tenant ?? 'common');
   const [testing, setTesting] = useState<DiagnosticTarget | null>(null);
-  useEffect(() => {
-    setEnabled(provider.enabled);
-    setClientId(provider.clientId ?? '');
+  // Re-sync after a save or a reload, never on mount: a mount-time copy could undo a click made right after the card appeared (#1044).
+  useOnNewValue(provider, (p) => {
+    setEnabled(p.enabled);
+    setClientId(p.clientId ?? '');
     setClientSecret('');
-    setTenant(provider.tenant ?? 'common');
-  }, [provider]);
+    setTenant(p.tenant ?? 'common');
+  });
 
   const complete = clientId.trim().length > 0 && (provider.hasClientSecret || clientSecret.length > 0);
 
@@ -171,11 +174,12 @@ function McpCard({ settings, canWrite, onChange }: { settings: McpAdmin; canWrit
   const [enabled, setEnabled] = useState(settings.enabled);
   const [allowed, setAllowed] = useState(settings.allowedHosts.join('\n'));
   const [blocked, setBlocked] = useState(settings.blockedHosts.join('\n'));
-  useEffect(() => {
-    setEnabled(settings.enabled);
-    setAllowed(settings.allowedHosts.join('\n'));
-    setBlocked(settings.blockedHosts.join('\n'));
-  }, [settings]);
+  // Re-sync after a save or a reload, never on mount (#1044).
+  useOnNewValue(settings, (s) => {
+    setEnabled(s.enabled);
+    setAllowed(s.allowedHosts.join('\n'));
+    setBlocked(s.blockedHosts.join('\n'));
+  });
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

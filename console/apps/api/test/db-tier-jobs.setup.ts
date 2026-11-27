@@ -18,6 +18,11 @@ import { Client } from 'pg';
 
 import { clearLeftoverJobs } from './support/db-tier-leftovers';
 
+// The API reference (#1043): building it costs about 4 s of every `createApp()`, and the db tier boots the app once per spec file.
+// A spec that reads `/api/openapi.json` or `/api/docs` asks for it with `createApp({ docs: true })`; the others leave it out. One that
+// forgets gets a 404, so it fails rather than passes. Read by `buildsApiReference` (`src/main.ts`), only under `NODE_ENV=test`.
+process.env.HEXACTRA_TEST_SKIP_DOCS = '1';
+
 const isDbSpec = (): boolean => /\.db\.spec\.ts$/.test(expect.getState().testPath ?? '');
 
 afterAll(async () => {

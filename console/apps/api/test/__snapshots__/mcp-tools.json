@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "d5722ecc9058da70"
+    "outputSchema": "7c803f066100ee48"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ac6591144e58419a",
-    "outputSchema": "7ce470d998d041d0"
+    "outputSchema": "9b670309e71262ce"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_pause",
@@ -87,7 +87,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_resume",
@@ -102,7 +102,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "run_export",
@@ -118,6 +118,66 @@
     },
     "inputSchema": "50c568c511c93b3c",
     "outputSchema": "15f3fda8ded4b91f"
+  },
+  {
+    "name": "run_diagnostics",
+    "title": "What happened in a run",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "What happened in a run",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "50c568c511c93b3c",
+    "outputSchema": "7bcba14ae18bbdd7"
+  },
+  {
+    "name": "task_consistency",
+    "title": "How consistent a task's runs are",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "How consistent a task's runs are",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "6b5746aea5590ad5",
+    "outputSchema": "9f16db8ab192b56f"
+  },
+  {
+    "name": "task_improvement_request",
+    "title": "Propose a better goal for a task",
+    "scope": "tasks:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Propose a better goal for a task",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "6ecae39247f1f63d",
+    "outputSchema": "400b6c792250f979"
+  },
+  {
+    "name": "task_improvement_get",
+    "title": "Read a proposed goal",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Read a proposed goal",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "f9d8213178af4d85",
+    "outputSchema": "3c5ce7d8c1660810"
   },
   {
     "name": "tasks_list",
@@ -177,7 +237,37 @@
       "openWorldHint": true
     },
     "inputSchema": "c1aba3cd46e48851",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
+  },
+  {
+    "name": "task_run_batch",
+    "title": "Run a saved task for several rows",
+    "scope": "runs:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Run a saved task for several rows",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "a640c7dd21676613",
+    "outputSchema": "8800cf5898ea2432"
+  },
+  {
+    "name": "batch_status",
+    "title": "See a batch",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "See a batch",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "fd80deb2f6e7c965",
+    "outputSchema": "8800cf5898ea2432"
   },
   {
     "name": "schedule_create",
@@ -972,7 +1062,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "d6d3b39b6b0ac149"
+    "outputSchema": "33c04d252f4f5348"
   },
   {
     "name": "question_card_answer",

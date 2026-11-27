@@ -9,7 +9,7 @@ import { procedureGetDescriptor, procedureRunDescriptor, proceduresListDescripto
 import { z } from 'zod';
 import type { UsageReport } from '../usage/usage.schemas';
 
-import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
+import { batchResponseSchema, fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
 import { schedulePreviewSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
 import { deliverySummarySchema } from '../deliveries/delivery.schemas';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
@@ -968,6 +968,77 @@ export const MCP_TOOLS: McpTool[] = [
       return toolOutput({ text: v, structured: v, summary, untrusted: traceHasPageText(trace) });
     },
   },
+  // Run findings, task consistency and proposals for a better goal (E52.10, #1025): read and request only. No tool applies a proposal,
+  // dismisses one or adds a site fact: applying is the task form's Save, in the console.
+  {
+    name: 'run_diagnostics',
+    title: 'What happened in a run',
+    description:
+      'Read the findings of one run: where it spent effort it did not need, computed from its recorded steps with no model (a loop, a selector that matched nothing, the same control clicked again, many reads per action, a slow start, time waiting for the owner, budget pressure, failures, steps whose outcome is unknown). ' +
+      'Each finding has a severity (warn or info), a title, a detail and the steps it is about. Texts are masked like the trace.',
+    input: z.object({ run_id: runId }),
+    output: z.object({ runId: z.string(), truncated: z.boolean(), findings: z.array(z.object({ code: z.string(), severity: z.string(), title: z.string(), detail: z.string(), seqFrom: z.number().nullable(), seqTo: z.number().nullable() }).passthrough()) }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const d = await ctx.api<Record<string, unknown> & { findings: unknown[] }>('GET', `/runs/${String(a.run_id)}/diagnostics`);
+      // A finding's detail can quote a selector or a step summary: page-derived text.
+      return toolOutput({ text: d, structured: d, summary: `${d.findings.length} finding${d.findings.length === 1 ? '' : 's'}.`, untrusted: d.findings.length > 0 });
+    },
+  },
+  {
+    name: 'task_consistency',
+    title: "How consistent a task's runs are",
+    description:
+      "Read how consistent a task's newest finished runs are: the min, median, 90th percentile and max of steps, model calls, working time and cost, the success rate, and a label (steady, varies, erratic, not_enough_runs), with the warning findings of the 10 newest runs. " +
+      'last is 3 to 50 (default 20). Use it to see whether a task needs a better goal (task_improvement_request).',
+    input: z.object({ task_id: taskId, last: z.number().int().min(3).max(50).optional().describe('How many of the newest finished runs to count (default 20).') }),
+    output: z.object({ taskId: z.string(), runs: z.number(), label: z.string() }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const c = await ctx.api<Record<string, unknown> & { runs: number; label: string }>('GET', `/tasks/${String(a.task_id)}/consistency${a.last ? `?last=${Number(a.last)}` : ''}`);
+      return toolOutput({ text: c, structured: c, summary: `${c.label} over ${c.runs} run${c.runs === 1 ? '' : 's'}.` });
+    },
+  },
+  {
+    name: 'task_improvement_request',
+    title: 'Propose a better goal for a task',
+    description:
+      "Ask for a proposal of a better goal for a saved task: an AI reads the task's recent finished runs (or run_ids, 1 to 10) and proposes a goal, each change cited to steps, plus facts about a site worth keeping. " +
+      'It never changes the task: the owner applies a proposal by saving the task form in the console. It takes a minute or two: read it with task_improvement_get. At most 20 a day; one at a time per task.',
+    input: z.object({ task_id: taskId, run_ids: z.array(id).min(1).max(10).optional().describe('The runs to read; default the 5 newest finished runs of the task.') }),
+    output: z.object({ id: z.string(), status: z.string() }).passthrough(),
+    scope: 'tasks:write',
+    effect: 'write',
+    openWorld: false,
+    async call(a, ctx) {
+      const r = await ctx.api<{ id: string; status: string }>('POST', `/tasks/${String(a.task_id)}/improvements`, a.run_ids ? { runIds: a.run_ids } : {});
+      return toolOutput({ text: r, structured: r, summary: `Proposal ${r.id.slice(0, 8)} queued: read it with task_improvement_get.` });
+    },
+  },
+  {
+    name: 'task_improvement_get',
+    title: 'Read a proposed goal',
+    description:
+      "Read one proposal for a better goal: its status (queued, running, ready, failed, applied, dismissed), what the runs showed, the proposed goal, each change with the steps that show why, and site facts. " +
+      'To use a ready proposal, the owner saves the goal in the task form in the console; this tool cannot apply it.',
+    input: z.object({ improvement_id: id.describe('The proposal id (from task_improvement_request).') }),
+    output: z.object({ id: z.string(), status: z.string(), proposedGoal: z.string().nullable() }).passthrough(),
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const p = await ctx.api<Record<string, unknown> & { id: string; status: string }>('GET', `/task-improvements/${String(a.improvement_id)}`);
+      // The summary and the goal were written by a model that read runs, which read pages: page-derived text.
+      return toolOutput({ text: p, structured: p, summary: `Proposal ${p.id.slice(0, 8)}: ${p.status}.`, untrusted: p.status === 'ready' || p.status === 'applied' });
+    },
+  },
   {
     name: 'tasks_list',
     title: 'List saved tasks',
@@ -1092,6 +1163,48 @@ export const MCP_TOOLS: McpTool[] = [
     ui: { resourceUri: RUN_CARD_URI },
     call: (a, ctx) =>
       startAndFollow(ctx, a, () => ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, { ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}), ...(a.inputs !== undefined ? { inputs: a.inputs } : {}) })),
+  },
+  {
+    name: 'task_run_batch',
+    title: 'Run a saved task for several rows',
+    description:
+      "Run a saved task once per row of values, one run after another (the same job for several people or items, each with its own values). It starts at once and returns the batch; " +
+      "follow it with batch_status, and each run with run_status or run_wait (the batch's items carry run ids). rows: 2 to 25 objects, each with inputs for the task's {{parameters}} by key or label. " +
+      'Every row is checked before anything starts; a bad row refuses the whole batch and names the row. Each run asks before a send or a payment as a single run would. Never pass a sensitive parameter.',
+    input: z.object({
+      task_id: taskId,
+      rows: z
+        .array(z.object({ inputs: z.record(z.string().min(1).max(80), z.union([z.string().max(500), z.number()])).describe("This row's values, by key or label, e.g. { \"recipient\": \"Ana\" }.") }))
+        .min(2)
+        .max(25)
+        .describe('One object per run, in order: 2 to 25.'),
+      policy_id: policyIdParam.optional(),
+    }),
+    output: batchResponseSchema,
+    scope: 'runs:write',
+    effect: 'write',
+    openWorld: true,
+    async call(a, ctx) {
+      const rows = (a.rows as { inputs: Record<string, string | number> }[]).map((r) => ({ inputs: r.inputs }));
+      const b = await ctx.api<Record<string, unknown>>('POST', `/tasks/${String(a.task_id)}/batches`, { rows, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) });
+      return toolOutput({ text: b, structured: b, summary: `Batch ${String(b.id)}: ${String(b.total)} runs of "${String(b.taskName ?? '')}", ${String(b.status)}.` });
+    },
+  },
+  {
+    name: 'batch_status',
+    title: 'See a batch',
+    description: "Read a batch of runs: its status, each row's values (masked), run id and status, and the start of each run's result. Use it to follow task_run_batch.",
+    input: z.object({ batch_id: z.uuid().describe('The batch id task_run_batch returned.') }),
+    output: batchResponseSchema,
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const b = await ctx.api<Record<string, unknown>>('GET', `/batches/${String(a.batch_id)}`);
+      // A run's result comes from what the agent read on a page: marked untrusted.
+      return toolOutput({ text: b, structured: b, summary: `Batch ${String(b.id)}: ${String(b.summary)} (${String(b.status)}).`, untrusted: true });
+    },
   },
   {
     name: 'schedule_create',

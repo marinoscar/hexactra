@@ -75,6 +75,9 @@ jobs:
       # The platform's lock and drift checks: installed migrations, the
       # composed schema and the infra fragments equal what the packages ship.
       - run: npm run platform:check
+      # The table of diagnostic codes in docs/web-search.md is generated from packages/shared/diagnostics.json (E50.16, #986):
+      # it fails when the document is stale, so the table cannot drift from the remedies the app shows.
+      - run: npm run docs:diagnostics -- --check
 
       # The agent packages (E38.9, packages/hexactra-agent, hexactra-browser-agent, hexactra-kgraph and hexactra-web-agent, E50.4) before the apps: the API imports their built output.
       # `test:packages` fails, rather than passes, when a package has no dist or a test did not run; `check:package-pack` dry-runs `npm pack`
@@ -107,12 +110,80 @@ jobs:
       # changed (a few seconds; it builds the app itself, and fails when it finds no baseline or no chunk).
       - run: npm run bundle:compare --workspace=web
 
-      # The db tier: the whole app against the migrated, seeded database.
+      # The db tier (the whole app against a migrated, seeded database) is the job below.
+
+  # The db tier: the whole app against a migrated, seeded database, as parallel shards (#1043). Each shard is its own job with its own
+  # PostgreSQL, so two shards never share a database; inside a shard the files still run one after another (`--runInBand`). Jest
+  # splits the files (`--shard`), every file lands in exactly one shard, and a shard that finds no test fails.
+  db:
+    name: Console db tier (shard ${{ matrix.shard }} of 4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # Every shard reports, so one failure does not hide another.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: console
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hexactra_console_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # As in the job above: the API runs as the ordinary role, so row-level security is in force.
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hexactra_console_test
+      POSTGRES_SSL: 'false'
+      JWT_SECRET: ci-jwt-secret-not-a-real-secret-0000000000
+      COOKIE_SECRET: ci-cookie-secret-not-a-real-secret
+      GOOGLE_CLIENT_ID: ci-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-google-client-secret
+      GOOGLE_CALLBACK_URL: http://127.0.0.1:3000/api/auth/google/callback
+      INITIAL_ADMIN_EMAIL: admin@example.test
+      OTEL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: console/package-lock.json
+
+      - name: Create the ordinary application role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 <<SQL
+          CREATE ROLE app LOGIN PASSWORD 'postgres' NOSUPERUSER NOBYPASSRLS CREATEDB CREATEROLE;
+          ALTER DATABASE "$POSTGRES_DB" OWNER TO app;
+          ALTER SCHEMA public OWNER TO app;
+          SQL
+
+      - run: npm ci
+      - run: npm run prisma:generate --workspace=api
+      # The db specs read built output (the agent packages, the MCP widgets, the SDK's examples), so the whole build runs first.
+      - run: npm run build
       - run: npm run prisma:migrate --workspace=api
       - run: npm run prisma:seed --workspace=api
       # The agent frameworks docs/recipes/ targets, pinned to the versions the
       # recipes were checked against; agent-clients.db.spec.ts runs their CLIs.
-      # hermes-agent 0.19.0 requires Python >=3.11,<3.14.
+      # hermes-agent 0.19.0 requires Python >=3.11,<3.14. Installed in every shard: Jest decides which one runs that spec.
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -123,9 +194,23 @@ jobs:
           "$RUNNER_TEMP/hermes/bin/pip" install -q "hermes-agent[mcp]==0.19.0"
           echo "$RUNNER_TEMP/agents/node_modules/.bin" >> "$GITHUB_PATH"
           echo "$RUNNER_TEMP/hermes/bin" >> "$GITHUB_PATH"
-      - run: npm run test:db --workspace=api
+      - run: npm run test:db --workspace=api -- --shard=${{ matrix.shard }}/4
         env:
           AGENT_CLIENTS_SMOKE: '1'
+
+  # One check for the whole db tier: green only when every shard passed (a cancelled or skipped shard is not a pass).
+  db-tier:
+    name: Console db tier
+    needs: db
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.db.result }}
+        run: |
+          echo "db shards: $RESULT"
+          test "$RESULT" = "success"
 
   stack:
     name: Console VPS stack (console + fabric + browser host)

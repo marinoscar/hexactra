@@ -32,6 +32,7 @@ export const APP_USER_DATA_CATEGORIES: readonly UserDataCategoryDef[] = [
   { id: 'notes', label: 'Notes', description: 'Every note you wrote.', content: true },
   { id: 'documents', label: 'Documents', description: 'Every document you wrote.', content: true },
   { id: 'memories', label: 'Memories', description: 'Every fact you let the agent use (people, accounts, preferences), with their earlier versions.', content: true },
+  { id: 'skills', label: 'Skills', description: 'Every skill you wrote: how you want the agent to do a kind of job.', content: true },
   { id: 'saved-logins', label: 'Saved logins', description: "The logins you saved in Hexactra's built-in store, their earlier versions and your encryption key. Deleting them is permanent: nothing can decrypt them afterwards.", content: true },
   { id: 'kgraph', label: 'Knowledge Graph', description: 'What the agent learned from your saved tasks: procedures, their versions and evidence, your site facts, and your Knowledge Graph choices per task and run.', content: true },
   { id: 'browser-tasks', label: 'Browser tasks and runs', description: 'Your browser tasks, their runs, the steps the agents took, the videos of the runs you recorded, the questions they asked you, your chats, your agent policies, your limits for connected AI apps and what those apps did, your saved approvals, your email triggers with what they did, the benchmarks you started, and the guided profile sign-ins you started on your nodes.', content: true },
@@ -44,12 +45,14 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'Task', category: 'browser-tasks' },
   { model: 'Run', category: 'browser-tasks' },
   { model: 'TaskSchedule', category: 'browser-tasks' },
+  { model: 'TaskImprovement', category: 'browser-tasks' },
   { model: 'Question', category: 'browser-tasks' },
   { model: 'AgentPolicy', category: 'browser-tasks' },
   { model: 'Conversation', category: 'browser-tasks' },
   { model: 'ConnectedAppSettings', category: 'browser-tasks' },
   { model: 'McpActivity', category: 'browser-tasks' },
   { model: 'Memory', category: 'memories' },
+  { model: 'Skill', category: 'skills' },
   { model: 'ApprovalRule', category: 'browser-tasks' },
   { model: 'SecretsConnection', category: 'credentials' },
   { model: 'Secret', category: 'saved-logins' },
@@ -74,6 +77,8 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'MailTrigger', category: 'browser-tasks' },
   { model: 'MailTriggerEvent', category: 'browser-tasks' },
   { model: 'Benchmark', category: 'browser-tasks' },
+  // Batches of runs (E51.1, #1006): with the runs.
+  { model: 'RunBatch', category: 'browser-tasks' },
   // A run's video (epic #755): with its run.
   { model: 'RunRecording', category: 'browser-tasks' },
   // The Knowledge Graph (epic E46).

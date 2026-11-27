@@ -38505,6 +38505,17 @@
             }
           },
           {
+            "name": "batchId",
+            "required": false,
+            "in": "query",
+            "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
             "name": "envelope",
             "required": false,
             "in": "query",
@@ -38839,6 +38850,17 @@
             "required": false,
             "in": "query",
             "description": "Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "batchId",
+            "required": false,
+            "in": "query",
+            "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
             "schema": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -41918,6 +41940,200 @@
         }
       }
     },
+    "/api/runs/{id}/diagnostics": {
+      "get": {
+        "description": "Where the run spent effort it did not need, computed on read from its recorded steps (E52.6): loops, selectors that matched nothing, the same control clicked again, many reads per action, a slow start, time waiting for the owner, budget pressure, failures and steps whose outcome is unknown. Deterministic: no model reads anything. Texts are masked like the trace. Reads at most 2,000 steps (`truncated`). Permission `runs:read`; 404 `RUN_NOT_FOUND` for a run that is not yours.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "runInsights_diagnostics",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunDiagnosticsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A run's findings",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/consistency": {
+      "get": {
+        "description": "The spread of steps, model calls, working time and cost over the task's newest finished runs (E52.7): min, median, 90th percentile, max and max ÷ median, the success rate and a label (`steady`, `varies`, `erratic`, `not_enough_runs`). `last` is 3 to 50 (default 20); `since` counts only runs created at or after a time (the web passes the time the goal last changed). Benchmark runs are left out. The findings of the 10 newest runs are included. Permissions `tasks:read` and `runs:read`; 404 `TASK_NOT_FOUND` for a task that is not yours.\n\n**Requires:** authentication, plus permissions `tasks:read` and `runs:read`.",
+        "operationId": "taskInsights_consistency",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "last",
+            "required": false,
+            "in": "query",
+            "description": "How many of the newest finished runs to count (3 to 50)",
+            "schema": {
+              "minimum": 3,
+              "maximum": 50,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "since",
+            "required": false,
+            "in": "query",
+            "description": "Only runs created at or after this time (ISO 8601)",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskConsistencyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "How consistent a task's runs are",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read",
+            "runs:read"
+          ]
+        }
+      }
+    },
     "/api/usage/report": {
       "get": {
         "description": "Tokens (uncached input, cached input, output, reasoning), requests and cost per day (or per month for `range=1y`), split by model, token type, feature, provider or user, with totals, a per-model table and the runs' own counters. Cost uses the admin's model prices (and, for `scope=me`, the caller's own overrides); a model with no price makes `costKnown` false and the cost a lower bound. `scope=me` is always the caller's own usage; `scope=all` (every user) needs `ai_config:read`. Catalogue syncs are left out.\n\n**Requires:** authentication, plus permission `usage:read`.",
@@ -44413,6 +44629,467 @@
         "description": "**Requires:** authentication, plus permission `runs:read`."
       }
     },
+    "/api/tasks/{id}/batches": {
+      "post": {
+        "operationId": "runBatches_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      },
+      "get": {
+        "operationId": "runBatches_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Batches to return, 1 to 100. Default 20.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's `nextCursor`.",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/batches/{id}": {
+      "get": {
+        "operationId": "runBatches_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/batches/{id}/start": {
+      "post": {
+        "operationId": "runBatches_start",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
+    "/api/batches/{id}/cancel": {
+      "post": {
+        "operationId": "runBatches_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BatchResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
     "/api/schedules": {
       "get": {
         "operationId": "schedules_list",
@@ -46250,6 +46927,449 @@
           ]
         },
         "description": "**Requires:** authentication, plus permissions `tasks:write` and `tasks:read`."
+      }
+    },
+    "/api/tasks/{id}/improvements": {
+      "post": {
+        "description": "Queues a proposal (E52.8): an AI reads the task's recent finished runs (default the 5 newest; `runIds`: 1 to 10 of its finished runs) and proposes a better goal, each change cited to steps. It never changes the task. 400 `INVALID_RUNS` / `NO_FINISHED_RUNS`; 409 `IMPROVEMENT_RUNNING` while one is being made; 429 `IMPROVEMENT_LIMIT` above 20 a day; 404 when the task is not yours or the feature is off. Permission `tasks:write`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskImprover_request",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestImprovementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementRequestedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Propose a better goal for a task",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      },
+      "get": {
+        "description": "Newest first, at most 50, without their changes. Permission `tasks:read`.\n\n**Requires:** authentication, plus permission `tasks:read`.",
+        "operationId": "taskImprover_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's proposals",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read"
+          ]
+        }
+      }
+    },
+    "/api/task-improvements/{id}": {
+      "get": {
+        "description": "With its summary, proposed goal, changes and their evidence, and site facts. Permission `tasks:read`.\n\n**Requires:** authentication, plus permission `tasks:read`.",
+        "operationId": "taskImprover_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One proposal",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read"
+          ]
+        }
+      }
+    },
+    "/api/task-improvements/{id}/dismiss": {
+      "post": {
+        "description": "A `ready` proposal becomes `dismissed`. Permission `tasks:write`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskImprover_dismiss",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Dismiss a proposal",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      }
+    },
+    "/api/task-improvements/{id}/applied": {
+      "post": {
+        "description": "Marks a `ready` proposal `applied` and stores the goal the owner saved. It does NOT change the task: the web calls it after the task form's own save, and it is refused (409 `GOAL_NOT_SAVED`) unless the task's goal is the one given. Permission `tasks:write`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskImprover_applied",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppliedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ImprovementResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Record that a proposed goal was saved",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
       }
     },
     "/api/webhooks/events": {
@@ -53390,6 +54510,608 @@
           ]
         }
       }
+    },
+    "/api/skills": {
+      "get": {
+        "description": "The skills in use by default (`archived=true` lists the archived ones, `all` both). `q` searches the name, the description and the sites, ignoring case.\n\n**Requires:** authentication, plus permission `skills:read`.",
+        "operationId": "skills_list",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Searches the name, the description and the sites, ignoring case.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "archived",
+            "required": false,
+            "in": "query",
+            "description": "`false` (the default): the skills in use; `true`: the archived ones; `all`: both.",
+            "schema": {
+              "default": "false",
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SkillResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List your skills",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Refused with `400 SKILL_SECRET` when a field looks like a password, a code, a token or a full card, account, IBAN or Social Security number; `400 INVALID_SITE` for a site that is not a registrable domain; `409 SKILL_NAME_TAKEN` and `409 SKILL_LIMIT` (100 skills).\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
+    },
+    "/api/skills/{id}": {
+      "get": {
+        "description": "With its text.\n\n**Requires:** authentication, plus permission `skills:read`.",
+        "operationId": "skills_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Get one skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:read"
+          ]
+        }
+      },
+      "patch": {
+        "description": "The name, when to use it, the text, the sites and whether it is on. The same checks as when it is added.\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSkillDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Edit a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Permanently. Runs that read it keep its id.\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
+    },
+    "/api/skills/{id}/archive": {
+      "post": {
+        "description": "An archived skill is kept but never offered to a run or a chat.\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Archive a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
+    },
+    "/api/skills/{id}/unarchive": {
+      "post": {
+        "description": "It is offered again when it fits a job (and it is on).\n\n**Requires:** authentication, plus permission `skills:write`.",
+        "operationId": "skills_unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SkillResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Unarchive a skill",
+        "tags": [
+          "Skills"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "skills:write"
+          ]
+        }
+      }
     }
   },
   "info": {
@@ -53675,6 +55397,16 @@
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
               "REPORT_LINK_INVALID",
+              "BATCH_TOO_SMALL",
+              "BATCH_TOO_LARGE",
+              "BATCH_INPUTS_MISSING",
+              "BATCH_SENSITIVE_PARAMETER",
+              "BATCH_DUPLICATE_ROW",
+              "BATCH_NO_ROWS",
+              "BATCH_UNKNOWN_ROW",
+              "BATCH_NOT_FOUND",
+              "BATCH_LIVE",
+              "BATCH_NOT_IN_REVIEW",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -53775,6 +55507,11 @@
               "MAIL_TRIGGER_POLL_TOO_FAST",
               "MAIL_TRIGGER_INPUTS_INVALID",
               "MAIL_TRIGGER_CONNECTION_UNAVAILABLE",
+              "SKILL_NOT_FOUND",
+              "SKILL_NAME_TAKEN",
+              "SKILL_LIMIT",
+              "SKILL_SECRET",
+              "INVALID_SITE",
               "BENCHMARK_NOT_FOUND",
               "BENCHMARK_RUNNING",
               "BENCHMARK_SITE_UNREACHABLE",
@@ -56869,6 +58606,18 @@
               "useSavedTasks"
             ]
           },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
           "connections": {
             "type": "object",
             "properties": {
@@ -57469,6 +59218,18 @@
             },
             "required": [
               "useSavedTasks"
+            ]
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+              }
+            },
+            "required": [
+              "enabled"
             ]
           },
           "connections": {
@@ -58131,6 +59892,22 @@
               }
             ]
           },
+          "skills": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "connections": {
             "anyOf": [
               {
@@ -58564,6 +60341,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "batchMaxRows": {
+                "description": "The most rows a batch of runs may have (E51.1). Absent: 25.",
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100
               }
             },
             "required": [
@@ -58675,6 +60458,17 @@
             },
             "required": [
               "archiveAfterDays"
+            ]
+          },
+          "taskImprover": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
             ]
           },
           "browserAgentTiers": {
@@ -59007,6 +60801,15 @@
               "keepDays",
               "maxMinutes"
             ]
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Skills for every user's runs and chats (default on).",
+                "type": "boolean"
+              }
+            }
           },
           "connections": {
             "type": "object",
@@ -59918,9 +61721,11 @@
           "kgraph",
           "agentPricing",
           "notes",
+          "taskImprover",
           "browserAgentTiers",
           "browserAgentCeilings",
           "recordings",
+          "skills",
           "connections",
           "webSearch",
           "deliveries",
@@ -60133,6 +61938,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "batchMaxRows": {
+                "description": "The most rows a batch of runs may have (E51.1). Absent: 25.",
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100
               }
             },
             "required": [
@@ -60244,6 +62055,17 @@
             },
             "required": [
               "archiveAfterDays"
+            ]
+          },
+          "taskImprover": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
             ]
           },
           "browserAgentTiers": {
@@ -60576,6 +62398,15 @@
               "keepDays",
               "maxMinutes"
             ]
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Skills for every user's runs and chats (default on).",
+                "type": "boolean"
+              }
+            }
           },
           "connections": {
             "type": "object",
@@ -61756,6 +63587,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "batchMaxRows": {
+                "description": "The most rows a batch of runs may have (E51.1). Absent: 25.",
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 100
               }
             }
           },
@@ -61849,6 +63686,14 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 3650
+              }
+            }
+          },
+          "taskImprover": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
               }
             }
           },
@@ -62144,6 +63989,15 @@
                 "minimum": 1,
                 "maximum": 480,
                 "description": "The longest one recording may be. The recorder stops at this length; the run goes on. Default 60."
+              }
+            }
+          },
+          "skills": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Skills for every user's runs and chats (default on).",
+                "type": "boolean"
               }
             }
           },
@@ -64853,6 +66707,18 @@
                 },
                 "required": [
                   "useSavedTasks"
+                ]
+              },
+              "skills": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Offer your skills to your runs and chats (default on). Off: they are kept but not offered."
+                  }
+                },
+                "required": [
+                  "enabled"
                 ]
               },
               "connections": {
@@ -97379,6 +99245,12 @@
                 "type": "string",
                 "format": "uuid",
                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "batchId": {
+                "description": "The runs of one batch (E51.1, #1006): `id` of `GET /batches/{id}`.",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               }
             },
             "additionalProperties": false
@@ -98536,6 +100408,32 @@
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
           },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -99609,6 +101507,32 @@
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
                   "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+                },
+                "batchId": {
+                  "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "batchSeq": {
+                  "description": "The row of the batch (1..n); null outside a batch.",
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "createdAt": {
                   "type": "string",
@@ -102302,6 +104226,32 @@
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
           },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -102672,6 +104622,31 @@
               ]
             },
             "description": "The memories of `memoryIds` that still exist, with their labels (#553): the run page says \"Used: …\""
+          },
+          "skills": {
+            "description": "The skills this run read with skill_read that still exist, by name (#1008; `runs.skill_ids`): the run page says \"Skills read: …\". Never their text.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "archived": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "archived"
+              ]
+            }
           },
           "suggestedConnections": {
             "description": "E41.5 (reworded by E50.17): the owner's accounts that could have done what this finished run did in the browser (a webmail, calendar or files site) had a switch been on: `fix` is `resume` (the account is paused) or `capability` (that capability is switched off). `scope` is where the run came from. Information for the owner; never shown to the agent, never applied.",
@@ -103784,6 +105759,32 @@
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -106943,6 +108944,401 @@
           }
         },
         "additionalProperties": false
+      },
+      "RunDiagnosticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "computedAt": {
+            "type": "string",
+            "description": "When the findings were computed (on read, ISO 8601)"
+          },
+          "stepsRead": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the run has more than 2,000 steps: the findings cover the first 2,000"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "loop",
+                    "selector_miss",
+                    "repeated_click",
+                    "observation_heavy",
+                    "slow_start",
+                    "waited_for_owner",
+                    "budget_pressure",
+                    "failures",
+                    "unknown_outcome"
+                  ],
+                  "description": "What kind of finding it is"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "description": "One line for a person"
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "One or two sentences, facts only"
+                },
+                "seqFrom": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The first step it is about, or null"
+                },
+                "seqTo": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The last step it is about, or null"
+                },
+                "stepsSpent": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Steps attributable to it; 0 when not applicable"
+                },
+                "evidence": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    ]
+                  },
+                  "description": "The facts behind it"
+                }
+              },
+              "required": [
+                "code",
+                "severity",
+                "title",
+                "detail",
+                "seqFrom",
+                "seqTo",
+                "stepsSpent",
+                "evidence"
+              ]
+            },
+            "description": "Warnings first, then by steps spent"
+          }
+        },
+        "required": [
+          "runId",
+          "computedAt",
+          "stepsRead",
+          "truncated",
+          "findings"
+        ]
+      },
+      "TaskConsistencyResponseDto": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runs": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The finished runs counted"
+          },
+          "succeeded": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "successRate": {
+            "type": "number",
+            "description": "0 to 1"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "number"
+                  },
+                  "median": {
+                    "type": "number"
+                  },
+                  "p90": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "description": "max ÷ median; 1 when the median is 0"
+                  }
+                },
+                "required": [
+                  "min",
+                  "median",
+                  "p90",
+                  "max",
+                  "ratio"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modelCalls": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "number"
+                  },
+                  "median": {
+                    "type": "number"
+                  },
+                  "p90": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "description": "max ÷ median; 1 when the median is 0"
+                  }
+                },
+                "required": [
+                  "min",
+                  "median",
+                  "p90",
+                  "max",
+                  "ratio"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "activeMs": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "number"
+                  },
+                  "median": {
+                    "type": "number"
+                  },
+                  "p90": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "description": "max ÷ median; 1 when the median is 0"
+                  }
+                },
+                "required": [
+                  "min",
+                  "median",
+                  "p90",
+                  "max",
+                  "ratio"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "costUsd": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "number"
+                  },
+                  "median": {
+                    "type": "number"
+                  },
+                  "p90": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "description": "max ÷ median; 1 when the median is 0"
+                  }
+                },
+                "required": [
+                  "min",
+                  "median",
+                  "p90",
+                  "max",
+                  "ratio"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the cost of a counted run is unknown"
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "not_enough_runs",
+              "steady",
+              "varies",
+              "erratic"
+            ],
+            "description": "Fewer than 3 runs: not_enough_runs. steady: the largest run is at most 1.5× the median in steps and 90% succeeded; erratic: over 3× or under 60% succeeded; varies otherwise"
+          },
+          "since": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "perRun": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "stepCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "activeMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "severity"
+                    ]
+                  },
+                  "description": "The findings of the 10 newest runs; empty for older ones"
+                }
+              },
+              "required": [
+                "runId",
+                "status",
+                "createdAt",
+                "stepCount",
+                "costUsd",
+                "activeMs",
+                "findings"
+              ]
+            }
+          }
+        },
+        "required": [
+          "taskId",
+          "runs",
+          "succeeded",
+          "successRate",
+          "steps",
+          "modelCalls",
+          "activeMs",
+          "costUsd",
+          "label",
+          "since",
+          "perRun"
+        ]
       },
       "UsageReportResponseDto": {
         "type": "object",
@@ -110712,6 +113108,32 @@
             },
             "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
           },
+          "batchId": {
+            "description": "The batch this run is one row of (E51.1, #1006); null for a run outside a batch.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batchSeq": {
+            "description": "The row of the batch (1..n); null outside a batch.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -110900,6 +113322,663 @@
         "required": [
           "goal"
         ]
+      },
+      "BatchResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that made it (`run_task_batch`); null for every other caller"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "policyRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "review",
+              "running",
+              "done",
+              "cancelled"
+            ],
+            "description": "`review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "onFailure": {
+            "type": "string",
+            "enum": [
+              "continue",
+              "stop"
+            ]
+          },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "owner_stopped",
+                  "unknown_outcome",
+                  "row_failed",
+                  "task_deleted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted"
+          },
+          "stoppedAtSeq": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The row whose run stopped it"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cancelled": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "skipped": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "pending": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "running": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "total",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "skipped",
+              "pending",
+              "running"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "\"3 of 3 done\", \"2 done, 1 failed, 2 not started\""
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The row, 1..n"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "running",
+                    "succeeded",
+                    "failed",
+                    "cancelled",
+                    "skipped"
+                  ],
+                  "description": "`skipped`: never started (the batch was stopped, or the row was unticked at review)"
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run of this row; null until it starts"
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Masked with the same rules as a run's inputs"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "value"
+                    ]
+                  },
+                  "description": "The row's values, by parameter"
+                },
+                "runStatus": {
+                  "description": "The run's status; null until it starts",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "result": {
+                  "description": "The first 300 characters of the run's result (or error), masked; null until it ends",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "seq",
+                "status",
+                "runId",
+                "values",
+                "runStatus",
+                "result"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "taskName",
+          "conversationId",
+          "trigger",
+          "origin",
+          "policyRef",
+          "status",
+          "total",
+          "onFailure",
+          "stopReason",
+          "stoppedAtSeq",
+          "createdAt",
+          "startedAt",
+          "finishedAt",
+          "counts",
+          "summary",
+          "items"
+        ]
+      },
+      "CreateBatchDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "inputs": {
+                  "description": "This row's values for the task's `{{Name}}` parameters, by key or display name.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "description": "One object per run, in order. 2 to 25 rows (the deployment setting `runs.batchMaxRows`). Every row is checked before anything is written."
+          },
+          "policyId": {
+            "description": "Run every row under this agent policy instead of the task's or the user's default.",
+            "type": "string",
+            "maxLength": 64
+          },
+          "onFailure": {
+            "default": "continue",
+            "description": "`continue` (the default): a failed row does not stop the batch. `stop`: it does, and the rows not started are skipped.",
+            "type": "string",
+            "enum": [
+              "continue",
+              "stop"
+            ]
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "BatchPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conversationId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The chat that made it (`run_task_batch`); null for every other caller"
+                },
+                "trigger": {
+                  "type": "string"
+                },
+                "origin": {
+                  "type": "string"
+                },
+                "policyRef": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "review",
+                    "running",
+                    "done",
+                    "cancelled"
+                  ],
+                  "description": "`review`: a chat's batch waits for the owner's Start; `cancelled`: stopped before its last row (see `stopReason`)"
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "onFailure": {
+                  "type": "string",
+                  "enum": [
+                    "continue",
+                    "stop"
+                  ]
+                },
+                "stopReason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "owner_stopped",
+                        "unknown_outcome",
+                        "row_failed",
+                        "task_deleted"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Why it stopped early: the owner's Stop, a step of unknown outcome, a failed row with `onFailure: stop`, the task deleted"
+                },
+                "stoppedAtSeq": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The row whose run stopped it"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "startedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "finishedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "counts": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "succeeded": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "cancelled": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "skipped": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "pending": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "running": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "total",
+                    "succeeded",
+                    "failed",
+                    "cancelled",
+                    "skipped",
+                    "pending",
+                    "running"
+                  ]
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "\"3 of 3 done\", \"2 done, 1 failed, 2 not started\""
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "seq": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "The row, 1..n"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "running",
+                          "succeeded",
+                          "failed",
+                          "cancelled",
+                          "skipped"
+                        ],
+                        "description": "`skipped`: never started (the batch was stopped, or the row was unticked at review)"
+                      },
+                      "runId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "The run of this row; null until it starts"
+                      },
+                      "values": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string",
+                              "description": "Masked with the same rules as a run's inputs"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "value"
+                          ]
+                        },
+                        "description": "The row's values, by parameter"
+                      },
+                      "runStatus": {
+                        "description": "The run's status; null until it starts",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "result": {
+                        "description": "The first 300 characters of the run's result (or error), masked; null until it ends",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "seq",
+                      "status",
+                      "runId",
+                      "values",
+                      "runStatus",
+                      "result"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "taskId",
+                "taskName",
+                "conversationId",
+                "trigger",
+                "origin",
+                "policyRef",
+                "status",
+                "total",
+                "onFailure",
+                "stopReason",
+                "stoppedAtSeq",
+                "createdAt",
+                "startedAt",
+                "finishedAt",
+                "counts",
+                "summary",
+                "items"
+              ]
+            }
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "StartBatchDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "description": "The rows to keep (their `seq`), default all; the others are skipped. At least one.",
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        }
       },
       "ScheduleResponseDto": {
         "type": "object",
@@ -111485,9 +114564,10 @@
                             "result",
                             "task_draft",
                             "memory",
-                            "request"
+                            "request",
+                            "batch"
                           ],
-                          "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                          "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                         },
                         "text": {
                           "type": "string",
@@ -112022,9 +115102,10 @@
                     "result",
                     "task_draft",
                     "memory",
-                    "request"
+                    "request",
+                    "batch"
                   ],
-                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                  "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                 },
                 "text": {
                   "type": "string",
@@ -112285,9 +115366,10 @@
               "result",
               "task_draft",
               "memory",
-              "request"
+              "request",
+              "batch"
             ],
-            "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+            "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
           },
           "text": {
             "type": "string",
@@ -113328,9 +116410,10 @@
                     "result",
                     "task_draft",
                     "memory",
-                    "request"
+                    "request",
+                    "batch"
                   ],
-                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
+                  "description": "`batch`: a batch of runs of one task (E51.1, `meta.batchId`): the review card, then each row's status; its summary is one `result` with `meta.batchSummary`. `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`). `memory`: a suggested memory or saved sign-in (`meta.questionId`). `request`: something a run asked the owner (`meta.questionId`, `meta.input`, `meta.outcome`); never a value."
                 },
                 "text": {
                   "type": "string",
@@ -114427,6 +117510,543 @@
           "schedules",
           "warnings"
         ]
+      },
+      "ImprovementRequestedResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ]
+      },
+      "RequestImprovementDto": {
+        "type": "object",
+        "properties": {
+          "runIds": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ImprovementListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "ready",
+                    "failed",
+                    "applied",
+                    "dismissed"
+                  ]
+                },
+                "runIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "description": "The runs read, newest first"
+                },
+                "goalBefore": {
+                  "type": "string",
+                  "description": "The task's goal template when the proposal was asked for"
+                },
+                "proposedGoal": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "summary": {
+                  "description": "What went wrong across the runs, in plain words",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "changes": {
+                  "description": "Each change with the steps that show why; absent in a list",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "add",
+                          "replace",
+                          "remove"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "why": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "seqFrom": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "seqTo": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "finding": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "seqFrom",
+                            "seqTo"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "text",
+                      "why",
+                      "evidence"
+                    ]
+                  }
+                },
+                "siteFacts": {
+                  "description": "Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "site": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "navigation",
+                          "timing",
+                          "quirk"
+                        ]
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "runId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "seqFrom": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "seqTo": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "runId",
+                            "seqFrom",
+                            "seqTo"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "site",
+                      "kind",
+                      "text",
+                      "evidence"
+                    ]
+                  }
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "usedImages": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "description": "Why a failed proposal failed, for a person",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "appliedGoal": {
+                  "description": "The goal the owner saved, when applied",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "finishedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "decidedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "taskId",
+                "status",
+                "runIds",
+                "goalBefore",
+                "proposedGoal",
+                "summary",
+                "confidence",
+                "model",
+                "usedImages",
+                "error",
+                "appliedGoal",
+                "createdAt",
+                "finishedAt",
+                "decidedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ImprovementResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "failed",
+              "applied",
+              "dismissed"
+            ]
+          },
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The runs read, newest first"
+          },
+          "goalBefore": {
+            "type": "string",
+            "description": "The task's goal template when the proposal was asked for"
+          },
+          "proposedGoal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "description": "What went wrong across the runs, in plain words",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changes": {
+            "description": "Each change with the steps that show why; absent in a list",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "add",
+                    "replace",
+                    "remove"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "runId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "seqFrom": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "seqTo": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "finding": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "runId",
+                      "seqFrom",
+                      "seqTo"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "text",
+                "why",
+                "evidence"
+              ]
+            }
+          },
+          "siteFacts": {
+            "description": "Facts about a site worth keeping (proposals only: the owner turns one into a Knowledge Graph fact in the console); absent in a list",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "navigation",
+                    "timing",
+                    "quirk"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "runId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "seqFrom": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "seqTo": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "runId",
+                      "seqFrom",
+                      "seqTo"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "site",
+                "kind",
+                "text",
+                "evidence"
+              ]
+            }
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usedImages": {
+            "type": "boolean"
+          },
+          "error": {
+            "description": "Why a failed proposal failed, for a person",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appliedGoal": {
+            "description": "The goal the owner saved, when applied",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "status",
+          "runIds",
+          "goalBefore",
+          "proposedGoal",
+          "summary",
+          "confidence",
+          "model",
+          "usedImages",
+          "error",
+          "appliedGoal",
+          "createdAt",
+          "finishedAt",
+          "decidedAt"
+        ]
+      },
+      "AppliedDto": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "additionalProperties": false
       },
       "WebhookEventCatalogDto": {
         "type": "object",
@@ -124979,6 +128599,156 @@
         "required": [
           "ids"
         ]
+      },
+      "SkillResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The guidance. Only its owner reads it here; a run reads it through `skill_read`, and it is never kept in a step."
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a run last read it."
+          },
+          "useCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many runs read it."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "body",
+          "sites",
+          "enabled",
+          "archivedAt",
+          "lastUsedAt",
+          "useCount",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateSkillDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "What you call it: \"Google Messages\". 1 to 60 characters, unique among your skills ignoring case.",
+            "type": "string"
+          },
+          "description": {
+            "description": "When to use it: \"How I send text messages from Google Messages on the web\". 1 to 200 characters. The agent is shown it, not the text.",
+            "type": "string"
+          },
+          "body": {
+            "description": "The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number.",
+            "type": "string"
+          },
+          "sites": {
+            "default": [],
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "description": "Registrable domains the skill is about (\"google.com\"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`."
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean",
+            "description": "Off: the skill is kept but not offered to a run or a chat."
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateSkillDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "What you call it: \"Google Messages\". 1 to 60 characters, unique among your skills ignoring case.",
+            "type": "string"
+          },
+          "description": {
+            "description": "When to use it: \"How I send text messages from Google Messages on the web\". 1 to 200 characters. The agent is shown it, not the text.",
+            "type": "string"
+          },
+          "body": {
+            "description": "The guidance, plain text or Markdown, 1 to 4,000 characters. Never a password, a code, a token or a full card, account or Social Security number.",
+            "type": "string"
+          },
+          "sites": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "description": "Registrable domains the skill is about (\"google.com\"), at most 10. A host or an address is stored as its registrable domain; anything else is refused with `INVALID_SITE`."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Off: the skill is kept but not offered to a run or a chat."
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
