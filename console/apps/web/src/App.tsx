@@ -73,6 +73,7 @@ import { SkillsAdminPage, SkillsPage } from './pages/SkillsPage';
 import { MemoriesMenuItem } from './memories/MemoriesMenuItem';
 import { AgentPolicyEditorPage } from './pages/AgentPolicyEditorPage';
 import { ModelTiersPage } from './pages/ModelTiersPage';
+import { HelperModelsPage } from './pages/HelperModelsPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
 import { AdminUsagePage, MyUsagePage } from './pages/UsagePage';
@@ -324,6 +325,7 @@ export function AppRoutes() {
           {/* AI usage and cost (#734): `usage:read` and `ai_config:read` are what GET /api/usage/report enforces for scope=me and scope=all. */}
           <Route path="settings/usage" element={<Gate permission="usage:read"><MyUsagePage /></Gate>} />
           {/* My model prices (#735): the user's own `agentPricing` in /user-settings. */}
+          <Route path="settings/helper-models" element={<Gate permission="user_settings:read"><HelperModelsPage /></Gate>} />
           <Route path="settings/model-prices" element={<Gate permission="user_settings:read"><AgentPricingPage scope="user" /></Gate>} />
           <Route path="admin/settings/usage" element={<Gate permission="ai_config:read"><AdminUsagePage /></Gate>} />
           {/* Runs analytics for everyone (E53.5): `run_stats:read_all` is what GET /api/admin/runs/stats enforces. */}

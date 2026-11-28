@@ -123,6 +123,25 @@ export async function saveUserTiers(api: PlatformApiClient, tiers: ModelTiersOve
   return { tiers: doc.browserAgent?.tiers ?? {}, version: doc.version };
 }
 
+/** The `aiHelpers` namespace of the user settings (E55.1, #1094): `provider:modelId` or null (the default model), and the title switches. */
+export interface AiHelpersSettings {
+  titleModel: string | null;
+  taskModel: string | null;
+  runTitles: boolean;
+  chatTitles: boolean;
+}
+export const AI_HELPERS_DEFAULTS: AiHelpersSettings = { titleModel: null, taskModel: null, runTitles: true, chatTitles: true };
+
+export async function getAiHelpers(api: PlatformApiClient): Promise<{ settings: AiHelpersSettings; version: number }> {
+  const doc = await api.get<{ version: number; aiHelpers?: Partial<AiHelpersSettings> | null }>('/user-settings');
+  return { settings: { ...AI_HELPERS_DEFAULTS, ...(doc.aiHelpers ?? {}) }, version: doc.version };
+}
+
+export async function saveAiHelpers(api: PlatformApiClient, settings: AiHelpersSettings, version: number): Promise<{ settings: AiHelpersSettings; version: number }> {
+  const doc = await api.patch<{ version: number; aiHelpers?: Partial<AiHelpersSettings> | null }>('/user-settings', { aiHelpers: settings }, { ifMatch: String(version) });
+  return { settings: { ...AI_HELPERS_DEFAULTS, ...(doc.aiHelpers ?? {}) }, version: doc.version };
+}
+
 // ---- System settings namespaces (#400, #403, #404) ----
 
 export function getAgentSystemSettings(api: PlatformApiClient): Promise<AgentSystemSettings> {

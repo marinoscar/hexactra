@@ -1,3 +1,4 @@
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
@@ -144,6 +145,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: PaidOutlinedIcon,
         path: '/settings/model-prices',
         permission: 'user_settings:read',
+      },
+      // Helper models (E55.1, #1094): the user's own `aiHelpers` namespace of GET/PATCH /api/user-settings.
+      {
+        title: 'Helper models',
+        description: 'Which model writes the short titles of runs and chats, and which model creates and improves tasks.',
+        Icon: AutoAwesomeOutlinedIcon,
+        path: '/settings/helper-models',
+        permission: 'user_settings:read',
+        feature: 'ai',
       },
       // The Knowledge Graph (E46.20). `kgraph:read` is what GET /api/kgraph/status enforces; the switch and
       // Delete everything learned (DELETE /api/kgraph) need `kgraph:write`, checked in the page.

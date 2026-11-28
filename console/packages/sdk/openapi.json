@@ -59167,6 +59167,53 @@
               "useSavedTasks"
             ]
           },
+          "aiHelpers": {
+            "type": "object",
+            "properties": {
+              "titleModel": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The model that writes short titles for runs and chats. Null uses your default model."
+              },
+              "taskModel": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The model that creates and improves tasks. Null uses your default model."
+              },
+              "runTitles": {
+                "type": "boolean",
+                "description": "Write a short title for each run. On by default."
+              },
+              "chatTitles": {
+                "type": "boolean",
+                "description": "Write a short title for each chat. On by default."
+              }
+            },
+            "required": [
+              "titleModel",
+              "taskModel",
+              "runTitles",
+              "chatTitles"
+            ]
+          },
           "skills": {
             "type": "object",
             "properties": {
@@ -59779,6 +59826,53 @@
             },
             "required": [
               "useSavedTasks"
+            ]
+          },
+          "aiHelpers": {
+            "type": "object",
+            "properties": {
+              "titleModel": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The model that writes short titles for runs and chats. Null uses your default model."
+              },
+              "taskModel": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 200,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The model that creates and improves tasks. Null uses your default model."
+              },
+              "runTitles": {
+                "type": "boolean",
+                "description": "Write a short title for each run. On by default."
+              },
+              "chatTitles": {
+                "type": "boolean",
+                "description": "Write a short title for each chat. On by default."
+              }
+            },
+            "required": [
+              "titleModel",
+              "taskModel",
+              "runTitles",
+              "chatTitles"
             ]
           },
           "skills": {
@@ -60445,6 +60539,54 @@
                   "useSavedTasks": {
                     "type": "boolean",
                     "description": "Let the chat use one of your saved tasks when it does what you ask. On by default."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "aiHelpers": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "titleModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The model that writes short titles for runs and chats. Null uses your default model."
+                  },
+                  "taskModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The model that creates and improves tasks. Null uses your default model."
+                  },
+                  "runTitles": {
+                    "type": "boolean",
+                    "description": "Write a short title for each run. On by default."
+                  },
+                  "chatTitles": {
+                    "type": "boolean",
+                    "description": "Write a short title for each chat. On by default."
                   }
                 }
               },
@@ -67268,6 +67410,53 @@
                 },
                 "required": [
                   "useSavedTasks"
+                ]
+              },
+              "aiHelpers": {
+                "type": "object",
+                "properties": {
+                  "titleModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The model that writes short titles for runs and chats. Null uses your default model."
+                  },
+                  "taskModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 200,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The model that creates and improves tasks. Null uses your default model."
+                  },
+                  "runTitles": {
+                    "type": "boolean",
+                    "description": "Write a short title for each run. On by default."
+                  },
+                  "chatTitles": {
+                    "type": "boolean",
+                    "description": "Write a short title for each chat. On by default."
+                  }
+                },
+                "required": [
+                  "titleModel",
+                  "taskModel",
+                  "runTitles",
+                  "chatTitles"
                 ]
               },
               "skills": {

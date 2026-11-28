@@ -2,7 +2,7 @@
 
 "Improve this task" (epic #1015, E52.8 #1023) reads a saved task's recent runs and proposes a better goal for it, each change tied to steps of those runs, plus site facts worth keeping. It writes a **proposal** only. **Nothing changes a task but the owner's Save in the task form.**
 
-- AI feature: `task_improver`. Its model is the owner's **default AI model** (Settings → AI Keys), as for the task builder. When that model takes no images, it reads text only (`usedImages: false`).
+- AI feature: `task_improver`. Its model is the owner's **task model** (Settings → Browser agent → **Helper models** (`/settings/helper-models`)), as for the task builder; with none picked, or when the pick can no longer be used, the **default AI model** (Settings → AI Keys). When that model takes no images, it reads text only (`usedImages: false`).
 - Deployment switch: the system setting `taskImprover.enabled` (on by default; `PATCH /api/system-settings` with `{ "taskImprover": { "enabled": false } }`). Off: every route below is a 404 and the web shows no button.
 - It runs only when an owner asks. Nothing runs in the background.
 

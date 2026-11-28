@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AiError, AiService, aiErrorLogDetails } from '@marinoscar/platform-api/ai';
 import type { Conversation } from '@prisma/client';
 
+import { HelperModels } from '../ai-helpers/helper-models';
 import { failureText } from '../chat/chat-turn.service';
 import { ChatTaskDraftService } from '../chat/chat-task-draft.service';
 import { transcriptLine } from '../chat/chat-transcript';
@@ -48,6 +49,7 @@ export class TaskBuilderTurnService {
     private readonly ai: AiService,
     @Optional() private readonly policies?: PoliciesService,
     @Optional() private readonly schedules?: TaskSchedulesService,
+    @Optional() private readonly helperModels?: HelperModels,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<TaskBuilderTurnOutcome> {
@@ -100,6 +102,7 @@ export class TaskBuilderTurnService {
     let text = '';
     try {
       const result = await this.ai.forUser(userId, { feature: TASK_BUILDER_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
+        ...((await this.helperModels?.target(userId, 'task')) ?? {}),
         instructions: TASK_BUILDER_INSTRUCTIONS,
         input: await this.buildInput(userId, c),
         tools,
