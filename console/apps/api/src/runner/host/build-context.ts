@@ -26,7 +26,8 @@ import { openFabricSession } from './browser-session';
 import { BrowserError } from '@marinoscar/hexactra-browser-agent/browser-port';
 import { connectionGate } from './gates/connection-gate';
 import { registerRunTools } from './run-tools';
-import { attachableLine, expectsLine, runContextLines, runInstructions } from './toolbox-line';
+import { attachableLine, expectsLine, offersBrowser, runContextLines, runInstructions } from './toolbox-line';
+import { tabsLine } from '@marinoscar/hexactra-browser-agent/page';
 import { mcpToolset } from './tools/connections/mcp';
 import { DEFAULT_CONNECTION_READ_LIMITS } from './connections/memory';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from '../goal-run.enqueue';
@@ -268,7 +269,9 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     // The pictures the agent can attach (E41.4): in the volatile tail, never in the cached prefix.
     statusLines: async (c) => {
       const line = attachableLine((await c.ports.pictures?.listSteps?.()) ?? []);
-      return line ? [line] : [];
+      // E54.2: with `delta` results, the open tabs (when there are several), so the model does not spend turns on `tabs`.
+      const tabs = c.ports.policy.policy.actionResults === 'delta' && offersBrowser(registry, c) ? await tabsLine(c as never) : null;
+      return [...(line ? [line] : []), ...(tabs ? [tabs] : [])];
     },
     summarizeGuidance: guidanceSummary,
     // The memories, then the owner's skills that fit (#1008), then "About these sites" (E46.32), then (everyday, E46.28) the saved procedures

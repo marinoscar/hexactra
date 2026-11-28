@@ -41,6 +41,10 @@ export interface AgentPolicySpec {
     observationChars: number;
     /** E54.1: absent or 1 = one action per model reply. */
     actionsPerReply?: number;
+    /** E54.2: absent or plain = as before. */
+    actionResults?: 'plain' | 'delta';
+    /** E54.3: absent or every_round = a picture every round. */
+    screenshotWhen?: 'every_round' | 'on_change';
   };
 }
 

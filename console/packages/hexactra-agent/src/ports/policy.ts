@@ -15,6 +15,16 @@ export interface RunPolicy {
    * fill-type actions may follow each other, and the first action that can change the page, fails or asks a person ends the reply.
    */
   actionsPerReply?: number;
+  /**
+   * What an action's result tells the model (E54.2, #1083). Absent: as before. `delta`: a click or key press that changed the page also says
+   * where the page is now (address, title, an open dialog), from the check that already runs after it, and each round names the open tabs.
+   */
+  actionResults?: 'delta';
+  /**
+   * When a round takes a new screenshot (E54.3, #1084). Absent: every round, as before. `on_change`: only when the page check differs from
+   * the one taken with the last picture (or the model asked to look); an unchanged page sends no new image.
+   */
+  screenshotWhen?: 'on_change';
   stall: StallSettings;
   effectiveBudget: EffectiveBudget;
 }

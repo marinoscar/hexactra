@@ -880,6 +880,22 @@
                       "minimum": 1,
                       "maximum": 5
                     },
+                    "actionResults": {
+                      "description": "E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.",
+                      "type": "string",
+                      "enum": [
+                        "plain",
+                        "delta"
+                      ]
+                    },
+                    "screenshotWhen": {
+                      "description": "E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.",
+                      "type": "string",
+                      "enum": [
+                        "every_round",
+                        "on_change"
+                      ]
+                    },
                     "observationChars": {
                       "type": "integer",
                       "minimum": 500,

@@ -30,6 +30,8 @@ export class FakeBrowser implements BrowserPort {
   digests: Array<string | null> = [];
   /** How many times the page digest was read. */
   digestReads = 0;
+  /** Open dialogs the page check reports (E54.2). */
+  dialogs = 0;
   /** The next `act` fails with this state instead of succeeding. */
   failNext: { state: ActionOp['state']; error: string } | null = null;
 
@@ -41,7 +43,9 @@ export class FakeBrowser implements BrowserPort {
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:page-digest */')) {
       this.digestReads += 1;
       const h = this.digests.length > 1 ? this.digests.shift()! : (this.digests[0] ?? null);
-      return { id: 'op', state: 'succeeded', result: { type: 'object', value: h === null ? null : { h } } };
+      // With the place (E54.2) when the script asks for it.
+      const place = String(action.script).includes('location.href.slice') ? { u: this.url, t: this.snapshot.title ?? 'Page', d: this.dialogs } : {};
+      return { id: 'op', state: 'succeeded', result: { type: 'object', value: h === null ? null : { h, ...place } } };
     }
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-elements */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: this.surface } };
     if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:surface-snapshot */')) return { id: 'op', state: 'succeeded', result: { type: 'object', value: { url: this.url, title: this.snapshot.title ?? '', text: this.snapshot.text ?? '', frames: this.snapshot.frames ?? [] } } };
@@ -63,7 +67,10 @@ export class FakeBrowser implements BrowserPort {
     this.actions.push({ type: 'type_secret', handoff_id: opts.handoffId, selector: opts.selector });
     return { id: 'op', ...this.secretOp };
   }
+  /** How many screenshots were taken (E54.3). */
+  captures = 0;
   async capture(screen: Screen): Promise<ScreenView> {
+    this.captures += 1;
     return { screen, dataUrl: 'data:image/jpeg;base64,AAAA', width: 800, height: 600, url: this.url, title: 'Page', marks: [] };
   }
   async captureTrace(): Promise<TraceShot> {

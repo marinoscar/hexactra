@@ -41,8 +41,10 @@ type Req = { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) 
 function replyingAi(replies: Call[][]) {
   const outputs: string[][] = [];
   const instructions: string[] = [];
+  const inputs: string[] = [];
   const runTools = jest.fn(async (req: Req) => {
     instructions.push(req.instructions ?? '');
+    inputs.push(JSON.stringify((req as { input?: unknown }).input));
     let step = 0;
     while (replies.length) {
       const reply = replies.shift()!;
@@ -53,7 +55,7 @@ function replyingAi(replies: Call[][]) {
     }
     return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
   });
-  return { ai: { forUser: () => ({ runTools }) } as unknown as AiService, outputs, instructions };
+  return { ai: { forUser: () => ({ runTools }) } as unknown as AiService, outputs, instructions, inputs };
 }
 
 const notifier = { finished: jest.fn(), needsYou: jest.fn(), started: jest.fn(), savedLoginUsed: jest.fn(), savedApprovalsUsed: jest.fn(), overBudget: jest.fn() };
@@ -68,12 +70,12 @@ const REPLY: Call[] = [
 ];
 const FINISH: Call[] = [['finish', { success: true, result: 'Searched.' }]];
 
-async function runWith(actionsPerReply: number | null) {
+async function runWith(actionsPerReply: number | null, more: Record<string, unknown> = {}, tabs: { id: number; active: boolean; url: string; title: string }[] | null = null) {
   const userId = await login(`reply-${actionsPerReply}-${stamp}@example.test`);
   const db = prisma.forUser({ userId });
   const run = await db.run.create({ data: { userId, goal: 'Search the shop for blue pens' } });
   const spec = balancedSpec();
-  const context = actionsPerReply === null ? spec.context : { ...spec.context, actionsPerReply };
+  const context = { ...(actionsPerReply === null ? spec.context : { ...spec.context, actionsPerReply }), ...more };
   const snapshot = { schemaVersion: 1, ref: 'reply', name: 'Reply', version: 1, builtin: false, source: 'system_default', spec: { ...spec, context }, tiers: null, takenAt: '2026-11-28T00:00:00.000Z' };
   await db.run.update({ where: { id: run.id }, data: { policySnapshot: snapshot as never } });
   const fabric = fakeSecretsFabric('https://shop.example.test/start');
@@ -82,6 +84,7 @@ async function runWith(actionsPerReply: number | null) {
     { selector: '#r', tag: 'input' },
     { selector: '#go', tag: 'button' },
   ];
+  fabric.page.tabs = tabs;
   const model = replyingAi([REPLY, FINISH]);
   const outcome = await runnerOf(fabric, model.ai).advance(run.id, userId, null);
   const steps = await prisma.runStep.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' }, select: { action: true, kind: true } });
@@ -106,5 +109,23 @@ describe('several actions per reply', () => {
     expect(r.model.instructions[0]).not.toContain('actions in one reply');
     expect(r.model.outputs[0]!.some((o) => o.startsWith('Not run'))).toBe(false);
     expect(r.sent).toEqual(['type', 'type', 'click', 'type']);
+  });
+});
+
+describe('what changed, with each action (E54.2, #1083)', () => {
+  const TABS = [
+    { id: 1, active: false, url: 'https://shop.example.test/start', title: 'Start' },
+    { id: 2, active: true, url: 'https://shop.example.test/cart', title: 'Cart' },
+  ];
+
+  it('names the open tabs in the round with `delta`', async () => {
+    const r = await runWith(null, { actionResults: 'delta' }, TABS);
+    expect(r.outcome).toBe('succeeded');
+    expect(r.model.inputs[0]).toContain('Tabs: 2 open; active: \\"Cart\\" at https://shop.example.test/cart.');
+  });
+
+  it('says nothing of the tabs without it, with the same two tabs open', async () => {
+    const r = await runWith(null, {}, TABS);
+    expect(r.model.inputs[0]).not.toContain('Tabs: 2 open');
   });
 });

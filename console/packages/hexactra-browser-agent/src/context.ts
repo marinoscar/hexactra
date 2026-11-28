@@ -2,7 +2,7 @@
 // toolset's own state and hooks. The host builds it; the tools reach the page, the site list and the gates only through it.
 import type { z } from 'zod';
 
-import type { GateTarget, HarnessMemory, ResultField, RunContext } from '@marinoscar/hexactra-agent';
+import type { GateTarget, HarnessMemory, Observation, ResultField, RunContext } from '@marinoscar/hexactra-agent';
 import type { BrowserPort } from './browser-port';
 import type { ScreenshotWindow } from './context-settings';
 import type { TargetFacts } from './policy';
@@ -30,6 +30,11 @@ export interface BrowserState {
   marks: Map<number, ScreenMark>;
   /** The last screen the model was shown. */
   view: ScreenView | null;
+  /** E54.2: where the page was at the last page check, when the policy asks for `delta` results. */
+  place?: { url: string; title: string; dialogs: number } | null;
+  /** E54.3: the page check taken just before the last page screenshot, and what that round told the stall detector. */
+  shotDigest?: string | null;
+  shotPage?: Observation['page'];
 }
 
 /** The sites the run may open: the task's list and the AI app's list. A URL must pass both. */

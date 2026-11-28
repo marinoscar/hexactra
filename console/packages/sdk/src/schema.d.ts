@@ -17792,6 +17792,16 @@ export interface components {
                     callsPerChunk: number;
                     /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
                     actionsPerReply?: number;
+                    /**
+                     * @description E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.
+                     * @enum {string}
+                     */
+                    actionResults?: "plain" | "delta";
+                    /**
+                     * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                     * @enum {string}
+                     */
+                    screenshotWhen?: "every_round" | "on_change";
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18013,6 +18023,16 @@ export interface components {
                         callsPerChunk: number;
                         /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
                         actionsPerReply?: number;
+                        /**
+                         * @description E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.
+                         * @enum {string}
+                         */
+                        actionResults?: "plain" | "delta";
+                        /**
+                         * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                         * @enum {string}
+                         */
+                        screenshotWhen?: "every_round" | "on_change";
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
                         /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18158,6 +18178,16 @@ export interface components {
                     callsPerChunk: number;
                     /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
                     actionsPerReply?: number;
+                    /**
+                     * @description E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.
+                     * @enum {string}
+                     */
+                    actionResults?: "plain" | "delta";
+                    /**
+                     * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                     * @enum {string}
+                     */
+                    screenshotWhen?: "every_round" | "on_change";
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18251,6 +18281,16 @@ export interface components {
                     callsPerChunk: number;
                     /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
                     actionsPerReply?: number;
+                    /**
+                     * @description E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.
+                     * @enum {string}
+                     */
+                    actionResults?: "plain" | "delta";
+                    /**
+                     * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                     * @enum {string}
+                     */
+                    screenshotWhen?: "every_round" | "on_change";
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -22270,6 +22310,16 @@ export interface components {
                         callsPerChunk: number;
                         /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
                         actionsPerReply?: number;
+                        /**
+                         * @description E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.
+                         * @enum {string}
+                         */
+                        actionResults?: "plain" | "delta";
+                        /**
+                         * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                         * @enum {string}
+                         */
+                        screenshotWhen?: "every_round" | "on_change";
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
                         /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */

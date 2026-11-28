@@ -1,8 +1,12 @@
 // How a round is shown to the model (#366): the screen, as a person would see it, and the text that goes with it.
 import { clip, digest, NO_OBSERVATION, stableDigest, type Observation } from '@marinoscar/hexactra-agent';
 import type { BrowserContext } from './context';
+import { pageDigest } from './page';
 import { shotHash } from './context-settings';
 import { roundInput, type ScreenView } from './vision';
+
+/** The line a round without a new picture adds to the log (E54.3): the page is the one of the last screenshot. */
+export const UNCHANGED_NOTE = '(No new screenshot this round: the page has not changed since the last one. Use look to see it again.)';
 
 /** The notes a run carries when its model takes no images: they name the tools to use instead. */
 export const VISION_NOTES = {
@@ -22,7 +26,15 @@ export async function observeRound(ctx: BrowserContext): Promise<Observation> {
   if (ext.browser.hasSession && !ext.browser.hasSession()) return NO_OBSERVATION;
   await ctx.setActivity('looking');
   const screen = memory.look ?? 'page';
+  const asked = memory.look !== null && memory.look !== undefined;
   memory.look = null;
+  // E54.3: with `on_change`, a page that has not changed since the last picture gets no new one (the model asked to look: always).
+  const onChange = ctx.ports.policy.policy.screenshotWhen === 'on_change' && screen === 'page';
+  const before = onChange ? await pageDigest(ctx) : null;
+  if (onChange && !asked && before !== null && before === ext.state.shotDigest && ext.state.shotPage) {
+    memory.log.push(UNCHANGED_NOTE);
+    return { images: [], page: ext.state.shotPage, url: ext.state.shotPage.url };
+  }
   try {
     // A desktop picture cannot be covered: with a saved detail on the page it is not taken.
     if (screen === 'desktop' && (await ext.masking.anyCoverable())) throw new Error('a saved detail is on the page, and the desktop picture would show it: use the page screenshot');
@@ -41,6 +53,10 @@ export async function observeRound(ctx: BrowserContext): Promise<Observation> {
       screen === 'page'
         ? { url: view.url, title: view.title, view: view.marks.length ? digest(JSON.stringify(view.marks.map((m) => [m.selector, m.text, m.x, m.y, m.w, m.h]))) : shotHash(view.dataUrl), stable: stableDigest(view.marks) }
         : null;
+    if (onChange) {
+      ext.state.shotDigest = before;
+      ext.state.shotPage = page;
+    }
     return { images, page, url: view.url };
   } catch (e) {
     memory.log.push(`(No ${screen} screenshot this round: ${clip(e instanceof Error ? e.message : String(e), 200)})`);
