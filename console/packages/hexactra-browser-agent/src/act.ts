@@ -4,7 +4,7 @@ import { actionTarget, clip, digest, inCommitTool, LEASE_LOST_TEXT, mutatingActi
 import { ACTION_TIMEOUT_MS, BrowserAborted, BrowserError } from './browser-port';
 import type { BrowserContext } from './context';
 import { codeBoxesNote } from './fill-report';
-import { unchangedAfter } from './page';
+import { placeNote, unchangedAfter } from './page';
 
 /** What the stall detector learns from a result beyond its arguments (#405): where the page is, and whether new content came back. */
 type StallExtra = { url?: string | null; title?: string | null; contentHash?: string; resultKey?: string };
@@ -142,11 +142,17 @@ async function runAction(ctx: BrowserContext, action: Record<string, unknown>, t
     if (note) summary = forModel = note.startsWith('into') ? `typed ${note}` : `typed; ${note}`;
   }
   // A click or key press that left the page exactly as it was (E52.3): the model is told before it repeats it. Still ok: a report.
+  // E54.2: only the checks after this action may say where the page is now.
+  const delta = ctx.ports.policy.policy.actionResults === 'delta';
+  if (delta) page.place = null;
   if (settle && !blockedNote && (await unchangedAfter(ctx, settle.before))) {
     summary = NO_CHANGE_SUMMARY;
     forModel = NO_CHANGE_TEXT;
     // A closed, content-free span attribute; the host keeps it (`hexactra.page.unchanged`).
     ctx.ports.telemetry.toolAttributes({ 'hexactra.page.unchanged': true });
+  } else if (delta && settle && !blockedNote && page.place) {
+    // The page changed: say where it is now, so the model does not spend a turn reading it (E54.2, #1083).
+    forModel = `${forModel}${placeNote(page.place)}`;
   }
   await ctx.record('action', type, action, true, summary, started, reason, extra, intent);
   return `${forModel}${blockedNote}`;

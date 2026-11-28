@@ -153,6 +153,8 @@ export function fakeSecretsFabric(url: string) {
   const handoffs = new Map<string, Handoff>();
   const page = {
     url,
+    /** The open tabs the `tabs` action reports (E54.2); absent: one tab, the page itself, as before. */
+    tabs: null as null | { id: number; active: boolean; url: string; title: string }[],
     /** What each input of the page holds now: typed or chosen from a provider. The only place a value lives. */
     fields: {} as Record<string, string>,
     /** The selectors the page lists as interactive elements (a form), as `observe_elements` and the marks show them. */
@@ -282,7 +284,7 @@ export function fakeSecretsFabric(url: string) {
         delete h.secret;
         return { id: 'op', state: 'succeeded', result: {} };
       }
-      if (action.type === 'tabs') return { id: 'op', state: 'succeeded', result: { tabs: [{ id: 1, active: true, url: page.url, title: 'Sign in' }] } };
+      if (action.type === 'tabs') return { id: 'op', state: 'succeeded', result: { tabs: page.tabs ?? [{ id: 1, active: true, url: page.url, title: 'Sign in' }] } };
       const origin = new URL(page.url).origin;
       const meta = { runId: action.run_id as string | undefined, clientLabel: action.client_label as string | undefined };
       // The page itself (E37.6): the elements it lists, its text, scripts that cover and read, and pictures.

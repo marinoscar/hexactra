@@ -1,4 +1,5 @@
 // What the server asks the page itself, outside `act`: not actions, so no step, no budget and no stall. Never the model's words.
+import { clip } from '@marinoscar/hexactra-agent';
 import { ACTION_TIMEOUT_MS, type BrowserPort } from './browser-port';
 import type { BrowserContext } from './context';
 import { hostOf, type TargetFacts } from './policy';
@@ -73,7 +74,12 @@ export async function lastStepOk(ctx: BrowserContext, seqBefore: number): Promis
  * elements, what has the focus, the open dialogs, and the length (never the value) of each field. One 32-bit FNV-1a hash, 8 hex
  * characters: no page text and no field value leaves the page. The marker comment lets a test fabric recognise it.
  */
-export function digestScript(): string {
+export function digestScript(withPlace = false): string {
+  // E54.2: with `withPlace`, the same check also says where the page is (address, title, open dialogs): no second call. Without it the script
+  // is byte-identical to before, so a run under a policy without `delta` sends exactly what it sent.
+  const place = withPlace
+    ? `, u: location.href.slice(0, 2000), t: String(document.title || '').slice(0, 300), d: document.querySelectorAll('[role=dialog], dialog[open], [aria-modal=true]').length`
+    : '';
   return `/* hexactra:page-digest */(() => {
   let h = 0x811c9dc5;
   const add = (s) => { s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } h ^= 0x7c; h = Math.imul(h, 0x01000193) >>> 0; };
@@ -86,16 +92,19 @@ export function digestScript(): string {
     const v = 'value' in f && f.tagName !== 'DIV' ? f.value : f.textContent;
     add(String(v == null ? '' : v).length); add(f.checked ? 1 : 0);
   }
-  return { h: (h >>> 0).toString(16).padStart(8, '0') };
+  return { h: (h >>> 0).toString(16).padStart(8, '0')${place} };
 })()`;
 }
 
 /** The page digest (E52.3): one evaluate outside `act`, so no step, no budget and no stall feed. Null when the page cannot be asked. */
 export async function pageDigest(ctx: BrowserContext): Promise<string | null> {
+  const delta = ctx.ports.policy.policy.actionResults === 'delta';
   try {
-    const op = await ctx.ext.browser.act({ type: 'evaluate', script: digestScript(), await_promise: false }, ACTION_TIMEOUT_MS);
-    const v = op.state === 'succeeded' ? (op.result?.value as { h?: unknown } | null | undefined) : null;
-    return v && typeof v.h === 'string' && /^[0-9a-f]{8}$/.test(v.h) ? v.h : null;
+    const op = await ctx.ext.browser.act({ type: 'evaluate', script: digestScript(delta), await_promise: false }, ACTION_TIMEOUT_MS);
+    const v = op.state === 'succeeded' ? (op.result?.value as { h?: unknown; u?: unknown; t?: unknown; d?: unknown } | null | undefined) : null;
+    const ok = v && typeof v.h === 'string' && /^[0-9a-f]{8}$/.test(v.h);
+    if (delta && ok && typeof v.u === 'string') ctx.ext.state.place = { url: v.u, title: typeof v.t === 'string' ? v.t : '', dialogs: typeof v.d === 'number' ? v.d : 0 };
+    return ok ? (v.h as string) : null;
   } catch {
     return null;
   }
@@ -120,4 +129,30 @@ export async function unchangedAfter(ctx: BrowserContext, before: string | null)
     if (now === null || now !== before) return false;
   }
   return true;
+}
+
+/**
+ * Where the page is now, for the model after a click or key press that changed it (E54.2, #1083): one sentence from the last page check.
+ * Page text: the title is the site's words, quoted as data.
+ */
+export function placeNote(place: { url: string; title: string; dialogs: number }): string {
+  const title = place.title ? ` — "${clip(place.title, 120)}"` : '';
+  return ` Now at ${clip(place.url, 300)}${title}${place.dialogs > 0 ? '; a dialog is open' : ''}.`;
+}
+
+/**
+ * The open tabs, for the round's status (E54.2): `Tabs: 3 open; active: "Title" at https://…`. One tabs read outside `act` (no step, no
+ * budget). Null when the browser cannot be asked or there is one tab whose page the round's screenshot already shows.
+ */
+export async function tabsLine(ctx: BrowserContext): Promise<string | null> {
+  try {
+    const op = await ctx.ext.browser.act({ type: 'tabs' }, ACTION_TIMEOUT_MS);
+    const tabs = (op.result?.tabs as Record<string, unknown>[] | undefined) ?? [];
+    if (tabs.length < 2) return null;
+    const active = tabs.find((t) => t.active === true);
+    const what = active ? `active: "${clip(String(active.title ?? ''), 80)}" at ${clip(String(active.url ?? ''), 200)}` : 'none active';
+    return `Tabs: ${tabs.length} open; ${what}. switch_tab changes it; you do not need tabs to find out.`;
+  } catch {
+    return null;
+  }
 }

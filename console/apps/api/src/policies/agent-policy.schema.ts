@@ -90,6 +90,7 @@ const contextSchema = z
     pruneBatch: z.number().int().min(1).max(50).describe('How many old tool results are pruned together once the context grows.'),
     callsPerChunk: z.number().int().min(1).max(20).describe('Model calls per chunk; the model tier only changes between chunks.'),
     actionsPerReply: z.number().int().min(1).max(5).optional().describe('E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.'),
+    actionResults: z.enum(['plain', 'delta']).optional().describe('E54.2: what an action\'s result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.'),
     observationChars: z.number().int().min(500).max(20_000).describe('Most characters of one page observation sent to the model.'),
     connectionReadMessages: z.number().int().min(1).max(500).optional().describe("Most mail messages a run may read through the owner's connections (E39.7). Default 25."),
     connectionReadChars: z.number().int().min(1_000).max(2_000_000).optional().describe("Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000."),

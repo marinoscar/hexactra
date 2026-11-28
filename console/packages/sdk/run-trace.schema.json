@@ -880,6 +880,14 @@
                       "minimum": 1,
                       "maximum": 5
                     },
+                    "actionResults": {
+                      "description": "E54.2: what an action's result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.",
+                      "type": "string",
+                      "enum": [
+                        "plain",
+                        "delta"
+                      ]
+                    },
                     "observationChars": {
                       "type": "integer",
                       "minimum": 500,

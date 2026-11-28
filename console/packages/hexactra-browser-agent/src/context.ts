@@ -30,6 +30,8 @@ export interface BrowserState {
   marks: Map<number, ScreenMark>;
   /** The last screen the model was shown. */
   view: ScreenView | null;
+  /** E54.2: where the page was at the last page check, when the policy asks for `delta` results. */
+  place?: { url: string; title: string; dialogs: number } | null;
 }
 
 /** The sites the run may open: the task's list and the AI app's list. A URL must pass both. */

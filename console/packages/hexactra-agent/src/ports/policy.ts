@@ -15,6 +15,11 @@ export interface RunPolicy {
    * fill-type actions may follow each other, and the first action that can change the page, fails or asks a person ends the reply.
    */
   actionsPerReply?: number;
+  /**
+   * What an action's result tells the model (E54.2, #1083). Absent: as before. `delta`: a click or key press that changed the page also says
+   * where the page is now (address, title, an open dialog), from the check that already runs after it, and each round names the open tabs.
+   */
+  actionResults?: 'delta';
   stall: StallSettings;
   effectiveBudget: EffectiveBudget;
 }

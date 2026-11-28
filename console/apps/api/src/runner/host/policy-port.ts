@@ -19,6 +19,8 @@ export function policyPort(snapshot: RunPolicySnapshot, tiersResolved: boolean):
       callsPerChunk: Math.min(spec.context.callsPerChunk, PLATFORM_MAX_CALLS_PER_CHUNK),
       // E54.1: absent (every built-in, every policy written before) keeps one action per reply, and the run is unchanged.
       ...(spec.context.actionsPerReply && spec.context.actionsPerReply > 1 ? { actionsPerReply: spec.context.actionsPerReply } : {}),
+      // E54.2: absent or `plain` keeps every result text as before.
+      ...(spec.context.actionResults === 'delta' ? { actionResults: 'delta' as const } : {}),
       stall: spec.stall,
       effectiveBudget: snapshot.effectiveBudget ?? computeEffectiveBudget(spec.budget, null),
     },

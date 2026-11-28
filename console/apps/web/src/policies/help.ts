@@ -19,6 +19,9 @@ export const SECTION_HELP = {
   context: 'Context efficiency: how much the model sees each round.',
 } as const;
 
+/** E54.2: the `context.actionResults` choice. */
+export const ACTION_RESULTS_HELP = 'E54.2: what an action\'s result tells the model. Absent or plain: as before. delta: a click or key press that changed the page also says where the page is now (address, title, an open dialog), and each round names the open tabs, so the model spends fewer turns reading the page.';
+
 export const MODELS_HELP = {
   startTier: 'The tier a run starts on.',
   maxTier: 'The highest tier a run may escalate to when it stalls. Never below `startTier`.',
