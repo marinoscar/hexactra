@@ -48,18 +48,47 @@ async function attach(tabId: number): Promise<void> {
   attached.add(tabId);
 }
 
-/** Send one CDP command to a tab, attaching (or re-attaching) as needed. */
-export async function send<T = Record<string, unknown>>(tabId: number, method: string, params?: Record<string, unknown>): Promise<T> {
+/**
+ * The longest one CDP command may take before the debugger session is treated as stuck (E54.7, #1088). On a real run on one site, seven
+ * debugger-driven actions in a row each waited the host's full 45 s while plain page reads answered in under 300 ms: a command that never
+ * answers left the session wedged for the next one too. A command that takes longer than this is abandoned, the tab is detached, and the
+ * next command attaches a fresh session.
+ */
+export const CDP_COMMAND_TIMEOUT_MS = 20_000;
+
+/** A command that did not answer in time (E54.7): the session was dropped, so the next command starts clean. */
+async function answered<T>(tabId: number, method: string, pending: Promise<unknown>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      attached.delete(tabId);
+      void Promise.resolve()
+        .then(() => chrome.debugger.detach({ tabId }))
+        .catch(() => undefined);
+      reject(new CdpError(`${method}: the page did not answer the debugger in ${Math.round(timeoutMs / 1000)} s; the debugger was reconnected for the next action`));
+    }, timeoutMs);
+  });
+  try {
+    return (await Promise.race([pending, late])) as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Send one CDP command to a tab, attaching (or re-attaching) as needed. `timeoutMs`: how long it may take (default CDP_COMMAND_TIMEOUT_MS). */
+export async function send<T = Record<string, unknown>>(tabId: number, method: string, params?: Record<string, unknown>, timeoutMs = CDP_COMMAND_TIMEOUT_MS): Promise<T> {
   await attach(tabId);
   try {
-    return (await chrome.debugger.sendCommand({ tabId }, method, params)) as T;
+    return await answered<T>(tabId, method, chrome.debugger.sendCommand({ tabId }, method, params), timeoutMs);
   } catch (e) {
+    if (e instanceof CdpError) throw e;
     if (!/not attached|detached|no tab/i.test(message(e))) throw new CdpError(`${method}: ${message(e)}`);
     attached.delete(tabId);
     await attach(tabId);
     try {
-      return (await chrome.debugger.sendCommand({ tabId }, method, params)) as T;
+      return await answered<T>(tabId, method, chrome.debugger.sendCommand({ tabId }, method, params), timeoutMs);
     } catch (e2) {
+      if (e2 instanceof CdpError) throw e2;
       throw new CdpError(`${method}: ${message(e2)}`);
     }
   }
@@ -229,6 +258,8 @@ interface RemoteObject {
  * runaway loop cannot freeze the tab for every later action (#382).
  */
 export async function evaluate(tabId: number, script: string, awaitPromise: boolean, timeoutMs?: number) {
+  // A script may run as long as its own budget; the debugger gets 2 s more before the session counts as stuck (E54.7).
+  const commandMs = timeoutMs !== undefined ? Math.max(1, Math.floor(timeoutMs)) + 2_000 : CDP_COMMAND_TIMEOUT_MS * 2;
   const r = await send<{ result?: RemoteObject; exceptionDetails?: { text?: string; exception?: RemoteObject } }>(tabId, 'Runtime.evaluate', {
     expression: script,
     returnByValue: true,
@@ -238,7 +269,7 @@ export async function evaluate(tabId: number, script: string, awaitPromise: bool
     replMode: true,
     allowUnsafeEvalBlockedByCSP: true,
     ...(timeoutMs !== undefined ? { timeout: Math.max(1, Math.floor(timeoutMs)) } : {}),
-  });
+  }, commandMs);
   if (r.exceptionDetails) {
     const ex = r.exceptionDetails.exception;
     throw new CdpError(`script threw: ${ex?.description ?? ex?.value ?? r.exceptionDetails.text ?? 'an exception'}`);
