@@ -48,6 +48,7 @@ import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
 import { isSliceEnabled } from './platform/slices/manifest';
 import { PrismaModule } from './prisma/prisma.service';
+import { AiHelpersModule } from './ai-helpers/helper-models';
 // Last, so the MCP connection routes and schemas follow everything else in the generated OpenAPI document (E39.9).
 import { McpConnectionsModule } from './connections/mcp/mcp.module';
 // After everything else, so the benchmark routes (E44) follow the others in the generated OpenAPI document.
@@ -64,6 +65,7 @@ import { BenchmarkModule } from './benchmark/benchmark.module';
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     PrismaModule,
+    AiHelpersModule,
     ...PLATFORM_MODULES,
     // The app's features.
     NotesModule,

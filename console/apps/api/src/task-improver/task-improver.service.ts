@@ -6,6 +6,7 @@ import { registrableDomain, validateSiteFact } from '@marinoscar/hexactra-kgraph
 import type { Prisma, TaskImprovement } from '@prisma/client';
 import { z } from 'zod';
 
+import { HelperModels } from '../ai-helpers/helper-models';
 import { consoleSecretCheck } from '../kgraph/prisma-site-fact-store';
 import { PrismaService } from '../prisma/prisma.service';
 import { diagnoseRun, type DiagnosticStep } from '../run-insights/run-diagnostics';
@@ -114,6 +115,7 @@ export class TaskImproverService {
     private readonly jobs: JobsService,
     @Optional() private readonly ai?: AiService,
     @Optional() @Inject(RUN_ARTIFACT_STORE) private readonly artifacts?: RunArtifactStore,
+    @Optional() private readonly helperModels?: HelperModels,
   ) {}
 
   /** The deployment switch; off answers 404 everywhere. */
@@ -210,8 +212,10 @@ export class TaskImproverService {
         runs,
         (t) => maskSensitive(t).text,
       );
+      const target = (await this.helperModels?.target(userId, 'task')) ?? {};
       const call = (extra: string) =>
         this.ai!.forUser(userId, { feature: TASK_IMPROVER_FEATURE_ID, ...(orgId ? { orgId } : {}), ...(jobId ? { jobId } : {}) } as never).respondStructured({
+          ...target,
           instructions: TASK_IMPROVER_INSTRUCTIONS,
           input: images.length
             ? ([{ type: 'message', role: 'user', content: [{ type: 'text', text: text + extra }, ...images.map((url) => ({ type: 'image', url, detail: 'low' }))] }] as never)

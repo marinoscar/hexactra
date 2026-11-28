@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **You pick the model that creates and improves tasks, and the model that writes titles** (#1094, console 1.169.0; E55.1, epic #1093). **Settings → Browser agent → Helper models** has two pickers. The **task model** is used by Build with AI, by the chat when it drafts a task, and by Improve this task; before, all three used your default AI model. The **title model** will write the short titles of runs and chats (#1095, #1096), with a switch for each. Leave a picker empty to keep your default model. A model that can no longer be used falls back to the default; it never stops a feature.
+
 ### Fixed
 
 - **The agent sends once, checks a different name once, and says only what it checked** (#1019, console 1.155.3; E52.4, epic #1015). New instructions, "Sending to a person": choose the recipient once from the app's picker; a conversation titled with another name for the same person is not a wrong recipient, so it checks one detail (a number) once; when it cannot confirm, or two contacts fit, it asks you once with both names instead of choosing again; it sends once and checks once. When it finishes, it says "not checked" for anything the goal asked it to check that it did not, and gives both names (or amounts) when the page and the goal differ.

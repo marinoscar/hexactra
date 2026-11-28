@@ -144,6 +144,7 @@ export const ROUTES = [
   ['settings-agent-policy-new', '/settings/agent-policies/new'],
   ['settings-agent-policy-edit', '/settings/agent-policies/{policy}'],
   ['settings-agent-model-tiers', '/settings/agent-model-tiers'],
+  ['settings-helper-models', '/settings/helper-models'],
   ['settings-webhooks', '/settings/webhooks'],
   ['settings-connected-apps', '/settings/connected-apps'],
   // Connected AI apps (#464).

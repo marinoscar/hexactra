@@ -129,6 +129,8 @@ describe('browser agent cards', () => {
       ['/settings/usage', 'usage:read', undefined],
       // E43.5 (#735), appended: the user's own `agentPricing` in GET/PATCH /api/user-settings.
       ['/settings/model-prices', 'user_settings:read', undefined],
+      // E55.1 (#1094): the user's own `aiHelpers` in GET/PATCH /api/user-settings; only with the AI slice.
+      ['/settings/helper-models', 'user_settings:read', 'ai'],
       // E46.20 (#794), appended: what GET /api/kgraph/status enforces.
       ['/settings/kgraph', 'kgraph:read', undefined],
       // E50.5 (#975) appended `/settings/web-search`; E50.14 (#984) made it a section of Connections and tools (one card).

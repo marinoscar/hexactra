@@ -25,6 +25,7 @@ import '../questions/questions.settings';
 import '../recordings/recordings.settings';
 import '../memories/memories.settings';
 import '../chat/chat.settings';
+import '../ai-helpers/ai-helpers.settings';
 import '../skills/skills.settings';
 import '../kgraph/kgraph.settings';
 import '../mcp/mcp.settings';
