@@ -27,7 +27,7 @@ function group(over: Partial<StatsGroup> = {}): StatsGroup {
     successRate: 0.8,
     costPerSuccessUsd: 0.0525,
     costKnown: true,
-    metrics: { workingMs: d(90_000, 300_000), wallMs: d(120_000, 600_000), steps: d(19, 52), modelCalls: d(30, 80), inputTokens: d(40_000, 120_000), cachedInputTokens: d(10_000, 30_000), outputTokens: d(2_000, 6_000), totalTokens: d(42_000, 126_000), costUsd: d(0.04, 0.11, 0.42) },
+    metrics: { workingMs: d(90_000, 300_000), wallMs: d(120_000, 600_000), modelMs: d(70_000, 250_000), steps: d(19, 52), modelCalls: d(30, 80), inputTokens: d(40_000, 120_000), cachedInputTokens: d(10_000, 30_000), outputTokens: d(2_000, 6_000), totalTokens: d(42_000, 126_000), costUsd: d(0.04, 0.11, 0.42) },
     ...over,
   };
 }

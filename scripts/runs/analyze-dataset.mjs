@@ -139,7 +139,8 @@ export function analyze(file, { top = 10 } = {}) {
     const tm = new Map();
     const failing = new Map();
     for (const s of steps) {
-      if (s.kind !== 'action' && s.kind !== 'observe' && !s.action) continue;
+      // An owner's answer or a request to the owner is not a tool the agent ran: a declined answer is not a tool failure.
+      if (s.kind === 'handoff' || s.action === 'answered' || (s.kind !== 'action' && s.kind !== 'observe' && !s.action)) continue;
       const tool = s.action ?? s.kind;
       const e = tm.get(tool) ?? { tool, calls: 0, failed: 0, durationMs: 0 };
       e.calls += 1;
@@ -170,7 +171,37 @@ export function analyze(file, { top = 10 } = {}) {
     bySteps: [...finished].sort((a, b) => num(b.steps) - num(a.steps)).slice(0, top).map(brief),
   };
 
-  return { overall, tasks, stopReasons, findings: findingRanks, tools, worstRuns };
+  // Where the time goes (E54.0): the runs' working time split into the model (measured, or inferred as working − tool time for a run
+  // from before it was measured) and the tools; the wall time beyond working time is waiting (mostly for the owner).
+  const timed = finished.filter((r) => num(r.working_ms) > 0);
+  const toolMs = new Map();
+  if (steps) for (const s of steps) toolMs.set(s.run_id, (toolMs.get(s.run_id) ?? 0) + num(s.duration_ms));
+  let work = 0, wall = 0, tool = 0, model = 0, measured = 0, calls = 0;
+  for (const r of timed) {
+    const t = toolMs.get(r.run_id) ?? 0;
+    work += num(r.working_ms);
+    wall += Math.max(num(r.wall_ms), num(r.working_ms));
+    tool += t;
+    const m = num(r.model_ms);
+    if (m > 0) measured += 1;
+    model += m > 0 ? m : Math.max(0, num(r.working_ms) - t);
+    calls += num(r.model_calls);
+  }
+  const time = timed.length && steps
+    ? {
+        runs: timed.length,
+        modelMeasuredRuns: measured,
+        workingMs: work,
+        modelShare: round(model / work, 3),
+        toolShare: round(tool / work, 3),
+        waitingMs: Math.max(0, wall - work),
+        wallToWorking: round(wall / work, 2),
+        msPerModelCall: calls ? Math.round(model / calls) : null,
+        stepsPerModelCall: calls ? round(steps.filter((s) => timed.some((r) => r.run_id === s.run_id)).length / calls, 2) : null,
+      }
+    : null;
+
+  return { overall, time, tasks, stopReasons, findings: findingRanks, tools, worstRuns };
 }
 
 const usd = (n) => (n === null || n === undefined ? '-' : `$${n < 1 ? n.toFixed(4) : n.toFixed(2)}`);
@@ -182,9 +213,16 @@ export function reportLines(a) {
   const out = [
     `Runs: ${o.runs} (${o.finished} finished, ${o.succeeded} succeeded, ${pct(o.successRate)}). Cost ${o.costKnown ? '' : '≥'}${usd(o.costUsd)}, ${usd(o.costPerSuccessUsd)} per success.`,
     `Steps p50/p90 ${o.steps?.p50 ?? '-'}/${o.steps?.p90 ?? '-'} · tokens p50/p90 ${o.totalTokens?.p50 ?? '-'}/${o.totalTokens?.p90 ?? '-'} · cost p50/p90 ${usd(o.costUsdSpread?.p50)}/${usd(o.costUsdSpread?.p90)}`,
-    '',
-    'Findings, ranked by the cost of the runs they appear in:',
   ];
+  if (a.time) {
+    const t = a.time;
+    out.push(
+      '',
+      `Where the time goes (${t.runs} runs; model time measured in ${t.modelMeasuredRuns}, inferred as working − tool time in the rest):`,
+      `  model ${pct(t.modelShare)} · tools ${pct(t.toolShare)} of working time · ${t.msPerModelCall ?? '-'} ms per model call · ${t.stepsPerModelCall ?? '-'} steps per call · wall time ${t.wallToWorking}× working time`,
+    );
+  }
+  out.push('', 'Findings, ranked by the cost of the runs they appear in:');
   if (a.findings.length === 0) out.push('  (none)');
   for (const f of a.findings) out.push(`  ${f.code.padEnd(18)} ${String(f.runsAffected).padStart(5)} runs (${pct(f.shareOfRuns)})  ${String(f.stepsSpent).padStart(6)} steps spent  ${usd(f.costOfAffectedRunsUsd).padStart(9)}  ${f.failedRuns} not succeeded`);
   out.push('', 'Tasks, by cost:');

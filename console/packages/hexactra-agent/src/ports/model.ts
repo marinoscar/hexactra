@@ -20,6 +20,11 @@ export interface ModelRoute {
 export interface ModelStep {
   response: { provider?: string; model?: string; finishReason?: string; usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number } };
   calls?: { callId: string; name: string; status: string; durationMs: number }[];
+  /**
+   * How long the model took to answer this round trip, in milliseconds (E54.0): the binding measures it (the time since the previous step,
+   * less the tools this step ran). Absent when the binding cannot tell; then it counts as 0.
+   */
+  latencyMs?: number;
 }
 
 export interface ModelRequest {

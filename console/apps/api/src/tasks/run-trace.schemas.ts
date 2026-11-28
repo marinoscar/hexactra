@@ -118,6 +118,8 @@ export const runTraceSchema = z
           costUsd: z.number().describe('A lower bound while costKnown is false'),
           costKnown: z.boolean(),
           activeMs: z.number().int().describe('Time spent working, waits for a person excluded'),
+          modelMs: z.number().int().optional().describe('E54.0: time spent waiting for the model, measured per call; absent for a run from before it was measured'),
+          modelsServed: z.array(z.string()).optional().describe('E54.0: the models that served the calls, as provider:model'),
           web: z
             .object({
               searches: z.number().int(),

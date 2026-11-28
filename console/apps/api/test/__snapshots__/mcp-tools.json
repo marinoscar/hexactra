@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "33c04d252f4f5348"
+    "outputSchema": "fb526fbc7b8bf3f6"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "7c803f066100ee48"
+    "outputSchema": "993ce9e17763d5bc"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ac6591144e58419a",
-    "outputSchema": "9b670309e71262ce"
+    "outputSchema": "8dac048ee7247ee7"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "33c04d252f4f5348"
+    "outputSchema": "fb526fbc7b8bf3f6"
   },
   {
     "name": "run_pause",
@@ -87,7 +87,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "33c04d252f4f5348"
+    "outputSchema": "fb526fbc7b8bf3f6"
   },
   {
     "name": "run_resume",
@@ -102,7 +102,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "33c04d252f4f5348"
+    "outputSchema": "fb526fbc7b8bf3f6"
   },
   {
     "name": "run_export",
@@ -117,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "d61da115086bbf5c"
+    "outputSchema": "f8008a8d54ca7c80"
   },
   {
     "name": "run_diagnostics",
@@ -252,7 +252,7 @@
       "openWorldHint": true
     },
     "inputSchema": "c1aba3cd46e48851",
-    "outputSchema": "33c04d252f4f5348"
+    "outputSchema": "fb526fbc7b8bf3f6"
   },
   {
     "name": "task_run_batch",
@@ -462,7 +462,7 @@
       "openWorldHint": false
     },
     "inputSchema": "137c4def79c3d9a2",
-    "outputSchema": "01f71c0f9a7ba52f"
+    "outputSchema": "3041577d46b2c74e"
   },
   {
     "name": "policy_create",
@@ -476,8 +476,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "5d8e7d472e49f99e",
-    "outputSchema": "01f71c0f9a7ba52f"
+    "inputSchema": "d729910c2f307741",
+    "outputSchema": "3041577d46b2c74e"
   },
   {
     "name": "policy_update",
@@ -491,8 +491,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "6348e84e72548b7b",
-    "outputSchema": "01f71c0f9a7ba52f"
+    "inputSchema": "0fbf6ee59f0f88f1",
+    "outputSchema": "3041577d46b2c74e"
   },
   {
     "name": "policy_set_default",
@@ -1077,7 +1077,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "33c04d252f4f5348"
+    "outputSchema": "fb526fbc7b8bf3f6"
   },
   {
     "name": "question_card_answer",

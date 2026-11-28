@@ -10,6 +10,11 @@ export interface RunPolicy {
   maxTier: Tier;
   allowProviderFallback: boolean;
   callsPerChunk: number;
+  /**
+   * How many actions one model reply may carry on an unchanged page (E54.1, #1082). Absent or 1: one, as before (nothing changes). Above 1:
+   * fill-type actions may follow each other, and the first action that can change the page, fails or asks a person ends the reply.
+   */
+  actionsPerReply?: number;
   stall: StallSettings;
   effectiveBudget: EffectiveBudget;
 }

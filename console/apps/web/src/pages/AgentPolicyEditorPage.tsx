@@ -55,7 +55,7 @@ const SUGGESTED: Record<BudgetLimitKey, string> = {
 };
 
 const STALL_NUMBERS = ['maxConsecutiveFailures', 'maxRepeatedAction', 'noProgressActions', 'maxEscalations'] as const;
-const CONTEXT_NUMBERS = ['screenshotsKept', 'pruneBatch', 'callsPerChunk', 'observationChars'] as const;
+const CONTEXT_NUMBERS = ['screenshotsKept', 'pruneBatch', 'callsPerChunk', 'observationChars', 'actionsPerReply'] as const;
 
 const STALL_FIELD_LABEL: Record<(typeof STALL_NUMBERS)[number], string> = {
   maxConsecutiveFailures: 'Failures in a row',
@@ -68,6 +68,7 @@ const CONTEXT_FIELD_LABEL: Record<(typeof CONTEXT_NUMBERS)[number], string> = {
   pruneBatch: 'Prune batch',
   callsPerChunk: 'Model calls per chunk',
   observationChars: 'Observation size (characters)',
+  actionsPerReply: 'Actions per reply',
 };
 
 const UNLIMITED_WARNING = NO_HARD_STOP_WARNING;
@@ -85,7 +86,8 @@ function toDrafts(spec: AgentPolicySpec): { nums: NumberDrafts; unlimited: Recor
   }
   nums['budget.warnAtPercent'] = String(spec.budget.warnAtPercent);
   for (const k of STALL_NUMBERS) nums[`stall.${k}`] = String(spec.stall[k]);
-  for (const k of CONTEXT_NUMBERS) nums[`context.${k}`] = String(spec.context[k]);
+  // `actionsPerReply` is optional in the spec (E54.1): absent shows as 1.
+  for (const k of CONTEXT_NUMBERS) nums[`context.${k}`] = String(spec.context[k] ?? 1);
   return { nums, unlimited };
 }
 
@@ -114,6 +116,8 @@ function buildSpec(base: AgentPolicySpec, nums: NumberDrafts, unlimited: Record<
   for (const k of STALL_NUMBERS) stall[k] = read(`stall.${k}`, STALL_HELP[k]);
   const context = { ...base.context };
   for (const k of CONTEXT_NUMBERS) context[k] = read(`context.${k}`, CONTEXT_HELP[k]);
+  // One action per reply is the default and is written as absent, so a policy saved without changing it stays as it was (E54.1).
+  if (context.actionsPerReply === 1) delete context.actionsPerReply;
   const pins = Object.fromEntries(TIERS.flatMap((t) => (base.models.pins?.[t] ? [[t, base.models.pins[t]]] : [])));
   const models = { startTier: base.models.startTier, maxTier: base.models.maxTier, allowProviderFallback: base.models.allowProviderFallback, ...(Object.keys(pins).length ? { pins } : {}) };
   return { spec: { schemaVersion: 1, models, budget, stall, context }, errors };

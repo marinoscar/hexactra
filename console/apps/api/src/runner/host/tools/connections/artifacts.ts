@@ -37,6 +37,18 @@ export function artifactOrigin(ref: RunArtifactRef): string {
   return previous ? `Screenshot from the previous job (step ${ref.step})` : `Screenshot of step ${ref.step}`;
 }
 
+/**
+ * Why a step of THIS run cannot be attached, and what to do instead (E54.4, #1085): the agent once tried steps 8, 11 and 59 in turn, never
+ * called save_screenshot, and asked the owner for a sign-in to work around it. The text names the tool that stores a picture and the steps
+ * of this run that have one (the newest 10), so the next call can succeed.
+ */
+async function missingStepText(d: HostContext['ext']['d'], runId: string, step: number | null): Promise<string> {
+  const stored = await d.prisma.runStep.findMany({ where: { runId, screenshotKey: { not: null } }, orderBy: { seq: 'desc' }, take: 10, select: { seq: true } });
+  const list = stored.map((s) => s.seq).sort((a, b) => a - b);
+  const which = list.length ? `Steps of this job with a stored screenshot: ${list.join(', ')}.` : 'No step of this job has a stored screenshot yet.';
+  return `Step ${step} has no stored screenshot. Use save_screenshot to store the page as it is now: it returns the step to attach. ${which}`;
+}
+
 /** Loads one artifact of THIS run, or of the previous job of its chat. A run of another owner or chat, an unmasked image or a missing one is refused with a reason the model can act on. */
 export async function loadRunArtifact(ctx: HostContext, ref: RunArtifactRef): Promise<LoadedArtifact> {
   const { d } = ctx.ext;
@@ -62,7 +74,7 @@ export async function loadRunArtifact(ctx: HostContext, ref: RunArtifactRef): Pr
     // Only the masked trace picture: there is no unmasked one (a stored picture is masked at capture).
     if (!row?.screenshotKey) {
       if (previous) return { ok: false, text: ref.step === null ? 'The previous job has no stored screenshot. Open the page and use save_screenshot.' : `Step ${ref.step} of the previous job has no stored screenshot.` };
-      return { ok: false, text: `Step ${ref.step} has no stored screenshot.` };
+      return { ok: false, text: await missingStepText(d, runId, ref.step) };
     }
     const got = await d.artifacts.get(row.screenshotKey);
     if (!got) return { ok: false, text: `The screenshot of step ${row.seq} is no longer stored.` };

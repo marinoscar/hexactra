@@ -17,6 +17,21 @@ export const HOW_TO_ACT = `How to act (choose what works, as a person would):
 - Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
 - Check the result of each action before the next one. If something does not work, try another way before giving up.`;
 
+/** The last line of HOW_TO_ACT, word for word: one action per reply (the default). */
+const ONE_PER_REPLY = '- Check the result of each action before the next one. If something does not work, try another way before giving up.';
+
+/**
+ * HOW_TO_ACT when the policy lets one reply carry several actions (E54.1, #1082): the last line says how. The harness enforces it (the reply
+ * stops at the first action that may change the page, fails or asks a person); the words only tell the model it may.
+ */
+export function howToAct(actionsPerReply: number): string {
+  if (actionsPerReply <= 1) return HOW_TO_ACT;
+  return HOW_TO_ACT.replace(
+    ONE_PER_REPLY,
+    `- On a page that stays the same, send up to ${actionsPerReply} actions in one reply, in order: fill fields, read, scroll, and put the one action that can change the page (a click, a key, navigate, typing that submits) last. They stop at the first one that changes the page, fails or asks a person. Check the results before your next reply. If something does not work, try another way before giving up.`,
+  );
+}
+
 /** Outside the page: the desktop's own short section, the bullet the act section used to carry, word for word. */
 export const OUTSIDE_THE_PAGE = `- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.`;
 
@@ -26,6 +41,8 @@ export const browserFamily: ToolFamily = {
   whenToUse: 'A real Chrome browser signed in as the owner. Use it for anything that lives on a website and that no account or added tool covers.',
   rank: 50,
   sections: [HOW_TO_SEE, HOW_TO_ACT],
+  // E54.1: the act section follows the run's policy; with one action per reply (the default) it is HOW_TO_ACT, word for word.
+  sectionsFor: (ctx) => [HOW_TO_SEE, howToAct(ctx.ports.policy.policy.actionsPerReply ?? 1)],
 };
 
 export const desktopFamily: ToolFamily = {

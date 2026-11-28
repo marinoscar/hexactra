@@ -98,6 +98,8 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
           maxSteps: policy.callsPerChunk,
           signal: control.haltSignal,
           onStep: (step) => {
+            // The next tools belong to the next reply (E54.1).
+            ctx.state.reply = undefined;
             countCall(ctx, step);
             ports.events.inputTokensPerCall(step.response.usage?.inputTokens ?? 0);
             // Stop ends the chunk before anything else decides (E38.1).

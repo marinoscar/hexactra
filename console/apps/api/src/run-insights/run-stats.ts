@@ -20,7 +20,7 @@ export const RUN_STATS_MAX_RUNS = 100_000;
 /** The most groups one answer carries; beyond it `groupsTruncated` is true (the largest groups, or the latest periods, are kept). */
 export const RUN_STATS_MAX_GROUPS = 400;
 
-export const RUN_STATS_METRICS = ['workingMs', 'wallMs', 'steps', 'modelCalls', 'inputTokens', 'cachedInputTokens', 'outputTokens', 'totalTokens', 'costUsd'] as const;
+export const RUN_STATS_METRICS = ['workingMs', 'wallMs', 'modelMs', 'steps', 'modelCalls', 'inputTokens', 'cachedInputTokens', 'outputTokens', 'totalTokens', 'costUsd'] as const;
 export type RunStatsMetric = (typeof RUN_STATS_METRICS)[number];
 
 /** The distribution of one measure over the finished runs of a group; null when the group has no finished run with a value. */

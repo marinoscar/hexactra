@@ -15,6 +15,8 @@ export interface ToolFamily<C extends AnyContext = AnyContext> {
   rank: number;
   /** Longer how-to for the family (the browser's see and act sections). Emitted only when the family is offered. */
   sections?: readonly string[];
+  /** The how-to for this run, when it depends on the run's policy (E54.1). Pure: identical in every round of a run. Replaces `sections`. */
+  sectionsFor?(ctx: C): readonly string[];
   /** A per-run line for the round input ("c1 \"Work\" (Google, read and change: read mail, ...)"). Null: nothing to add. */
   toolbox?(ctx: C): string | null;
 }

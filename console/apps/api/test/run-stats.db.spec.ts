@@ -94,6 +94,7 @@ describe('GET /runs/stats', () => {
         stopReason: i % 5 === 4 ? 'stalled' : 'finished',
         stepCount: i + 1,
         modelCalls: 2 * (i + 1),
+        modelMs: 1000 * (i + 1),
         inputTokens: 1000 * (i + 1),
         cachedInputTokens: 100 * (i + 1),
         outputTokens: 50 * (i + 1),
@@ -157,6 +158,8 @@ describe('GET /runs/stats', () => {
     expect(s.total.metrics.totalTokens).toMatchObject({ n: 10, sum: 57_750, p50: 5_775, p90: 9_450, max: 10_500 });
     expect(s.total.metrics.costUsd).toMatchObject({ n: 10, sum: 0.55, p50: 0.055, p90: 0.09, max: 0.1 });
     expect(s.total.metrics.wallMs).toMatchObject({ n: 10, p50: 120_000 });
+    // E54.0: the model time, measured per call (1..10 s).
+    expect(s.total.metrics.modelMs).toMatchObject({ n: 10, sum: 55_000, p50: 5_500, p90: 9_000 });
     expect(s.total.costPerSuccessUsd).toBe(0.06875);
   });
 
