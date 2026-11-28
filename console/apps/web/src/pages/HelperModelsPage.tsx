@@ -10,6 +10,7 @@ import { PageContainer, PageHeader } from '../ui';
 
 /** `provider:modelId`, as the API stores a pick. */
 const PICK = /^[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
+const EMPTY_NOTE = 'Empty uses your default model.';
 const pickError = (v: string | null) => (v && !PICK.test(v) ? 'Choose a model from the list, or type provider:model' : null);
 
 /**
@@ -102,7 +103,7 @@ export function HelperModelsPage() {
                 requireTools={false}
                 disabled={!canWrite}
                 placeholder="My default model"
-                helperText={pickError(draft.titleModel) ?? (gone(draft.titleModel) ? goneNote : undefined)}
+                helperText={pickError(draft.titleModel) ?? (gone(draft.titleModel) ? goneNote : EMPTY_NOTE)}
               />
               <Stack sx={{ mt: 1 }}>
                 <FormControlLabel control={<Switch checked={draft.runTitles} disabled={!canWrite} onChange={(e) => update({ runTitles: e.target.checked })} />} label="Write a short title for each run" />
@@ -125,7 +126,7 @@ export function HelperModelsPage() {
                 models={models}
                 disabled={!canWrite}
                 placeholder="My default model"
-                helperText={pickError(draft.taskModel) ?? (gone(draft.taskModel) ? goneNote : undefined)}
+                helperText={pickError(draft.taskModel) ?? (gone(draft.taskModel) ? goneNote : EMPTY_NOTE)}
               />
             </CardContent>
           </Card>
