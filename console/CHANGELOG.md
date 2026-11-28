@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The chat fills the window, and stays put when the keyboard opens** (#1098, console 1.169.1; E55.5, epic #1093). On a tablet the chat sat in a bordered card, the greeting was cut off under the header, and opening the on-screen keyboard scrolled the whole page so the top bar and the navigation disappeared. The chat now fills the space beside the navigation with no frame, the new-chat screen starts at its top, and the page resizes for the keyboard so the message field sits just above it. The message field is a card with a modest corner instead of a pill. Every page was also 1 pixel taller than the window from tablet width up, and scrolled by it; that is gone.
+
 ### Added
 
 - **You pick the model that creates and improves tasks, and the model that writes titles** (#1094, console 1.169.0; E55.1, epic #1093). **Settings → Browser agent → Helper models** has two pickers. The **task model** is used by Build with AI, by the chat when it drafts a task, and by Improve this task; before, all three used your default AI model. The **title model** will write the short titles of runs and chats (#1095, #1096), with a switch for each. Leave a picker empty to keep your default model. A model that can no longer be used falls back to the default; it never stops a feature.
