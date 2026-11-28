@@ -20,6 +20,11 @@ export interface RunPolicy {
    * where the page is now (address, title, an open dialog), from the check that already runs after it, and each round names the open tabs.
    */
   actionResults?: 'delta';
+  /**
+   * When a round takes a new screenshot (E54.3, #1084). Absent: every round, as before. `on_change`: only when the page check differs from
+   * the one taken with the last picture (or the model asked to look); an unchanged page sends no new image.
+   */
+  screenshotWhen?: 'on_change';
   stall: StallSettings;
   effectiveBudget: EffectiveBudget;
 }

@@ -117,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "880cb3a121687be1"
+    "outputSchema": "8a2d99e545f6321d"
   },
   {
     "name": "run_diagnostics",
@@ -462,7 +462,7 @@
       "openWorldHint": false
     },
     "inputSchema": "137c4def79c3d9a2",
-    "outputSchema": "b6698037a6d10deb"
+    "outputSchema": "74baf009ab5aab3c"
   },
   {
     "name": "policy_create",
@@ -476,8 +476,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "4e700ec59c13389c",
-    "outputSchema": "b6698037a6d10deb"
+    "inputSchema": "f2642e0cfaed2076",
+    "outputSchema": "74baf009ab5aab3c"
   },
   {
     "name": "policy_update",
@@ -491,8 +491,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "b1b8b4d0721486ec",
-    "outputSchema": "b6698037a6d10deb"
+    "inputSchema": "2132a1a0882ae495",
+    "outputSchema": "74baf009ab5aab3c"
   },
   {
     "name": "policy_set_default",

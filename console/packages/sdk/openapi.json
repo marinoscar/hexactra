@@ -85421,6 +85421,14 @@
                       "delta"
                     ]
                   },
+                  "screenshotWhen": {
+                    "description": "E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.",
+                    "type": "string",
+                    "enum": [
+                      "every_round",
+                      "on_change"
+                    ]
+                  },
                   "observationChars": {
                     "type": "integer",
                     "minimum": 500,
@@ -86510,6 +86518,14 @@
                             "delta"
                           ]
                         },
+                        "screenshotWhen": {
+                          "description": "E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.",
+                          "type": "string",
+                          "enum": [
+                            "every_round",
+                            "on_change"
+                          ]
+                        },
                         "observationChars": {
                           "type": "integer",
                           "minimum": 500,
@@ -87065,6 +87081,14 @@
                       "delta"
                     ]
                   },
+                  "screenshotWhen": {
+                    "description": "E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.",
+                    "type": "string",
+                    "enum": [
+                      "every_round",
+                      "on_change"
+                    ]
+                  },
                   "observationChars": {
                     "type": "integer",
                     "minimum": 500,
@@ -87405,6 +87429,14 @@
                     "enum": [
                       "plain",
                       "delta"
+                    ]
+                  },
+                  "screenshotWhen": {
+                    "description": "E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.",
+                    "type": "string",
+                    "enum": [
+                      "every_round",
+                      "on_change"
                     ]
                   },
                   "observationChars": {
@@ -103228,6 +103260,14 @@
                             "enum": [
                               "plain",
                               "delta"
+                            ]
+                          },
+                          "screenshotWhen": {
+                            "description": "E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.",
+                            "type": "string",
+                            "enum": [
+                              "every_round",
+                              "on_change"
                             ]
                           },
                           "observationChars": {

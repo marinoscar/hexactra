@@ -17797,6 +17797,11 @@ export interface components {
                      * @enum {string}
                      */
                     actionResults?: "plain" | "delta";
+                    /**
+                     * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                     * @enum {string}
+                     */
+                    screenshotWhen?: "every_round" | "on_change";
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18023,6 +18028,11 @@ export interface components {
                          * @enum {string}
                          */
                         actionResults?: "plain" | "delta";
+                        /**
+                         * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                         * @enum {string}
+                         */
+                        screenshotWhen?: "every_round" | "on_change";
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
                         /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18173,6 +18183,11 @@ export interface components {
                      * @enum {string}
                      */
                     actionResults?: "plain" | "delta";
+                    /**
+                     * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                     * @enum {string}
+                     */
+                    screenshotWhen?: "every_round" | "on_change";
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18271,6 +18286,11 @@ export interface components {
                      * @enum {string}
                      */
                     actionResults?: "plain" | "delta";
+                    /**
+                     * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                     * @enum {string}
+                     */
+                    screenshotWhen?: "every_round" | "on_change";
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -22295,6 +22315,11 @@ export interface components {
                          * @enum {string}
                          */
                         actionResults?: "plain" | "delta";
+                        /**
+                         * @description E54.3: when a round takes a new screenshot. Absent or every_round: each round, as before. on_change: only when the page changed since the last picture (or the model asked to look), so an unchanged page sends no new image.
+                         * @enum {string}
+                         */
+                        screenshotWhen?: "every_round" | "on_change";
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
                         /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */

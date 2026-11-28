@@ -43,6 +43,8 @@ export interface AgentPolicySpec {
     actionsPerReply?: number;
     /** E54.2: absent or plain = as before. */
     actionResults?: 'plain' | 'delta';
+    /** E54.3: absent or every_round = a picture every round. */
+    screenshotWhen?: 'every_round' | 'on_change';
   };
 }
 

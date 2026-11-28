@@ -21,6 +21,8 @@ export function policyPort(snapshot: RunPolicySnapshot, tiersResolved: boolean):
       ...(spec.context.actionsPerReply && spec.context.actionsPerReply > 1 ? { actionsPerReply: spec.context.actionsPerReply } : {}),
       // E54.2: absent or `plain` keeps every result text as before.
       ...(spec.context.actionResults === 'delta' ? { actionResults: 'delta' as const } : {}),
+      // E54.3: absent or `every_round` keeps a picture every round.
+      ...(spec.context.screenshotWhen === 'on_change' ? { screenshotWhen: 'on_change' as const } : {}),
       stall: spec.stall,
       effectiveBudget: snapshot.effectiveBudget ?? computeEffectiveBudget(spec.budget, null),
     },

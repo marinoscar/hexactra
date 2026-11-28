@@ -67,7 +67,10 @@ export class FakeBrowser implements BrowserPort {
     this.actions.push({ type: 'type_secret', handoff_id: opts.handoffId, selector: opts.selector });
     return { id: 'op', ...this.secretOp };
   }
+  /** How many screenshots were taken (E54.3). */
+  captures = 0;
   async capture(screen: Screen): Promise<ScreenView> {
+    this.captures += 1;
     return { screen, dataUrl: 'data:image/jpeg;base64,AAAA', width: 800, height: 600, url: this.url, title: 'Page', marks: [] };
   }
   async captureTrace(): Promise<TraceShot> {

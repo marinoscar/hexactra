@@ -27,7 +27,7 @@ import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'rea
 
 import { createPolicy, duplicatePolicy, getCeilings, getPolicy, updatePolicy } from '../policies/api';
 import { BUDGET_LABEL, NO_HARD_STOP_WARNING, STALL_LABEL, ceilingText, copyName, sourceText, tierRank } from '../policies/format';
-import { ACTION_RESULTS_HELP, BUDGET_HELP, CONTEXT_HELP, MODELS_HELP, SECTION_HELP, STALL_HELP, budgetHelp, plain, type FieldHelp } from '../policies/help';
+import { ACTION_RESULTS_HELP, BUDGET_HELP, SCREENSHOT_WHEN_HELP, CONTEXT_HELP, MODELS_HELP, SECTION_HELP, STALL_HELP, budgetHelp, plain, type FieldHelp } from '../policies/help';
 import { ModelPicker, modelName } from '../policies/ModelPicker';
 import {
   BUDGET_LIMIT_KEYS,
@@ -523,6 +523,29 @@ export function AgentPolicyEditorPage() {
                     <Typography variant="body2">Report what changed after each action</Typography>
                     <Typography variant="caption" color="text.secondary">
                       {plain(ACTION_RESULTS_HELP)}
+                    </Typography>
+                  </Box>
+                }
+              />
+              <FormControlLabel
+                sx={{ gridColumn: '1 / -1' }}
+                control={
+                  <Switch
+                    checked={base?.context.screenshotWhen === 'on_change'}
+                    disabled={readOnly}
+                    onChange={(e) => {
+                      if (!base) return;
+                      // Off is written as absent, so a policy saved without changing it stays as it was (E54.3).
+                      const { screenshotWhen: _was, ...rest } = base.context;
+                      setBase({ ...base, context: e.target.checked ? { ...rest, screenshotWhen: 'on_change' } : rest });
+                    }}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2">New screenshot only when the page changed</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {plain(SCREENSHOT_WHEN_HELP)}
                     </Typography>
                   </Box>
                 }

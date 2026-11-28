@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { ACTION_RESULTS_HELP, BUDGET_HELP, CONTEXT_HELP, MODELS_HELP, SECTION_HELP, STALL_HELP, budgetHelp, plain } from '../policies/help';
+import { ACTION_RESULTS_HELP, BUDGET_HELP, SCREENSHOT_WHEN_HELP, CONTEXT_HELP, MODELS_HELP, SECTION_HELP, STALL_HELP, budgetHelp, plain } from '../policies/help';
 import { BUDGET_LIMIT_KEYS, CONFLICT_MODES, STALL_ACTIONS, TIERS } from '../policies/types';
 
 interface JsonSchema {
@@ -66,6 +66,11 @@ describe('policy helper texts match the API', () => {
   it('context.actionResults (E54.2)', () => {
     expect(field('context', 'actionResults').description).toBe(ACTION_RESULTS_HELP);
     expect(field('context', 'actionResults').enum).toEqual(['plain', 'delta']);
+  });
+
+  it('context.screenshotWhen (E54.3)', () => {
+    expect(field('context', 'screenshotWhen').description).toBe(SCREENSHOT_WHEN_HELP);
+    expect(field('context', 'screenshotWhen').enum).toEqual(['every_round', 'on_change']);
   });
 
   it('covers every budget, and the enums the editor offers are the API\'s', () => {
