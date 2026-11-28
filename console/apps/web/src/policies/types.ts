@@ -39,6 +39,8 @@ export interface AgentPolicySpec {
     pruneBatch: number;
     callsPerChunk: number;
     observationChars: number;
+    /** E54.1: absent or 1 = one action per model reply. */
+    actionsPerReply?: number;
   };
 }
 

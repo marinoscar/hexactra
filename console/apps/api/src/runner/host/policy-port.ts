@@ -17,6 +17,8 @@ export function policyPort(snapshot: RunPolicySnapshot, tiersResolved: boolean):
       maxTier: spec.models.maxTier,
       allowProviderFallback: spec.models.allowProviderFallback,
       callsPerChunk: Math.min(spec.context.callsPerChunk, PLATFORM_MAX_CALLS_PER_CHUNK),
+      // E54.1: absent (every built-in, every policy written before) keeps one action per reply, and the run is unchanged.
+      ...(spec.context.actionsPerReply && spec.context.actionsPerReply > 1 ? { actionsPerReply: spec.context.actionsPerReply } : {}),
       stall: spec.stall,
       effectiveBudget: snapshot.effectiveBudget ?? computeEffectiveBudget(spec.budget, null),
     },

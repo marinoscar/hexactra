@@ -85407,6 +85407,12 @@
                     "maximum": 20,
                     "description": "Model calls per chunk; the model tier only changes between chunks."
                   },
+                  "actionsPerReply": {
+                    "description": "E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
                   "observationChars": {
                     "type": "integer",
                     "minimum": 500,
@@ -86482,6 +86488,12 @@
                           "maximum": 20,
                           "description": "Model calls per chunk; the model tier only changes between chunks."
                         },
+                        "actionsPerReply": {
+                          "description": "E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 5
+                        },
                         "observationChars": {
                           "type": "integer",
                           "minimum": 500,
@@ -87023,6 +87035,12 @@
                     "maximum": 20,
                     "description": "Model calls per chunk; the model tier only changes between chunks."
                   },
+                  "actionsPerReply": {
+                    "description": "E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
                   "observationChars": {
                     "type": "integer",
                     "minimum": 500,
@@ -87350,6 +87368,12 @@
                     "minimum": 1,
                     "maximum": 20,
                     "description": "Model calls per chunk; the model tier only changes between chunks."
+                  },
+                  "actionsPerReply": {
+                    "description": "E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
                   },
                   "observationChars": {
                     "type": "integer",
@@ -103159,6 +103183,12 @@
                             "minimum": 1,
                             "maximum": 20,
                             "description": "Model calls per chunk; the model tier only changes between chunks."
+                          },
+                          "actionsPerReply": {
+                            "description": "E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.",
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 5
                           },
                           "observationChars": {
                             "type": "integer",

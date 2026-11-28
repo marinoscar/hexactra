@@ -9,6 +9,8 @@ export const observeElements = defineRunnerTool({
   name: 'observe_elements',
   group: 'browser',
   family: 'browser',
+  // E54.1: leaves the page where it is, so a reply that carries several actions may go on after it.
+  batch: 'fill',
   description: 'List the interactive elements of the current page with CSS selectors.',
   parameters: z.object({}),
   execute: (ctx: BrowserContext) => act(ctx, { type: 'elements', max_elements: maxElementsFor(ctx.ext.observationChars) }),
@@ -18,6 +20,8 @@ export const readText = defineRunnerTool({
   name: 'read_text',
   group: 'browser',
   family: 'browser',
+  // E54.1: leaves the page where it is, so a reply that carries several actions may go on after it.
+  batch: 'fill',
   description: 'Read the visible text of the page, or of one element.',
   parameters: z.object({ selector: z.string().max(2000).nullable() }),
   execute: (ctx: BrowserContext, { selector }) => act(ctx, { type: 'text', ...(selector ? { selector } : {}), max_chars: ctx.ext.observationChars }),

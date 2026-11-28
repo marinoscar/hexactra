@@ -50,6 +50,12 @@ export interface RunnerTool<C extends AnyContext = AnyContext, P extends z.ZodTy
   parametersFor?(ctx: C): z.ZodTypeAny;
   /** The tool can do something irreversible (a click that passes the risk gate, typing a secret, later sending mail): the call is commit-class and its action is intent-recorded. */
   commits?: boolean;
+  /**
+   * `fill` (E54.1): the tool leaves the page where it is (typing into a field, reading, scrolling), so when the policy lets a reply carry
+   * several actions the reply may go on after it; a function decides from the call's arguments (typing that also submits is not fill).
+   * Absent: the tool may change the page, and ends the reply's batch.
+   */
+  batch?: 'fill' | ((args: z.output<P>) => boolean);
   /** Which gates apply, and what each looks at. */
   gated?: Readonly<Record<string, GateRequestFn<C, P>>>;
   /** Hides the tool when it cannot be used (vision off, no desktop, a connection not enabled for this run). */

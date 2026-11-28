@@ -36,6 +36,8 @@ export const tabs = defineRunnerTool({
   name: 'tabs',
   group: 'browser',
   family: 'browser',
+  // E54.1: leaves the page where it is, so a reply that carries several actions may go on after it.
+  batch: 'fill',
   description: 'List the open tabs (id, title, URL, which is active).',
   parameters: z.object({}),
   execute: (ctx: BrowserContext) => act(ctx, { type: 'tabs' }),

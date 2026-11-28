@@ -17790,6 +17790,8 @@ export interface components {
                     pruneBatch: number;
                     /** @description Model calls per chunk; the model tier only changes between chunks. */
                     callsPerChunk: number;
+                    /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
+                    actionsPerReply?: number;
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18009,6 +18011,8 @@ export interface components {
                         pruneBatch: number;
                         /** @description Model calls per chunk; the model tier only changes between chunks. */
                         callsPerChunk: number;
+                        /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
+                        actionsPerReply?: number;
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
                         /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18152,6 +18156,8 @@ export interface components {
                     pruneBatch: number;
                     /** @description Model calls per chunk; the model tier only changes between chunks. */
                     callsPerChunk: number;
+                    /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
+                    actionsPerReply?: number;
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -18243,6 +18249,8 @@ export interface components {
                     pruneBatch: number;
                     /** @description Model calls per chunk; the model tier only changes between chunks. */
                     callsPerChunk: number;
+                    /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
+                    actionsPerReply?: number;
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
                     /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
@@ -22260,6 +22268,8 @@ export interface components {
                         pruneBatch: number;
                         /** @description Model calls per chunk; the model tier only changes between chunks. */
                         callsPerChunk: number;
+                        /** @description E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person. */
+                        actionsPerReply?: number;
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
                         /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */

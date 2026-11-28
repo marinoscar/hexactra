@@ -150,6 +150,11 @@ export interface RunState {
   handoffAsk: { prompt: string; kind: string; input: string } | null;
   /** Observer calls that threw (E46.5): counted, never surfaced to the run. Absent: none. */
   observerErrors?: number;
+  /**
+   * The actions of the model's current reply (E54.1, #1082), when the policy lets one reply carry several: how many ran, and why the rest of
+   * the reply is not run (null: it may go on). Reset after every model reply. Absent with one action per reply, the default.
+   */
+  reply?: { calls: number; ended: string | null };
 }
 
 /** What the stall detector learns from a result beyond its arguments. `secret` steps are not fed to it at all. */

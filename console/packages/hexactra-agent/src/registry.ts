@@ -31,7 +31,7 @@ export class ToolRegistry<C extends AnyContext = AnyContext> {
       .map((f, i) => ({ f, i }))
       .filter(({ f }) => offered.has(f.id))
       .sort((a, b) => a.f.rank - b.f.rank || a.i - b.i)
-      .map(({ f }) => f);
+      .map(({ f }) => (f.sectionsFor ? { ...f, sections: f.sectionsFor(ctx) } : f));
   }
 
   /** Adds a tool. A second tool of the same name is a programming error. */

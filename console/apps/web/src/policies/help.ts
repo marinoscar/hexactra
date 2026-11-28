@@ -54,6 +54,7 @@ export const CONTEXT_HELP = {
   pruneBatch: { text: 'How many old tool results are pruned together once the context grows.', min: 1, max: 50 },
   callsPerChunk: { text: 'Model calls per chunk; the model tier only changes between chunks.', min: 1, max: 20 },
   observationChars: { text: 'Most characters of one page observation sent to the model.', min: 500, max: 20_000 },
+  actionsPerReply: { text: 'E54.1: actions one model reply may carry on an unchanged page (fill fields, read, then one action that may change the page). Absent or 1: one, as before. The run stops a reply at the first action that may change the page, fails or asks a person.', min: 1, max: 5 },
 } as const;
 
 /** An API description as plain text: code spans lose their backticks. */
