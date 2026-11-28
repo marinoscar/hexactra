@@ -132,7 +132,8 @@ const ensureDir = (out) => {
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
-const browser = await chromium.launch();
+// Headful, never headless (AGENTS.md, "Never a headless browser"): without a desktop, run under `xvfb-run -a`.
+const browser = await chromium.launch({ headless: false });
 const tab = await browser.newPage();
 
 for (const { svg, size, out } of icons) {

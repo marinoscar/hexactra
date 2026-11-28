@@ -248,6 +248,8 @@ async fn main() -> Result<()> {
             let launch = match browser {
                 None => None,
                 Some(browser) => {
+                    // Fail at start, not at the first run: no headless browser, ever.
+                    hexactra_agent::launcher::refuse_headless(&browser, &browser_args)?;
                     let native_host = match native_host {
                         Some(p) => p,
                         None => std::env::current_exe()?.with_file_name("hexactra-native-host"),

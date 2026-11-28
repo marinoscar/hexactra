@@ -97,6 +97,9 @@ jobs:
           node-version: '22'
       - run: node scripts/check-agent-sync.mjs
       - run: node scripts/ci/check-no-tracked-node-modules.mjs
+      # Never a headless browser (AGENTS.md, #1091): fails when tracked code launches one.
+      - run: node scripts/ci/check-no-headless.mjs
+      - run: node --test scripts/ci/check-no-headless.test.mjs
 
   e2e-remote-control:
     name: Remote control e2e (real Chromium)

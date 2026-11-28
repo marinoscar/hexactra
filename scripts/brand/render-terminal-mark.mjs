@@ -27,7 +27,8 @@ const BITS = [
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
-const browser = await chromium.launch();
+// Headful, never headless (AGENTS.md, "Never a headless browser"): without a desktop, run under `xvfb-run -a`.
+const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage();
 await page.setContent('<html><body></body></html>');
 

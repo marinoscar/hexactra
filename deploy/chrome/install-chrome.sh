@@ -18,7 +18,8 @@ curl -fsSL https://dl.google.com/linux/chrome/deb/google-chrome-stable-current-a
 dpkg -i /tmp/google-chrome.deb || apt-get install -f -y
 rm -f /tmp/google-chrome.deb
 
-# Install additional dependencies for headless Chrome
+# Libraries Chrome needs on a server. Chrome still runs headful on a virtual
+# display: Hexactra never runs a headless browser (AGENTS.md).
 apt-get install -y \
     libasound2 \
     libatk-bridge2.0-0 \

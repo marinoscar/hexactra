@@ -32,6 +32,10 @@ README, "Add your first feature" is the recipe for a model, permission, settings
 - Locate code with `grep -rn` before opening a file; read only the files a task names plus their direct neighbours.
 - Use one subagent at a time and hand it the section to read, not the whole document.
 
+## MANDATORY: Never a headless browser
+
+Hexactra never uses a headless browser: not in a run, a benchmark, a test, a screenshot script or CI. Run Chrome headful, and under `xvfb-run -a` on a machine without a desktop. With Playwright, pass `headless: false`, because it defaults to headless. Never add a headless mode, flag, setting or fallback. The full rule, and how it is enforced, is in the repository's `AGENTS.md`, "MANDATORY: Never a headless browser" (#1091). `scripts/ci/check-no-headless.mjs` fails CI on a violation.
+
 ## MANDATORY: Agent run policies
 
 A run's models and limits come from its agent policy ([README, Agent policies](README.md#agent-policies)). The rules below keep that true.

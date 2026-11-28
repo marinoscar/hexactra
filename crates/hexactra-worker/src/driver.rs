@@ -21,7 +21,7 @@ pub struct DriverCapabilities {
     pub supports_screenshot: bool,
     /// Supports native dialog handling
     pub supports_native_dialogs: bool,
-    /// Supports headless mode
+    /// Always false: Hexactra never runs a headless browser (AGENTS.md).
     pub supports_headless: bool,
     /// Supports multiple tabs
     pub supports_multiple_tabs: bool,
@@ -202,7 +202,7 @@ impl ChromeBrowserDriver {
                 supports_desktop_input: true,
                 supports_screenshot: true,
                 supports_native_dialogs: true,
-                supports_headless: true,
+                supports_headless: false,
                 supports_multiple_tabs: true,
             },
         }
@@ -300,7 +300,7 @@ impl VirtualDesktopDriver {
                 supports_desktop_input: true,
                 supports_screenshot: true,
                 supports_native_dialogs: false,
-                supports_headless: true,
+                supports_headless: false,
                 supports_multiple_tabs: false,
             },
         }
@@ -386,7 +386,7 @@ mod tests {
             supports_desktop_input: true,
             supports_screenshot: true,
             supports_native_dialogs: true,
-            supports_headless: true,
+            supports_headless: false,
             supports_multiple_tabs: true,
         };
         assert!(caps.supports_browser);
@@ -400,7 +400,7 @@ mod tests {
         // Test capabilities
         let caps = driver.get_capabilities();
         assert!(caps.supports_browser);
-        assert!(caps.supports_headless);
+        assert!(!caps.supports_headless);
     }
 
     #[test]

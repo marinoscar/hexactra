@@ -13,7 +13,7 @@
 
 **hexactra** is a self-hosted computer-use runtime. It lets AI agents operate real, visible Chrome browsers with persistent sign-ins, the way a person would: they click, type, read the page and wait for you when they need a human. You assign the work from the web, your phone, a terminal or your own agent framework, and you watch every step.
 
-- **Real browsers, not headless scripts.** Real, headful Google Chrome with persistent profiles that keep their cookies and sign-ins.
+- **Real browsers, never headless.** Real, headful Google Chrome with persistent profiles that keep their cookies and sign-ins.
 - **On machines you own, at home.** Browsers run on **nodes**, such as a mini PC on your residential network, because many sites block or challenge datacenter IPs. A node connects out over HTTPS to your console, with no inbound ports and no VPN, and runs **unattended** (its own desktop, nobody logged in) or **attended** (your own desktop and Chrome). See [docs/nodes.md](docs/nodes.md).
 - **A human in the loop by design.** CAPTCHAs, one-time codes, sign-ins and purchases come to you as handoffs; your answer resumes the run.
 - **The model never sees secrets.** You type codes and passwords into a handoff, and the runner types them into the page.

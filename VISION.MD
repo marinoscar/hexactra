@@ -44,7 +44,7 @@ Hexactra addresses the **execution and control** part of this problem. A separat
 
 ### 3.1 Goals
 
-1. **Real computer use:** operate genuine, visible browser sessions rather than substituting a mock browser or a headless-only representation.
+1. **Real computer use:** operate genuine, visible browser sessions rather than substituting a mock browser or a headless representation. Hexactra never uses a headless browser, in any mode (AGENTS.md, "MANDATORY: Never a headless browser").
 2. **Unattended hosting on machines you own:** launch real, headful Chrome sessions on a Linux node with no interactive host-user login. The primary node is a machine on the owner's **residential network** (for example a mini PC at home), because many sites block or challenge datacenter IP addresses; the node connects outbound over HTTPS and needs no inbound port. See [docs/nodes.md](docs/nodes.md).
 3. **Persistent identity:** allow intentional reuse of isolated browser profiles and their signed-in sessions across jobs.
 4. **Remote control:** allow agents and human operators on different devices to access the same authorized session.

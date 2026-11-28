@@ -597,7 +597,8 @@ async function main() {
     return 2;
   }
 
-  const browser = await chromium.launch();
+  // Headful, never headless (AGENTS.md, "Never a headless browser"): without a desktop, run under `xvfb-run -a`.
+  const browser = await chromium.launch({ headless: false });
   const fixtures = args.mock ? await import('./ui-screens.fixtures.mjs') : null;
   const unmocked = new Set();
   let frame = null;
