@@ -29,6 +29,7 @@ function group(over: Partial<StatsGroup> = {}): StatsGroup {
     metrics: {
       workingMs: dist(90_000, 300_000),
       wallMs: dist(120_000, 600_000),
+      modelMs: dist(70_000, 250_000),
       steps: dist(19, 52),
       modelCalls: dist(30, 80),
       inputTokens: dist(40_000, 120_000),

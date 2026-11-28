@@ -54,7 +54,7 @@ describe('RunUsage', () => {
     const d = u.drain();
     expect(d).toMatchObject({ modelCalls: 3, inputTokens: 3500, outputTokens: 160, cachedInputTokens: 400, costKnown: true });
     expect(d.costUsd).toBe(roundUsd(0.0008 * 0.6 + 0.0008 * 0.4 + 0.0004 + 0.006 + 0.00075 + 0.0004 + 0.00004));
-    expect(d.byModel).toEqual({ 'prov-a:model-y': { calls: 2, costUsd: expect.any(Number) }, 'prov-a:model-x': { calls: 1, costUsd: expect.any(Number) } });
+    expect(d.byModel).toEqual({ 'prov-a:model-y': { calls: 2, costUsd: expect.any(Number), ms: 0 }, 'prov-a:model-x': { calls: 1, costUsd: expect.any(Number), ms: 0 } });
     expect(u.dirty).toBe(false);
     expect(u.drain()).toMatchObject({ modelCalls: 0, costUsd: 0, costKnown: true });
   });
@@ -66,8 +66,8 @@ describe('RunUsage', () => {
     u.add(undefined, undefined, { inputTokens: 1 }, PRICES);
     const d = u.drain();
     expect(d).toMatchObject({ modelCalls: 3, inputTokens: 1_000_006, costUsd: 0.8, costKnown: false });
-    expect(d.byModel['prov-a:unlisted']).toEqual({ calls: 1, costUsd: null });
-    expect(d.byModel['unknown']).toEqual({ calls: 1, costUsd: null });
+    expect(d.byModel['prov-a:unlisted']).toEqual({ calls: 1, costUsd: null, ms: 0 });
+    expect(d.byModel['unknown']).toEqual({ calls: 1, costUsd: null, ms: 0 });
     // The next chunk starts known again: the run flips it with the first delta that says so.
     expect(u.delta().costKnown).toBe(true);
   });

@@ -376,6 +376,19 @@
               "maximum": 9007199254740991,
               "description": "Time spent working, waits for a person excluded"
             },
+            "modelMs": {
+              "description": "E54.0: time spent waiting for the model, measured per call; absent for a run from before it was measured",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "modelsServed": {
+              "description": "E54.0: the models that served the calls, as provider:model",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "web": {
               "description": "What the run did on the web (E50.7); absent when it made no web call",
               "type": "object",

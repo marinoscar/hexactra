@@ -26,7 +26,7 @@ export interface StatsGroup {
   successRate: number | null;
   costPerSuccessUsd: number | null;
   costKnown: boolean;
-  metrics: Record<'workingMs' | 'wallMs' | 'steps' | 'modelCalls' | 'inputTokens' | 'cachedInputTokens' | 'outputTokens' | 'totalTokens' | 'costUsd', Distribution | null>;
+  metrics: Record<'workingMs' | 'wallMs' | 'modelMs' | 'steps' | 'modelCalls' | 'inputTokens' | 'cachedInputTokens' | 'outputTokens' | 'totalTokens' | 'costUsd', Distribution | null>;
 }
 
 export interface RunStats {

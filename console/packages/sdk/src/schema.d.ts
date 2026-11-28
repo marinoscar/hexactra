@@ -21679,6 +21679,10 @@ export interface components {
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
             modelCalls: number;
+            /** @description Milliseconds spent waiting for the model so far, measured per call (E54.0); 0 for a run from before it was measured */
+            modelMs?: number;
+            /** @description The models that served the calls, as provider:model (E54.0) */
+            models?: string[];
             /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
@@ -21926,6 +21930,10 @@ export interface components {
                 cachedInputTokens: number;
                 /** @description Model calls (provider round trips) made so far */
                 modelCalls: number;
+                /** @description Milliseconds spent waiting for the model so far, measured per call (E54.0); 0 for a run from before it was measured */
+                modelMs?: number;
+                /** @description The models that served the calls, as provider:model (E54.0) */
+                models?: string[];
                 /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
                 costUsd: number;
                 /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
@@ -22133,6 +22141,10 @@ export interface components {
                     costKnown: boolean;
                     /** @description Time spent working, waits for a person excluded */
                     activeMs: number;
+                    /** @description E54.0: time spent waiting for the model, measured per call; absent for a run from before it was measured */
+                    modelMs?: number;
+                    /** @description E54.0: the models that served the calls, as provider:model */
+                    modelsServed?: string[];
                     /** @description What the run did on the web (E50.7); absent when it made no web call */
                     web?: {
                         searches: number;
@@ -22545,6 +22557,10 @@ export interface components {
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
             modelCalls: number;
+            /** @description Milliseconds spent waiting for the model so far, measured per call (E54.0); 0 for a run from before it was measured */
+            modelMs?: number;
+            /** @description The models that served the calls, as provider:model (E54.0) */
+            models?: string[];
             /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
@@ -22890,6 +22906,10 @@ export interface components {
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
             modelCalls: number;
+            /** @description Milliseconds spent waiting for the model so far, measured per call (E54.0); 0 for a run from before it was measured */
+            modelMs?: number;
+            /** @description The models that served the calls, as provider:model (E54.0) */
+            models?: string[];
             /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
@@ -23816,6 +23836,19 @@ export interface components {
                         p90: number;
                         max: number;
                     } | null;
+                    /** @description Time spent waiting for the model (E54.0), measured per call; runs from before it was measured are left out */
+                    modelMs: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
                     /** @description Over the finished runs of the group; null when it has none */
                     steps: {
                         /** @description Finished runs with a value */
@@ -23948,6 +23981,19 @@ export interface components {
                     } | null;
                     /** @description From start to finish, waits included; runs that never started are left out */
                     wallMs: {
+                        /** @description Finished runs with a value */
+                        n: number;
+                        sum: number;
+                        mean: number;
+                        min: number;
+                        /** @description The median (the mean of the two middle values of an even list) */
+                        p50: number;
+                        /** @description The 90th percentile, by the nearest rank */
+                        p90: number;
+                        max: number;
+                    } | null;
+                    /** @description Time spent waiting for the model (E54.0), measured per call; runs from before it was measured are left out */
+                    modelMs: {
                         /** @description Finished runs with a value */
                         n: number;
                         sum: number;
@@ -24921,6 +24967,10 @@ export interface components {
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
             modelCalls: number;
+            /** @description Milliseconds spent waiting for the model so far, measured per call (E54.0); 0 for a run from before it was measured */
+            modelMs?: number;
+            /** @description The models that served the calls, as provider:model (E54.0) */
+            models?: string[];
             /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */

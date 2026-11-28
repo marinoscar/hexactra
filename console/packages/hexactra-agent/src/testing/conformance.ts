@@ -49,7 +49,7 @@ export interface HarnessHost {
   stopWithinMs?: number;
 }
 
-const usage: UsageDelta = { modelCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0, costKnown: true, byModel: {} };
+const usage: UsageDelta = { modelCalls: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0, costKnown: true, byModel: {}, modelMs: 0 };
 
 async function until(check: () => boolean, ms: number): Promise<boolean> {
   const deadline = Date.now() + ms;

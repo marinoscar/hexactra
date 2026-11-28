@@ -15,6 +15,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MEASURE_SQL: Record<RunStatsMetric, Prisma.Sql> = {
   workingMs: Prisma.sql`r.active_ms::float8`,
   wallMs: Prisma.sql`CASE WHEN r.started_at IS NOT NULL AND r.finished_at IS NOT NULL THEN GREATEST(0, EXTRACT(EPOCH FROM (r.finished_at - r.started_at)) * 1000)::float8 END`,
+  // Measured since E54.0: a run from before (0 with model calls) is unknown, not instant, so it is left out.
+  modelMs: Prisma.sql`CASE WHEN r.model_ms > 0 THEN r.model_ms::float8 END`,
   steps: Prisma.sql`r.step_count::float8`,
   modelCalls: Prisma.sql`r.model_calls::float8`,
   inputTokens: Prisma.sql`r.input_tokens::float8`,

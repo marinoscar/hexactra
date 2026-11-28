@@ -218,6 +218,8 @@ export const runResponseSchema = z.object({
   traceId: z.string().nullable().describe("The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts."),
   cachedInputTokens: z.number().int().describe('Input tokens the provider served from its cache (part of inputTokens)'),
   modelCalls: z.number().int().describe('Model calls (provider round trips) made so far'),
+  modelMs: z.number().int().optional().describe('Milliseconds spent waiting for the model so far, measured per call (E54.0); 0 for a run from before it was measured'),
+  models: z.array(z.string()).optional().describe('The models that served the calls, as provider:model (E54.0)'),
   costUsd: z.number().describe('USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false'),
   costKnown: z.boolean().describe('False once a call could not be priced because its model has no price: show costUsd as "at least"'),
   confirmedActions: z

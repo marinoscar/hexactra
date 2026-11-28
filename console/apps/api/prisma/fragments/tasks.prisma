@@ -173,6 +173,11 @@ model Run {
   cachedInputTokens Int      @default(0) @map("cached_input_tokens")
   /// Provider round trips the goal runner made (E31.2).
   modelCalls      Int        @default(0) @map("model_calls")
+  /// Milliseconds the run spent waiting for the model (E54.0, #1081): the sum of each call's latency, measured by the model port.
+  /// Runs from before this column have 0 (unknown, not zero).
+  modelMs         Int        @default(0) @map("model_ms")
+  /// The models that served the run's calls, as `provider:model` (E54.0), each once, in no order.
+  models          String[]   @default([]) @db.VarChar(160)
   /// USD spent on model calls, from the admin's price table; a lower bound while `cost_known` is false.
   costUsd         Decimal    @default(0) @map("cost_usd") @db.Decimal(12, 6)
   /// False once a call could not be priced (its model is not in the price table).

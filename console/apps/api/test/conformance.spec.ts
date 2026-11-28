@@ -142,6 +142,10 @@ runPlatformConformance({
           why: 'Run statistics (E53.1, #1069) aggregate the caller\'s runs per group in one statement: count FILTER per status, percentile_cont(0.5) and percentile_disc(0.9) per measure, GROUPING SETS for the groups and the total, and days and weeks in a time zone, which Prisma cannot express. The WHERE is `runWhereSql`, which starts with `r.user_id = <the caller>`, except for the admin statistics (E53.2): a route behind `run_stats:read_all`, read through the system client with the reason `admin-aggregate`, aggregates only, labels by id (never another user\'s task or policy name); every value (ids, statuses, the goal search, the time zone) is a bound parameter. It reads numbers and grouping keys only, never a goal, a result or a step.',
         },
         {
+          file: 'runner/host/finish-run.ts',
+          why: 'Saving a chunk adds the models it used to `runs.models` (E54.0, #1081) in one statement (`ARRAY(SELECT DISTINCT … unnest(models || new))`), so two chunks never lose each other\'s models, which Prisma\'s `push` cannot express without duplicates. It runs only after the lease-guarded update succeeded, binds `id` and `user_id` of the run this job holds, and every value is a bound parameter (provider:model names from the provider\'s response, never request text).',
+        },
+        {
           file: 'tasks/task-summary.service.ts',
           why: 'The task list filters and sorts on facts computed from schedules and runs, and the summaries and statistics aggregate runs per task (FILTER, DISTINCT ON, percentile_cont, days in a time zone): one statement each instead of one per task. Every statement binds the caller\'s `user_id`.',
         },

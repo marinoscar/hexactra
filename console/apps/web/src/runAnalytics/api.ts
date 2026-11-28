@@ -22,7 +22,7 @@ export interface Distribution {
   p90: number;
   max: number;
 }
-export type StatsMetric = 'workingMs' | 'wallMs' | 'steps' | 'modelCalls' | 'inputTokens' | 'cachedInputTokens' | 'outputTokens' | 'totalTokens' | 'costUsd';
+export type StatsMetric = 'workingMs' | 'wallMs' | 'modelMs' | 'steps' | 'modelCalls' | 'inputTokens' | 'cachedInputTokens' | 'outputTokens' | 'totalTokens' | 'costUsd';
 
 export interface StatsGroup {
   runs: number;

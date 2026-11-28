@@ -93,6 +93,8 @@ interface RunRow {
   recoveries: number;
   stepCount: number;
   modelCalls: number;
+  modelMs: number;
+  models: string[];
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
@@ -124,6 +126,8 @@ const RUN_SELECT = {
   recoveries: true,
   stepCount: true,
   modelCalls: true,
+  modelMs: true,
+  models: true,
   inputTokens: true,
   cachedInputTokens: true,
   outputTokens: true,
@@ -192,6 +196,9 @@ export function runDatasetRow(r: RunRow): ExportRow {
     recoveries: r.recoveries,
     steps: r.stepCount,
     model_calls: r.modelCalls,
+    // E54.0: null when the run is from before the model time was measured.
+    model_ms: r.modelMs > 0 ? r.modelMs : null,
+    models: r.models.length ? [...r.models].sort().join(',') : null,
     input_tokens: r.inputTokens,
     cached_input_tokens: r.cachedInputTokens,
     output_tokens: r.outputTokens,
@@ -225,6 +232,8 @@ const RUN_COLUMNS: ExportTable['columns'] = [
   { key: 'recoveries', label: 'Recoveries', type: 'number' },
   { key: 'steps', label: 'Steps', type: 'number' },
   { key: 'model_calls', label: 'Model calls', type: 'number' },
+  { key: 'model_ms', label: 'Model time (ms)', type: 'number' },
+  { key: 'models', label: 'Models (provider:model, comma-separated)', type: 'string' },
   { key: 'input_tokens', label: 'Input tokens', type: 'number' },
   { key: 'cached_input_tokens', label: 'Cached input tokens', type: 'number' },
   { key: 'output_tokens', label: 'Output tokens', type: 'number' },

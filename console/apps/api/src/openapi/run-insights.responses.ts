@@ -116,6 +116,7 @@ const runStatsGroupSchema = z.object({
   metrics: z.object({
     workingMs: distributionSchema.describe('Time in `running` (waiting for a person never counts)'),
     wallMs: distributionSchema.describe('From start to finish, waits included; runs that never started are left out'),
+    modelMs: distributionSchema.describe('Time spent waiting for the model (E54.0), measured per call; runs from before it was measured are left out'),
     steps: distributionSchema,
     modelCalls: distributionSchema,
     inputTokens: distributionSchema.describe('Input tokens, cached included'),

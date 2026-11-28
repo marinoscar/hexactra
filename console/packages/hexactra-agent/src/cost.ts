@@ -76,8 +76,10 @@ export interface UsageDelta {
   costUsd: number;
   /** False when at least one call could not be priced: `costUsd` is then a lower bound. */
   costKnown: boolean;
-  /** The priced and unpriced calls by model served, for the run page (no secrets, no user data). */
-  byModel: Record<string, { calls: number; costUsd: number | null }>;
+  /** The priced and unpriced calls by model served, for the run page (no secrets, no user data), with the time the model took (E54.0). */
+  byModel: Record<string, { calls: number; costUsd: number | null; ms: number }>;
+  /** Milliseconds spent waiting for the model across the calls (E54.0): the sum of each call's `latencyMs`. */
+  modelMs: number;
 }
 
 /**
@@ -92,23 +94,27 @@ export class RunUsage {
   private cached = 0;
   private micros = 0;
   private known = true;
-  private models: Record<string, { calls: number; micros: number; known: boolean }> = {};
+  private ms = 0;
+  private models: Record<string, { calls: number; micros: number; known: boolean; ms: number }> = {};
 
   /**
    * Count one model call. `provider` and `model` are what actually served it
    * (`response.provider`, `response.model`); pass what was asked for only
-   * when the response names none. An empty model is priced as unknown.
+   * when the response names none. An empty model is priced as unknown. `latencyMs` is how long the model took (E54.0), when known.
    */
-  add(provider: string | undefined, model: string | undefined, usage: CallUsage | undefined, prices: PriceTable | null | undefined): number | null {
+  add(provider: string | undefined, model: string | undefined, usage: CallUsage | undefined, prices: PriceTable | null | undefined, latencyMs?: number): number | null {
     const u = usage ?? {};
+    const ms = Math.round(count(latencyMs));
     this.calls += 1;
+    this.ms += ms;
     this.input += count(u.inputTokens);
     this.output += count(u.outputTokens);
     this.cached += Math.min(count(u.cachedInputTokens), count(u.inputTokens));
     const usd = provider && model ? priceCall(provider, model, u, prices) : null;
     const label = provider && model ? priceKey(provider, model) : 'unknown';
-    const entry = (this.models[label] ??= { calls: 0, micros: 0, known: true });
+    const entry = (this.models[label] ??= { calls: 0, micros: 0, known: true, ms: 0 });
     entry.calls += 1;
+    entry.ms += ms;
     if (usd === null) {
       this.known = false;
       entry.known = false;
@@ -133,14 +139,15 @@ export class RunUsage {
       cachedInputTokens: this.cached,
       costUsd: this.micros / MICROS,
       costKnown: this.known,
-      byModel: Object.fromEntries(Object.entries(this.models).map(([k, v]) => [k, { calls: v.calls, costUsd: v.known ? v.micros / MICROS : null }])),
+      byModel: Object.fromEntries(Object.entries(this.models).map(([k, v]) => [k, { calls: v.calls, costUsd: v.known ? v.micros / MICROS : null, ms: v.ms }])),
+      modelMs: this.ms,
     };
   }
 
   /** The totals since the last `drain`, then start again from zero. */
   drain(): UsageDelta {
     const d = this.delta();
-    this.calls = this.input = this.output = this.cached = this.micros = 0;
+    this.calls = this.input = this.output = this.cached = this.micros = this.ms = 0;
     this.known = true;
     this.models = {};
     return d;

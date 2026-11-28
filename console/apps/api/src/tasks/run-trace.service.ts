@@ -147,6 +147,8 @@ export class RunTraceService {
         outputsComplete: true,
         stepCount: true,
         modelCalls: true,
+        modelMs: true,
+        models: true,
         inputTokens: true,
         outputTokens: true,
         cachedInputTokens: true,
@@ -253,6 +255,8 @@ export class RunTraceService {
           costUsd: Number(run.costUsd),
           costKnown: run.costKnown,
           activeMs: run.activeMs,
+          ...(run.modelMs > 0 ? { modelMs: run.modelMs } : {}),
+          ...(run.models.length ? { modelsServed: [...run.models].sort() } : {}),
           // The run's web searches and page reads (E50.7), with the search cost estimate apart from the AI cost. Absent without any.
           ...((w) => (w ? { web: w } : {}))(runWebUsage(run.steps, snapshot)),
         },

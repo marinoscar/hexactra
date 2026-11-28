@@ -50,11 +50,23 @@ export async function saveMemoryRaw(d: HostDeps, userId: string, runId: string, 
       outputTokens: { increment: usage.outputTokens },
       cachedInputTokens: { increment: usage.cachedInputTokens },
       modelCalls: { increment: usage.modelCalls },
+      // How long the model took (E54.0); `modelMs` is absent from a usage made before it existed.
+      modelMs: { increment: Math.round(usage.modelMs ?? 0) },
       costUsd: { increment: usage.costUsd },
       // Only ever flips to false: one unpriced call makes the whole figure a lower bound.
       ...(usage.costKnown ? {} : { costKnown: false }),
     },
   });
+  // The models this chunk used (E54.0), each once: one statement, so two chunks never lose each other's models. `unknown` (no model named) is
+  // left out. After the guarded update: a job that lost the run wrote nothing above and writes nothing here.
+  const models = Object.keys(usage.byModel ?? {}).filter((k) => k !== 'unknown').map((k) => k.slice(0, 160));
+  if (count > 0 && models.length) {
+    try {
+      await d.prisma.$executeRaw`UPDATE runs SET models = ARRAY(SELECT DISTINCT m FROM unnest(models || ${models}::varchar(160)[]) AS m ORDER BY m) WHERE id = ${runId}::uuid AND user_id = ${userId}::uuid`;
+    } catch (e) {
+      d.log.warn(`run ${runId}: could not record the models used: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   return count > 0;
 }
 

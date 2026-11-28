@@ -5,6 +5,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+
+const round = (n) => Math.round(n * 1000) / 1000;
 import { fileURLToPath } from 'node:url';
 
 import { analyze, reportLines, spread, summaryKey, tablesOf } from './analyze-dataset.mjs';
@@ -90,6 +92,22 @@ test('folds repeated failing summaries and counts failures per tool', () => {
   assert.deepEqual(a.tools.byTool[0], { tool: 'click', calls: 8, failed: 8, durationMs: 800, failureRate: 1, meanMs: 100 });
   assert.deepEqual(a.tools.failingSummaries[0], { tool: 'click', summary: 'No element matches "…"', count: 8, runs: 2 });
   assert.equal(summaryKey('Waited 12 s for "Pay" 3 times'), 'Waited N s for "…" N times');
+});
+
+test('splits the time into model and tools, measured or inferred, and does not count owner answers as tool failures', () => {
+  const f = fixture();
+  for (const r of f.datasets.runs.rows) Object.assign(r, { working_ms: 10_000, wall_ms: 30_000 });
+  f.datasets.runs.rows[0].model_ms = 9_000;
+  f.datasets.runs.rows[0].model_calls = 3;
+  f.datasets.steps.rows.push({ run_id: 'r5', seq: 9, kind: 'handoff', action: 'answered', ok: false, summary: 'The owner declined to answer', duration_ms: 0 });
+  const a = analyze(f);
+  // 5 finished runs × 10 s; tools: r5 500 ms, r6 300 ms, r1 900 ms; r1 measured at 9 s, the rest inferred.
+  assert.equal(a.time.runs, 5);
+  assert.equal(a.time.modelMeasuredRuns, 1);
+  assert.equal(a.time.toolShare, round(1_700 / 50_000));
+  assert.equal(a.time.modelShare, round((9_000 + 10_000 + 10_000 + 9_500 + 9_700) / 50_000));
+  assert.equal(a.time.wallToWorking, 3);
+  assert.equal(a.tools.byTool.find((t) => t.tool === 'answered'), undefined);
 });
 
 test('lists the worst runs with their findings', () => {
