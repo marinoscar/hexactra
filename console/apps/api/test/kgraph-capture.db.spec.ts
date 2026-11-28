@@ -80,7 +80,7 @@ async function record(runId: string, rounds: ReturnType<typeof scriptedAi>['roun
   const steps = await prisma.runStep.findMany({ where: { runId }, orderBy: { seq: 'asc' } });
   const run = await prisma.run.findFirstOrThrow({ where: { id: runId } });
   const pick = ({ id: _id, runId: _r, createdAt: _c, startedAt: _s, ...s }: Record<string, unknown>) => ({ ...s, durationMs: typeof s.durationMs === 'number' ? 'ms' : s.durationMs });
-  const { id: _i, taskId: _t, createdAt: _c, updatedAt: _u, startedAt: _s, finishedAt: _f, leaseUntil: _l, leaseOwner: _o, activeMs: _a, ...row } = run as unknown as Record<string, unknown>;
+  const { id: _i, taskId: _t, createdAt: _c, updatedAt: _u, startedAt: _s, finishedAt: _f, leaseUntil: _l, leaseOwner: _o, activeMs: _a, modelMs: _m, ...row } = run as unknown as Record<string, unknown>;
   return scrub({ outcomes, rounds, actions: fabric.actions, steps: steps.map((s) => pick(s as unknown as Record<string, unknown>)), run: row });
 }
 
