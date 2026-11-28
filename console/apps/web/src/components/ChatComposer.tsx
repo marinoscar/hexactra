@@ -46,7 +46,8 @@ export function ChatComposer({ value, onChange, onSend, busy = false, placeholde
         e.preventDefault();
         if (canSend) onSend();
       }}
-      sx={{ display: 'flex', flexDirection: 'column', px: 1, pt: 0.5, pb: 1, borderRadius: 6, bgcolor: 'background.paper', boxShadow: 1, '&:focus-within': { borderColor: 'primary.main' } }}
+      // A card with a modest corner, not a pill: a pill's corners cut into the first and last line of a long message.
+      sx={{ display: 'flex', flexDirection: 'column', px: 1, pt: 0.5, pb: 0.75, borderRadius: '18px', bgcolor: 'background.paper', boxShadow: 'none', transition: 'border-color 120ms', '&:focus-within': { borderColor: 'primary.main' } }}
     >
       <InputBase
         inputRef={input}

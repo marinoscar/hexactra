@@ -39,7 +39,8 @@
 //          --schemes light,dark  --only <name,name>  --strict (a skipped or
 //          redirected route fails the run)  --list (print the routes and exit)
 //
-// A route's options: `signedOut` (open it without a session), `click` (the
+// A route's options: `height` (the window's height, for a short window),
+// `fillsWindow` (the window itself must not scroll: the chat), `signedOut` (open it without a session), `click` (the
 // accessible name of a button to press before the screenshot: a dialog).
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
@@ -75,12 +76,15 @@ function pressButton(name) {
 /** Every route the audit opens: `[name, path, options?]`. Append to add a page. */
 export const ROUTES = [
   // Chat is the home (#713); the dashboard of runs is the overview.
-  ['home', '/'],
+  ['home', '/', { fillsWindow: true }],
+  // A short window, as with the on-screen keyboard open (#1098): the greeting is whole and the window does not scroll.
+  ['home-short', '/', { height: 500, viewport: true, fillsWindow: true }],
   ['home-options', '/', { action: pressButton('Chat options'), viewport: true }],
   ['overview', '/overview'],
   ['chat', '/chat'],
-  ['chat-new', '/chat/new'],
-  ['chat-thread', '/chat/{chat}'],
+  ['chat-new', '/chat/new', { fillsWindow: true }],
+  ['chat-thread', '/chat/{chat}', { fillsWindow: true }],
+  ['chat-thread-short', '/chat/{chat}', { height: 500, viewport: true, fillsWindow: true }],
   ['chat-thread-options', '/chat/{chat}', { action: pressButton('Chat options'), viewport: true }],
   ['inbox', '/inbox'],
   ['question', '/inbox/q/{question}'],
@@ -469,7 +473,8 @@ async function openExportMenu(page) {
   await page.waitForTimeout(300);
 }
 
-const DEFAULT_WIDTHS = [360, 390, 768, 1024, 1440];
+// 900: the first width with the chat list beside the thread, and an unfolded foldable's width (#1098).
+const DEFAULT_WIDTHS = [360, 390, 768, 900, 1024, 1440];
 const DEFAULT_SCHEMES = ['light', 'dark'];
 
 function parseArgs(argv) {
@@ -703,6 +708,8 @@ async function main() {
         contexts[signedIn] ??= await newContext(width, scheme, signedIn);
         const page = await contexts[signedIn].newPage();
         try {
+          // A short window stands in for an open on-screen keyboard (#1098).
+          if (options.height) await page.setViewportSize({ width, height: options.height });
           await page.goto(`${args.base}${path}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
           // A live page keeps a stream open, so "network idle" may never come: wait for it briefly, then let the page settle.
           await page.waitForLoadState('networkidle', { timeout: 6_000 }).catch(() => undefined);
@@ -718,12 +725,16 @@ async function main() {
             continue;
           }
           if (options.action) await options.action(page, width);
-          const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
+          const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth, tall: document.documentElement.scrollHeight, high: window.innerHeight }));
           await page.screenshot({ path: join(args.out, `${name}-${width}-${scheme}.png`), fullPage: !options.viewport });
           checked++;
           if (size.scroll > size.inner) {
             note(name, width, 'overflow');
             failures.push(`OVERFLOW ${path} at ${width}px (${scheme}): scrollWidth ${size.scroll} > innerWidth ${size.inner}`);
+          } else if (options.fillsWindow && size.tall > size.high) {
+            // A page that fills the window (the chat): the window itself must not scroll, only the page's own scroller.
+            note(name, width, 'overflow');
+            failures.push(`WINDOW SCROLLS ${path} at ${width}px (${scheme}): scrollHeight ${size.tall} > innerHeight ${size.high}`);
           } else note(name, width, 'ok');
         } catch (error) {
           note(name, width, 'overflow');

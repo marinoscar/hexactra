@@ -24,7 +24,7 @@ import { ProfileSigninBanner, useProfileSignin } from '../fleet/ProfileSigninBan
 import { profileInUseRun, signinDesktopPath, startProfileSignin } from '../fleet/signin';
 import { queuePath } from '../fleet/signinQueue';
 import type { FleetHost } from '../types/fleet';
-import { BOTTOM_BAR_HEIGHT, formatDateTime, useBreakpoint } from '../ui';
+import { BOTTOM_BAR_HEIGHT, formatDateTime, useBreakpoint, useKeyboardInset } from '../ui';
 
 /** A takeover lease (`/api/fleet/hosts/:id/takeover`). */
 interface Lease {
@@ -61,28 +61,6 @@ export function applyScale(r: Pick<RFB, 'scaleViewport' | 'clipViewport' | 'drag
   r.scaleViewport = fit;
   r.clipViewport = !fit;
   r.dragViewport = !fit;
-}
-
-/**
- * How much of the window's bottom the on-screen keyboard covers, in CSS pixels
- * (0 without the Visual Viewport API or with no keyboard). Browsers that
- * overlay the keyboard keep the layout height, so the viewer shrinks itself.
- */
-function useKeyboardInset(): number {
-  const [inset, setInset] = useState(0);
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const update = () => setInset(Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop)));
-    update();
-    viewport.addEventListener('resize', update);
-    viewport.addEventListener('scroll', update);
-    return () => {
-      viewport.removeEventListener('resize', update);
-      viewport.removeEventListener('scroll', update);
-    };
-  }, []);
-  return inset;
 }
 
 interface ToolButtonProps {

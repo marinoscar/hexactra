@@ -10,6 +10,7 @@ import { useTheme } from '@mui/material/styles';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+import { useShellMainVariant } from '@marinoscar/platform-web/shell/headless';
 import { useOptionalAuth } from '@marinoscar/platform-web/identity/headless';
 
 import { BrowserPane, confirmedPromptOf } from '../components/ChatBrowser';
@@ -26,11 +27,12 @@ import { EXAMPLE_PROMPTS, chatPaths, chatSubtitle, chatTitle, lastSeq, threadRow
 import { useChat } from '../components/useChat';
 import { useChatList } from '../components/useChatList';
 import { isSettledError, type AnswerBody, type Question } from '../components/questions';
+import { ShellBanners } from '../components/ShellBanners';
 import { useOpenViewer } from '../components/useOpenViewer';
 import { useNow } from '../components/RunActivity';
 import { useRunFrame } from '../components/useRunFrame';
 import type { Chat, ChatDraftState, ChatMessage, ChatSettings, ChatStatus, ChatTaskDraft } from '../types/chat';
-import { EmptyState, ErrorBanner, SAFE_AREA_BOTTOM, isLive, toast, useConfirm, useProfileTimeZone } from '../ui';
+import { BOTTOM_BAR_HEIGHT, EmptyState, ErrorBanner, SAFE_AREA_BOTTOM, isLive, toast, useConfirm, useKeyboardInset, useProfileTimeZone } from '../ui';
 
 /** How close to the end of the thread counts as "reading the latest" (new messages then keep the view at the end). */
 const NEAR_END_PX = 120;
@@ -44,43 +46,6 @@ interface RunViewer {
   hostId: string | null;
   hostName: string | null;
   desktop: boolean;
-}
-
-/** How far into the shell's own padding the chat reaches on a phone, top and bottom, so it does not float in a frame. */
-const PHONE_BLEED = 16;
-
-/**
- * Where the chat sits in the window, measured: the page's top edge (the
- * shell's bar and any banner above the page vary) and the padding the shell
- * keeps under every page (on a phone that padding is also what clears the
- * bottom navigation bar). The chat fills what is between them, so the window
- * itself never scrolls and only the thread does.
- */
-function useFillHeight(): { ref: (el: HTMLDivElement | null) => void; top: number; bottom: number } {
-  const [box, setBox] = useState({ top: 64, bottom: 24 });
-  const node = useRef<HTMLDivElement | null>(null);
-  const measure = useCallback(() => {
-    const el = node.current;
-    if (!el) return;
-    // Rounded up: a fraction of a pixel too tall would make the window scroll.
-    const top = Math.max(0, Math.ceil(el.getBoundingClientRect().top + window.scrollY));
-    const main = el.closest('main');
-    const bottom = main ? Math.ceil(parseFloat(getComputedStyle(main).paddingBottom) || 0) : 0;
-    setBox((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
-  }, []);
-  useLayoutEffect(() => {
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  });
-  const ref = useCallback(
-    (el: HTMLDivElement | null) => {
-      node.current = el;
-      measure();
-    },
-    [measure],
-  );
-  return { ref, ...box };
 }
 
 /** What `/chat/:id` is opened with when "All chat settings" was chosen on a new chat: the chat is created first, then its settings open. */
@@ -112,6 +77,9 @@ export function ChatPage() {
   /** From `lg` (1200 px) the browser has a pane of its own beside the thread. */
   const hasSidePane = useMediaQuery(theme.breakpoints.up('lg'));
   const timeZone = useProfileTimeZone();
+  // The chat fills <main>: no padding and no frame around it, and the shell (the one owner of the window's height) sizes it.
+  useShellMainVariant('full-bleed');
+  const keyboardInset = useKeyboardInset();
   const canWrite = viewer.hasPermission('chat:write');
 
   const params = useParams<{ id?: string }>();
@@ -297,9 +265,14 @@ export function ChatPage() {
   };
   const newest = lastSeq(messages);
   useLayoutEffect(() => {
+    // The new-chat screen has no latest message to follow: it starts at its top, so the greeting is never under the header.
+    if (isNew) {
+      scroller.current?.scrollTo({ top: 0 });
+      return;
+    }
     if (atEnd.current) toEnd();
     else if (newest > 0) setShowJump(true);
-  }, [newest, state.thinking, requestId, toEnd]);
+  }, [isNew, newest, state.thinking, requestId, toEnd]);
   // Opening a chat always starts at its end.
   useLayoutEffect(() => {
     atEnd.current = true;
@@ -472,7 +445,6 @@ export function ChatPage() {
     onReviewDraft: canSaveTask ? reviewDraft : undefined,
   };
 
-  const fill = useFillHeight();
   const listPanel = <ChatList list={list} status={status} onStatus={setStatus} selectedId={chatId} canWrite={canWrite} onAction={onAction} onNavigate={() => setDrawer(false)} />;
 
   // ---- The thread column ----
@@ -480,12 +452,13 @@ export function ChatPage() {
   let body: ReactNode;
   if (isNew) {
     body = canWrite ? (
-      <Stack spacing={2} sx={{ alignItems: 'center', justifyContent: 'center', minHeight: '100%', textAlign: 'center', py: 3 }}>
+      // `my: auto` centres it while there is room and starts it at the top when there is not: nothing is ever cut off.
+      <Stack spacing={1.5} sx={{ alignItems: 'center', textAlign: 'center', my: 'auto', py: { xs: 2, sm: 3 } }}>
         <Typography color="text.secondary" component="p" data-testid="chat-greeting">
           {greeting(new Date(), timeZone)}
           {name ? `, ${name}` : ''}
         </Typography>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mt: '4px !important' }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mt: '4px !important', fontSize: { xs: '1.6rem', sm: '2rem' } }}>
           What should I do?
         </Typography>
         <Typography color="text.secondary" sx={{ maxWidth: 480 }}>
@@ -493,7 +466,7 @@ export function ChatPage() {
         </Typography>
         <Stack spacing={1} sx={{ width: '100%', maxWidth: 560, pt: 1 }} role="group" aria-label="Examples">
           {EXAMPLE_PROMPTS.map((prompt) => (
-            <Chip key={prompt} label={prompt} variant="outlined" onClick={() => setDraft(prompt)} sx={{ height: 'auto', minHeight: 44, justifyContent: 'flex-start', borderRadius: 3, '& .MuiChip-label': { whiteSpace: 'normal', textAlign: 'left', py: 1 } }} />
+            <Chip key={prompt} label={prompt} variant="outlined" onClick={() => setDraft(prompt)} sx={{ height: 'auto', minHeight: 44, justifyContent: 'flex-start', borderRadius: '12px', borderColor: 'divider', bgcolor: 'background.paper', color: 'text.secondary', '&:hover': { color: 'text.primary' }, '& .MuiChip-label': { whiteSpace: 'normal', textAlign: 'left', py: 1, px: 1.5 } }} />
           ))}
         </Stack>
         {inbox.count > 0 && (
@@ -549,7 +522,7 @@ export function ChatPage() {
 
   const thread = (
     <Box component="section" aria-label={isNew ? 'New chat' : chatTitle(chat)} sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', px: { xs: 0.5, sm: 1 }, py: 0.5, minHeight: 56, borderBottom: 1, borderColor: 'divider', flex: 'none' }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', px: { xs: 0.5, sm: 1 }, py: 0.25, minHeight: 52, borderBottom: isNew ? 0 : 1, borderColor: 'divider', flex: 'none' }}>
         {isPhone ? (
           isNew ? (
             // The new-chat screen is the home on a phone (#713): its chats are one tap away, as in a chat app.
@@ -594,8 +567,8 @@ export function ChatPage() {
       {browserPane && !hasSidePane && !isPhone && <Box sx={{ flex: 'none', height: '48%', minHeight: 260, borderBottom: 1, borderColor: 'divider' }}>{browserPane}</Box>}
 
       <Box sx={{ position: 'relative', flex: 1, minHeight: 0 }}>
-        <Box ref={scroller} onScroll={onScroll} role="log" aria-label="Messages" aria-live="polite" sx={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'contain', px: { xs: 1.5, sm: 3 }, py: 1.5 }}>
-          <Box sx={{ maxWidth: 820, mx: 'auto', minHeight: '100%' }}>
+        <Box ref={scroller} onScroll={onScroll} role="log" aria-label="Messages" aria-live="polite" sx={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin', px: { xs: 1.5, sm: 3 }, py: 1.5 }}>
+          <Box sx={{ maxWidth: 820, mx: 'auto', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
             {state.error && <ErrorBanner error={state.error} />}
             {body}
           </Box>
@@ -634,29 +607,33 @@ export function ChatPage() {
     </Box>
   );
 
+  // What a keyboard that overlays the page covers (0 when the browser resizes the page for it); on a phone the bottom bar already holds 56 px of it.
+  const keyboardPad = Math.max(0, keyboardInset - (isPhone ? BOTTOM_BAR_HEIGHT : 0));
   return (
     <Box
-      ref={fill.ref}
       sx={{
         display: 'flex',
-        // The shell pads every page 24 px on each side; on a phone the chat goes edge to edge and reaches into the top and bottom padding.
-        mx: { xs: -3, sm: 0 },
-        mt: { xs: `-${PHONE_BLEED}px`, sm: 0 },
-        mb: { xs: `-${PHONE_BLEED}px`, sm: 0 },
-        // `dvh` follows the visible viewport, so the composer stays above an Android or iOS keyboard.
-        height: { xs: `calc(100dvh - ${fill.top}px - ${Math.max(0, fill.bottom - PHONE_BLEED)}px - ${SAFE_AREA_BOTTOM})`, sm: `calc(100dvh - ${fill.top}px - ${fill.bottom}px)` },
-        minHeight: 320,
-        bgcolor: 'background.default',
-        border: { xs: 0, sm: 1 },
-        borderColor: { sm: 'divider' },
-        borderRadius: { xs: 0, sm: 2 },
+        flexDirection: 'column',
+        // Fills <main> and never grows it: the shell's height is the window's (`100dvh`), so the window never scrolls and only the thread does.
+        flex: '1 1 0',
+        minHeight: 0,
+        minWidth: 0,
         overflow: 'hidden',
+        // <main> keeps 24 px of padding under a full-bleed page; the chat takes it back. On a phone the rest of that padding clears the bottom bar.
+        mb: -3,
+        pb: keyboardPad > 0 ? `${keyboardPad}px` : { xs: SAFE_AREA_BOTTOM, sm: 0 },
+        bgcolor: 'background.default',
       }}
     >
+      <Box sx={{ flex: 'none', px: { xs: 2, sm: 3 }, pt: 2, '&:empty': { display: 'none' } }}>
+        <ShellBanners />
+      </Box>
+      <Box sx={{ display: 'flex', flex: '1 1 0', minHeight: 0, minWidth: 0 }}>
       {hasRail && <Box sx={{ width: RAIL_WIDTH, flex: 'none', borderRight: 1, borderColor: 'divider', minHeight: 0 }}>{listPanel}</Box>}
       {showListScreen ? <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>{listPanel}</Box> : thread}
       {/* A wide window: the browser beside the thread. */}
       {browserPane && hasSidePane && !showListScreen && <Box sx={{ flex: '0 0 46%', minWidth: 0, maxWidth: 760, borderLeft: 1, borderColor: 'divider', minHeight: 0 }}>{browserPane}</Box>}
+      </Box>
       {/* A phone: the browser takes the screen. */}
       <Dialog fullScreen open={Boolean(browserPane) && isPhone} onClose={() => setBrowserOpen(false)} slotProps={{ paper: { 'aria-label': 'Browser' } }}>
         {isPhone && browserPane}

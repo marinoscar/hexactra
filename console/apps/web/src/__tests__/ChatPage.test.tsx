@@ -24,6 +24,10 @@ vi.mock('../live', () => ({
   fetchRunScreenshot: async () => null,
 }));
 
+// The shell's "fill <main>" request, recorded: the page is rendered here without the shell.
+const shell = vi.hoisted(() => ({ mainVariant: vi.fn() }));
+vi.mock('@marinoscar/platform-web/shell/headless', async (original) => ({ ...(await original<object>()), useShellMainVariant: shell.mainVariant }));
+
 import { ChatPage } from '../pages/ChatPage';
 import type { Chat, ChatDetail, ChatListItem, ChatMessage } from '../types/chat';
 import { ConfirmProvider, ToastHost, dismissToast } from '../ui';
@@ -233,6 +237,47 @@ describe('a new chat', () => {
     expect(sent(host, 'POST', '/chats')).toHaveLength(1);
     expect(sent(host, 'POST', `/chats/${NEW_ID}/messages`)[0]!.body).toEqual({ text: 'Find a stroller' });
     expect(await within(thread()).findByText('Find a stroller')).toBeInTheDocument();
+  });
+});
+
+describe('the layout (#1098)', () => {
+  /** Every `top` the thread's scroller was sent to, with a thread 1200 px tall. */
+  function watchScroller() {
+    const tops: number[] = [];
+    const scrollTo = vi.spyOn(Element.prototype, 'scrollTo').mockImplementation(function (this: Element, options?: ScrollToOptions | number) {
+      if (this.getAttribute('role') === 'log') tops.push(typeof options === 'object' ? (options.top ?? 0) : 0);
+    } as never);
+    const height = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(1200);
+    return { tops, restore: () => (scrollTo.mockRestore(), height.mockRestore()) };
+  }
+
+  it('the new-chat screen starts at its top, so the greeting is never under the header', async () => {
+    const { tops, restore } = watchScroller();
+    try {
+      mount({ entry: '/' });
+      expect(await screen.findByTestId('chat-greeting')).toBeInTheDocument();
+      expect(tops.length).toBeGreaterThan(0);
+      expect(tops.every((top) => top === 0)).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('an open chat still starts at its end', async () => {
+    const { tops, restore } = watchScroller();
+    try {
+      mount();
+      await within(await screen.findByRole('log', { name: 'Messages' })).findByText('Which showing?');
+      expect(tops).toContain(1200);
+    } finally {
+      restore();
+    }
+  });
+
+  it('fills the shell instead of drawing its own frame: the page asks for the full-bleed main', async () => {
+    mount({ entry: '/' });
+    await screen.findByRole('heading', { name: 'What should I do?' });
+    expect(shell.mainVariant).toHaveBeenCalledWith('full-bleed');
   });
 });
 

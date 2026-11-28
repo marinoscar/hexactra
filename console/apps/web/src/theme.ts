@@ -45,7 +45,17 @@ function brandTypography(theme: Theme): Theme {
     createTheme(theme, {
       typography: { h1: heading, h2: heading, h3: heading, h4: heading },
       components: {
-        MuiAppBar: { styleOverrides: { root: { borderBottomColor: theme.palette.divider } } },
+        MuiAppBar: {
+          styleOverrides: {
+            root: {
+              borderBottomColor: theme.palette.divider,
+              // The shell's rail sticks 64 px down and is `100dvh - 64px` tall, but the bar is its 64 px toolbar PLUS its 1 px
+              // border: every page was 1 px taller than the window and scrolled by it. The toolbar gives the pixel back, so
+              // the bar is 64 px with its border (#1098). Only where the rail is (from `sm`).
+              [theme.breakpoints.up('sm')]: { '& > .MuiToolbar-root': { minHeight: 63 } },
+            },
+          },
+        },
       },
     }),
   );
