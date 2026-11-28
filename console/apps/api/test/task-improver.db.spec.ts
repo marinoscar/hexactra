@@ -5,6 +5,7 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
+import type { HelperModels } from '../src/ai-helpers/helper-models';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TaskImproverService } from '../src/task-improver/task-improver.service';
@@ -101,6 +102,23 @@ describe('a proposal', () => {
     expect(asked[0]).not.toContain('Sam Example');
     expect(asked[0]).not.toContain('See you at 7');
     expect(asked[0]).not.toContain('⟦');
+  });
+
+  it('goes to the task model the owner picked, provider and model; with no pick the request names none (E55.1)', async () => {
+    const { userId } = await login(`imp-model-${stamp}@example.test`);
+    const { taskId, runId } = await setup(userId);
+    const requests: Record<string, unknown>[] = [];
+    const ai = { forUser: () => ({ respondStructured: async (req: Record<string, unknown>) => (requests.push(req), { parsed: goodAnswer(runId), usage: { inputTokens: 1, outputTokens: 1 }, model: 'fake-model' }) }) } as unknown as AiService;
+    const picked = { target: async (_u: string, kind: string) => (kind === 'task' ? { provider: 'prov-b', model: 'model-big' } : {}) } as unknown as HelperModels;
+    const none = { target: async () => ({}) } as unknown as HelperModels;
+    for (const helperModels of [picked, none]) {
+      const row = await queued(userId, taskId, runId);
+      const svc = new TaskImproverService(prisma, app.get(SystemSettingsService), app.get(JobsService), ai, undefined, helperModels);
+      expect(await svc.propose(row.id, userId, null)).toBe('ready');
+    }
+    expect(requests[0]).toMatchObject({ provider: 'prov-b', model: 'model-big' });
+    expect(requests[1]).not.toHaveProperty('provider');
+    expect(requests[1]).not.toHaveProperty('model');
   });
 
   it('an answer that obeys the injection (a new site) is retried once, then failed; the task does not change', async () => {

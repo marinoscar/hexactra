@@ -381,6 +381,8 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 
 **Model tiers.** **Settings → Browser agent → Model tiers** (`/settings/agent-model-tiers`, shown while AI is on) has one card per tier: model, reasoning effort, max output tokens and fallback model. Each tier **inherits from the deployment** until you switch that off; "Now:" shows what it resolves to.
 
+**Helper models.** **Settings → Browser agent → Helper models** (`/settings/helper-models`, shown while AI is on) picks two models outside the tiers: the **title model**, which writes the short titles of runs and chats (with a switch for each), and the **task model**, which Build with AI, the chat's task draft and Improve this task use. Empty is your default AI model; a pick that can no longer be used falls back to it. Stored in the `aiHelpers` namespace of your user settings (`provider:modelId` or null).
+
 **For administrators**, under **Administration → Browser agent**: **Agent model tiers** (`/admin/settings/agent-model-tiers`, the deployment default for every user), **Agent budget ceilings** (`/admin/settings/agent-ceilings`, the most any run may spend, also capping Unlimited policies; **No ceiling** per budget) and **Model prices** (`/admin/settings/agent-pricing`, US dollars per million input, output and cached input tokens per `provider:modelId`). All three read with `system_settings:read` and save with `system_settings:write`.
 
 ### Watching a run's spend

@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 
 import { paramKey } from '@app/shared/task-params';
 
+import { HelperModels } from '../ai-helpers/helper-models';
 import { ChatTaskDraftService, draftDefinitions, draftOutputDefinitions, parseDraft, type ChatTaskDraft, type DraftParameter } from '../chat/chat-task-draft.service';
 import { transcriptLine } from '../chat/chat-transcript';
 import { ChatService } from '../chat/chat.service';
@@ -75,6 +76,7 @@ export class TaskBuilderDraftService {
     private readonly chats: ChatService,
     private readonly ai: AiService,
     @Optional() private readonly policies?: PoliciesService,
+    @Optional() private readonly helperModels?: HelperModels,
   ) {}
 
   /** What the model reads: the spec as JSON and the thread, oldest first. Chat messages only: no question's answer and no secret. */
@@ -86,7 +88,7 @@ export class TaskBuilderDraftService {
 
   private async write(userId: string, orgId: string | null, conversationId: string, spec: TaskBuilderSpec): Promise<{ name: string; goal: string } | null> {
     try {
-      const response = await this.ai.forUser(userId, { feature: TASK_BUILDER_FEATURE_ID, ...(orgId ? { orgId } : {}) }).respond({ instructions: TASK_BUILDER_DRAFT_INSTRUCTIONS, input: await this.buildInput(conversationId, spec) });
+      const response = await this.ai.forUser(userId, { feature: TASK_BUILDER_FEATURE_ID, ...(orgId ? { orgId } : {}) }).respond({ ...((await this.helperModels?.target(userId, 'task')) ?? {}), instructions: TASK_BUILDER_DRAFT_INSTRUCTIONS, input: await this.buildInput(conversationId, spec) });
       const parsed = parseDraft(response.outputText ?? '');
       return parsed ? { name: parsed.name, goal: parsed.goal } : null;
     } catch (e) {

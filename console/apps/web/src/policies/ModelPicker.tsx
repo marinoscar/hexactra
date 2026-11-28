@@ -14,6 +14,8 @@ export interface ModelPickerProps {
   onChange: (value: string | null) => void;
   /** The models the viewer can call (`useUsableAiModels`). Only those with tool calls are offered. */
   models: readonly UsableAiModel[];
+  /** Offer only models with tool calls (the default). False for a helper that calls no tool, such as a title writer. */
+  requireTools?: boolean;
   /** A pin must also accept images: models without vision are listed but disabled. */
   requireVision?: boolean;
   helperText?: ReactNode;
@@ -24,12 +26,12 @@ export interface ModelPickerProps {
 
 /**
  * A model picker over the platform AI catalogue. The browser agent needs tool
- * calls, so only models with tools are offered; a model without image input
+ * calls, so only models with tools are offered (unless `requireTools` is false); a model without image input
  * is labelled "no vision" (the run then works without screenshots). A typed
  * `provider:modelId` is accepted too; the API validates it on save.
  */
-export function ModelPicker({ label, value, onChange, models, requireVision, helperText, placeholder, disabled, size = 'small' }: ModelPickerProps) {
-  const usable = models.filter(hasTools);
+export function ModelPicker({ label, value, onChange, models, requireTools = true, requireVision, helperText, placeholder, disabled, size = 'small' }: ModelPickerProps) {
+  const usable = requireTools ? models.filter(hasTools) : [...models];
   const byKey = new Map(usable.map((m) => [modelKey(m), m]));
   const options = usable.map(modelKey);
 
@@ -57,7 +59,7 @@ export function ModelPicker({ label, value, onChange, models, requireVision, hel
                 {key}
               </Typography>
             </Box>
-            {!hasVision(m) && <Chip size="small" variant="outlined" label={requireVision ? 'no vision: cannot be pinned' : 'no vision'} />}
+            {requireTools && !hasVision(m) && <Chip size="small" variant="outlined" label={requireVision ? 'no vision: cannot be pinned' : 'no vision'} />}
           </Box>
         );
       }}

@@ -12203,6 +12203,16 @@ export interface components {
                 /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                 useSavedTasks: boolean;
             };
+            aiHelpers?: {
+                /** @description The model that writes short titles for runs and chats. Null uses your default model. */
+                titleModel: string | null;
+                /** @description The model that creates and improves tasks. Null uses your default model. */
+                taskModel: string | null;
+                /** @description Write a short title for each run. On by default. */
+                runTitles: boolean;
+                /** @description Write a short title for each chat. On by default. */
+                chatTitles: boolean;
+            };
             skills?: {
                 /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
                 enabled: boolean;
@@ -12352,6 +12362,16 @@ export interface components {
                 /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                 useSavedTasks: boolean;
             };
+            aiHelpers?: {
+                /** @description The model that writes short titles for runs and chats. Null uses your default model. */
+                titleModel: string | null;
+                /** @description The model that creates and improves tasks. Null uses your default model. */
+                taskModel: string | null;
+                /** @description Write a short title for each run. On by default. */
+                runTitles: boolean;
+                /** @description Write a short title for each chat. On by default. */
+                chatTitles: boolean;
+            };
             skills?: {
                 /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
                 enabled: boolean;
@@ -12495,6 +12515,16 @@ export interface components {
             chat?: {
                 /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                 useSavedTasks?: boolean;
+            } | null;
+            aiHelpers?: {
+                /** @description The model that writes short titles for runs and chats. Null uses your default model. */
+                titleModel?: string | null;
+                /** @description The model that creates and improves tasks. Null uses your default model. */
+                taskModel?: string | null;
+                /** @description Write a short title for each run. On by default. */
+                runTitles?: boolean;
+                /** @description Write a short title for each chat. On by default. */
+                chatTitles?: boolean;
             } | null;
             skills?: {
                 /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */
@@ -13977,6 +14007,16 @@ export interface components {
                 chat?: {
                     /** @description Let the chat use one of your saved tasks when it does what you ask. On by default. */
                     useSavedTasks: boolean;
+                };
+                aiHelpers?: {
+                    /** @description The model that writes short titles for runs and chats. Null uses your default model. */
+                    titleModel: string | null;
+                    /** @description The model that creates and improves tasks. Null uses your default model. */
+                    taskModel: string | null;
+                    /** @description Write a short title for each run. On by default. */
+                    runTitles: boolean;
+                    /** @description Write a short title for each chat. On by default. */
+                    chatTitles: boolean;
                 };
                 skills?: {
                     /** @description Offer your skills to your runs and chats (default on). Off: they are kept but not offered. */

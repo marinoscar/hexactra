@@ -4,7 +4,7 @@ The task builder (epic E42, #717) is an AI that interviews you about a task you 
 
 - Web: **Build with AI** on Tasks (`/tasks`) and on New task (`/tasks/new`, where a `?goal=` becomes your first message). The builder opens at `/tasks/builder/:id`.
 - API: `/api/task-builder` (below). Permission: `tasks:write`.
-- AI feature: `task_builder`. **Its model is your default AI model**: Settings → AI Keys (`/settings/ai`) → *Default model*, the same model the chat uses. There is no per-feature model setting; with no default set, the only configured provider is used, and otherwise the builder says no model is selected. (Task runs use the model tiers of their agent policy instead.) Without the AI slice the builder is not offered.
+- AI feature: `task_builder`. **Its model is the task model you picked** under Settings → Browser agent → **Helper models** (`/settings/helper-models`), which also serves the chat's task draft and [Improve this task](task-improver.md). With none picked, or when the pick can no longer be used, it is your default AI model: Settings → AI Keys (`/settings/ai`) → *Default model*, the same model the chat uses. With no default set, the only configured provider is used, and otherwise the builder says no model is selected. (Task runs use the model tiers of their agent policy instead.) Without the AI slice the builder is not offered.
 
 ## How a conversation becomes a task
 

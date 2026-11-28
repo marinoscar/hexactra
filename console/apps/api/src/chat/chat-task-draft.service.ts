@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { AiService } from '@marinoscar/platform-api/ai';
 import type { Conversation } from '@prisma/client';
 
 import { PARAMETER_TYPES, paramKey, type TaskParameter, type TaskParameterType } from '@app/shared/task-params';
 
+import { HelperModels } from '../ai-helpers/helper-models';
 import { PrismaService } from '../prisma/prisma.service';
 import { OUTPUT_TYPES, outputKey, type TaskOutput, type TaskOutputType } from '@app/shared/task-fields';
 import { prepareOutputs } from '../tasks/task-outputs';
@@ -181,6 +182,7 @@ export class ChatTaskDraftService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    @Optional() private readonly helperModels?: HelperModels,
   ) {}
 
   /** What the model reads: the end of the thread, oldest first. */
@@ -218,7 +220,7 @@ export class ChatTaskDraftService {
     let written: { name: string; goal: string; parameters?: DraftParameter[]; outputs?: DraftOutput[] } | null = null;
     const memories = await this.memories(userId);
     try {
-      const response = await this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).respond({ instructions: TASK_DRAFT_INSTRUCTIONS, input: await this.buildInput(c.id, memories) });
+      const response = await this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).respond({ ...((await this.helperModels?.target(userId, 'task')) ?? {}), instructions: TASK_DRAFT_INSTRUCTIONS, input: await this.buildInput(c.id, memories) });
       written = parseDraft(response.outputText ?? '');
     } catch (e) {
       // No model, or it failed: the owner still gets a draft to edit, from what the chat already holds.
