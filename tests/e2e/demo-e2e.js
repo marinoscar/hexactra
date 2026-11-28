@@ -8,6 +8,9 @@
  * - Persisted saved Chrome profile
  * - Reconnecting client
  * - Retain non-secret result/audit evidence
+ *
+ * Chrome runs headful, never headless (AGENTS.md, "Never a headless browser"):
+ * on a machine without a desktop, run this under `xvfb-run -a`.
  */
 
 const fs = require('fs');
@@ -76,7 +79,6 @@ function startChromeWithProfile() {
             --no-sandbox \
             --disable-dev-shm-usage \
             --remote-debugging-port=9222 \
-            --headless=new \
             "about:blank" 2>&1 &
     `;
     

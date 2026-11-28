@@ -813,6 +813,8 @@ Every page works on a phone, a tablet and a desktop. The breakpoints are MUI's a
 
 `scripts/ui-screens.mjs` opens every route at 360, 390, 768, 1024 and 1440 px, in light and dark, saves a PNG of each under `.ui-screens/` (ignored by git) and fails when a page scrolls sideways (`scrollWidth > innerWidth`), naming the route and the width. It is a local, manual check and **not a CI step**: CI has no stack with data.
 
+The browser runs headful, never headless (AGENTS.md, "MANDATORY: Never a headless browser"). On a machine without a desktop, prefix the command with `xvfb-run -a`.
+
 ```bash
 # Against the dev stack ("Run it"), signed in:
 npm run ui:screens -- --login     # once: sign in in the window that opens; saves .ui-screens/state.json

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
  * E2E tests for managed AI across remote session and connection failure
+ *
+ * Chrome runs headful, never headless (AGENTS.md, "Never a headless browser"):
+ * on a machine without a desktop, run this under `xvfb-run -a`.
  */
 
 const { execSync } = require('child_process');
@@ -45,7 +48,7 @@ function testChromeProfilePersistence() {
     
     // Start Chrome with profile
     const startResult = runCommand(
-        `google-chrome --user-data-dir="${CONFIG.chromeProfilePath}" --headless=new --no-sandbox "about:blank" 2>&1 &`,
+        `google-chrome --user-data-dir="${CONFIG.chromeProfilePath}" --no-sandbox "about:blank" 2>&1 &`,
         'Start Chrome with profile'
     );
     

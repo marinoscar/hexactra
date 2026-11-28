@@ -216,6 +216,7 @@ impl ChromeManager {
 
         // Add extra arguments
         args.extend(self.config.extra_args.clone());
+        crate::launcher::refuse_headless(Path::new(&self.config.chrome_binary), &args)?;
 
         // Check if Chrome binary exists
         if !Path::new(&self.config.chrome_binary).exists() {

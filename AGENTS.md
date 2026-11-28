@@ -87,6 +87,33 @@ Rules:
 - Do not delegate to sub-agents for now; the session working the issue does the work itself in its branch.
 - Remove the branch once the PR is merged. `git branch -a` shows what exists.
 
+## MANDATORY: Never a headless browser
+
+**Hexactra never uses a headless browser. Not ever, not anywhere, not as a fallback.** This rule has no exceptions and is not a setting.
+
+- **Why:** the agent operates the owner's real sites (banks, airlines, carriers, mail) as the owner. Anti-bot systems detect a headless browser before anything else, and such a browser does not render the page as a person sees it. A headless run that "works" in a test proves nothing about the product.
+- **Where it applies:** everywhere:
+  - the product: the host agent, the worker, nodes in unattended and attended mode, the Chrome extension;
+  - tests: unit, e2e, benchmarks and the challenge suite;
+  - scripts: screenshots, `ui:screens` and brand rendering;
+  - CI;
+  - coding agents working in this repository.
+- **What to do instead:** run real, headful Chrome:
+  - on a node: the person's desktop (attended), or its own GPU-backed virtual desktop (unattended, `docs/nodes.md`);
+  - on a machine without a desktop (CI, a container, a cloud session): under a virtual display such as `xvfb-run -a`;
+  - with Playwright or Puppeteer: pass `headless: false`, because both default to headless.
+- **Never add:**
+  - `--headless` in any form (`--headless=new`, `--headless=old`);
+  - `headless: true`, `headless: 'new'` or `headless=True`;
+  - a `chrome-headless-shell` binary, or `playwright install --only-shell`;
+  - a "headless mode" capability, flag, setting, environment variable or fallback;
+  - a Playwright or Puppeteer `launch()` that leaves `headless` at its default.
+- **Enforced:**
+  - the host agent refuses a headless argument or a headless-shell binary, at daemon start and before every launch (`refuse_headless`, `crates/hexactra-agent/src/launcher.rs`);
+  - the worker reports `supports_headless: false`;
+  - `scripts/ci/check-no-headless.mjs` fails CI when tracked code launches a headless browser. Its allowlist is only for files that name the word to refuse it. Never allowlist a file to use headless.
+- Decided in #1091. Changing it is a product decision for the owner, not an implementation choice.
+
 ## Commits
 
 Conventional Commits: `<type>(<scope>): <imperative summary>` (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`). Small, single-intent commits; behavior changes ship with their tests. Reference the issue (`#<n>`) in the PR, and in commits where useful.
@@ -112,7 +139,7 @@ A portable, self-hostable computer-use runtime letting authorized AI agents oper
 
 Don't add restrictions that only limit the agent. Limits are per-task opt-ins (allowed sites, purchase confirmation). Hosted MCP clients (ChatGPT, Claude) authenticate with OAuth and scoped consent; personal access tokens keep full authority. Never add an MCP tool without a scope, an effect and a title (`console/AGENTS.md`, "MCP tools").
 
-Browsers run on **nodes**: the primary node is a machine on the owner's residential network (sites block datacenter IPs), connected outbound over HTTPS to the console, in unattended mode (its own GPU-backed virtual desktop, nobody logged in) or attended mode (the person's own desktop and Chrome), never headless (docs/nodes.md, epic #333). The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
+Browsers run on **nodes**: the primary node is a machine on the owner's residential network (sites block datacenter IPs), connected outbound over HTTPS to the console, in unattended mode (its own GPU-backed virtual desktop, nobody logged in) or attended mode (the person's own desktop and Chrome), **never headless** (see "MANDATORY: Never a headless browser"; docs/nodes.md, epic #333). The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
 
 ## Architecture (see VISION.MD §5–§6, §18)
 
@@ -158,6 +185,7 @@ Design invariants to preserve when writing docs or code:
 - A delivery's recipients and destinations are fixed when the owner sets it up. A run cannot add or change one (console `docs/deliveries.md`).
 - Connection tokens never reach the model, a step, a log, a span or an export. No connection is exposed through Hexactra's own MCP server (console `docs/parity.md`, `docs/security-connections.md`).
 - A connection never starts a process: MCP servers are reached over HTTPS only.
+- No headless browser, ever: Chrome is always headful on a real or virtual display (see "MANDATORY: Never a headless browser").
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).

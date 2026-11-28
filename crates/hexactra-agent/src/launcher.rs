@@ -24,6 +24,28 @@ use tokio::time::Instant;
 
 use crate::browser_bridge::BrowserBridge;
 
+/// Hexactra never runs a headless browser (AGENTS.md, "Never a headless
+/// browser"): sites detect it and it does not show the page as a person sees
+/// it. Refuses any `--headless` argument (`--headless`, `--headless=new`, ...)
+/// and a headless-shell binary, wherever they come from (`--browser-arg`,
+/// `HEXACTRA_BROWSER`, a profile's settings).
+pub fn refuse_headless(browser: &Path, args: &[String]) -> Result<()> {
+    if let Some(arg) = args
+        .iter()
+        .find(|a| a.trim().to_ascii_lowercase().starts_with("--headless"))
+    {
+        bail!("refusing to start the browser with `{arg}`: Hexactra never runs a headless browser (AGENTS.md, \"MANDATORY: Never a headless browser\")");
+    }
+    let name = browser
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if name.contains("headless") {
+        bail!("refusing to start {}: a headless-shell browser is never used (AGENTS.md, \"MANDATORY: Never a headless browser\")", browser.display());
+    }
+    Ok(())
+}
+
 /// Launch settings.
 #[derive(Debug, Clone)]
 pub struct LaunchConfig {
@@ -135,7 +157,7 @@ impl BrowserLauncher {
         Ok(())
     }
 
-    fn args(&self) -> Vec<String> {
+    fn args(&self) -> Result<Vec<String>> {
         let mut a = vec![
             format!("--user-data-dir={}", self.cfg.profile_dir.display()),
             "--no-first-run".into(),
@@ -151,9 +173,10 @@ impl BrowserLauncher {
             a.push(format!("--load-extension={}", ext.display()));
         }
         a.extend(self.cfg.extra_args.iter().cloned());
+        refuse_headless(&self.cfg.browser, &a)?;
         // No start URL: after a graceful close Chromium usually restores the
         // tabs it had, so an agent finds the browser as it left it.
-        a
+        Ok(a)
     }
 
     /// Make sure the browser runs and its extension is connected.
@@ -175,6 +198,8 @@ impl BrowserLauncher {
             );
         }
 
+        // Refused before anything is written: no headless browser, ever.
+        let args = self.args()?;
         self.prepare_profile()?;
         tracing::info!(browser = %self.cfg.browser.display(), profile = %self.cfg.profile_dir.display(), "launching browser");
         // Browser output goes to a log next to the profile, replaced on each
@@ -183,7 +208,7 @@ impl BrowserLauncher {
         let log = std::fs::File::create(&log_path)
             .with_context(|| format!("creating {}", log_path.display()))?;
         let child = Command::new(&self.cfg.browser)
-            .args(self.args())
+            .args(args)
             .env(BRIDGE_SOCKET_ENV, &self.cfg.bridge_socket)
             .stdin(Stdio::null())
             .stdout(log.try_clone()?)
@@ -502,6 +527,57 @@ mod tests {
             "did not fail fast"
         );
         assert!(e.contains("No usable sandbox"), "{e}");
+    }
+
+    #[test]
+    fn refuses_every_headless_argument_and_a_headless_shell() {
+        let chrome = Path::new("/opt/google/chrome/chrome");
+        for arg in [
+            "--headless",
+            "--headless=new",
+            "--headless=old",
+            " --HEADLESS",
+        ] {
+            let e = refuse_headless(chrome, &[arg.to_string()])
+                .unwrap_err()
+                .to_string();
+            assert!(e.contains("never runs a headless browser"), "{arg}: {e}");
+        }
+        let shell = Path::new(
+            "/home/x/.cache/ms-playwright/chromium_headless_shell-1/chrome-headless-shell",
+        );
+        assert!(refuse_headless(shell, &[]).is_err());
+        assert!(refuse_headless(
+            chrome,
+            &[
+                "--password-store=basic".into(),
+                "--window-name=Hexactra: a".into()
+            ]
+        )
+        .is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_headless_argument_is_refused_before_launch() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket = dir.path().join("b.sock");
+        let bridge = BrowserBridge::bind(&socket).await.unwrap();
+        let l = BrowserLauncher::new(
+            LaunchConfig {
+                browser: dir.path().join("chrome"),
+                profile_dir: dir.path().join("p"),
+                extension_dir: None,
+                extra_args: vec!["--headless=new".into()],
+                idle_shutdown: None,
+                native_host: PathBuf::from("/x"),
+                bridge_socket: socket,
+                startup_timeout: Duration::from_secs(1),
+            },
+            bridge,
+        );
+        let e = l.ensure_running().await.unwrap_err().to_string();
+        assert!(e.contains("never runs a headless browser"), "{e}");
+        assert_eq!(l.launches().await, 0);
     }
 
     #[tokio::test]
